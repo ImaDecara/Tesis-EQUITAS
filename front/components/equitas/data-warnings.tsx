@@ -1,0 +1,29 @@
+import { AlertTriangle } from 'lucide-react'
+
+import { type DataWarning } from '@/lib/equitas-data'
+
+export function DataWarnings({ warnings }: { warnings: DataWarning[] }) {
+  if (!warnings.length) {
+    return null
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+      <p className="mb-2 inline-flex items-center gap-2 text-sm font-semibold">
+        <AlertTriangle className="size-4" />
+        Tablas con acceso restringido o errores de lectura
+      </p>
+      <ul className="space-y-1 text-xs">
+        {warnings.map((warning) => (
+          <li key={`${warning.table}-${warning.message}`}>
+            <span className="font-medium">{warning.table}:</span> {warning.message}
+            {warning.needsSelectPolicy && (
+              <span> (agregar policy `SELECT` para el rol `anon`/`authenticated`)</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
