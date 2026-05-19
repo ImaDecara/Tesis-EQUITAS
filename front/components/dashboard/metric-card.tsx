@@ -19,6 +19,7 @@ const toneMap: Record<NonNullable<MetricCardProps['tone']>, string> = {
   indigo: 'from-indigo-100 to-white text-indigo-700',
 }
 
+// Envoltorio visual para tarjetas KPI usadas en el encabezado del tablero.
 export function MetricCard({
   label,
   value,
@@ -51,4 +52,3 @@ export function MetricCard({
     </Card>
   )
 }
-

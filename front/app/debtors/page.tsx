@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Eye, Filter } from 'lucide-react'
 
 import { DataWarnings } from '@/components/equitas/data-warnings'
+import { ContactAvailabilityBadge } from '@/components/debtors/contact-availability-badge'
 import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +19,7 @@ import {
 import { getDebtorsData } from '@/lib/equitas-data'
 import { formatCurrency } from '@/lib/utils'
 
+// Pantalla de listado de objetos de deuda: vista operativa centrada en tabla.
 export default async function DebtorsPage() {
   const { debtors, warnings } = await getDebtorsData()
 
@@ -95,11 +97,7 @@ export default async function DebtorsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {debtor.hasContact ? (
-                        <Badge variant="success">Disponible</Badge>
-                      ) : (
-                        <Badge variant="warning">Faltante</Badge>
-                      )}
+                      <ContactAvailabilityBadge hasContact={debtor.hasContact} />
                     </TableCell>
                     <TableCell>
                       <RiskBadge risk={debtor.risk} />

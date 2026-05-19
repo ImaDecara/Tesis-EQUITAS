@@ -31,6 +31,7 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {}
 
 function Button({ className, variant, size, ...props }: ButtonProps) {
+  // Primitiva de boton compartida para enlaces y acciones de toda la aplicacion.
   return (
     <button
       className={cn(buttonVariants({ variant, size, className }))}
@@ -40,4 +41,3 @@ function Button({ className, variant, size, ...props }: ButtonProps) {
 }
 
 export { Button, buttonVariants }
-

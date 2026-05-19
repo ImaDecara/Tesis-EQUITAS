@@ -36,6 +36,7 @@ function Tabs({
   className,
   children,
 }: TabsProps) {
+  // Soporta uso controlado y no controlado.
   const [internalValue, setInternalValue] = React.useState(defaultValue)
   const selectedValue = value ?? internalValue
 
@@ -104,6 +105,7 @@ type TabsContentProps = React.ComponentProps<'div'> & {
 function TabsContent({ className, value, ...props }: TabsContentProps) {
   const context = useTabsContext()
 
+  // Mantiene simple la interfaz: solo renderiza el contenido activo.
   if (context.value !== value) {
     return null
   }
@@ -112,4 +114,3 @@ function TabsContent({ className, value, ...props }: TabsContentProps) {
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent }
-

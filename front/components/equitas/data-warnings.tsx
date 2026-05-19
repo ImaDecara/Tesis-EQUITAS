@@ -1,7 +1,8 @@
 import { AlertTriangle } from 'lucide-react'
 
-import { type DataWarning } from '@/lib/equitas-data'
+import { type DataWarning } from '@/types/equitas-domain'
 
+// Renderiza alertas de acceso a datos (RLS/policies faltantes) sin bloquear la interfaz.
 export function DataWarnings({ warnings }: { warnings: DataWarning[] }) {
   if (!warnings.length) {
     return null
@@ -26,4 +27,3 @@ export function DataWarnings({ warnings }: { warnings: DataWarning[] }) {
     </div>
   )
 }
-

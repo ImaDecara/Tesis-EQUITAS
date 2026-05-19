@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/app-shell'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
+// Pantalla amigable cuando falta el id del objeto de deuda o no es visible para el rol actual.
 export default function NotFound() {
   return (
     <AppShell>

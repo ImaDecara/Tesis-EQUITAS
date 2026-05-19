@@ -3,6 +3,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
+  // Contenedor que preserva scroll horizontal en pantallas chicas.
   return (
     <div className="w-full overflow-auto">
       <table className={cn('w-full caption-bottom text-sm', className)} {...props} />
@@ -54,4 +55,3 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
 }
 
 export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell }
-

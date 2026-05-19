@@ -35,6 +35,7 @@ import {
 import { getDashboardData } from '@/lib/equitas-data'
 import { formatCurrency } from '@/lib/utils'
 
+// Entrada del tablero: consume servicios y renderiza la vista ejecutiva.
 export default async function HomePage() {
   const { dashboard, warnings } = await getDashboardData()
 

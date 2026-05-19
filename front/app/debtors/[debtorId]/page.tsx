@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getDebtorDetailData } from '@/lib/equitas-data'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
+// Pantalla de detalle del objeto de deuda con pestanas de resumen, personas, deudas y perfil.
 export default async function DebtorDetailPage({
   params,
 }: {
@@ -252,4 +253,3 @@ export default async function DebtorDetailPage({
     </AppShell>
   )
 }
-

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ListTree, Landmark, Shield } from 'lucide-react'
 
+import { AuthGuard } from '@/components/auth/auth-guard'
+import { LogoutButton } from '@/components/layout/logout-button'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -35,6 +37,7 @@ function SideNavigation() {
 
       <nav className="space-y-1 px-3 py-4">
         {NAV_ITEMS.map((item) => {
+          // La coincidencia por prefijo mantiene activo el menu padre en rutas anidadas.
           const isActive =
             pathname === item.href ||
             (item.href !== '/' && pathname.startsWith(item.href))
@@ -78,14 +81,18 @@ function TopBar() {
           Sistema inteligente de recupero de deuda municipal
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-          <Shield className="size-3.5 text-emerald-600" />
-          Tenant activo
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+            <Shield className="size-3.5 text-emerald-600" />
+            Tenant activo
+          </div>
+          <LogoutButton />
         </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto px-4 pb-3 md:hidden">
         {NAV_ITEMS.map((item) => {
+          // En movil se mantiene la misma logica activa que en la barra lateral de escritorio.
           const isActive =
             pathname === item.href ||
             (item.href !== '/' && pathname.startsWith(item.href))
@@ -114,15 +121,17 @@ function TopBar() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dff7ea_0,_#f8fbff_34%,_#f5f7fb_100%)]">
-      <div className="flex min-h-screen">
-        <SideNavigation />
+    <AuthGuard>
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dff7ea_0,_#f8fbff_34%,_#f5f7fb_100%)]">
+        <div className="flex min-h-screen">
+          <SideNavigation />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
-          <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <TopBar />
+            <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+          </div>
         </div>
       </div>
-    </div>
+    </AuthGuard>
   )
 }

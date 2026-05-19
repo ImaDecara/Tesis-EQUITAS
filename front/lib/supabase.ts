@@ -4,7 +4,8 @@ const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const supabasePublishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? ''
 
-function normalizeSupabaseUrl(url: string): string {
+// Evita errores cuando la URL viene con /rest/v1 o barras finales.
+export function normalizeSupabaseUrl(url: string): string {
   const cleanUrl = url.trim().replace(/\/+$/, '')
 
   if (cleanUrl.endsWith('/rest/v1')) {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AuthProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
   description: "Sistema de recupero inteligente de deuda municipal",
 };
 
+// Estructura global de la app para fuentes y metadatos compartidos por todas las rutas.
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,9 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans text-slate-900">{children}</body>
+      <body className="min-h-full font-sans text-slate-900">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
