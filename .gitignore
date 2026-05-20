@@ -87,5 +87,26 @@ database/imports/
 *.backup
 *.bak
 
+# =========================
+# Backend specific
+# =========================
+back/.env
+.env
+*.env
 # Do not ignore SQL schema files
 !database/*.sql
+
+# =========================
+# ETL input/output data
+# =========================
+
+back/data/input/**
+!back/data/input/
+!back/data/input/.gitkeep
+
+back/data/processed/**
+!back/data/processed/
+!back/data/processed/.gitkeep
+
+# Generated Excel previews
+*.xlsx
