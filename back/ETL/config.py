@@ -45,7 +45,7 @@ class Settings:
     input_dir: Path
     processed_dir: Path
 
-
+# Función para cargar la configuración desde variables de entorno y rutas del proyecto.
 def get_settings() -> Settings:
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_service_role_key = (

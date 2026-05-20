@@ -7,11 +7,21 @@ from ETL.config import supabase
 # NOMBRES DE TABLAS
 # ============================================================
 
+#Etapa 1
 PERSON_TABLE = "person"
 DEBTOR_TABLE = "debtor"
 DEBTOR_PERSON_TABLE = "debtor_person"
 DEBT_TABLE = "debt"
 
+#Etapa 2
+PROVINCE_TABLE = "province"
+CITY_TABLE = "city"
+ADDRESS_TABLE = "address"
+DEBTOR_CONTACT_TABLE = "debtor_contact"
+
+#Etapa 3
+DEBTOR_PROFILE_TABLE = "debtor_profile"
+DEBTOR_PROFILE_DETAIL_TABLE = "debtor_profile_detail"
 
 # ============================================================
 # FUNCIONES BASE DE SUPABASE
@@ -255,6 +265,155 @@ def load_debt(payload: dict[str, Any]) -> dict[str, Any]:
         },
     )
 
+#Inserta o actualiza una provincia.
+def load_province(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Inserta o actualiza una provincia.
+
+    Regla de deduplicación:
+    province.name
+    """
+
+    name = payload.get("name")
+
+    if not name:
+        raise ValueError(f"Province sin name. Payload: {payload}")
+
+    return insert_or_update_by_filters(
+        table_name=PROVINCE_TABLE,
+        payload=payload,
+        lookup_filters={
+            "name": name,
+        },
+    )
+
+# Inserta o actualiza una ciudad.
+def load_city(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Inserta o actualiza una ciudad.
+
+    Regla de deduplicación:
+    city.province + city.name + city.postal_code, si hay CP.
+    Si no hay CP, usa city.province + city.name.
+    """
+
+    province = payload.get("province")
+    name = payload.get("name")
+    postal_code = payload.get("postal_code")
+
+    if province is None:
+        raise ValueError(f"City sin province. Payload: {payload}")
+
+    if not name:
+        raise ValueError(f"City sin name. Payload: {payload}")
+
+    lookup_filters = {
+        "province": province,
+        "name": name,
+    }
+
+    if postal_code:
+        lookup_filters["postal_code"] = postal_code
+
+    return insert_or_update_by_filters(
+        table_name=CITY_TABLE,
+        payload=payload,
+        lookup_filters=lookup_filters,
+    )
+
+# Inserta o actualiza una dirección.
+def load_address(payload: dict[str, Any]) -> dict[str, Any]:
+    
+    person = payload.get("person")
+
+    if person is None:
+        raise ValueError(f"Address sin person. Payload: {payload}")
+
+    return insert_or_update_by_filters(
+        table_name=ADDRESS_TABLE,
+        payload=payload,
+        lookup_filters={
+            "person": person,
+        },
+    )
+
+
+# Inserta o actualiza un contacto de un deudor.
+def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Regla de deduplicación:
+    debtor_contact.person + debtor_contact.type + debtor_contact.value
+    """
+
+    person = payload.get("person")
+    contact_type = payload.get("type")
+    value = payload.get("value")
+
+    if person is None:
+        raise ValueError(f"DebtorContact sin person. Payload: {payload}")
+
+    if contact_type is None:
+        raise ValueError(f"DebtorContact sin type. Payload: {payload}")
+
+    if not value:
+        raise ValueError(f"DebtorContact sin value. Payload: {payload}")
+
+    return insert_or_update_by_filters(
+        table_name=DEBTOR_CONTACT_TABLE,
+        payload=payload,
+        lookup_filters={
+            "person": person,
+            "type": contact_type,
+            "value": value,
+        },
+    )
+
+
+# Inserta o actualiza el perfil calculado de un objeto de deuda.
+def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Regla de deduplicación:
+    debtor_profile.debtor
+    """
+
+    debtor = payload.get("debtor")
+
+    if debtor is None:
+        raise ValueError(f"DebtorProfile sin debtor. Payload: {payload}")
+
+    return insert_or_update_by_filters(
+        table_name=DEBTOR_PROFILE_TABLE,
+        payload=payload,
+        lookup_filters={
+            "debtor": debtor,
+        },
+    )
+
+
+# Inserta o actualiza el detalle de riesgo de una persona dentro de un perfil.
+def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Regla de deduplicación:
+    debtor_profile_detail.debtor_profile + debtor_profile_detail.person
+    """
+
+    debtor_profile = payload.get("debtor_profile")
+    person = payload.get("person")
+
+    if debtor_profile is None:
+        raise ValueError(f"DebtorProfileDetail sin debtor_profile. Payload: {payload}")
+
+    if person is None:
+        raise ValueError(f"DebtorProfileDetail sin person. Payload: {payload}")
+
+    return insert_or_update_by_filters(
+        table_name=DEBTOR_PROFILE_DETAIL_TABLE,
+        payload=payload,
+        lookup_filters={
+            "debtor_profile": debtor_profile,
+            "person": person,
+        },
+    )
 
 # ============================================================
 # FUNCIONES AUXILIARES PARA CATÁLOGOS

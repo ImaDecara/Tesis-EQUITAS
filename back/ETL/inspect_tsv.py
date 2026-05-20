@@ -67,8 +67,11 @@ DETALLE_OPTIONAL_FIELDS = {
 }
 
 
-
+# ============================================================
 # FUNCIONES AUXILIARES
+# ============================================================
+
+# Estas funciones se encargan de leer los archivos, validar su estructura y contenido, y mostrar estadísticas útiles para el ETL.
 def read_tsv(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"No existe el archivo: {path}")
@@ -82,12 +85,13 @@ def read_tsv(path: Path) -> pd.DataFrame:
     )
 
 
+# Estas funciones se encargan de transformar los datos, inferir valores faltantes y construir los payloads para la carga.
 def print_section(title: str) -> None:
     print("\n" + "=" * 80)
     print(title)
     print("=" * 80)
 
-
+# Estas funciones se encargan de cargar los datos transformados a Supabase, usando las funciones definidas en load.py.
 def parse_decimal(value: str) -> float:
     if value is None:
         return 0.0
@@ -114,7 +118,7 @@ def parse_decimal(value: str) -> float:
     except ValueError:
         return 0.0
 
-
+# Estas funciones se encargan de ejecutar el proceso completo de ETL, coordinando la extracción, transformación y carga, y mostrando resúmenes y estadísticas útiles para el usuario.
 def validate_field_groups(
     dataframe: pd.DataFrame,
     field_groups: dict[str, list[str]],
@@ -143,7 +147,8 @@ def validate_field_groups(
 
     return missing_fields
 
-
+# Estas funciones se encargan de coordinar la ejecución del ETL, mostrando resúmenes y estadísticas útiles para el usuario
+# permitiendo hacer un dry-run para validar los archivos antes de cargar datos reales a Supabase.
 def get_clean_key_set(dataframe: pd.DataFrame, column: str) -> set[str]:
     return set(
         dataframe[column]
@@ -154,6 +159,7 @@ def get_clean_key_set(dataframe: pd.DataFrame, column: str) -> set[str]:
     )
 
 
+# Convierte las claves de un diccionario a string, para evitar problemas de tipo de clave.
 def inspect_files(cabecera_path: Path, detalle_path: Path) -> None:
     print_section("LECTURA DE ARCHIVOS")
 

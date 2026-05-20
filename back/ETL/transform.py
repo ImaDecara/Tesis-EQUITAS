@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 from collections.abc import Hashable, Mapping
 import re
@@ -54,6 +54,12 @@ DEBT_STATUS_PAID_ID = 6
 DEBT_STATUS_CANCELLED_ID = 7
 DEBT_STATUS_UNKNOWN_ID = 8
 
+# contact_type
+CONTACT_TYPE_PHONE_ID = 1
+CONTACT_TYPE_MOBILE_ID = 2
+CONTACT_TYPE_EMAIL_ID = 3
+CONTACT_TYPE_LETTER_ID = 4
+CONTACT_TYPE_WHATSAPP_ID = 5
 
 # ============================================================
 # TIPOS PARA RESUMEN DE TRANSFORMACIÓN
@@ -126,6 +132,19 @@ def parse_int(value: Any, default: int | None = None) -> int | None:
         return int(digits)
     except ValueError:
         return default
+
+
+# Convierte un valor a decimal opcional.
+# Si el valor viene vacío, devuelve None.
+# Sirve para campos como number o floor, donde no queremos guardar 0 si el dato no existe.
+def parse_optional_decimal(value: Any) -> float | None:
+    
+    text = clean_text(value)
+
+    if text is None:
+        return None
+
+    return parse_decimal(text)
 
 
 #Convierte un valor a decimal (float). Si no se puede, devuelve 0.0.
@@ -207,25 +226,30 @@ def parse_bool(value: Any, default: bool = True) -> bool:
     return default
 
 
+# Normaliza nombres de personas, eliminando espacios extra y capitalizando cada palabra.
+def normalize_name(value: Any) -> str | None:
+    
+    text = clean_text(value)
+
+    if text is None:
+        return None
+
+    return " ".join(text.split()).title()
+
 # ============================================================
 # REGLAS DE INFERENCIA
 # ============================================================
 
 # Estas funciones infieren valores a partir de otros campos, para completar los payloads
 def infer_document_type_id(document_number: str | None) -> int:
-    """
-    Infere document_type.
-
-    Como el archivo trae Destinatario_CUIT, por defecto lo tratamos como CUIT.
-    Si falta, asignamos unknown.
-    """
-
+    
     if not document_number:
         return DOCUMENT_TYPE_UNKNOWN_ID
 
     return DOCUMENT_TYPE_CUIT_ID
 
 
+# Para este primer archivo, inferimos el tipo de persona a partir del prefijo de su número de documento (CUIT o DNI).
 def infer_person_type_id(document_number: str | None) -> int:
 
     digits = only_digits(document_number)
@@ -244,6 +268,9 @@ def infer_person_type_id(document_number: str | None) -> int:
     return PERSON_TYPE_UNKNOWN_ID
 
 
+# Para este primer archivo, inferimos el estado de la deuda a partir de su fecha de vencimiento:
+# - Si no tiene fecha de vencimiento o no se puede parsear, lo marcamos como desconocido.
+# - Si la fecha de vencimiento es anterior a hoy, lo marcamos como vencido
 def infer_debt_status_id(due_date: str | None) -> int:
 
     if not due_date:
@@ -331,6 +358,307 @@ def build_debt_payload(
         "status": infer_debt_status_id(due_date),
     }
 
+def build_province_payload(row: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Construye payload para province.
+    """
+
+    province_name = normalize_name(row.get("Destinatario_Provincia"))
+
+    if not province_name:
+        return None
+
+    return {
+        "name": province_name,
+        "active": True,
+    }
+
+
+def build_city_payload(
+    row: dict[str, Any],
+    province_id: int,
+) -> dict[str, Any] | None:
+    """
+    Construye payload para city.
+    """
+
+    city_name = normalize_name(row.get("Destinatario_Localidad"))
+
+    if not city_name:
+        return None
+
+    return {
+        "province": province_id,
+        "name": city_name,
+        "postal_code": clean_text(row.get("Destinatario_CP")),
+        "active": True,
+    }
+
+
+def build_address_payload(
+    row: dict[str, Any],
+    person_id: int,
+    city_id: int,
+) -> dict[str, Any] | None:
+    """
+    Construye payload para address.
+    """
+
+    street = clean_text(row.get("Destinatario_Calle"))
+    number = parse_optional_decimal(row.get("Destinatario_Numeracion"))
+    floor = parse_optional_decimal(row.get("Destinatario_Piso"))
+    apartment = clean_text(row.get("Destinatario_Depto"))
+
+    if not street and number is None and not apartment:
+        return None
+
+    return {
+        "person": person_id,
+        "city": city_id,
+        "street": street,
+        "number": number,
+        "neighborhood": None,
+        "floor": floor,
+        "apartment": apartment,
+        "tower": None,
+        "building_name": None,
+        "lot": None,
+        "block": None,
+        "reference": None,
+        "coordinates": None,
+        "active": True,
+    }
+
+
+def build_debtor_contact_payloads(
+    row: dict[str, Any],
+    person_id: int,
+) -> list[dict[str, Any]]:
+    """
+    Construye payloads para debtor_contact.
+
+    Una misma persona puede tener:
+    - teléfono
+    - celular
+    - email
+    """
+
+    payloads: list[dict[str, Any]] = []
+
+    phone = clean_text(row.get("Destinatario_Telefono"))
+    mobile = clean_text(row.get("Destinatario_Celular"))
+    email = clean_text(row.get("Destinatario_Email"))
+
+    if phone:
+        payloads.append(
+            {
+                "person": person_id,
+                "type": CONTACT_TYPE_PHONE_ID,
+                "value": phone,
+                "active": True,
+            }
+        )
+
+    if mobile:
+        payloads.append(
+            {
+                "person": person_id,
+                "type": CONTACT_TYPE_MOBILE_ID,
+                "value": mobile,
+                "active": True,
+            }
+        )
+
+    if email:
+        payloads.append(
+            {
+                "person": person_id,
+                "type": CONTACT_TYPE_EMAIL_ID,
+                "value": email.lower(),
+                "active": True,
+            }
+        )
+
+    return payloads
+
+
+# ============================================================
+# BUILDERS PARA PERFIL CALCULADO
+# ============================================================
+
+# Calcula los días de antigüedad de una deuda a partir de su fecha de vencimiento.
+def calculate_debt_age_days(due_date: Any) -> int:
+    parsed_due_date = parse_date(due_date)
+
+    if parsed_due_date is None:
+        return 0
+
+    parsed = pd.to_datetime(parsed_due_date, errors="coerce")
+
+    if pd.isna(parsed):
+        return 0
+
+    return max((date.today() - parsed.date()).days, 0)
+
+
+# Calcula el nivel de riesgo general del objeto de deuda para el MVP.
+def calculate_socioeconomic_risk_level(
+    total_debt_amount: float,
+    overdue_debt_amount: float,
+    overdue_debt_count: int,
+    oldest_debt_days: int,
+    active_person_count: int,
+    available_contact_count: int,
+    average_total_debt_amount: float,
+) -> int:
+    
+    if total_debt_amount <= 0:
+        return 1
+
+    if average_total_debt_amount <= 0:
+        average_total_debt_amount = total_debt_amount
+
+    debt_ratio = total_debt_amount / average_total_debt_amount
+
+    if debt_ratio < 0.5:
+        risk_level = 1
+    elif debt_ratio < 1.0:
+        risk_level = 2
+    elif debt_ratio < 1.5:
+        risk_level = 3
+    elif debt_ratio < 2.5:
+        risk_level = 4
+    else:
+        risk_level = 5
+
+    # Si no hay contactos disponibles, sube el riesgo operativo.
+    if available_contact_count == 0:
+        risk_level += 1
+
+    # Si está por encima del promedio y tiene muchas deudas vencidas, sube el riesgo.
+    if debt_ratio >= 1.0 and overdue_debt_count >= 10:
+        risk_level += 1
+
+    # Si está por encima del promedio y la deuda más antigua supera 1 año, sube el riesgo.
+    if debt_ratio >= 1.0 and oldest_debt_days >= 365:
+        risk_level += 1
+
+    return max(1, min(risk_level, 5))
+
+
+# Construye payload para debtor_profile a partir de las deudas, personas y contactos asociados a un debtor.
+def build_debtor_profile_payload(
+    debtor_id: int,
+    debt_rows: list[dict[str, Any]],
+    active_person_count: int,
+    available_contact_count: int,
+    average_total_debt_amount: float,
+) -> dict[str, Any]:
+    current_amounts = [parse_decimal(row.get("current_amount")) for row in debt_rows]
+    original_amounts = [parse_decimal(row.get("original_amount")) for row in debt_rows]
+
+    total_debt_amount = round(sum(current_amounts), 2)
+    original_debt_amount = round(sum(original_amounts), 2)
+
+    overdue_rows = [
+        row for row in debt_rows
+        if parse_int(row.get("status")) == DEBT_STATUS_OVERDUE_ID
+    ]
+
+    overdue_amounts = [parse_decimal(row.get("current_amount")) for row in overdue_rows]
+    overdue_debt_amount = round(sum(overdue_amounts), 2)
+
+    debt_ages = [calculate_debt_age_days(row.get("due_date")) for row in debt_rows]
+    debt_count = len(debt_rows)
+    overdue_debt_count = len(overdue_rows)
+
+    oldest_debt_days = max(debt_ages) if debt_ages else 0
+    average_debt_age_days = int(round(sum(debt_ages) / len(debt_ages))) if debt_ages else 0
+
+    risk_level = calculate_socioeconomic_risk_level(
+        total_debt_amount=total_debt_amount,
+        overdue_debt_amount=overdue_debt_amount,
+        overdue_debt_count=overdue_debt_count,
+        oldest_debt_days=oldest_debt_days,
+        active_person_count=active_person_count,
+        available_contact_count=available_contact_count,
+        average_total_debt_amount=average_total_debt_amount,
+    )
+
+    return {
+        "debtor": debtor_id,
+        "total_debt_amount": total_debt_amount,
+        "overdue_debt_amount": overdue_debt_amount,
+        "debt_count": debt_count,
+        "overdue_debt_count": overdue_debt_count,
+        "oldest_debt_days": oldest_debt_days,
+        "average_debt_age_days": average_debt_age_days,
+        "active_person_count": active_person_count,
+        "available_contact_count": available_contact_count,
+        "socioeconomic_risk_level": risk_level,
+        "profile_generated_at": datetime.now(timezone.utc).isoformat(),
+        "active": True,
+    }
+
+# Construye la razón textual para el riesgo de una persona dentro del perfil del objeto.
+def build_profile_detail_reason(
+    profile_risk_level: int,
+    final_risk_value: int,
+    person_contact_count: int,
+    role: str | None,
+    priority: float | None,
+) -> str:
+    reasons: list[str] = []
+
+    reasons.append(f"Riesgo base del objeto: {profile_risk_level}.")
+    reasons.append(f"Riesgo individual final: {final_risk_value}.")
+
+    if final_risk_value > profile_risk_level:
+        reasons.append("El riesgo individual se elevó por condiciones particulares de la persona.")
+
+    if person_contact_count == 0:
+        reasons.append("La persona no tiene contactos disponibles.")
+    else:
+        reasons.append(f"La persona tiene {person_contact_count} contacto(s) disponible(s).")
+
+    if role:
+        reasons.append(f"Rol frente al objeto: {role}.")
+
+    if priority is not None:
+        reasons.append(f"Porcentaje/prioridad declarada: {priority}.")
+
+    return " ".join(reasons)
+
+
+# Construye payload para debtor_profile_detail por cada persona asociada al objeto.
+def build_debtor_profile_detail_payload(
+    debtor_profile_id: int,
+    person_id: int,
+    profile_risk_level: int,
+    person_contact_count: int,
+    role: str | None = None,
+    priority: float | None = None,
+) -> dict[str, Any]:
+    risk_value = profile_risk_level
+
+    if person_contact_count == 0:
+        risk_value = min(risk_value + 1, 5)
+
+    reason = build_profile_detail_reason(
+        profile_risk_level=profile_risk_level,
+        final_risk_value=risk_value,
+        person_contact_count=person_contact_count,
+        role=role,
+        priority=priority,
+    )
+
+    return {
+        "debtor_profile": debtor_profile_id,
+        "person": person_id,
+        "risk_value": risk_value,
+        "reason": reason,
+        "active": True,
+    }
 
 # ============================================================
 # FUNCIONES AUXILIARES PARA TRANSFORMACIÓN
@@ -351,6 +679,7 @@ def build_header_context_by_clave(cabecera_df: pd.DataFrame) -> dict[str, dict[s
     return context
 
 
+# Estas funciones toman la fecha de actualización de la cabecera para usarla como issue_date y last_collection_date de las deudas.
 def get_issue_date_from_header(header_row: dict[str, Any] | None) -> str | None:
 
     if not header_row:
@@ -383,7 +712,7 @@ def build_transform_summary(
     debtors_by_account: set[int] = set()
     debtor_person_relations: set[tuple[int, int]] = set()
 
-    for row in cabecera_df.to_dict(orient="records"):
+    for row in dataframe_to_records(cabecera_df):
         person_external_id = parse_int(row.get("Destinatario_Id"))
         debtor_external_id = parse_int(row.get("Cuenta"))
 
