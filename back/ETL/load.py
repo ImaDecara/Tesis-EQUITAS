@@ -13,13 +13,12 @@ DEBTOR_TABLE = "debtor"
 DEBTOR_PERSON_TABLE = "debtor_person"
 DEBT_TABLE = "debt"
 
+
 #Etapa 2
 PROVINCE_TABLE = "province"
 CITY_TABLE = "city"
 ADDRESS_TABLE = "address"
 DEBTOR_CONTACT_TABLE = "debtor_contact"
-
-#Etapa 3
 DEBTOR_PROFILE_TABLE = "debtor_profile"
 DEBTOR_PROFILE_DETAIL_TABLE = "debtor_profile_detail"
 
@@ -367,8 +366,6 @@ def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
             "value": value,
         },
     )
-
-
 # Inserta o actualiza el perfil calculado de un objeto de deuda.
 def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
     """
@@ -414,7 +411,6 @@ def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
             "person": person,
         },
     )
-
 # ============================================================
 # FUNCIONES AUXILIARES PARA CATÁLOGOS
 # ============================================================

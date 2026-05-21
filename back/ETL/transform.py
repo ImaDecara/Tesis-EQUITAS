@@ -32,14 +32,6 @@ PERSON_STATUS_ACTIVE_ID = 1
 PERSON_STATUS_INACTIVE_ID = 2
 PERSON_STATUS_UNKNOWN_ID = 3
 
-# debtor_type
-# Para este primer archivo de inmuebles, Bien_Tipo_Id = 1
-DEFAULT_DEBTOR_TYPE_ID = 1
-
-# debt.type
-# Para este primer archivo, Tipo_Ingreso_Id = 1
-DEFAULT_DEBT_TYPE_ID = 1
-
 # currency
 # Asumimos ARS = 1
 DEFAULT_CURRENCY_ID = 1
@@ -61,6 +53,7 @@ CONTACT_TYPE_EMAIL_ID = 3
 CONTACT_TYPE_LETTER_ID = 4
 CONTACT_TYPE_WHATSAPP_ID = 5
 
+
 # ============================================================
 # TIPOS PARA RESUMEN DE TRANSFORMACIÓN
 # ============================================================
@@ -80,9 +73,9 @@ class TransformSummary:
 # FUNCIONES DE LIMPIEZA Y PARSEO
 # ============================================================
 
-#Limpia un valor y lo convierte a texto. Si viene vacío, devuelve None.
+# Limpia un valor y lo convierte a texto. Si viene vacío, devuelve None.
 def clean_text(value: Any) -> str | None:
-    
+
     if value is None:
         return None
 
@@ -93,24 +86,22 @@ def clean_text(value: Any) -> str | None:
 
     return text
 
-# Convierte una fila proveniente de pandas a dict[str, Any], 
-# asegurando que las claves sean strings panda usa claves hashables
-def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
-    
 
+# Convierte una fila proveniente de pandas a dict[str, Any],
+# asegurando que las claves sean strings porque pandas usa claves hashables.
+def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
     return {str(key): value for key, value in row.items()}
 
 
 # Convierte un DataFrame a una lista de diccionarios con claves string.
 def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
-    
     raw_records = dataframe.to_dict(orient="records")
-
     return [row_to_str_dict(row) for row in raw_records]
 
-#Devuelve solo los dígitos de un valor. Sirve para CUIT, CUIL, DNI, Cuenta, DEUD_id, etc.
+
+# Devuelve solo los dígitos de un valor. Sirve para CUIT, CUIL, DNI, Cuenta, DEUD_id, etc.
 def only_digits(value: Any) -> str | None:
-    
+
     text = clean_text(value)
 
     if text is None:
@@ -120,9 +111,10 @@ def only_digits(value: Any) -> str | None:
 
     return digits or None
 
-#Convierte un valor a entero. Si no se puede, devuelve None o un default dado.
+
+# Convierte un valor a entero. Si no se puede, devuelve None o un default dado.
 def parse_int(value: Any, default: int | None = None) -> int | None:
-   
+
     digits = only_digits(value)
 
     if digits is None:
@@ -138,7 +130,7 @@ def parse_int(value: Any, default: int | None = None) -> int | None:
 # Si el valor viene vacío, devuelve None.
 # Sirve para campos como number o floor, donde no queremos guardar 0 si el dato no existe.
 def parse_optional_decimal(value: Any) -> float | None:
-    
+
     text = clean_text(value)
 
     if text is None:
@@ -147,7 +139,7 @@ def parse_optional_decimal(value: Any) -> float | None:
     return parse_decimal(text)
 
 
-#Convierte un valor a decimal (float). Si no se puede, devuelve 0.0.
+# Convierte un valor a decimal (float). Si no se puede, devuelve 0.0.
 def parse_decimal(value: Any) -> float:
 
     text = clean_text(value)
@@ -167,9 +159,10 @@ def parse_decimal(value: Any) -> float:
     except ValueError:
         return 0.0
 
-#Convierte fechas del TSV a formato ISO YYYY-MM-DD.
+
+# Convierte fechas del TSV a formato ISO YYYY-MM-DD.
 def parse_date(value: Any) -> str | None:
-   
+
     text = clean_text(value)
 
     if text is None:
@@ -183,9 +176,9 @@ def parse_date(value: Any) -> str | None:
     return parsed.date().isoformat()
 
 
-#Convierte textos del TSV a booleano.
-#Activo -> True
-#Inactivo -> False
+# Convierte textos del TSV a booleano.
+# Activo -> True
+# Inactivo -> False
 def parse_bool(value: Any, default: bool = True) -> bool:
 
     text = clean_text(value)
@@ -226,9 +219,9 @@ def parse_bool(value: Any, default: bool = True) -> bool:
     return default
 
 
-# Normaliza nombres de personas, eliminando espacios extra y capitalizando cada palabra.
+# Normaliza nombres simples, eliminando espacios extra y capitalizando cada palabra.
 def normalize_name(value: Any) -> str | None:
-    
+
     text = clean_text(value)
 
     if text is None:
@@ -236,20 +229,21 @@ def normalize_name(value: Any) -> str | None:
 
     return " ".join(text.split()).title()
 
+
 # ============================================================
 # REGLAS DE INFERENCIA
 # ============================================================
 
-# Estas funciones infieren valores a partir de otros campos, para completar los payloads
+# Estas funciones infieren valores a partir de otros campos, para completar los payloads.
 def infer_document_type_id(document_number: str | None) -> int:
-    
+
     if not document_number:
         return DOCUMENT_TYPE_UNKNOWN_ID
 
     return DOCUMENT_TYPE_CUIT_ID
 
 
-# Para este primer archivo, inferimos el tipo de persona a partir del prefijo de su número de documento (CUIT o DNI).
+# Para este primer MVP, inferimos el tipo de persona a partir del prefijo de su CUIT/CUIL.
 def infer_person_type_id(document_number: str | None) -> int:
 
     digits = only_digits(document_number)
@@ -268,9 +262,8 @@ def infer_person_type_id(document_number: str | None) -> int:
     return PERSON_TYPE_UNKNOWN_ID
 
 
-# Para este primer archivo, inferimos el estado de la deuda a partir de su fecha de vencimiento:
-# - Si no tiene fecha de vencimiento o no se puede parsear, lo marcamos como desconocido.
-# - Si la fecha de vencimiento es anterior a hoy, lo marcamos como vencido
+# Inferimos el estado de la deuda a partir de su fecha de vencimiento.
+# Si la fecha de vencimiento es anterior a hoy, se marca como vencida.
 def infer_debt_status_id(due_date: str | None) -> int:
 
     if not due_date:
@@ -285,6 +278,35 @@ def infer_debt_status_id(due_date: str | None) -> int:
         return DEBT_STATUS_OVERDUE_ID
 
     return DEBT_STATUS_ACTIVE_ID
+
+
+# Convierte el Tipo_Ingreso_Id del archivo origen a una clave textual para debt.type.
+# Para el MVP usamos strings en debt.type, no FK numérica.
+# Convierte el Tipo_Ingreso_Id del archivo origen a una clave textual para debt.type.
+# Para el MVP usamos strings en debt.type, no FK numérica.
+def infer_debt_type_key(tipo_ingreso_id: Any) -> str:
+    tipo_id = parse_int(tipo_ingreso_id)
+
+    debt_type_by_origin_id = {
+        # Inmuebles
+        1: "inmuebles",
+
+        # Rodados
+        100: "vehicle_tax",
+        101: "vehicle_deregistration",
+        102: "vehicle_clearance",
+        109: "vehicle_registration",
+
+        # Agua
+        800: "water_service",
+        801: "water_connection",
+        802: "water_connection_70m",
+    }
+
+    if tipo_id is None:
+        return "unknown"
+
+    return debt_type_by_origin_id.get(tipo_id, f"unknown_{tipo_id}")
 
 
 # ============================================================
@@ -307,11 +329,11 @@ def build_person_payload(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_debtor_payload(row: dict[str, Any]) -> dict[str, Any]:
-    
+
     return {
         "tenant": settings.tenant_id,
         "external_id": parse_int(row.get("Cuenta")),
-        "type": parse_int(row.get("Bien_Tipo_Id"), DEFAULT_DEBTOR_TYPE_ID),
+        "type": parse_int(row.get("Bien_Tipo_Id")),
         "identifier": clean_text(row.get("Identificador")),
         "description": clean_text(row.get("Bien_Descripcion")),
         "status": parse_bool(row.get("Estado"), default=True),
@@ -323,7 +345,7 @@ def build_debtor_person_payload(
     debtor_id: int,
     person_id: int,
 ) -> dict[str, Any]:
-    
+
     return {
         "debtor": debtor_id,
         "person": person_id,
@@ -346,7 +368,7 @@ def build_debt_payload(
     return {
         "external_id": debt_external_id,
         "debtor": debtor_id,
-        "type": parse_int(row.get("Tipo_Ingreso_Id"), DEFAULT_DEBT_TYPE_ID),
+        "type": infer_debt_type_key(row.get("Tipo_Ingreso_Id")),
         "description": f"Deuda importada desde TSV - DEUD_id {debt_external_id}",
         "original_amount": parse_decimal(row.get("NOTD_capital")),
         "current_amount": parse_decimal(row.get("NOTD_totalActualizado")),
@@ -357,6 +379,7 @@ def build_debt_payload(
         "period": clean_text(row.get("DEUD_id")),
         "status": infer_debt_status_id(due_date),
     }
+
 
 def build_province_payload(row: dict[str, Any]) -> dict[str, Any] | None:
     """
@@ -502,6 +525,7 @@ def calculate_debt_age_days(due_date: Any) -> int:
 
 
 # Calcula el nivel de riesgo general del objeto de deuda para el MVP.
+# Esta versión usa una regla relativa al promedio de deuda de la cartera importada.
 def calculate_socioeconomic_risk_level(
     total_debt_amount: float,
     overdue_debt_amount: float,
@@ -511,7 +535,7 @@ def calculate_socioeconomic_risk_level(
     available_contact_count: int,
     average_total_debt_amount: float,
 ) -> int:
-    
+
     if total_debt_amount <= 0:
         return 1
 
@@ -600,6 +624,7 @@ def build_debtor_profile_payload(
         "active": True,
     }
 
+
 # Construye la razón textual para el riesgo de una persona dentro del perfil del objeto.
 def build_profile_detail_reason(
     profile_risk_level: int,
@@ -660,6 +685,7 @@ def build_debtor_profile_detail_payload(
         "active": True,
     }
 
+
 # ============================================================
 # FUNCIONES AUXILIARES PARA TRANSFORMACIÓN
 # ============================================================
@@ -667,7 +693,7 @@ def build_debtor_profile_detail_payload(
 # Crea un diccionario para acceder rápidamente a una fila de cabecera usando ClaveAgrupacion.
 # Esto servirá después para tomar Fecha_Actualizacion de cabecera cuando estemos procesando detalle.
 def build_header_context_by_clave(cabecera_df: pd.DataFrame) -> dict[str, dict[str, Any]]:
-    
+
     context: dict[str, dict[str, Any]] = {}
 
     for row in dataframe_to_records(cabecera_df):
@@ -690,7 +716,7 @@ def get_issue_date_from_header(header_row: dict[str, Any] | None) -> str | None:
 
 # Para el MVP usamos Fecha_Actualizacion también como last_collection_date.
 def get_last_collection_date_from_header(header_row: dict[str, Any] | None) -> str | None:
-    
+
     if not header_row:
         return None
 
@@ -707,37 +733,45 @@ def build_transform_summary(
     cabecera_df: pd.DataFrame,
     detalle_df: pd.DataFrame,
 ) -> TransformSummary:
-    
+
     persons_by_external_id: set[int] = set()
-    debtors_by_account: set[int] = set()
-    debtor_person_relations: set[tuple[int, int]] = set()
+    debtors_by_key: set[tuple[int, int]] = set()
+    debtor_person_relations: set[tuple[int, int, int]] = set()
 
     for row in dataframe_to_records(cabecera_df):
+        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
         person_external_id = parse_int(row.get("Destinatario_Id"))
         debtor_external_id = parse_int(row.get("Cuenta"))
 
         if person_external_id is not None:
             persons_by_external_id.add(person_external_id)
 
-        if debtor_external_id is not None:
-            debtors_by_account.add(debtor_external_id)
+        if debtor_type_id is not None and debtor_external_id is not None:
+            debtors_by_key.add((debtor_type_id, debtor_external_id))
 
-        if debtor_external_id is not None and person_external_id is not None:
-            debtor_person_relations.add((debtor_external_id, person_external_id))
+        if (
+            debtor_type_id is not None
+            and debtor_external_id is not None
+            and person_external_id is not None
+        ):
+            debtor_person_relations.add(
+                (debtor_type_id, debtor_external_id, person_external_id)
+            )
 
-    unique_debt_keys: set[tuple[int, int]] = set()
+    unique_debt_keys: set[tuple[int, int, int]] = set()
     duplicated_debt_rows_count = 0
 
     for row in dataframe_to_records(detalle_df):
+        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
         debtor_external_id = parse_int(row.get("Cuenta"))
         debt_external_id = parse_int(row.get("DEUD_id"))
 
-        if debtor_external_id is None or debt_external_id is None:
+        if debtor_type_id is None or debtor_external_id is None or debt_external_id is None:
             continue
 
         # Clave correcta para no duplicar deudas:
-        # una deuda se carga una sola vez por Cuenta + DEUD_id.
-        debt_key = (debtor_external_id, debt_external_id)
+        # una deuda se carga una sola vez por Bien_Tipo_Id + Cuenta + DEUD_id.
+        debt_key = (debtor_type_id, debtor_external_id, debt_external_id)
 
         if debt_key in unique_debt_keys:
             duplicated_debt_rows_count += 1
@@ -746,7 +780,7 @@ def build_transform_summary(
 
     return TransformSummary(
         persons_count=len(persons_by_external_id),
-        debtors_count=len(debtors_by_account),
+        debtors_count=len(debtors_by_key),
         debtor_person_relations_count=len(debtor_person_relations),
         detail_rows_count=len(detalle_df),
         unique_debts_count=len(unique_debt_keys),
@@ -768,7 +802,7 @@ def print_transform_summary(
     print(f"Debtors / cuentas únicas detectadas:    {summary.debtors_count}")
     print(f"Relaciones debtor_person detectadas:    {summary.debtor_person_relations_count}")
     print(f"Filas de detalle leídas:                {summary.detail_rows_count}")
-    print(f"Deudas únicas por Cuenta + DEUD_id:     {summary.unique_debts_count}")
+    print(f"Deudas únicas por Bien_Tipo + Cuenta + DEUD_id: {summary.unique_debts_count}")
     print(f"Filas de deuda duplicadas a ignorar:    {summary.duplicated_debt_rows_count}")
     print("-" * 80)
 
