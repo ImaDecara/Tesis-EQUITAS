@@ -3,7 +3,7 @@ from typing import Any
 import argparse
 import pandas as pd
 
-from ETL.extract import extract_from_input_folder
+from ETL.extract import extract_from_input_folder_limited
 
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
 from ETL.transform import (
@@ -25,6 +25,7 @@ from ETL.transform import (
     parse_int,
     print_transform_summary,
 )
+
 from ETL.load import (
     load_address,
     load_city,
@@ -39,24 +40,30 @@ from ETL.load import (
 )
 
 
-#Convierte una fila de pandas a dict[str, Any], asegurando que las claves sean strings.
+# Convierte una fila de pandas a dict[str, Any], asegurando que las claves sean strings.
 def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
-   
     return {str(key): value for key, value in row.items()}
 
 
-#Convierte un DataFrame a lista de diccionarios con claves string.
-# Esto es útil para evitar problemas de tipo de clave (por ejemplo, si el DataFrame tiene columnas con nombres que no son strings).
+# Convierte un DataFrame a lista de diccionarios con claves string.
+# Esto es útil para evitar problemas de tipo de clave si el DataFrame tiene columnas con nombres que no son strings.
 def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
-
     raw_records = dataframe.to_dict(orient="records")
-
     return [row_to_str_dict(row) for row in raw_records]
 
 
-# Función principal del ETL
-def run_etl(folder_name: str, execute: bool = False) -> None:
-    source_data = extract_from_input_folder(folder_name)
+# Función principal del ETL.
+def run_etl(
+    folder_name: str,
+    execute: bool = False,
+    limit_objects: int | None = None,
+    priority_tipo_ingreso_ids: list[int] | None = None,
+) -> None:
+    source_data = extract_from_input_folder_limited(
+        folder_name=folder_name,
+        limit_objects=limit_objects,
+        priority_tipo_ingreso_ids=priority_tipo_ingreso_ids,
+    )
 
     cabecera_df = source_data.cabecera_df
     detalle_df = source_data.detalle_df
@@ -65,6 +72,11 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         cabecera_df=cabecera_df,
         detalle_df=detalle_df,
     )
+
+    print()
+    print(f"Carpeta procesada: {folder_name}")
+    print(f"Límite de objetos: {limit_objects}")
+    print(f"Tipos de ingreso priorizados: {priority_tipo_ingreso_ids or []}")
 
     if not execute:
         print()
@@ -77,7 +89,13 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
     print("INICIANDO CARGA REAL EN SUPABASE")
     print("-" * 80)
 
-    debtor_id_by_account: dict[int, int] = {}
+    # Diccionario para ubicar el debtor interno a partir del tipo de bien y la cuenta.
+    # Esto es clave para no mezclar objetos de distintos tipos.
+    # Ejemplo:
+    # - INMUEBLE Cuenta 3 -> (1, 3)
+    # - AGUA Cuenta 3     -> (6, 3)
+    debtor_id_by_key: dict[tuple[int, int], int] = {}
+
     person_id_by_external_id: dict[int, int] = {}
 
     persons_loaded = 0
@@ -103,13 +121,15 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
     # 1. PROCESAR CABECERA
     # ========================================================
 
-    #Cargamos primero personas y deudores, para luego poder referenciarlos desde el detalle.
+    # Cargamos primero personas y objetos de deuda.
+    # También cargamos la relación debtor_person, contactos, provincia, ciudad y dirección.
     for index, row in enumerate(dataframe_to_records(cabecera_df), start=1):
         person_payload = build_person_payload(row)
         debtor_payload = build_debtor_payload(row)
 
         person_external_id = person_payload.get("external_id")
         debtor_external_id = debtor_payload.get("external_id")
+        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
 
         if person_external_id is None:
             print(f"⚠️ Fila omitida: person sin external_id. Row: {row}")
@@ -119,6 +139,10 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
             print(f"⚠️ Fila omitida: debtor sin external_id. Row: {row}")
             continue
 
+        if debtor_type_id is None:
+            print(f"⚠️ Fila omitida: debtor sin Bien_Tipo_Id. Row: {row}")
+            continue
+
         person_row = load_person(person_payload)
         debtor_row = load_debtor(debtor_payload)
 
@@ -126,7 +150,12 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         debtor_id = int(debtor_row["id"])
 
         person_id_by_external_id[int(person_external_id)] = person_id
-        debtor_id_by_account[int(debtor_external_id)] = debtor_id
+
+        # Guardamos el debtor por clave compuesta:
+        # Bien_Tipo_Id + Cuenta.
+        debtor_key = (int(debtor_type_id), int(debtor_external_id))
+        debtor_id_by_key[debtor_key] = debtor_id
+
         persons_by_debtor_id.setdefault(debtor_id, set()).add(person_id)
 
         debtor_person_payload = build_debtor_person_payload(
@@ -150,6 +179,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         # 1.1 PROVINCE
         # ====================================================
 
+        # Cargamos o actualizamos provincia a partir de Destinatario_Provincia.
         province_payload = build_province_payload(row)
 
         province_id: int | None = None
@@ -164,6 +194,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         # 1.2 CITY
         # ====================================================
 
+        # Cargamos o actualizamos ciudad/localidad a partir de provincia, localidad y CP.
         if province_id is not None:
             city_payload = build_city_payload(
                 row=row,
@@ -179,6 +210,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         # 1.3 ADDRESS
         # ====================================================
 
+        # Cargamos o actualizamos la dirección principal asociada a la persona.
         if city_id is not None:
             address_payload = build_address_payload(
                 row=row,
@@ -194,6 +226,8 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         # 1.4 DEBTOR CONTACT
         # ====================================================
 
+        # Cargamos contactos de la persona:
+        # teléfono, celular y email si vienen informados.
         contact_payloads = build_debtor_contact_payloads(
             row=row,
             person_id=person_id,
@@ -214,22 +248,29 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         if index % 10 == 0:
             print(f"Cabecera procesada: {index}/{len(cabecera_df)}")
 
-
     # ========================================================
     # 2. PROCESAR DETALLE
     # ========================================================
-    
+
     # Desde detalle cargamos:
     # - debt
-    # La deuda se deduplica por Cuenta + DEUD_id.
-    
+    #
+    # La deuda se deduplica en memoria por:
+    # Bien_Tipo_Id + Cuenta + DEUD_id.
+    #
+    # Esto evita mezclar deudas de distintos tipos de objeto.
     header_context_by_clave = build_header_context_by_clave(cabecera_df)
 
-    loaded_debt_keys: set[tuple[int, int]] = set()
+    loaded_debt_keys: set[tuple[int, int, int]] = set()
 
     for index, row in enumerate(dataframe_to_records(detalle_df), start=1):
+        bien_tipo_id = parse_int(row.get("Bien_Tipo_Id"))
         account = parse_int(row.get("Cuenta"))
         debt_external_id = parse_int(row.get("DEUD_id"))
+
+        if bien_tipo_id is None:
+            print(f"⚠️ Detalle omitido: sin Bien_Tipo_Id. Row: {row}")
+            continue
 
         if account is None:
             print(f"⚠️ Detalle omitido: sin Cuenta. Row: {row}")
@@ -239,17 +280,20 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
             print(f"⚠️ Detalle omitido: sin DEUD_id. Row: {row}")
             continue
 
-        debt_key = (account, debt_external_id)
+        # Clave de deduplicación robusta para múltiples tipos de bien.
+        debt_key = (bien_tipo_id, account, debt_external_id)
 
         if debt_key in loaded_debt_keys:
             duplicate_debts_skipped += 1
             continue
 
-        debtor_id = debtor_id_by_account.get(account)
+        # Buscamos el debtor usando Bien_Tipo_Id + Cuenta.
+        debtor_id = debtor_id_by_key.get((bien_tipo_id, account))
 
         if debtor_id is None:
             print(
-                f"⚠️ Detalle omitido: no existe debtor para Cuenta={account}, "
+                f"⚠️ Detalle omitido: no existe debtor para "
+                f"Bien_Tipo_Id={bien_tipo_id}, Cuenta={account}, "
                 f"DEUD_id={debt_external_id}"
             )
             continue
@@ -280,6 +324,9 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
                 f"Duplicadas omitidas: {duplicate_debts_skipped}"
             )
 
+    # ========================================================
+    # 3. CALCULAR PROMEDIO DE DEUDA PARA RIESGO
+    # ========================================================
 
     # Calcula el promedio de deuda total por objeto para usarlo como referencia relativa del riesgo.
     total_debt_amounts_for_average: list[float] = []
@@ -302,7 +349,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
     print(f"Promedio de deuda por objeto usado para riesgo: {average_total_debt_amount:.2f}")
 
     # ========================================================
-    # 3. CALCULAR Y CARGAR DEBTOR_PROFILE
+    # 4. CALCULAR Y CARGAR DEBTOR_PROFILE
     # ========================================================
 
     # El perfil se calcula al final porque depende de deudas, personas asociadas y contactos ya cargados.
@@ -327,7 +374,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
         profiles_loaded += 1
 
         # ====================================================
-        # 3.1 CALCULAR Y CARGAR DEBTOR_PROFILE_DETAIL
+        # 4.1 CALCULAR Y CARGAR DEBTOR_PROFILE_DETAIL
         # ====================================================
 
         # El detalle del perfil se calcula por cada persona asociada al objeto de deuda.
@@ -350,8 +397,10 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
             load_debtor_profile_detail(debtor_profile_detail_payload)
             profile_details_loaded += 1
 
+    # ========================================================
+    # 5. RESUMEN FINAL
+    # ========================================================
 
-    #Print de resumen final
     print()
     print("CARGA FINALIZADA")
     print("-" * 80)
@@ -369,7 +418,7 @@ def run_etl(folder_name: str, execute: bool = False) -> None:
     print("-" * 80)
 
 
-# Entry point para ejecutar el ETL desde línea de comandos
+# Entry point para ejecutar el ETL desde línea de comandos.
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Ejecuta el ETL de archivos TSV hacia Supabase."
@@ -387,11 +436,28 @@ def main() -> None:
         help="Ejecuta la carga real en Supabase. Si no se usa, corre en modo dry-run.",
     )
 
+    parser.add_argument(
+        "--limit-objects",
+        type=int,
+        default=None,
+        help="Limita la carga a N objetos únicos por Bien_Tipo_Id + Cuenta.",
+    )
+
+    parser.add_argument(
+        "--priority-tipo-ingreso",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Tipo_Ingreso_Id que deben priorizarse dentro del límite. Ejemplo: 801 802.",
+    )
+
     args = parser.parse_args()
 
     run_etl(
         folder_name=args.folder,
         execute=args.execute,
+        limit_objects=args.limit_objects,
+        priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
     )
 
 

@@ -7,7 +7,7 @@ import pandas as pd
 
 # Este módulo se encarga de generar un archivo Excel de preview del proceso de ETL, con hojas que muestran los datos transformados antes de cargarlos a Supabase.
 from ETL.config import settings
-from ETL.extract import extract_from_input_folder
+from ETL.extract import extract_from_input_folder_limited
 from ETL.transform import (
     build_address_payload,
     build_city_payload,
@@ -26,8 +26,8 @@ from ETL.transform import (
     parse_int,
     parse_date,
     infer_debt_status_id,
+    infer_debt_type_key,
     DEFAULT_CURRENCY_ID,
-    DEFAULT_DEBT_TYPE_ID,
 )
 
 
@@ -56,33 +56,36 @@ def build_person_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_debtor_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
-    rows: dict[int, dict[str, Any]] = {}
+    rows: dict[tuple[int, int], dict[str, Any]] = {}
 
     for row in dataframe_to_records(cabecera_df):
         payload = build_debtor_payload(row)
         external_id = payload.get("external_id")
+        debtor_type = payload.get("type")
 
-        if external_id is None:
+        if external_id is None or debtor_type is None:
             continue
 
-        rows[int(external_id)] = payload
+        rows[(int(debtor_type), int(external_id))] = payload
 
     return pd.DataFrame(rows.values())
 
 
 def build_debtor_person_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
-    rows: dict[tuple[int, int], dict[str, Any]] = {}
+    rows: dict[tuple[int, int, int], dict[str, Any]] = {}
 
     for row in dataframe_to_records(cabecera_df):
+        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
         debtor_external_id = parse_int(row.get("Cuenta"))
         person_external_id = parse_int(row.get("Destinatario_Id"))
 
-        if debtor_external_id is None or person_external_id is None:
+        if debtor_type_id is None or debtor_external_id is None or person_external_id is None:
             continue
 
-        key = (debtor_external_id, person_external_id)
+        key = (debtor_type_id, debtor_external_id, person_external_id)
 
         rows[key] = {
+            "debtor_type_id": debtor_type_id,
             "debtor_external_id": debtor_external_id,
             "person_external_id": person_external_id,
             "priority": parse_decimal(row.get("Destinatario_Porcentaje")),
@@ -100,17 +103,18 @@ def build_debt_preview(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     header_context = build_header_context_by_clave(cabecera_df)
 
-    unique_debts: dict[tuple[int, int], dict[str, Any]] = {}
+    unique_debts: dict[tuple[int, int, int], dict[str, Any]] = {}
     duplicated_rows: list[dict[str, Any]] = []
 
     for row in dataframe_to_records(detalle_df):
+        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
         account = parse_int(row.get("Cuenta"))
         debt_external_id = parse_int(row.get("DEUD_id"))
 
-        if account is None or debt_external_id is None:
+        if debtor_type_id is None or account is None or debt_external_id is None:
             continue
 
-        debt_key = (account, debt_external_id)
+        debt_key = (debtor_type_id, account, debt_external_id)
 
         clave = clean_text(row.get("ClaveAgrupacion"))
         header_row = header_context.get(clave) if clave else None
@@ -120,9 +124,10 @@ def build_debt_preview(
         due_date = parse_date(row.get("NOTD_vencimiento"))
 
         preview_row = {
+            "debtor_type_id": debtor_type_id,
             "debtor_external_id": account,
             "external_id": debt_external_id,
-            "type": parse_int(row.get("Tipo_Ingreso_Id"), DEFAULT_DEBT_TYPE_ID),
+            "type": infer_debt_type_key(row.get("Tipo_Ingreso_Id")),
             "description": f"Deuda importada desde TSV - DEUD_id {debt_external_id}",
             "original_amount": parse_decimal(row.get("NOTD_capital")),
             "interest_amount_source": parse_decimal(row.get("NOTD_intereses")),
@@ -147,6 +152,7 @@ def build_debt_preview(
         unique_debts[debt_key] = preview_row
 
     return pd.DataFrame(unique_debts.values()), pd.DataFrame(duplicated_rows)
+
 
 def build_province_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
     rows: dict[str, dict[str, Any]] = {}
@@ -261,7 +267,6 @@ def build_debtor_contact_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows.values())
 
 
-
 # Construye la hoja de preview para debtor_profile usando las deudas únicas, relaciones y contactos calculados.
 def build_debtor_profile_preview(
     debt_df: pd.DataFrame,
@@ -274,7 +279,7 @@ def build_debtor_profile_preview(
         return pd.DataFrame(rows)
 
     total_debt_by_debtor = (
-        debt_df.groupby("debtor_external_id")["current_amount"]
+        debt_df.groupby(["debtor_type_id", "debtor_external_id"])["current_amount"]
         .sum()
         .tolist()
     )
@@ -285,10 +290,24 @@ def build_debtor_profile_preview(
         else 0.0
     )
 
-    for debtor_external_id in sorted(debt_df["debtor_external_id"].dropna().unique()):
-        debtor_debts = debt_df[debt_df["debtor_external_id"] == debtor_external_id]
+    debtor_keys_df = (
+        debt_df[["debtor_type_id", "debtor_external_id"]]
+        .drop_duplicates()
+        .sort_values(["debtor_type_id", "debtor_external_id"])
+    )
+
+    for _, debtor_key_row in debtor_keys_df.iterrows():
+        debtor_type_id = int(debtor_key_row["debtor_type_id"])
+        debtor_external_id = int(debtor_key_row["debtor_external_id"])
+
+        debtor_debts = debt_df[
+            (debt_df["debtor_type_id"] == debtor_type_id)
+            & (debt_df["debtor_external_id"] == debtor_external_id)
+        ]
+
         debtor_people = debtor_person_df[
-            debtor_person_df["debtor_external_id"] == debtor_external_id
+            (debtor_person_df["debtor_type_id"] == debtor_type_id)
+            & (debtor_person_df["debtor_external_id"] == debtor_external_id)
         ] if not debtor_person_df.empty else pd.DataFrame()
 
         person_external_ids = set()
@@ -308,13 +327,14 @@ def build_debtor_profile_preview(
             available_contact_count = 0
 
         payload = build_debtor_profile_payload(
-            debtor_id=int(debtor_external_id),
+            debtor_id=debtor_external_id,
             debt_rows=debtor_debts.to_dict(orient="records"),
             active_person_count=len(person_external_ids),
             available_contact_count=available_contact_count,
             average_total_debt_amount=average_total_debt_amount,
         )
 
+        payload["debtor_type_id"] = debtor_type_id
         payload["debtor_external_id"] = payload.pop("debtor")
         rows.append(payload)
 
@@ -333,14 +353,19 @@ def build_debtor_profile_detail_preview(
         return pd.DataFrame(rows)
 
     profile_by_debtor = {
-        int(row["debtor_external_id"]): row
+        (
+            int(row["debtor_type_id"]),
+            int(row["debtor_external_id"]),
+        ): row
         for row in debtor_profile_df.to_dict(orient="records")
     }
 
     for relation in debtor_person_df.to_dict(orient="records"):
+        debtor_type_id = int(relation["debtor_type_id"])
         debtor_external_id = int(relation["debtor_external_id"])
         person_external_id = int(relation["person_external_id"])
-        profile = profile_by_debtor.get(debtor_external_id)
+
+        profile = profile_by_debtor.get((debtor_type_id, debtor_external_id))
 
         if not profile:
             continue
@@ -362,11 +387,13 @@ def build_debtor_profile_detail_preview(
             priority=parse_decimal(relation.get("priority")),
         )
 
+        payload["debtor_type_id"] = debtor_type_id
         payload["debtor_external_id"] = payload.pop("debtor_profile")
         payload["person_external_id"] = payload.pop("person")
         rows.append(payload)
 
     return pd.DataFrame(rows)
+
 
 def build_summary_sheet(
     folder_name: str,
@@ -383,10 +410,14 @@ def build_summary_sheet(
     debtor_contact_df: pd.DataFrame,
     debtor_profile_df: pd.DataFrame,
     debtor_profile_detail_df: pd.DataFrame,
+    limit_objects: int | None,
+    priority_tipo_ingreso_ids: list[int] | None,
 ) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {"metric": "folder", "value": folder_name},
+            {"metric": "limit_objects", "value": limit_objects},
+            {"metric": "priority_tipo_ingreso_ids", "value": str(priority_tipo_ingreso_ids or [])},
             {"metric": "tenant_id", "value": settings.tenant_id},
             {"metric": "tenant_name", "value": settings.tenant_name},
             {"metric": "cabecera_rows", "value": len(cabecera_df)},
@@ -404,6 +435,7 @@ def build_summary_sheet(
             {"metric": "debtor_profile_detail_preview_rows", "value": len(debtor_profile_detail_df)},
         ]
     )
+
 
 def autosize_excel_columns(
     writer: pd.ExcelWriter,
@@ -439,8 +471,17 @@ def autosize_excel_columns(
         )
 
 
-def export_preview(folder_name: str, output_path: Path | None = None) -> Path:
-    source_data = extract_from_input_folder(folder_name)
+def export_preview(
+    folder_name: str,
+    output_path: Path | None = None,
+    limit_objects: int | None = None,
+    priority_tipo_ingreso_ids: list[int] | None = None,
+) -> Path:
+    source_data = extract_from_input_folder_limited(
+        folder_name=folder_name,
+        limit_objects=limit_objects,
+        priority_tipo_ingreso_ids=priority_tipo_ingreso_ids,
+    )
 
     cabecera_df = source_data.cabecera_df
     detalle_df = source_data.detalle_df
@@ -453,11 +494,13 @@ def export_preview(folder_name: str, output_path: Path | None = None) -> Path:
     city_df = build_city_preview(cabecera_df)
     address_df = build_address_preview(cabecera_df)
     debtor_contact_df = build_debtor_contact_preview(cabecera_df)
+
     debtor_profile_df = build_debtor_profile_preview(
         debt_df=debt_df,
         debtor_person_df=debtor_person_df,
         debtor_contact_df=debtor_contact_df,
     )
+
     debtor_profile_detail_df = build_debtor_profile_detail_preview(
         debtor_profile_df=debtor_profile_df,
         debtor_person_df=debtor_person_df,
@@ -479,6 +522,8 @@ def export_preview(folder_name: str, output_path: Path | None = None) -> Path:
         debtor_contact_df=debtor_contact_df,
         debtor_profile_df=debtor_profile_df,
         debtor_profile_detail_df=debtor_profile_detail_df,
+        limit_objects=limit_objects,
+        priority_tipo_ingreso_ids=priority_tipo_ingreso_ids,
     )
 
     settings.processed_dir.mkdir(parents=True, exist_ok=True)
@@ -526,6 +571,21 @@ def main() -> None:
         help="Ruta opcional del archivo Excel de salida.",
     )
 
+    parser.add_argument(
+        "--limit-objects",
+        type=int,
+        default=None,
+        help="Limita el preview a N objetos únicos por Bien_Tipo_Id + Cuenta.",
+    )
+
+    parser.add_argument(
+        "--priority-tipo-ingreso",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Tipo_Ingreso_Id que deben priorizarse dentro del límite. Ejemplo: 801 802.",
+    )
+
     args = parser.parse_args()
 
     output_path = Path(args.output) if args.output else None
@@ -533,6 +593,8 @@ def main() -> None:
     generated_path = export_preview(
         folder_name=args.folder,
         output_path=output_path,
+        limit_objects=args.limit_objects,
+        priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
     )
 
     print("EXPORT PREVIEW OK")
