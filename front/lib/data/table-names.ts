@@ -7,6 +7,7 @@ export const EQUITAS_TABLE_NAMES = {
   person: 'person',
   debtorContact: 'debtor_contact',
   debtorProfile: 'debtor_profile',
+  debtorProfileDetail: 'debtor_profile_detail',
 } as const
 
 // Fuente unica de verdad para el orden de carga cruda de objetos de deuda.

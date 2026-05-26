@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EQUITAS MVP",
   description: "Sistema de recupero inteligente de deuda municipal",
+  icons: {
+    icon: "/icono.png?v=2",
+    shortcut: "/icono.png?v=2",
+    apple: "/icono.png?v=2",
+  },
 };
 
 // Estructura global de la app para fuentes y metadatos compartidos por todas las rutas.

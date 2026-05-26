@@ -8,15 +8,15 @@ type MetricCardProps = {
   value: string
   hint: string
   icon: ComponentType<{ className?: string }>
-  tone?: 'emerald' | 'sky' | 'amber' | 'rose' | 'indigo'
+  tone?: 'primary' | 'accent' | 'warning' | 'danger' | 'success'
 }
 
 const toneMap: Record<NonNullable<MetricCardProps['tone']>, string> = {
-  emerald: 'from-emerald-100 to-white text-emerald-700',
-  sky: 'from-sky-100 to-white text-sky-700',
-  amber: 'from-amber-100 to-white text-amber-700',
-  rose: 'from-rose-100 to-white text-rose-700',
-  indigo: 'from-indigo-100 to-white text-indigo-700',
+  primary: 'from-[#e6edf6] to-white text-[#163a63]',
+  accent: 'from-[#f4ecd6] to-white text-[#8a6f2a]',
+  warning: 'from-[#f6efdc] to-white text-[#8a6f2a]',
+  danger: 'from-[#f8e7e7] to-white text-[#9d3d3d]',
+  success: 'from-[#e8f3ed] to-white text-[#2d6a4f]',
 }
 
 // Envoltorio visual para tarjetas KPI usadas en el encabezado del tablero.
@@ -25,22 +25,22 @@ export function MetricCard({
   value,
   hint,
   icon: Icon,
-  tone = 'emerald',
+  tone = 'primary',
 }: MetricCardProps) {
   return (
-    <Card className="overflow-hidden border-slate-200/80">
+    <Card className="overflow-hidden border-slate-200/90 bg-white shadow-sm">
       <CardHeader className="relative pb-3">
         <div
           className={cn(
-            'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-75',
+            'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-85',
             toneMap[tone]
           )}
         />
         <div className="relative flex items-start justify-between">
-          <p className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
+          <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
             {label}
           </p>
-          <span className="rounded-lg bg-white/80 p-2 shadow-sm ring-1 ring-slate-200">
+          <span className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-slate-200">
             <Icon className="size-4" />
           </span>
         </div>
