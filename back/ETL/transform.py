@@ -524,8 +524,15 @@ def calculate_debt_age_days(due_date: Any) -> int:
     return max((date.today() - parsed.date()).days, 0)
 
 
-# Calcula el nivel de riesgo general del objeto de deuda para el MVP.
+# Limita un puntaje de riesgo para que quede dentro del rango 0 a 100.
+# Lo usamos para que todos los scores sean interpretables como porcentaje.
+def clamp_risk_score(value: float, minimum: int = 0, maximum: int = 100) -> int:
+    return int(max(minimum, min(round(value), maximum)))
+
+
+# Calcula el riesgo general del objeto de deuda en escala 0 a 100%.
 # Esta versión usa una regla relativa al promedio de deuda de la cartera importada.
+# La idea es obtener una escala más precisa que 1 a 5 y poder ordenar mejor los casos.
 def calculate_socioeconomic_risk_level(
     total_debt_amount: float,
     overdue_debt_amount: float,
@@ -537,37 +544,58 @@ def calculate_socioeconomic_risk_level(
 ) -> int:
 
     if total_debt_amount <= 0:
-        return 1
+        return 0
 
     if average_total_debt_amount <= 0:
         average_total_debt_amount = total_debt_amount
 
     debt_ratio = total_debt_amount / average_total_debt_amount
 
-    if debt_ratio < 0.5:
-        risk_level = 1
-    elif debt_ratio < 1.0:
-        risk_level = 2
-    elif debt_ratio < 1.5:
-        risk_level = 3
-    elif debt_ratio < 2.5:
-        risk_level = 4
-    else:
-        risk_level = 5
+    # Componente principal: peso relativo de la deuda frente al promedio de la cartera.
+    # Tiene un máximo de 60 puntos sobre 100.
+    debt_amount_score = min(debt_ratio * 35, 60)
 
-    # Si no hay contactos disponibles, sube el riesgo operativo.
+    # Proporción de deuda vencida sobre deuda total.
+    # Tiene un máximo de 10 puntos.
+    overdue_amount_ratio = (
+        overdue_debt_amount / total_debt_amount
+        if total_debt_amount > 0
+        else 0
+    )
+    overdue_amount_score = min(overdue_amount_ratio * 10, 10)
+
+    # Cantidad de deudas vencidas.
+    # Tiene un máximo de 10 puntos.
+    overdue_count_score = min(overdue_debt_count, 10)
+
+    # Antigüedad de la deuda más vieja.
+    # A partir de un año o más, aporta el máximo de 15 puntos.
+    age_score = min((oldest_debt_days / 365) * 15, 15)
+
+    # Disponibilidad de contacto.
+    # Sin contactos sube bastante el riesgo operativo.
+    # Con un solo contacto sube levemente porque hay menor redundancia.
     if available_contact_count == 0:
-        risk_level += 1
+        contact_score = 15
+    elif available_contact_count == 1:
+        contact_score = 5
+    else:
+        contact_score = 0
 
-    # Si está por encima del promedio y tiene muchas deudas vencidas, sube el riesgo.
-    if debt_ratio >= 1.0 and overdue_debt_count >= 10:
-        risk_level += 1
+    # Multiplicidad de personas asociadas al objeto.
+    # Suma un ajuste pequeño porque puede requerir gestión más compleja.
+    multi_person_score = 5 if active_person_count > 1 else 0
 
-    # Si está por encima del promedio y la deuda más antigua supera 1 año, sube el riesgo.
-    if debt_ratio >= 1.0 and oldest_debt_days >= 365:
-        risk_level += 1
+    total_score = (
+        debt_amount_score
+        + overdue_amount_score
+        + overdue_count_score
+        + age_score
+        + contact_score
+        + multi_person_score
+    )
 
-    return max(1, min(risk_level, 5))
+    return clamp_risk_score(total_score)
 
 
 # Construye payload para debtor_profile a partir de las deudas, personas y contactos asociados a un debtor.
@@ -626,25 +654,34 @@ def build_debtor_profile_payload(
 
 
 # Construye la razón textual para el riesgo de una persona dentro del perfil del objeto.
+# Explica el riesgo base del objeto, el ajuste individual y el riesgo final en porcentaje.
 def build_profile_detail_reason(
     profile_risk_level: int,
-    final_risk_value: int,
+    final_risk_value: float,
     person_contact_count: int,
     role: str | None,
     priority: float | None,
 ) -> str:
     reasons: list[str] = []
 
-    reasons.append(f"Riesgo base del objeto: {profile_risk_level}.")
-    reasons.append(f"Riesgo individual final: {final_risk_value}.")
+    base_risk = round(float(profile_risk_level), 2)
+    final_risk = round(float(final_risk_value), 2)
+    adjustment = round(final_risk - base_risk, 2)
 
-    if final_risk_value > profile_risk_level:
-        reasons.append("El riesgo individual se elevó por condiciones particulares de la persona.")
+    reasons.append(f"Riesgo base del objeto: {base_risk}%.")
+    reasons.append(f"Riesgo individual final: {final_risk}%.")
+
+    if adjustment > 0:
+        reasons.append(f"El riesgo individual se elevó {adjustment} punto(s) por condiciones particulares de la persona.")
+    elif adjustment < 0:
+        reasons.append(f"El riesgo individual se redujo {abs(adjustment)} punto(s) por condiciones particulares de la persona.")
 
     if person_contact_count == 0:
         reasons.append("La persona no tiene contactos disponibles.")
+    elif person_contact_count == 1:
+        reasons.append("La persona tiene 1 contacto disponible.")
     else:
-        reasons.append(f"La persona tiene {person_contact_count} contacto(s) disponible(s).")
+        reasons.append(f"La persona tiene {person_contact_count} contactos disponibles.")
 
     if role:
         reasons.append(f"Rol frente al objeto: {role}.")
@@ -656,6 +693,7 @@ def build_profile_detail_reason(
 
 
 # Construye payload para debtor_profile_detail por cada persona asociada al objeto.
+# risk_value representa el riesgo individual de esa persona dentro del objeto, en escala 0 a 100%.
 def build_debtor_profile_detail_payload(
     debtor_profile_id: int,
     person_id: int,
@@ -664,10 +702,29 @@ def build_debtor_profile_detail_payload(
     role: str | None = None,
     priority: float | None = None,
 ) -> dict[str, Any]:
-    risk_value = profile_risk_level
+    risk_value = float(profile_risk_level)
 
+    # Ajuste por contacto individual.
+    # Si la persona no tiene contactos, se eleva el riesgo operativo.
+    # Si tiene un solo contacto, se suma un ajuste menor.
     if person_contact_count == 0:
-        risk_value = min(risk_value + 1, 5)
+        risk_value += 15
+    elif person_contact_count == 1:
+        risk_value += 3
+
+    # Ajuste leve por rol: si figura como responsable de pago, puede ser
+    # más relevante para la gestión operativa del caso.
+    normalized_role = role.lower() if role else ""
+
+    if "responsable" in normalized_role:
+        risk_value += 5
+
+    # Ajuste leve por prioridad/porcentaje de responsabilidad.
+    # Un porcentaje alto indica mayor peso de esa persona frente al objeto.
+    if priority is not None and priority >= 75:
+        risk_value += 5
+
+    risk_value = round(max(0, min(risk_value, 100)), 2)
 
     reason = build_profile_detail_reason(
         profile_risk_level=profile_risk_level,
