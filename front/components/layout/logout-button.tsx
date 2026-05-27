@@ -27,7 +27,7 @@ export function LogoutButton() {
       className="h-8"
     >
       <LogOut className="size-3.5" />
-      {isLoading ? 'Saliendo...' : 'Cerrar sesión'}
+      {isLoading ? 'Saliendo...' : 'Cerrar sesion'}
     </Button>
   )
 }

@@ -16,6 +16,7 @@ function mapDebtorDetailFromMappedObjects(
 
   const debts = mapped.debtsByDebtor.get(debtorId) ?? []
   const people = mapped.peopleByDebtor.get(debtorId) ?? []
+  const contacts = mapped.contactsByDebtor.get(debtorId) ?? []
   // La fecha de vencimiento mas antigua se usa como proxy simple de antiguedad.
   const oldestDebt =
     debts
@@ -26,14 +27,17 @@ function mapDebtorDetailFromMappedObjects(
   return {
     debtor,
     people,
+    contacts,
     debts,
     profile: {
       totalDebt: debtor.totalDebt,
       overdueDebt: debtor.overdueDebt,
+      debtCount: debtor.debtCount,
       antiquityDays: calculateDaysSinceDate(oldestDebt),
       associatedPeople: debtor.peopleCount,
       availableContacts: debtor.contactCount,
       risk: debtor.risk,
+      socioeconomicLevel: 'No informado',
     },
   }
 }

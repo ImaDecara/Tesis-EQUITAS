@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
+import { notFound } from 'next/navigation'
 
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { RiskBadge } from '@/components/equitas/risk-badge'
@@ -19,7 +19,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getDebtorDetailData } from '@/lib/equitas-data'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
-// Pantalla de detalle del objeto de deuda con pestanas de resumen, personas, deudas y perfil.
+const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
+  'Llamado prioritario': 'danger',
+  'Mensaje recordatorio': 'warning',
+  'Plan de pago / revision humana': 'info',
+  'Seguimiento posterior': 'success',
+}
+
 export default async function DebtorDetailPage({
   params,
 }: {
@@ -32,7 +38,7 @@ export default async function DebtorDetailPage({
     notFound()
   }
 
-  const { debtor, debts, people, profile } = detail
+  const { debtor, debts, people, contacts, profile } = detail
 
   return (
     <AppShell>
@@ -47,7 +53,7 @@ export default async function DebtorDetailPage({
 
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
               {debtor.identifier}
             </h1>
             <p className="text-sm text-slate-600">{debtor.description}</p>
@@ -67,9 +73,11 @@ export default async function DebtorDetailPage({
         <Tabs defaultValue="summary">
           <TabsList>
             <TabsTrigger value="summary">Resumen</TabsTrigger>
-            <TabsTrigger value="people">Personas</TabsTrigger>
+            <TabsTrigger value="people">Personas asociadas</TabsTrigger>
+            <TabsTrigger value="contacts">Contactos</TabsTrigger>
             <TabsTrigger value="debts">Deudas</TabsTrigger>
             <TabsTrigger value="risk">Perfil/Riesgo</TabsTrigger>
+            <TabsTrigger value="recommendation">Recomendacion</TabsTrigger>
           </TabsList>
 
           <TabsContent value="summary">
@@ -84,7 +92,12 @@ export default async function DebtorDetailPage({
                     {debtor.identifier}
                   </p>
                   <p>
-                    <span className="font-medium text-slate-900">Tipo:</span> {debtor.type}
+                    <span className="font-medium text-slate-900">Tipo de objeto:</span>{' '}
+                    {debtor.type}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Descripcion:</span>{' '}
+                    {debtor.description}
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Deuda total:</span>{' '}
@@ -94,19 +107,34 @@ export default async function DebtorDetailPage({
                     <span className="font-medium text-slate-900">Deuda vencida:</span>{' '}
                     {formatCurrency(debtor.overdueDebt)}
                   </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Dias de atraso:</span>{' '}
+                    {debtor.maxDaysOverdue} dias
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Estado:</span> {debtor.status}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-900">Prioridad:</span>{' '}
+                    {debtor.priorityLevel} (score {debtor.priorityScore})
+                  </p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Recomendación (hardcodeada)</CardTitle>
+                  <CardTitle>Recomendacion actual</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm text-slate-700">
-                  <p>{debtor.recommendation}</p>
+                <CardContent className="space-y-3 text-sm text-slate-700">
+                  <Badge variant={RECOMMENDATION_BADGE[debtor.recommendationType] ?? 'neutral'}>
+                    {debtor.recommendationType}
+                  </Badge>
+                  <p className="font-medium text-slate-900">{debtor.recommendation}</p>
+                  <p>{debtor.recommendationReason}</p>
                   <p>
                     Contacto disponible:{' '}
                     {debtor.hasContact ? (
-                      <span className="font-medium text-emerald-700">Sí</span>
+                      <span className="font-medium text-emerald-700">Si</span>
                     ) : (
                       <span className="font-medium text-amber-700">No</span>
                     )}
@@ -127,26 +155,69 @@ export default async function DebtorDetailPage({
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Documento</TableHead>
-                      <TableHead>Prioridad</TableHead>
+                      <TableHead>Prioridad de contacto</TableHead>
+                      <TableHead>Relacion</TableHead>
                       <TableHead>Contacto</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {people.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-slate-500">
+                        <TableCell colSpan={5} className="text-center text-slate-500">
                           Sin personas asociadas visibles.
                         </TableCell>
                       </TableRow>
                     )}
                     {people.map((person) => (
                       <TableRow key={person.id}>
-                        <TableCell className="font-medium text-slate-900">
-                          {person.name}
-                        </TableCell>
+                        <TableCell className="font-medium text-slate-900">{person.name}</TableCell>
                         <TableCell>{person.document}</TableCell>
                         <TableCell>{person.priority}</TableCell>
+                        <TableCell>{person.relation}</TableCell>
                         <TableCell>{person.contact}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="contacts">
+            <Card>
+              <CardHeader>
+                <CardTitle>Contactos de personas asociadas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Persona</TableHead>
+                      <TableHead>Canal</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contacts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-slate-500">
+                          Sin contactos registrados para este objeto.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {contacts.map((contact) => (
+                      <TableRow key={`${contact.personId}-${contact.id}-${contact.value}`}>
+                        <TableCell className="font-medium text-slate-900">
+                          {contact.personName || `Persona ${contact.personId}`}
+                        </TableCell>
+                        <TableCell>{contact.channel}</TableCell>
+                        <TableCell>{contact.value}</TableCell>
+                        <TableCell>
+                          <Badge variant={contact.isActive ? 'success' : 'warning'}>
+                            {contact.isActive ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -166,8 +237,8 @@ export default async function DebtorDetailPage({
                     <TableRow>
                       <TableHead>Monto original</TableHead>
                       <TableHead>Monto actualizado</TableHead>
+                      <TableHead>Periodo</TableHead>
                       <TableHead>Vencimiento</TableHead>
-                      <TableHead>Período</TableHead>
                       <TableHead>Estado</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -183,8 +254,8 @@ export default async function DebtorDetailPage({
                       <TableRow key={debt.id}>
                         <TableCell>{formatCurrency(debt.originalAmount)}</TableCell>
                         <TableCell>{formatCurrency(debt.updatedAmount)}</TableCell>
-                        <TableCell>{formatDate(debt.dueDate)}</TableCell>
                         <TableCell>{debt.period}</TableCell>
+                        <TableCell>{formatDate(debt.dueDate)}</TableCell>
                         <TableCell>
                           <Badge variant="neutral">{debt.status}</Badge>
                         </TableCell>
@@ -216,18 +287,18 @@ export default async function DebtorDetailPage({
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Antigüedad</CardTitle>
+                  <CardTitle className="text-sm">Cantidad de deudas</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {profile.antiquityDays} días
+                  {profile.debtCount}
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Personas asociadas</CardTitle>
+                  <CardTitle className="text-sm">Antiguedad</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {profile.associatedPeople}
+                  {profile.antiquityDays} dias
                 </CardContent>
               </Card>
               <Card>
@@ -240,13 +311,34 @@ export default async function DebtorDetailPage({
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Nivel de riesgo</CardTitle>
+                  <CardTitle className="text-sm">Nivel socioeconomico / riesgo</CardTitle>
                 </CardHeader>
-                <CardContent className="text-2xl font-semibold text-slate-900">
+                <CardContent className="space-y-2 text-slate-900">
                   <RiskBadge risk={profile.risk} />
+                  <p className="text-sm text-slate-600">{profile.socioeconomicLevel}</p>
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="recommendation">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recomendacion sugerida</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-slate-700">
+                <Badge variant={RECOMMENDATION_BADGE[debtor.recommendationType] ?? 'neutral'}>
+                  {debtor.recommendationType}
+                </Badge>
+                <p className="text-base font-semibold text-slate-900">{debtor.recommendation}</p>
+                <p>{debtor.recommendationReason}</p>
+                <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                  Ejemplo de lectura operativa: {debtor.recommendation} porque el caso combina{' '}
+                  {formatCurrency(debtor.totalDebt)} de deuda total, {debtor.maxDaysOverdue} dias
+                  de atraso y contacto {debtor.hasContact ? 'disponible' : 'faltante'}.
+                </p>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

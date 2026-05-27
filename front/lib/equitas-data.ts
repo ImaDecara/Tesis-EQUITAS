@@ -2,12 +2,19 @@ export type {
   ChartBucket,
   DashboardData,
   DataWarning,
+  DebtorContactItem,
   DebtorDebtItem,
   DebtorDetailData,
   DebtorListItem,
   DebtorPersonItem,
+  DebtorPriorityLevel,
+  PeopleDashboardSummary,
+  PersonIndividualRiskLevel,
+  PersonListItem,
+  RecommendationKind,
   DebtorProfileSummary,
   RawDebtorDataBundle,
+  RawPersonDataBundle,
   RawRow,
   RiskLevel,
 } from '@/types/equitas-domain'
@@ -18,3 +25,4 @@ export {
   getDebtorDetailDataFromService as getDebtorDetailData,
   getDebtorsDataFromService as getDebtorsData,
 } from '@/lib/services/debtor-data-service'
+export { getPeopleDataFromService as getPeopleData } from '@/lib/services/person-data-service'

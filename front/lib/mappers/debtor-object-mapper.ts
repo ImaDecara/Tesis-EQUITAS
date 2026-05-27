@@ -1,4 +1,7 @@
-import { resolveDebtStatusFromDueDate } from '@/lib/parsers/date-value-parser'
+import {
+  calculateDaysSinceDate,
+  resolveDebtStatusFromDueDate,
+} from '@/lib/parsers/date-value-parser'
 import {
   parseBooleanFromUnknown,
   rowHasCandidateKey,
@@ -10,16 +13,18 @@ import { selectNumericValueFromRow } from '@/lib/parsers/numeric-value-parser'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 import { calculateDebtorRiskLevel } from '@/lib/services/debtor-risk-calculator'
 import type {
+  DebtorContactItem,
   DebtorDebtItem,
   DebtorListItem,
   DebtorPersonItem,
   DebtorPersonRelation,
+  DebtorPriorityLevel,
   MappedDebtorObjects,
   RawDebtorDataBundle,
   RawRow,
+  RiskLevel,
 } from '@/types/equitas-domain'
 
-// Resuelve etiquetas de catalogos (tipo/estado) usando ids con nombres variables.
 function mapLabelById(rows: RawRow[], idCandidates: string[], labelCandidates: string[]) {
   const result = new Map<string, string>()
 
@@ -65,9 +70,84 @@ function normalizeStatusLabel(value: string) {
   return trimmed
 }
 
-// Mapeador principal: transforma datos crudos en objetos de dominio listos para la interfaz.
+function isDebtOverdue(debt: DebtorDebtItem) {
+  const normalizedStatus = debt.status.trim().toLowerCase()
+
+  if (
+    normalizedStatus.includes('venc') ||
+    normalizedStatus.includes('mora') ||
+    normalizedStatus.includes('atras')
+  ) {
+    return true
+  }
+
+  return resolveDebtStatusFromDueDate(debt.dueDate) === 'Vencida'
+}
+
+function inferContactChannel(contact: RawRow, value: string) {
+  const explicitChannel = selectTextFromRow(contact, [
+    'channel',
+    'contact_channel',
+    'kind',
+    'type',
+    'contact_type',
+  ])
+
+  if (explicitChannel) {
+    return explicitChannel
+  }
+
+  if (value.includes('@')) {
+    return 'Email'
+  }
+
+  return 'Telefono'
+}
+
+function toPriorityLevel(score: number): DebtorPriorityLevel {
+  if (score >= 105) {
+    return 'ALTA'
+  }
+
+  if (score >= 70) {
+    return 'MEDIA'
+  }
+
+  return 'BAJA'
+}
+
+// El puntaje de prioridad combina severidad financiera y factibilidad de accion de cobranza.
+function calculatePriorityScore({
+  totalDebt,
+  overdueDays,
+  risk,
+  hasContact,
+  recommendationType,
+}: {
+  totalDebt: number
+  overdueDays: number
+  risk: RiskLevel
+  hasContact: boolean
+  recommendationType: string
+}) {
+  const debtScore = Math.min(totalDebt / 250000, 4) * 18
+  const overdueScore = Math.min(overdueDays / 30, 4) * 10
+  const riskScore = risk === 'ALTO' ? 30 : risk === 'MEDIO' ? 18 : 8
+  const contactScore = hasContact ? 10 : -6
+  const recommendationScore =
+    recommendationType === 'Llamado prioritario'
+      ? 20
+      : recommendationType === 'Plan de pago / revision humana'
+        ? 14
+        : recommendationType === 'Mensaje recordatorio'
+          ? 9
+          : 4
+
+  return Math.max(Math.round(debtScore + overdueScore + riskScore + contactScore + recommendationScore), 0)
+}
+
+// Mapeador principal: transforma filas crudas en objetos listos para dashboard, listado y detalle.
 export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDebtorObjects {
-  // Busquedas de catalogos: traduce ids a etiquetas legibles cuando existen.
   const debtorTypeLabels = mapLabelById(
     raw.debtorTypes,
     ['id', 'debtor_type_id', 'type_id'],
@@ -89,7 +169,6 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   }
 
   const debtsByDebtor = new Map<string, DebtorDebtItem[]>()
-  // Construye lineas de deuda agrupadas por id del objeto de deuda.
   for (const debt of raw.debts) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(debt, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -148,7 +227,6 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   }
 
   const personRelationsByDebtor = new Map<string, DebtorPersonRelation[]>()
-  // Carga relaciones activas entre objeto de deuda y persona.
   for (const relation of raw.debtorPeople) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(relation, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -182,12 +260,19 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       personId,
       priority:
         selectTextFromRow(relation, ['priority', 'priority_level', 'order']) || 'Media',
+      relation:
+        selectTextFromRow(relation, [
+          'relation',
+          'relationship',
+          'person_role',
+          'role',
+          'link_type',
+        ]) || 'No especificada',
     })
     personRelationsByDebtor.set(debtorId, current)
   }
 
-  const contactValuesByPerson = new Map<string, string[]>()
-  // Carga contactos activos y no vacios, indexados por persona.
+  const contactsByPerson = new Map<string, DebtorContactItem[]>()
   for (const contact of raw.debtorContacts) {
     const personId = stringifyUnknownValue(
       selectValueFromRow(contact, ['person', 'person_id', 'id_person'])
@@ -197,7 +282,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       continue
     }
 
-    const rawValue = selectTextFromRow(contact, [
+    const value = selectTextFromRow(contact, [
       'value',
       'contact_value',
       'contact',
@@ -208,18 +293,18 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       'whatsapp',
     ]).trim()
 
-    if (!rawValue) {
+    if (!value) {
       continue
     }
 
-    const contactHasActive = rowHasCandidateKey(contact, [
+    const hasActiveColumn = rowHasCandidateKey(contact, [
       'active',
       'is_active',
       'is_available',
       'available',
       'valid',
     ])
-    const contactIsActive = contactHasActive
+    const isActive = hasActiveColumn
       ? parseBooleanFromUnknown(
           selectValueFromRow(contact, [
             'active',
@@ -231,24 +316,40 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
         )
       : true
 
-    if (!contactIsActive) {
-      continue
+    const contactItem: DebtorContactItem = {
+      id:
+        stringifyUnknownValue(selectValueFromRow(contact, ['id', 'contact_id'])) ||
+        `${personId}-${contactsByPerson.get(personId)?.length ?? 0}`,
+      personId,
+      personName: '',
+      channel: inferContactChannel(contact, value),
+      value,
+      isActive,
     }
 
-    const current = contactValuesByPerson.get(personId) ?? []
-    if (!current.includes(rawValue)) {
-      current.push(rawValue)
-      contactValuesByPerson.set(personId, current)
+    const current = contactsByPerson.get(personId) ?? []
+    const duplicate = current.some(
+      (item) =>
+        item.value.toLowerCase() === contactItem.value.toLowerCase() &&
+        item.channel.toLowerCase() === contactItem.channel.toLowerCase() &&
+        item.isActive === contactItem.isActive
+    )
+
+    if (!duplicate) {
+      current.push(contactItem)
+      contactsByPerson.set(personId, current)
     }
   }
 
   const peopleByDebtor = new Map<string, DebtorPersonItem[]>()
+  const contactsByDebtor = new Map<string, DebtorContactItem[]>()
   const contactCountByDebtor = new Map<string, number>()
-  // Cruza objeto de deuda -> persona -> contacto para filas de personas y conteo de disponibilidad.
 
+  // Este cruce materializa la cadena debtor -> debtor_person -> person -> debtor_contact.
   for (const [debtorId, relations] of personRelationsByDebtor.entries()) {
     const currentPeople: DebtorPersonItem[] = []
-    const personsWithContact = new Set<string>()
+    const currentContacts: DebtorContactItem[] = []
+    const personsWithActiveContact = new Set<string>()
 
     for (const relation of relations) {
       const personRow = peopleById.get(relation.personId)
@@ -262,28 +363,35 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
         (personRow &&
           selectTextFromRow(personRow, ['document_number', 'document', 'dni', 'tax_id'])) ||
         'Sin documento'
-      const contactValues = contactValuesByPerson.get(relation.personId) ?? []
-      const contact = contactValues.length > 0 ? contactValues.join(' | ') : 'Sin contacto'
+      const personContacts = (contactsByPerson.get(relation.personId) ?? []).map((item) => ({
+        ...item,
+        personName: fullName,
+      }))
+      const activeValues = personContacts.filter((item) => item.isActive).map((item) => item.value)
+      const contactSummary = activeValues.length > 0 ? activeValues.join(' | ') : 'Sin contacto'
 
-      if (contactValues.length > 0) {
-        personsWithContact.add(relation.personId)
+      if (activeValues.length > 0) {
+        personsWithActiveContact.add(relation.personId)
       }
 
+      currentContacts.push(...personContacts)
       currentPeople.push({
         id: relation.personId,
         name: fullName,
         document,
         priority: relation.priority,
-        contact,
+        contact: contactSummary,
+        relation: relation.relation,
       })
     }
 
     peopleByDebtor.set(debtorId, currentPeople)
-    contactCountByDebtor.set(debtorId, personsWithContact.size)
+    contactsByDebtor.set(debtorId, currentContacts)
+    contactCountByDebtor.set(debtorId, personsWithActiveContact.size)
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    // Depuracion temporal para validar el cruce debtor_person -> debtor_contact.
+    // Log temporal para validar las relaciones de contacto cuando cambia el schema de datos.
     console.log('[EQUITAS contact debug]', {
       debtorPersonRows: raw.debtorPeople.length,
       debtorContactRows: raw.debtorContacts.length,
@@ -292,7 +400,6 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   }
 
   const profileByDebtor = new Map<string, RawRow>()
-  // Filas de perfil son opcionales, pero mejoran agregados de deuda/contacto/riesgo.
   for (const profile of raw.debtorProfiles) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(profile, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -311,7 +418,6 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   }
 
   const debtors: DebtorListItem[] = []
-  // Ensamble final de objetos de dominio para listado/detalle/tablero.
   for (const debtorRow of raw.debtors) {
     const id = stringifyUnknownValue(
       selectValueFromRow(debtorRow, ['id', 'debtor_id', 'debtorid'])
@@ -323,18 +429,19 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
 
     const debts = debtsByDebtor.get(id) ?? []
     const people = peopleByDebtor.get(id) ?? []
+    const contacts = contactsByDebtor.get(id) ?? []
+    const activeContacts = contacts.filter((item) => item.isActive)
     const profile = profileByDebtor.get(id)
+
     const profileContactCount = selectNumericValueFromRow(profile ?? {}, [
       'available_contact_count',
       'available_contacts_count',
       'contact_available_count',
     ])
     const relationContactCount = contactCountByDebtor.get(id) ?? 0
-    const contactCount = Math.max(profileContactCount, relationContactCount)
-    const hasContact =
-      profileContactCount > 0 ||
-      relationContactCount > 0 ||
-      people.some((person) => person.contact !== 'Sin contacto')
+    const contactCount = Math.max(profileContactCount, relationContactCount, activeContacts.length)
+    const hasContact = contactCount > 0
+
     const totalDebt =
       selectNumericValueFromRow(profile ?? {}, [
         'total_debt_amount',
@@ -342,15 +449,18 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
         'debt_total',
         'amount_total',
       ]) || debts.reduce((acc, debt) => acc + debt.updatedAmount, 0)
+
+    const overdueDebts = debts.filter((debt) => isDebtOverdue(debt))
     const overdueDebt =
       selectNumericValueFromRow(profile ?? {}, [
         'overdue_debt_amount',
         'overdue_debt',
         'debt_overdue',
-      ]) ||
-      debts
-        .filter((debt) => resolveDebtStatusFromDueDate(debt.dueDate) === 'Vencida')
-        .reduce((acc, debt) => acc + debt.updatedAmount, 0)
+      ]) || overdueDebts.reduce((acc, debt) => acc + debt.updatedAmount, 0)
+    const maxDaysOverdue = overdueDebts.reduce((acc, debt) => {
+      const overdueDays = calculateDaysSinceDate(debt.dueDate)
+      return Math.max(acc, overdueDays)
+    }, 0)
 
     const risk = calculateDebtorRiskLevel(
       selectTextFromRow(profile ?? {}, [
@@ -361,8 +471,25 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       ]),
       totalDebt,
       overdueDebt,
-      hasContact
+      hasContact,
+      maxDaysOverdue
     )
+
+    const recommendationResult = generateDebtorRecommendation({
+      risk,
+      hasContact,
+      overdueDebt,
+      totalDebt,
+      overdueDays: maxDaysOverdue,
+    })
+    const priorityScore = calculatePriorityScore({
+      totalDebt,
+      overdueDays: maxDaysOverdue,
+      risk,
+      hasContact,
+      recommendationType: recommendationResult.type,
+    })
+    const priorityLevel = toPriorityLevel(priorityScore)
 
     const debtorTypeId = stringifyUnknownValue(
       selectValueFromRow(debtorRow, ['debtor_type_id', 'type_id', 'type'])
@@ -406,11 +533,20 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       totalDebt,
       overdueDebt,
       peopleCount: people.length,
+      peopleIds: people.map((person) => person.id),
       peopleNames: people.map((person) => person.name),
       hasContact,
       contactCount,
       risk,
-      recommendation: generateDebtorRecommendation(risk, hasContact, overdueDebt),
+      debtCount: debts.length,
+      overdueDebtsCount: overdueDebts.length,
+      maxDaysOverdue,
+      priorityScore,
+      priorityLevel,
+      recommendation: recommendationResult.summary,
+      recommendationType: recommendationResult.type,
+      recommendationReason: recommendationResult.reason,
+      isUrgentRecommendation: recommendationResult.isUrgent,
     })
   }
 
@@ -418,6 +554,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     debtors,
     debtsByDebtor,
     peopleByDebtor,
+    contactsByDebtor,
     debtStatusBuckets,
     warnings: raw.warnings,
   }

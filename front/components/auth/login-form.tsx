@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation'
 import { LogIn } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { signInWithPassword, signOutCurrentSession, validateCurrentUserTenantAccess, mapAuthErrorMessage } from '@/lib/services/auth-service'
+import {
+  mapAuthErrorMessage,
+  signInWithPassword,
+  signOutCurrentSession,
+  validateCurrentUserTenantAccess,
+} from '@/lib/services/auth-service'
 
 type LoginFormProps = {
   nextPath: string
@@ -76,7 +81,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
   if (isCheckingSession) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-        Validando sesión...
+        Validando sesion...
       </div>
     )
   }
@@ -94,7 +99,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-sky-500/30 transition placeholder:text-slate-400 focus:ring-4"
+          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition placeholder:text-slate-400 focus:ring-4"
           placeholder="admin@municipio.gob.ar"
         />
       </div>
@@ -110,8 +115,8 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-sky-500/30 transition placeholder:text-slate-400 focus:ring-4"
-          placeholder="••••••••"
+          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition placeholder:text-slate-400 focus:ring-4"
+          placeholder="********"
         />
       </div>
 
@@ -123,7 +128,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         <LogIn className="size-4" />
-        {isSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
+        {isSubmitting ? 'Ingresando...' : 'Iniciar sesion'}
       </Button>
     </form>
   )

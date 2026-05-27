@@ -65,7 +65,7 @@ function TabsList({
   return (
     <div
       className={cn(
-        'inline-flex h-10 items-center rounded-lg bg-slate-100 p-1 text-slate-600',
+        'inline-flex h-10 items-center rounded-lg bg-[#edf2f8] p-1 text-slate-600',
         className
       )}
       {...props}
@@ -88,7 +88,7 @@ function TabsTrigger({ className, value, children, ...props }: TabsTriggerProps)
       onClick={() => context.setValue(value)}
       className={cn(
         'inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition',
-        'data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm',
+        'data-[state=active]:bg-white data-[state=active]:text-[#163a63] data-[state=active]:shadow-sm',
         className
       )}
       {...props}

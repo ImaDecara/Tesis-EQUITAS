@@ -9,7 +9,7 @@ export function DataWarnings({ warnings }: { warnings: DataWarning[] }) {
   }
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+    <div className="rounded-lg border border-[#d8c28a] bg-[#f6efdc] p-4 text-[#5f4a19]">
       <p className="mb-2 inline-flex items-center gap-2 text-sm font-semibold">
         <AlertTriangle className="size-4" />
         Tablas con acceso restringido o errores de lectura
