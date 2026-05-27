@@ -37,6 +37,7 @@ function mapDebtorDetailFromMappedObjects(
       associatedPeople: debtor.peopleCount,
       availableContacts: debtor.contactCount,
       risk: debtor.risk,
+      riskScore: debtor.riskScore,
       socioeconomicLevel: 'No informado',
     },
   }

@@ -8,15 +8,49 @@ type MetricCardProps = {
   value: string
   hint: string
   icon: ComponentType<{ className?: string }>
-  tone?: 'primary' | 'accent' | 'warning' | 'danger' | 'success'
+  tone?: 'primary' | 'accent' | 'warning' | 'danger' | 'success' | 'critical'
 }
 
-const toneMap: Record<NonNullable<MetricCardProps['tone']>, string> = {
-  primary: 'from-[#e6edf6] to-white text-[#163a63]',
-  accent: 'from-[#f4ecd6] to-white text-[#8a6f2a]',
-  warning: 'from-[#f6efdc] to-white text-[#8a6f2a]',
-  danger: 'from-[#f8e7e7] to-white text-[#9d3d3d]',
-  success: 'from-[#e8f3ed] to-white text-[#2d6a4f]',
+const toneMap: Record<
+  NonNullable<MetricCardProps['tone']>,
+  { gradient: string; border: string; icon: string; label: string }
+> = {
+  primary: {
+    gradient: 'from-[#e7edf7] to-white',
+    border: 'border-[#cfdaea]',
+    icon: 'text-[#163a63]',
+    label: 'text-[#1e436f]',
+  },
+  accent: {
+    gradient: 'from-[#edf2f9] to-white',
+    border: 'border-[#cfdaea]',
+    icon: 'text-[#163a63]',
+    label: 'text-[#1e436f]',
+  },
+  warning: {
+    gradient: 'from-[#f6efdc] to-white',
+    border: 'border-[#ead8b0]',
+    icon: 'text-[#8a6f2a]',
+    label: 'text-[#7e6322]',
+  },
+  danger: {
+    gradient: 'from-[#f9ecec] to-white',
+    border: 'border-[#efd2d2]',
+    icon: 'text-[#a64848]',
+    label: 'text-[#8f3939]',
+  },
+  critical: {
+    gradient: 'from-[#f3e2e2] to-white',
+    border: 'border-[#e7c0c0]',
+    icon: 'text-[#973b3b]',
+    label: 'text-[#8a2f2f]',
+  },
+  success: {
+    gradient: 'from-[#e7f1eb] to-white',
+    border: 'border-[#cfe1d8]',
+    icon: 'text-[#2d6a4f]',
+    label: 'text-[#255a43]',
+  },
 }
 
 // Envoltorio visual para tarjetas KPI usadas en el encabezado del tablero.
@@ -27,21 +61,28 @@ export function MetricCard({
   icon: Icon,
   tone = 'primary',
 }: MetricCardProps) {
+  const toneStyles = toneMap[tone]
+
   return (
-    <Card className="overflow-hidden border-slate-200/90 bg-white shadow-sm">
+    <Card
+      className={cn(
+        'overflow-hidden bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md',
+        toneStyles.border
+      )}
+    >
       <CardHeader className="relative pb-3">
         <div
           className={cn(
             'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-85',
-            toneMap[tone]
+            toneStyles.gradient
           )}
         />
         <div className="relative flex items-start justify-between">
-          <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+          <p className={cn('text-xs font-semibold tracking-wide uppercase', toneStyles.label)}>
             {label}
           </p>
-          <span className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-slate-200">
-            <Icon className="size-4" />
+          <span className="rounded-lg bg-white p-2 shadow-sm ring-1 ring-slate-200/80">
+            <Icon className={cn('size-5', toneStyles.icon)} />
           </span>
         </div>
       </CardHeader>

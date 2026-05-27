@@ -11,7 +11,7 @@ import {
 } from '@/lib/parsers/generic-value-selector'
 import { selectNumericValueFromRow } from '@/lib/parsers/numeric-value-parser'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
-import { calculateDebtorRiskLevel } from '@/lib/services/debtor-risk-calculator'
+import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
 import type {
   DebtorContactItem,
   DebtorDebtItem,
@@ -462,18 +462,19 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       return Math.max(acc, overdueDays)
     }, 0)
 
-    const risk = calculateDebtorRiskLevel(
-      selectTextFromRow(profile ?? {}, [
+    const riskAssessment = calculateDebtorRiskAssessment({
+      providedRisk: selectValueFromRow(profile ?? {}, [
+        'socioeconomic_risk_level',
         'risk_level',
         'risk',
         'risk_segment',
-        'socioeconomic_risk_level',
       ]),
       totalDebt,
       overdueDebt,
       hasContact,
-      maxDaysOverdue
-    )
+      maxDaysOverdue,
+    })
+    const risk = riskAssessment.risk
 
     const recommendationResult = generateDebtorRecommendation({
       risk,
@@ -538,6 +539,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       hasContact,
       contactCount,
       risk,
+      riskScore: riskAssessment.riskScore,
       debtCount: debts.length,
       overdueDebtsCount: overdueDebts.length,
       maxDaysOverdue,

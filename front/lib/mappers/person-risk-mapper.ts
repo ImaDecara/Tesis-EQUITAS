@@ -6,6 +6,7 @@ import {
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
 import { parseNumericValue, selectNumericValueFromRow } from '@/lib/parsers/numeric-value-parser'
+import { clampRiskScore, mapRiskLevel } from '@/lib/services/debtor-risk-calculator'
 import type {
   PeopleDashboardSummary,
   PersonIndividualRiskLevel,
@@ -14,29 +15,14 @@ import type {
 } from '@/types/equitas-domain'
 
 function clampRiskValue(value: number) {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-
-  return Math.min(Math.max(value, 0), 5)
+  return clampRiskScore(value)
 }
 
-// Convierte risk_value (escala 0-5) al nivel cualitativo solicitado por negocio.
+// Convierte risk_value individual (escala 0-100) al nivel cualitativo de negocio.
 export function mapRiskValueToIndividualRiskLevel(
   riskValue: number
 ): PersonIndividualRiskLevel {
-  // Regla pedida: 1 y 2 => Bajo (se toma <= 2 para cubrir valores decimales).
-  if (riskValue <= 2) {
-    return 'BAJO'
-  }
-
-  // Regla pedida: 3 y 4 => Medio (se toma > 2 y < 5 para cubrir decimales).
-  if (riskValue < 5) {
-    return 'MEDIO'
-  }
-
-  // Regla pedida: 5 => Alto.
-  return 'ALTO'
+  return mapRiskLevel(riskValue)
 }
 
 function buildPeopleDashboardSummary(people: PersonListItem[]): PeopleDashboardSummary {

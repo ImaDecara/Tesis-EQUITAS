@@ -7,6 +7,22 @@ import { Search } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+function getRiskFilterLabel(risk: string) {
+  if (risk === 'BAJO') {
+    return 'Bajo (0-39)'
+  }
+
+  if (risk === 'MEDIO') {
+    return 'Medio (40-69)'
+  }
+
+  if (risk === 'ALTO') {
+    return 'Alto (70-100)'
+  }
+
+  return risk
+}
+
 type DebtorsFiltersFormProps = {
   initialValues: {
     q: string
@@ -93,7 +109,7 @@ export function DebtorsFiltersForm({
           <option value="">Todos</option>
           {riskOptions.map((risk) => (
             <option key={risk} value={risk}>
-              {risk}
+              {getRiskFilterLabel(risk)}
             </option>
           ))}
         </select>

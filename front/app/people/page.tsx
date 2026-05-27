@@ -59,16 +59,25 @@ export default async function PeoplePage({
     risk: resolvedSearchParams.risk?.trim() ?? '',
   }
   const filteredPeople = applyPeopleFilters(people, filters)
+  const totalDebtAssociated = filteredPeople.reduce(
+    (acc, person) => acc + person.totalDebtAssociated,
+    0
+  )
+  const averageRiskValue =
+    filteredPeople.length > 0
+      ? filteredPeople.reduce((acc, person) => acc + person.riskValue, 0) / filteredPeople.length
+      : 0
+  const withContactCount = filteredPeople.filter((person) => person.hasContact).length
 
   return (
     <AppShell>
-      <section className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
             Personas / Deudores
           </h1>
           <p className="text-sm text-slate-600">
-            Seguimiento individual con riesgo de persona basado en risk_value (0-5).
+            Seguimiento individual con riesgo de persona basado en risk_value (0-100).
           </p>
         </div>
 
@@ -79,7 +88,7 @@ export default async function PeoplePage({
         </Badge>
       </section>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         <DataWarnings warnings={warnings} />
 
         <Card className="border-[#d2dceb]">
@@ -91,37 +100,55 @@ export default async function PeoplePage({
           </CardContent>
         </Card>
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-[#d2dceb]">
-            <CardHeader className="pb-2">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <Card className="border-[#cfe1d8] bg-[#edf6f1] shadow-sm">
+            <CardHeader className="pb-1">
               <CardTitle className="text-sm">Riesgo bajo</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold text-emerald-700">
+            <CardContent className="pb-4 text-2xl font-semibold text-emerald-700">
               {peopleDashboard.lowRiskCount.toLocaleString('es-AR')}
             </CardContent>
           </Card>
-          <Card className="border-[#d2dceb]">
-            <CardHeader className="pb-2">
+          <Card className="border-[#ead8b0] bg-[#f9f3e4] shadow-sm">
+            <CardHeader className="pb-1">
               <CardTitle className="text-sm">Riesgo medio</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold text-amber-700">
+            <CardContent className="pb-4 text-2xl font-semibold text-amber-700">
               {peopleDashboard.mediumRiskCount.toLocaleString('es-AR')}
             </CardContent>
           </Card>
-          <Card className="border-[#d2dceb]">
-            <CardHeader className="pb-2">
+          <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
+            <CardHeader className="pb-1">
               <CardTitle className="text-sm">Riesgo alto</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold text-rose-700">
+            <CardContent className="pb-4 text-2xl font-semibold text-rose-700">
               {peopleDashboard.highRiskCount.toLocaleString('es-AR')}
             </CardContent>
           </Card>
-          <Card className="border-[#d2dceb]">
-            <CardHeader className="pb-2">
+          <Card className="border-[#efd9b7] bg-[#f8f2e3] shadow-sm">
+            <CardHeader className="pb-1">
               <CardTitle className="text-sm">Sin contacto</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold text-slate-800">
-              {peopleDashboard.withoutContactCount.toLocaleString('es-AR')}
+            <CardContent className="space-y-0.5 pb-4">
+              <p className="text-2xl font-semibold text-[#8a6f2a]">
+                {peopleDashboard.withoutContactCount.toLocaleString('es-AR')}
+              </p>
+              <p className="text-xs text-slate-600">
+                Con contacto: {withContactCount.toLocaleString('es-AR')}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-[#cfdaea] bg-[#edf2f9] shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-sm">Deuda asociada</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-0.5 pb-4">
+              <p className="text-lg font-semibold text-[#163a63]">
+                {formatCurrency(totalDebtAssociated)}
+              </p>
+              <p className="text-xs text-slate-600">
+                Riesgo promedio {averageRiskValue.toFixed(1)} / 100
+              </p>
             </CardContent>
           </Card>
         </section>
@@ -137,7 +164,7 @@ export default async function PeoplePage({
               <CardTitle>Top 5 personas por risk_value</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
+              <Table className="min-w-[680px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Persona</TableHead>
@@ -148,13 +175,16 @@ export default async function PeoplePage({
                 </TableHeader>
                 <TableBody>
                   {peopleDashboard.topPeopleByRiskValue.map((person) => (
-                    <TableRow key={person.id}>
+                    <TableRow key={person.id} className="hover:bg-[#eef3fa]">
                       <TableCell>
                         <div className="font-medium text-slate-900">{person.name}</div>
                         <p className="text-xs text-slate-500">{person.document}</p>
                       </TableCell>
                       <TableCell>
-                        <PersonRiskBadge risk={person.individualRisk} />
+                        <PersonRiskBadge
+                          risk={person.individualRisk}
+                          score={person.riskValue}
+                        />
                       </TableCell>
                       <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{person.debtorsCount}</TableCell>
@@ -171,7 +201,7 @@ export default async function PeoplePage({
             <CardTitle>Listado de personas</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="min-w-[980px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
@@ -194,11 +224,14 @@ export default async function PeoplePage({
                 )}
 
                 {filteredPeople.map((person) => (
-                  <TableRow key={person.id}>
+                  <TableRow key={person.id} className="hover:bg-[#eef3fa]">
                     <TableCell className="font-medium text-slate-900">{person.name}</TableCell>
                     <TableCell>{person.document}</TableCell>
                     <TableCell>
-                      <PersonRiskBadge risk={person.individualRisk} />
+                      <PersonRiskBadge
+                        risk={person.individualRisk}
+                        score={person.riskValue}
+                      />
                     </TableCell>
                     <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
                     <TableCell className="text-right">{person.debtorsCount}</TableCell>

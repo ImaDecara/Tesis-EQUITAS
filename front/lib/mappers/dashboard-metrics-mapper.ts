@@ -63,6 +63,7 @@ export function mapDashboardMetricsFromDebtorObjects({
     totalDebt: item.totalDebt,
     overdueDays: item.maxDaysOverdue,
     risk: item.risk,
+    riskScore: item.riskScore,
     hasContact: item.hasContact,
     recommendationType: item.recommendationType,
     priorityScore: item.priorityScore,
@@ -76,6 +77,7 @@ export function mapDashboardMetricsFromDebtorObjects({
     totalDebt: item.totalDebt,
     overdueDays: item.maxDaysOverdue,
     risk: item.risk,
+    riskScore: item.riskScore,
     recommendationType: item.recommendationType,
   }))
 
@@ -89,7 +91,20 @@ export function mapDashboardMetricsFromDebtorObjects({
       totalDebt: item.totalDebt,
       overdueDays: item.maxDaysOverdue,
       risk: item.risk,
+      riskScore: item.riskScore,
     }))
+
+  // Panel ejecutivo: define casos criticos con riesgo extremo o urgencia operativa de hoy.
+  const criticalDebtors = debtors.filter(
+    (debtor) =>
+      debtor.riskScore > 90 ||
+      debtor.isUrgentRecommendation ||
+      (debtor.overdueDebt > 0 && !debtor.hasContact)
+  )
+  const riskAboveNinetyCases = debtors.filter((debtor) => debtor.riskScore > 90).length
+  const criticalDebtTotal = debtors
+    .filter((debtor) => debtor.riskScore > 90)
+    .reduce((acc, debtor) => acc + debtor.totalDebt, 0)
 
   return {
     totalDebtors: debtors.length,
@@ -99,6 +114,9 @@ export function mapDashboardMetricsFromDebtorObjects({
     withoutContactCases: debtors.filter((debtor) => !debtor.hasContact).length,
     priorityCases: debtors.filter((debtor) => debtor.priorityLevel === 'ALTA').length,
     urgentRecommendationCases: debtors.filter((debtor) => debtor.isUrgentRecommendation).length,
+    criticalCasesToday: criticalDebtors.length,
+    riskAboveNinetyCases,
+    criticalDebtTotal,
     byDebtStatus: Array.from(debtStatusBuckets.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value),
@@ -117,6 +135,7 @@ export function mapDashboardMetricsFromDebtorObjects({
       type: item.type,
       totalDebt: item.totalDebt,
       risk: item.risk,
+      riskScore: item.riskScore,
     })),
     topPriorityDebtors,
     withoutContactDebtors,

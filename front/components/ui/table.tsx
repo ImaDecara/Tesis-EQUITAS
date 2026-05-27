@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils'
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   // Contenedor que preserva scroll horizontal en pantallas chicas.
   return (
-    <div className="w-full overflow-auto">
-      <table className={cn('w-full caption-bottom text-sm', className)} {...props} />
+    <div className="w-full overflow-x-auto">
+      <table className={cn('w-full caption-bottom text-sm text-slate-700', className)} {...props} />
     </div>
   )
 }
@@ -28,7 +28,7 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
   return (
     <tr
       className={cn(
-        'border-b transition-colors hover:bg-slate-50/80 data-[state=selected]:bg-slate-100',
+        'border-b transition-colors duration-150 hover:bg-[#eef3fa] data-[state=selected]:bg-[#e6eef8]',
         className
       )}
       {...props}
@@ -40,7 +40,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
   return (
     <th
       className={cn(
-        'h-10 px-4 text-left align-middle text-xs font-semibold tracking-wide text-slate-500 uppercase',
+        'h-10 px-4 text-left align-middle text-xs font-semibold tracking-wide text-slate-600 uppercase',
         className
       )}
       {...props}
@@ -49,9 +49,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
 }
 
 function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
-  return (
-    <td className={cn('p-4 align-middle text-slate-700', className)} {...props} />
-  )
+  return <td className={cn('px-4 py-3 align-middle text-slate-700', className)} {...props} />
 }
 
 export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell }

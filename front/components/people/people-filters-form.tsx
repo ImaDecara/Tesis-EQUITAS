@@ -71,9 +71,9 @@ export function PeopleFiltersForm({ initialValues }: PeopleFiltersFormProps) {
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
         >
           <option value="">Todos</option>
-          <option value="BAJO">Bajo</option>
-          <option value="MEDIO">Medio</option>
-          <option value="ALTO">Alto</option>
+          <option value="BAJO">Bajo (0-39)</option>
+          <option value="MEDIO">Medio (40-69)</option>
+          <option value="ALTO">Alto (70-100)</option>
         </select>
       </div>
 

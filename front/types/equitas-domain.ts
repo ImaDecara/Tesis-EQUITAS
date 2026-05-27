@@ -31,6 +31,9 @@ export type DashboardData = {
   withoutContactCases: number
   priorityCases: number
   urgentRecommendationCases: number
+  criticalCasesToday: number
+  riskAboveNinetyCases: number
+  criticalDebtTotal: number
   byDebtStatus: ChartBucket[]
   byDebtorType: ChartBucket[]
   byRisk: ChartBucket[]
@@ -42,6 +45,7 @@ export type DashboardData = {
     type: string
     totalDebt: number
     risk: RiskLevel
+    riskScore: number
   }>
   topPriorityDebtors: Array<{
     id: string
@@ -50,6 +54,7 @@ export type DashboardData = {
     totalDebt: number
     overdueDays: number
     risk: RiskLevel
+    riskScore: number
     hasContact: boolean
     recommendationType: RecommendationKind
     priorityScore: number
@@ -62,6 +67,7 @@ export type DashboardData = {
     totalDebt: number
     overdueDays: number
     risk: RiskLevel
+    riskScore: number
   }>
   topDebtDebtors: Array<{
     id: string
@@ -70,6 +76,7 @@ export type DashboardData = {
     totalDebt: number
     overdueDays: number
     risk: RiskLevel
+    riskScore: number
     recommendationType: RecommendationKind
   }>
 }
@@ -88,6 +95,7 @@ export type DebtorListItem = {
   hasContact: boolean
   contactCount: number
   risk: RiskLevel
+  riskScore: number
   debtCount: number
   overdueDebtsCount: number
   maxDaysOverdue: number
@@ -134,6 +142,7 @@ export type DebtorProfileSummary = {
   associatedPeople: number
   availableContacts: number
   risk: RiskLevel
+  riskScore: number
   socioeconomicLevel: string
 }
 

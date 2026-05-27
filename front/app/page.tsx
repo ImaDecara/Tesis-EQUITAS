@@ -49,10 +49,61 @@ const RECOMMENDATION_COLOR: Record<string, string> = {
 export default async function HomePage() {
   const { dashboard, peopleDashboard, warnings } = await getDashboardData()
   const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
+  const highRiskCount = riskMap.get('ALTO') ?? 0
+  const highRiskShare =
+    dashboard.totalDebtors > 0
+      ? Math.round((highRiskCount / dashboard.totalDebtors) * 100)
+      : 0
+  const topDebtConcentration =
+    dashboard.totalDebt > 0
+      ? Math.round(
+          (dashboard.topDebtDebtors.reduce((sum, debtor) => sum + debtor.totalDebt, 0) /
+            dashboard.totalDebt) *
+            100
+        )
+      : 0
+  const dominantRecommendation =
+    dashboard.byRecommendation.length > 0
+      ? [...dashboard.byRecommendation].sort((a, b) => b.value - a.value)[0]
+      : null
+  const peopleHighRiskShare =
+    peopleDashboard.totalPeople > 0
+      ? Math.round((peopleDashboard.highRiskCount / peopleDashboard.totalPeople) * 100)
+      : 0
+  const executiveCards = [
+    {
+      label: 'Casos criticos hoy',
+      value: dashboard.criticalCasesToday.toLocaleString('es-AR'),
+      hint: 'Riesgo extremo, urgentes o sin contacto',
+      icon: Clock3,
+      tone: 'text-[#8a2f2f] border-[#e6c7c7] bg-[#f9efef]',
+    },
+    {
+      label: 'Personas sin contacto',
+      value: peopleDashboard.withoutContactCount.toLocaleString('es-AR'),
+      hint: 'Sin telefono o email activo',
+      icon: Users,
+      tone: 'text-[#8a6f2a] border-[#ead8b0] bg-[#f8f2e3]',
+    },
+    {
+      label: 'Objetos con riesgo > 90',
+      value: dashboard.riskAboveNinetyCases.toLocaleString('es-AR'),
+      hint: 'Escala de riesgo 0-100',
+      icon: ShieldAlert,
+      tone: 'text-[#9d3d3d] border-[#efd2d2] bg-[#f9eeee]',
+    },
+    {
+      label: 'Deuda acumulada critica',
+      value: formatCurrency(dashboard.criticalDebtTotal),
+      hint: 'Suma de objetos con riesgo mayor a 90',
+      icon: CircleDollarSign,
+      tone: 'text-[#163a63] border-[#cfdaea] bg-[#edf2f9]',
+    },
+  ] as const
 
   return (
     <AppShell>
-      <section className="mb-7 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
             Dashboard operativo
@@ -63,11 +114,40 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         <DataWarnings warnings={warnings} />
 
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {executiveCards.map((card) => {
+            const Icon = card.icon
+
+            return (
+              <Card
+                key={card.label}
+                className={cn(
+                  'border shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                  card.tone
+                )}
+              >
+                <CardContent className="flex items-start justify-between gap-3 p-4">
+                  <div>
+                    <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-600">
+                      {card.label}
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-slate-900">{card.value}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{card.hint}</p>
+                  </div>
+                  <span className="rounded-lg bg-white/90 p-2 shadow-sm ring-1 ring-slate-200/80">
+                    <Icon className="size-5" />
+                  </span>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </section>
+
         <Card className="border-[#d2dceb] bg-white shadow-sm">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-3">
             <CardTitle className="text-[#163a63]">Resumen operativo del dia</CardTitle>
             <CardDescription>
               Vista ejecutiva para definir en que casos conviene gestionar primero.
@@ -79,28 +159,28 @@ export default async function HomePage() {
               value={dashboard.priorityCases.toLocaleString('es-AR')}
               hint="Casos con prioridad alta"
               icon={ShieldAlert}
-              tone="primary"
+              tone="critical"
             />
             <MetricCard
               label="Deuda total"
               value={formatCurrency(dashboard.totalDebt)}
               hint="Saldo consolidado"
               icon={CircleDollarSign}
-              tone="accent"
+              tone="primary"
             />
             <MetricCard
               label="Casos vencidos"
               value={dashboard.overdueCases.toLocaleString('es-AR')}
               hint="Al menos una deuda vencida"
               icon={FileWarning}
-              tone="warning"
+              tone="danger"
             />
             <MetricCard
               label="Casos sin contacto"
               value={dashboard.withoutContactCases.toLocaleString('es-AR')}
               hint="Sin email/telefono activo"
               icon={AlertCircle}
-              tone="danger"
+              tone="warning"
             />
             <MetricCard
               label="Recomendacion urgente"
@@ -116,6 +196,26 @@ export default async function HomePage() {
               icon={ContactRound}
               tone="success"
             />
+          </CardContent>
+          <CardContent className="border-t border-[#e4e9f2] pt-3">
+            <div className="grid grid-cols-1 gap-2 text-xs text-slate-700 md:grid-cols-2 xl:grid-cols-3">
+              <p>
+                <span className="font-semibold text-slate-900">{highRiskShare}%</span> de los
+                objetos estan en riesgo alto.
+              </p>
+              <p>
+                Los 5 objetos con mayor deuda concentran{' '}
+                <span className="font-semibold text-slate-900">{topDebtConcentration}%</span> del
+                saldo total.
+              </p>
+              <p>
+                Hay{' '}
+                <span className="font-semibold text-slate-900">
+                  {dashboard.withoutContactCases.toLocaleString('es-AR')}
+                </span>{' '}
+                casos con bloqueo de gestion por falta de contacto.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -157,7 +257,7 @@ export default async function HomePage() {
                         </p>
                       </TableCell>
                       <TableCell>
-                        <RiskBadge risk={debtor.risk} />
+                        <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                       </TableCell>
                       <TableCell className="text-right">{debtor.overdueDays} dias</TableCell>
                       <TableCell className="text-right">
@@ -221,7 +321,7 @@ export default async function HomePage() {
                         <p className="text-xs text-slate-500">{debtor.type}</p>
                       </TableCell>
                       <TableCell>
-                        <RiskBadge risk={debtor.risk} />
+                        <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                       </TableCell>
                       <TableCell className="text-right">{debtor.overdueDays} dias</TableCell>
                       <TableCell className="text-right">
@@ -267,7 +367,7 @@ export default async function HomePage() {
                         <p className="text-xs text-slate-500">{debtor.type}</p>
                       </TableCell>
                       <TableCell>
-                        <RiskBadge risk={debtor.risk} />
+                        <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -341,6 +441,15 @@ export default async function HomePage() {
                 )
               })}
             </CardContent>
+            <CardContent className="pt-0">
+              <p className="text-xs text-slate-700">
+                {dominantRecommendation
+                  ? `Insight: "${dominantRecommendation.label}" concentra ${Math.round(
+                      (dominantRecommendation.value / Math.max(dashboard.totalDebtors, 1)) * 100
+                    )}% de los objetos actuales.`
+                  : 'Insight: sin datos suficientes para consolidar recomendacion dominante.'}
+              </p>
+            </CardContent>
           </Card>
         </section>
 
@@ -350,6 +459,23 @@ export default async function HomePage() {
           <RiskDonutChart title="Distribucion por riesgo" data={dashboard.byRisk} />
           <TopDebtHorizontalChart title="Top de deuda" data={dashboard.topDebtChart} />
         </section>
+
+        <Card className="border-[#d2dceb]">
+          <CardContent className="grid grid-cols-1 gap-2 py-4 text-xs text-slate-700 md:grid-cols-2">
+            <p>
+              Prioridad operativa:{' '}
+              <span className="font-semibold text-slate-900">
+                {dashboard.priorityCases.toLocaleString('es-AR')}
+              </span>{' '}
+              objetos en nivel ALTA.
+            </p>
+            <p>
+              Lectura personas: riesgo alto individual en{' '}
+              <span className="font-semibold text-slate-900">{peopleHighRiskShare}%</span> del
+              padron visible.
+            </p>
+          </CardContent>
+        </Card>
 
         <Card className="border-[#d2dceb]">
           <CardHeader>
@@ -386,7 +512,7 @@ export default async function HomePage() {
               <div>
                 <CardTitle>Riesgo individual de personas</CardTitle>
                 <CardDescription>
-                  Seccion paralela basada en debtor_profile_detail.risk_value (0 a 5).
+                  Seccion paralela basada en debtor_profile_detail.risk_value (0 a 100).
                 </CardDescription>
               </div>
               <Link href="/people" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
@@ -397,21 +523,21 @@ export default async function HomePage() {
               <MetricCard
                 label="Riesgo bajo"
                 value={peopleDashboard.lowRiskCount.toLocaleString('es-AR')}
-                hint="Personas con risk_value entre 1 y 2"
+                hint="Personas con risk_value entre 0 y 39"
                 icon={Users}
                 tone="success"
               />
               <MetricCard
                 label="Riesgo medio"
                 value={peopleDashboard.mediumRiskCount.toLocaleString('es-AR')}
-                hint="Personas con risk_value entre 3 y 4"
+                hint="Personas con risk_value entre 40 y 69"
                 icon={Users}
                 tone="warning"
               />
               <MetricCard
                 label="Riesgo alto"
                 value={peopleDashboard.highRiskCount.toLocaleString('es-AR')}
-                hint="Personas con risk_value en 5"
+                hint="Personas con risk_value entre 70 y 100"
                 icon={Users}
                 tone="danger"
               />
@@ -460,7 +586,10 @@ export default async function HomePage() {
                           <p className="text-xs text-slate-500">{person.document}</p>
                         </TableCell>
                         <TableCell>
-                          <PersonRiskBadge risk={person.individualRisk} />
+                          <PersonRiskBadge
+                            risk={person.individualRisk}
+                            score={person.riskValue}
+                          />
                         </TableCell>
                         <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
                         <TableCell className="text-right">{person.debtorsCount}</TableCell>

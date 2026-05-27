@@ -62,13 +62,65 @@ export default async function DebtorDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="neutral">{debtor.type}</Badge>
             <Badge variant="info">{debtor.status}</Badge>
-            <RiskBadge risk={debtor.risk} />
+            <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
           </div>
         </div>
       </section>
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         <DataWarnings warnings={warnings} />
+
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Riesgo</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
+            </CardContent>
+          </Card>
+          <Card className="border-[#cfdaea] bg-[#edf2f9] shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Deuda total</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 text-lg font-semibold text-[#163a63]">
+              {formatCurrency(debtor.totalDebt)}
+            </CardContent>
+          </Card>
+          <Card className="border-[#d9dfe7] bg-[#f7f9fc] shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Estado</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Badge variant="neutral">{debtor.status}</Badge>
+            </CardContent>
+          </Card>
+          <Card className="border-[#ead8b0] bg-[#f9f3e4] shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Contacto</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Badge variant={debtor.hasContact ? 'success' : 'warning'}>
+                {debtor.hasContact ? 'Disponible' : 'Faltante'}
+              </Badge>
+            </CardContent>
+          </Card>
+          <Card className="border-[#d2dceb] bg-white shadow-sm xl:col-span-2">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">
+                Recomendacion
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 pt-0">
+              <Badge variant={RECOMMENDATION_BADGE[debtor.recommendationType] ?? 'neutral'}>
+                {debtor.recommendationType}
+              </Badge>
+              <p className="text-xs text-slate-600">
+                {debtor.peopleCount} persona(s) asociada(s)
+              </p>
+            </CardContent>
+          </Card>
+        </section>
 
         <Tabs defaultValue="summary">
           <TabsList>
@@ -314,7 +366,7 @@ export default async function DebtorDetailPage({
                   <CardTitle className="text-sm">Nivel socioeconomico / riesgo</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-slate-900">
-                  <RiskBadge risk={profile.risk} />
+                  <RiskBadge risk={profile.risk} score={profile.riskScore} />
                   <p className="text-sm text-slate-600">{profile.socioeconomicLevel}</p>
                 </CardContent>
               </Card>
