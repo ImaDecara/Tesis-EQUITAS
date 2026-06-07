@@ -79,10 +79,7 @@ export default async function LoginPage({
               </span>
               <h1 className="text-4xl font-semibold tracking-tight lg:text-[42px]">EQUITAS</h1>
             </div>
-            <p className="mt-2 max-w-md text-sm text-slate-100/95">
-              Sistema inteligente de recupero de deuda municipal.
-            </p>
-            <p className="mt-1 max-w-lg text-sm text-slate-200/95">
+            <p className="mt-2 max-w-lg text-sm text-slate-200/95">
               Centralizacion de deudas, perfiles de riesgo y acciones recomendadas.
             </p>
 

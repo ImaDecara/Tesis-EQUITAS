@@ -18,8 +18,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getPeopleData } from '@/lib/equitas-data'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import type { PersonListItem } from '@/types/equitas-domain'
+
+const DEFAULT_PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 20] as const
 
 type PeopleFilters = {
   q: string
@@ -44,12 +47,37 @@ function applyPeopleFilters(people: PersonListItem[], filters: PeopleFilters) {
   })
 }
 
+function parsePositiveInteger(value: string | undefined) {
+  const parsedValue = Number(value)
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null
+}
+
+function isPageSizeOption(value: number | null): value is (typeof PAGE_SIZE_OPTIONS)[number] {
+  return value !== null && PAGE_SIZE_OPTIONS.some((option) => option === value)
+}
+
+function buildPeopleHref(filters: PeopleFilters, page: number, pageSize: number) {
+  const params = new URLSearchParams()
+
+  if (filters.q) params.set('q', filters.q)
+  if (filters.risk) params.set('risk', filters.risk)
+  if (page > 1) params.set('page', String(page))
+  if (pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(pageSize))
+
+  const queryString = params.toString()
+
+  return queryString ? `/people?${queryString}` : '/people'
+}
+
 export default async function PeoplePage({
   searchParams,
 }: {
   searchParams: Promise<{
     q?: string
     risk?: string
+    page?: string
+    pageSize?: string
   }>
 }) {
   const { people, peopleDashboard, warnings } = await getPeopleData()
@@ -59,6 +87,17 @@ export default async function PeoplePage({
     risk: resolvedSearchParams.risk?.trim() ?? '',
   }
   const filteredPeople = applyPeopleFilters(people, filters)
+  const parsedPageSize = parsePositiveInteger(resolvedSearchParams.pageSize)
+  const pageSize = isPageSizeOption(parsedPageSize) ? parsedPageSize : DEFAULT_PAGE_SIZE
+  const totalPages = Math.max(1, Math.ceil(filteredPeople.length / pageSize))
+  const parsedPage = parsePositiveInteger(resolvedSearchParams.page)
+  const currentPage = Math.min(parsedPage ?? 1, totalPages)
+  const startIndex = (currentPage - 1) * pageSize
+  const paginatedPeople = filteredPeople.slice(startIndex, startIndex + pageSize)
+  const currentStart = filteredPeople.length === 0 ? 0 : startIndex + 1
+  const currentEnd = Math.min(startIndex + pageSize, filteredPeople.length)
+  const hasPreviousPage = currentPage > 1
+  const hasNextPage = currentPage < totalPages
   const totalDebtAssociated = filteredPeople.reduce(
     (acc, person) => acc + person.totalDebtAssociated,
     0
@@ -77,7 +116,7 @@ export default async function PeoplePage({
             Personas / Deudores
           </h1>
           <p className="text-sm text-slate-600">
-            Seguimiento individual con riesgo de persona basado en risk_value (0-100).
+            Seguimiento individual con puntaje de riesgo de 0 a 100.
           </p>
         </div>
 
@@ -161,7 +200,7 @@ export default async function PeoplePage({
 
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Top 5 personas por risk_value</CardTitle>
+              <CardTitle>Top 5 personas con mayor riesgo</CardTitle>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[680px]">
@@ -169,7 +208,7 @@ export default async function PeoplePage({
                   <TableRow>
                     <TableHead>Persona</TableHead>
                     <TableHead>Riesgo</TableHead>
-                    <TableHead className="text-right">risk_value</TableHead>
+                    <TableHead className="text-right">Puntaje</TableHead>
                     <TableHead className="text-right">Objetos</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -197,8 +236,35 @@ export default async function PeoplePage({
         </section>
 
         <Card className="border-[#d2dceb]">
-          <CardHeader>
-            <CardTitle>Listado de personas</CardTitle>
+          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
+            <div>
+              <CardTitle>Listado de personas</CardTitle>
+              <p className="mt-2 text-sm text-slate-600">
+                Mostrando {currentStart.toLocaleString('es-AR')}-
+                {currentEnd.toLocaleString('es-AR')} de{' '}
+                {filteredPeople.length.toLocaleString('es-AR')} personas.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span className="font-semibold text-slate-700">Ver</span>
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <Link
+                  key={option}
+                  href={buildPeopleHref(filters, 1, option)}
+                  aria-current={pageSize === option ? 'page' : undefined}
+                  className={cn(
+                    buttonVariants({
+                      variant: pageSize === option ? 'default' : 'outline',
+                      size: 'sm',
+                    }),
+                    'h-7 px-2.5'
+                  )}
+                >
+                  {option}
+                </Link>
+              ))}
+              <span>por pagina</span>
+            </div>
           </CardHeader>
           <CardContent>
             <Table className="min-w-[980px]">
@@ -207,7 +273,7 @@ export default async function PeoplePage({
                   <TableHead>Nombre</TableHead>
                   <TableHead>Documento</TableHead>
                   <TableHead>Riesgo individual</TableHead>
-                  <TableHead className="text-right">risk_value</TableHead>
+                  <TableHead className="text-right">Puntaje</TableHead>
                   <TableHead className="text-right">Objetos asociados</TableHead>
                   <TableHead>Contacto disponible</TableHead>
                   <TableHead className="text-right">Deuda total asociada</TableHead>
@@ -215,7 +281,7 @@ export default async function PeoplePage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPeople.length === 0 && (
+                {paginatedPeople.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-slate-500">
                       No hay personas que coincidan con los filtros.
@@ -223,7 +289,7 @@ export default async function PeoplePage({
                   </TableRow>
                 )}
 
-                {filteredPeople.map((person) => (
+                {paginatedPeople.map((person) => (
                   <TableRow key={person.id} className="hover:bg-[#eef3fa]">
                     <TableCell className="font-medium text-slate-900">{person.name}</TableCell>
                     <TableCell>{person.document}</TableCell>
@@ -256,6 +322,52 @@ export default async function PeoplePage({
                 ))}
               </TableBody>
             </Table>
+            {filteredPeople.length > 0 && (
+              <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                <p>
+                  Pagina {currentPage.toLocaleString('es-AR')} de{' '}
+                  {totalPages.toLocaleString('es-AR')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {hasPreviousPage ? (
+                    <Link
+                      href={buildPeopleHref(filters, currentPage - 1, pageSize)}
+                      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                    >
+                      Anterior
+                    </Link>
+                  ) : (
+                    <span
+                      className={cn(
+                        buttonVariants({ variant: 'outline', size: 'sm' }),
+                        'pointer-events-none opacity-50'
+                      )}
+                      aria-disabled
+                    >
+                      Anterior
+                    </span>
+                  )}
+                  {hasNextPage ? (
+                    <Link
+                      href={buildPeopleHref(filters, currentPage + 1, pageSize)}
+                      className={buttonVariants({ variant: 'default', size: 'sm' })}
+                    >
+                      Ver mas
+                    </Link>
+                  ) : (
+                    <span
+                      className={cn(
+                        buttonVariants({ variant: 'default', size: 'sm' }),
+                        'pointer-events-none opacity-50'
+                      )}
+                      aria-disabled
+                    >
+                      Ver mas
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

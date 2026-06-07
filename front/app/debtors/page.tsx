@@ -28,6 +28,9 @@ const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'succ
   'Seguimiento posterior': 'success',
 }
 
+const DEFAULT_PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 20] as const
+
 type DebtorFilters = {
   q: string
   risk: string
@@ -95,6 +98,33 @@ function applyDebtorFilters(debtors: DebtorListItem[], filters: DebtorFilters) {
   })
 }
 
+function parsePositiveInteger(value: string | undefined) {
+  const parsedValue = Number(value)
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null
+}
+
+function isPageSizeOption(value: number | null): value is (typeof PAGE_SIZE_OPTIONS)[number] {
+  return value !== null && PAGE_SIZE_OPTIONS.some((option) => option === value)
+}
+
+function buildDebtorsHref(filters: DebtorFilters, page: number, pageSize: number) {
+  const params = new URLSearchParams()
+
+  if (filters.q) params.set('q', filters.q)
+  if (filters.risk) params.set('risk', filters.risk)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.type) params.set('type', filters.type)
+  if (filters.contact) params.set('contact', filters.contact)
+  if (filters.personId) params.set('personId', filters.personId)
+  if (page > 1) params.set('page', String(page))
+  if (pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(pageSize))
+
+  const queryString = params.toString()
+
+  return queryString ? `/debtors?${queryString}` : '/debtors'
+}
+
 export default async function DebtorsPage({
   searchParams,
 }: {
@@ -105,6 +135,8 @@ export default async function DebtorsPage({
     type?: string
     contact?: string
     personId?: string
+    page?: string
+    pageSize?: string
   }>
 }) {
   const { debtors, warnings } = await getDebtorsData()
@@ -120,6 +152,17 @@ export default async function DebtorsPage({
   }
 
   const filteredDebtors = applyDebtorFilters(debtors, filters)
+  const parsedPageSize = parsePositiveInteger(resolvedSearchParams.pageSize)
+  const pageSize = isPageSizeOption(parsedPageSize) ? parsedPageSize : DEFAULT_PAGE_SIZE
+  const totalPages = Math.max(1, Math.ceil(filteredDebtors.length / pageSize))
+  const parsedPage = parsePositiveInteger(resolvedSearchParams.page)
+  const currentPage = Math.min(parsedPage ?? 1, totalPages)
+  const startIndex = (currentPage - 1) * pageSize
+  const paginatedDebtors = filteredDebtors.slice(startIndex, startIndex + pageSize)
+  const currentStart = filteredDebtors.length === 0 ? 0 : startIndex + 1
+  const currentEnd = Math.min(startIndex + pageSize, filteredDebtors.length)
+  const hasPreviousPage = currentPage > 1
+  const hasNextPage = currentPage < totalPages
   const riskOptions = ['ALTO', 'MEDIO', 'BAJO']
   const statusOptions = [...new Set(debtors.map((debtor) => debtor.status))].sort()
   const typeOptions = [...new Set(debtors.map((debtor) => debtor.type))].sort()
@@ -189,8 +232,35 @@ export default async function DebtorsPage({
         </Card>
 
         <Card className="border-[#d2dceb]">
-          <CardHeader>
-            <CardTitle>Listado operativo</CardTitle>
+          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
+            <div>
+              <CardTitle>Listado operativo</CardTitle>
+              <p className="mt-2 text-sm text-slate-600">
+                Mostrando {currentStart.toLocaleString('es-AR')}-
+                {currentEnd.toLocaleString('es-AR')} de{' '}
+                {filteredDebtors.length.toLocaleString('es-AR')} registros.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span className="font-semibold text-slate-700">Ver</span>
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <Link
+                  key={option}
+                  href={buildDebtorsHref(filters, 1, option)}
+                  aria-current={pageSize === option ? 'page' : undefined}
+                  className={cn(
+                    buttonVariants({
+                      variant: pageSize === option ? 'default' : 'outline',
+                      size: 'sm',
+                    }),
+                    'h-7 px-2.5'
+                  )}
+                >
+                  {option}
+                </Link>
+              ))}
+              <span>por pagina</span>
+            </div>
           </CardHeader>
           <CardContent>
             <Table className="min-w-[1180px] table-fixed">
@@ -209,7 +279,7 @@ export default async function DebtorsPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDebtors.length === 0 && (
+                {paginatedDebtors.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center text-slate-500">
                       No hay objetos que cumplan los filtros actuales.
@@ -217,7 +287,7 @@ export default async function DebtorsPage({
                   </TableRow>
                 )}
 
-                {filteredDebtors.map((debtor) => {
+                {paginatedDebtors.map((debtor) => {
                   const detailHref = `/debtors/${encodeURIComponent(debtor.id)}`
                   const priorityVisual = getPriorityVisual(debtor.priorityLevel)
                   const linkClassName =
@@ -330,6 +400,52 @@ export default async function DebtorsPage({
                 })}
               </TableBody>
             </Table>
+            {filteredDebtors.length > 0 && (
+              <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                <p>
+                  Pagina {currentPage.toLocaleString('es-AR')} de{' '}
+                  {totalPages.toLocaleString('es-AR')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {hasPreviousPage ? (
+                    <Link
+                      href={buildDebtorsHref(filters, currentPage - 1, pageSize)}
+                      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                    >
+                      Anterior
+                    </Link>
+                  ) : (
+                    <span
+                      className={cn(
+                        buttonVariants({ variant: 'outline', size: 'sm' }),
+                        'pointer-events-none opacity-50'
+                      )}
+                      aria-disabled
+                    >
+                      Anterior
+                    </span>
+                  )}
+                  {hasNextPage ? (
+                    <Link
+                      href={buildDebtorsHref(filters, currentPage + 1, pageSize)}
+                      className={buttonVariants({ variant: 'default', size: 'sm' })}
+                    >
+                      Ver mas
+                    </Link>
+                  ) : (
+                    <span
+                      className={cn(
+                        buttonVariants({ variant: 'default', size: 'sm' }),
+                        'pointer-events-none opacity-50'
+                      )}
+                      aria-disabled
+                    >
+                      Ver mas
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

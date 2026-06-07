@@ -4,10 +4,18 @@ import type { ComponentType, ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ListTree, Shield, UsersRound } from 'lucide-react'
+import {
+  ClipboardCheck,
+  LayoutDashboard,
+  ListChecks,
+  ListTree,
+  PhoneOff,
+  ShieldAlert,
+  UsersRound,
+  WalletCards,
+} from 'lucide-react'
 
 import { AuthGuard } from '@/components/auth/auth-guard'
-import { useAuthState } from '@/components/auth/auth-provider'
 import { LogoutButton } from '@/components/layout/logout-button'
 import { cn } from '@/lib/utils'
 
@@ -20,8 +28,16 @@ type NavItem = {
 
 const OPERATIVE_NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/priority-cases', label: 'Casos prioritarios', icon: ListChecks },
+  { href: '/no-contact', label: 'Casos sin contacto', icon: PhoneOff },
   { href: '/debtors', label: 'Objetos de deuda', icon: ListTree },
   { href: '/people', label: 'Personas / Deudores', icon: UsersRound },
+]
+
+const ANALYSIS_NAV_ITEMS: NavItem[] = [
+  { href: '/debt-aging', label: 'Deuda y mora', icon: WalletCards },
+  { href: '/risk-analysis', label: 'Analisis de riesgo', icon: ShieldAlert },
+  { href: '/recommended-actions', label: 'Acciones recomendadas', icon: ClipboardCheck },
 ]
 
 type NavigationSection = {
@@ -31,13 +47,14 @@ type NavigationSection = {
 
 const NAV_SECTIONS: NavigationSection[] = [
   { label: 'OPERATIVO', items: OPERATIVE_NAV_ITEMS },
+  { label: 'ANALISIS', items: ANALYSIS_NAV_ITEMS },
 ]
 
 function SideNavigation() {
   const pathname = usePathname()
 
   return (
-    <aside className="hidden w-72 border-r border-[#0b2646] bg-[#0f2f57] text-slate-200 md:block">
+    <aside className="hidden w-72 flex-col border-r border-[#0b2646] bg-[#0f2f57] text-slate-200 md:flex">
       <div className="flex h-[74px] items-center gap-2 border-b border-[#1d416e] px-5">
         <Image
           src="/icono.png"
@@ -53,7 +70,7 @@ function SideNavigation() {
         </div>
       </div>
 
-      <nav className="space-y-3 px-3 py-3">
+      <nav className="flex-1 space-y-3 px-3 py-3">
         {NAV_SECTIONS.map((section) => (
           <section key={section.label} className="space-y-1.5">
             <div className="px-2">
@@ -103,6 +120,10 @@ function SideNavigation() {
             </div>
           </section>
         ))}
+
+        <LogoutButton
+          className="mt-4 h-10 w-full justify-start border-[#245287] bg-[#143a66] text-slate-100 hover:border-[#35669f] hover:bg-[#1a4578] hover:text-white"
+        />
       </nav>
     </aside>
   )
@@ -110,10 +131,9 @@ function SideNavigation() {
 
 function TopBar() {
   const pathname = usePathname()
-  const { tenant, role } = useAuthState()
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
       <div className="flex h-16 items-center justify-between px-4 md:px-8">
         <div className="flex items-center gap-2 md:hidden">
           <Image
@@ -127,22 +147,11 @@ function TopBar() {
           <p className="text-sm font-semibold text-[#163a63]">EQUITAS</p>
         </div>
 
-        <div className="hidden text-xs text-slate-600 md:block">
-          Sistema inteligente de recupero de deuda municipal
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#d8c28a] bg-[#f6efdc] px-3 py-1 text-xs text-[#5f4a19]">
-            <Shield className="size-3.5 text-[#8a6f2a]" />
-            {tenant?.id ? `Tenant ${tenant.id}` : 'Tenant activo'}
-            {role ? ` - ${role}` : ''}
-          </div>
-          <LogoutButton />
-        </div>
+        <LogoutButton />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto px-4 pb-3 md:hidden">
-        {OPERATIVE_NAV_ITEMS.map((item) => {
+      <div className="flex gap-2 overflow-x-auto px-4 pb-3">
+        {NAV_SECTIONS.flatMap((section) => section.items).map((item) => {
           if (!item.href) {
             return null
           }
