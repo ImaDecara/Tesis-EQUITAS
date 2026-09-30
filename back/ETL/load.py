@@ -33,6 +33,24 @@ TRANSIENT_SUPABASE_ERRORS = (
 )
 MAX_SUPABASE_ATTEMPTS = 5
 SUPABASE_RETRY_DELAYS_SECONDS = (1, 2, 4, 8)
+DEFAULT_BULK_BATCH_SIZE = 500
+
+DEBT_COMPARE_COLUMNS = (
+    "external_id",
+    "debtor",
+    "type",
+    "description",
+    "original_amount",
+    "current_amount",
+    "currency",
+    "issue_date",
+    "due_date",
+    "last_collection_date",
+    "period",
+    "status",
+)
+DEBT_NUMERIC_COLUMNS = {"original_amount", "current_amount"}
+DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
 
 T = TypeVar("T")
 
@@ -183,6 +201,128 @@ def update_row(
     table_name=table_name,
     action="update",
 )
+
+
+def chunk_list(items: list[dict[str, Any]], batch_size: int) -> list[list[dict[str, Any]]]:
+    return [
+        items[start:start + batch_size]
+        for start in range(0, len(items), batch_size)
+    ]
+
+
+def bulk_insert_rows(
+    table_name: str,
+    payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not payloads:
+        return []
+
+    response = execute_supabase_operation(
+        operation_name=f"bulk insert {table_name} ({len(payloads)} rows)",
+        operation=lambda: supabase.table(table_name).insert(payloads).execute(),
+    )
+
+    if not response.data:
+        raise RuntimeError(
+            f"No se pudo insertar bulk en {table_name}. Filas: {len(payloads)}"
+        )
+
+    if not isinstance(response.data, list):
+        raise RuntimeError(
+            f"Respuesta inválida al insertar bulk en {table_name}. "
+            f"Data recibida: {response.data}"
+        )
+
+    return cast(list[dict[str, Any]], response.data)
+
+
+def normalize_debt_key(payload: dict[str, Any]) -> tuple[int, int]:
+    debtor_id = payload.get("debtor")
+    external_id = payload.get("external_id")
+
+    if debtor_id is None:
+        raise ValueError(f"Debt sin debtor. Payload: {payload}")
+
+    if external_id is None:
+        raise ValueError(f"Debt sin external_id. Payload: {payload}")
+
+    return int(debtor_id), int(external_id)
+
+
+def debt_values_are_equal(column: str, current_value: Any, next_value: Any) -> bool:
+    if column in DEBT_NUMERIC_COLUMNS:
+        return abs(float(current_value or 0) - float(next_value or 0)) < 0.000001
+
+    if column in DEBT_INTEGER_COLUMNS:
+        if current_value is None or next_value is None:
+            return current_value is None and next_value is None
+
+        return int(current_value) == int(next_value)
+
+    return current_value == next_value
+
+
+def debt_payload_matches_existing(
+    payload: dict[str, Any],
+    existing_row: dict[str, Any],
+) -> bool:
+    return all(
+        debt_values_are_equal(
+            column=column,
+            current_value=existing_row.get(column),
+            next_value=payload.get(column),
+        )
+        for column in DEBT_COMPARE_COLUMNS
+    )
+
+
+def fetch_existing_debts_by_key(
+    payloads: list[dict[str, Any]],
+) -> dict[tuple[int, int], dict[str, Any]]:
+    if not payloads:
+        return {}
+
+    expected_keys = {normalize_debt_key(payload) for payload in payloads}
+    debtor_ids = sorted({debtor_id for debtor_id, _ in expected_keys})
+    external_ids = sorted({external_id for _, external_id in expected_keys})
+    select_columns = ",".join(("id", *DEBT_COMPARE_COLUMNS))
+
+    def select_existing_debts() -> Any:
+        return (
+            supabase
+            .table(DEBT_TABLE)
+            .select(select_columns)
+            .in_("debtor", debtor_ids)
+            .in_("external_id", external_ids)
+            .execute()
+        )
+
+    response = execute_supabase_operation(
+        operation_name=f"bulk select {DEBT_TABLE} ({len(payloads)} keys)",
+        operation=select_existing_debts,
+    )
+
+    rows_by_key: dict[tuple[int, int], dict[str, Any]] = {}
+
+    if not response.data:
+        return rows_by_key
+
+    if not isinstance(response.data, list):
+        raise RuntimeError(
+            f"Respuesta inválida al buscar deudas existentes. "
+            f"Data recibida: {response.data}"
+        )
+
+    for row in response.data:
+        if not isinstance(row, dict):
+            continue
+
+        row_key = normalize_debt_key(row)
+
+        if row_key in expected_keys:
+            rows_by_key[row_key] = cast(dict[str, Any], row)
+
+    return rows_by_key
 
 
 #1.Busca si ya existe un registro con lookup_filters.
@@ -337,6 +477,91 @@ def load_debt(payload: dict[str, Any]) -> dict[str, Any]:
             "external_id": external_id,
         },
     )
+
+
+def load_debts_bulk(
+    payloads: list[dict[str, Any]],
+    batch_size: int = DEFAULT_BULK_BATCH_SIZE,
+) -> dict[str, int]:
+    """
+    Carga deudas por lotes manteniendo la regla de deduplicaciÃ³n:
+    debt.debtor + debt.external_id.
+
+    Para evitar duplicados sin depender de cambios de esquema:
+    1. busca existentes por lote;
+    2. inserta nuevas en bulk;
+    3. actualiza individualmente solo las existentes que cambiaron.
+    """
+
+    unique_payloads_by_key: dict[tuple[int, int], dict[str, Any]] = {}
+
+    for payload in payloads:
+        debt_key = normalize_debt_key(payload)
+        unique_payloads_by_key[debt_key] = payload
+
+    unique_payloads = list(unique_payloads_by_key.values())
+    summary = {
+        "received": len(payloads),
+        "unique": len(unique_payloads),
+        "inserted": 0,
+        "updated": 0,
+        "unchanged": 0,
+    }
+
+    if not unique_payloads:
+        return summary
+
+    batches = chunk_list(unique_payloads, batch_size)
+
+    for batch_index, batch in enumerate(batches, start=1):
+        existing_debts_by_key = fetch_existing_debts_by_key(batch)
+        payloads_to_insert: list[dict[str, Any]] = []
+        payloads_to_update: list[tuple[int, dict[str, Any]]] = []
+
+        for payload in batch:
+            debt_key = normalize_debt_key(payload)
+            existing_row = existing_debts_by_key.get(debt_key)
+
+            if existing_row is None:
+                payloads_to_insert.append(payload)
+                continue
+
+            if debt_payload_matches_existing(payload, existing_row):
+                summary["unchanged"] += 1
+                continue
+
+            row_id = existing_row.get("id")
+
+            if row_id is None:
+                raise RuntimeError(
+                    f"La deuda encontrada no tiene columna id. Payload: {payload}"
+                )
+
+            payloads_to_update.append((int(row_id), payload))
+
+        if payloads_to_insert:
+            bulk_insert_rows(
+                table_name=DEBT_TABLE,
+                payloads=payloads_to_insert,
+            )
+            summary["inserted"] += len(payloads_to_insert)
+
+        for row_id, payload in payloads_to_update:
+            update_row(
+                table_name=DEBT_TABLE,
+                row_id=row_id,
+                payload=payload,
+            )
+            summary["updated"] += 1
+
+        print(
+            f"Batch debt {batch_index}/{len(batches)} | "
+            f"insertadas: {summary['inserted']} | "
+            f"actualizadas: {summary['updated']} | "
+            f"sin cambios: {summary['unchanged']}"
+        )
+
+    return summary
 
 #Inserta o actualiza una provincia.
 def load_province(payload: dict[str, Any]) -> dict[str, Any]:

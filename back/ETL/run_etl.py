@@ -29,7 +29,7 @@ from ETL.transform import (
 from ETL.load import (
     load_address,
     load_city,
-    load_debt,
+    load_debts_bulk,
     load_debtor,
     load_debtor_contact,
     load_debtor_person,
@@ -115,7 +115,15 @@ def run_etl(
     persons_by_debtor_id: dict[int, set[int]] = {}
     contact_keys_by_person_id: dict[int, set[tuple[int, str]]] = {}
     debt_payloads_by_debtor_id: dict[int, list[dict[str, Any]]] = {}
+    debt_payloads_to_load: list[dict[str, Any]] = []
     relation_metadata_by_debtor_and_person: dict[tuple[int, int], dict[str, Any]] = {}
+    debt_bulk_summary = {
+        "received": 0,
+        "unique": 0,
+        "inserted": 0,
+        "updated": 0,
+        "unchanged": 0,
+    }
 
     # ========================================================
     # 1. PROCESAR CABECERA
@@ -311,8 +319,7 @@ def run_etl(
             last_collection_date=last_collection_date,
         )
 
-        load_debt(debt_payload)
-
+        debt_payloads_to_load.append(debt_payload)
         debt_payloads_by_debtor_id.setdefault(debtor_id, []).append(debt_payload)
         loaded_debt_keys.add(debt_key)
         debts_loaded += 1
@@ -320,9 +327,13 @@ def run_etl(
         if index % 100 == 0:
             print(
                 f"Detalle procesado: {index}/{len(detalle_df)} | "
-                f"Deudas cargadas: {debts_loaded} | "
+                f"Deudas preparadas: {debts_loaded} | "
                 f"Duplicadas omitidas: {duplicate_debts_skipped}"
             )
+
+    print()
+    print(f"Cargando {len(debt_payloads_to_load)} deudas por lotes en Supabase...")
+    debt_bulk_summary = load_debts_bulk(debt_payloads_to_load)
 
     # ========================================================
     # 3. CALCULAR PROMEDIO DE DEUDA PARA RIESGO
@@ -408,6 +419,9 @@ def run_etl(
     print(f"Debtor rows procesadas:              {debtors_loaded}")
     print(f"Relaciones debtor_person cargadas:   {relations_loaded}")
     print(f"Deudas únicas cargadas/actualizadas: {debts_loaded}")
+    print(f"Deudas insertadas:                   {debt_bulk_summary['inserted']}")
+    print(f"Deudas actualizadas:                 {debt_bulk_summary['updated']}")
+    print(f"Deudas sin cambios:                  {debt_bulk_summary['unchanged']}")
     print(f"Deudas duplicadas omitidas:          {duplicate_debts_skipped}")
     print(f"Provincias procesadas:               {provinces_loaded}")
     print(f"Ciudades procesadas:                 {cities_loaded}")
