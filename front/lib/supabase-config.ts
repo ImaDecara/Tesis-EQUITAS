@@ -1,7 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
-
 const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const supabasePublishableKey =
+
+export const supabasePublishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? ''
 
 // Evita errores cuando la URL viene con /rest/v1 o barras finales.
@@ -15,12 +14,8 @@ export function normalizeSupabaseUrl(url: string): string {
   return cleanUrl
 }
 
-const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl)
+export const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl)
 
 export const hasSupabaseCredentials = Boolean(
   supabaseUrl && supabasePublishableKey
 )
-
-export const supabase = hasSupabaseCredentials
-  ? createClient(supabaseUrl, supabasePublishableKey)
-  : null

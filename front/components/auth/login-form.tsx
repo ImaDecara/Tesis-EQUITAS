@@ -75,6 +75,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
     }
 
     router.replace(nextPath)
+    router.refresh()
     setIsSubmitting(false)
   }
 

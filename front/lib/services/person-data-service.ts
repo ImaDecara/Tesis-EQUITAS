@@ -1,6 +1,9 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 import { EQUITAS_TABLE_NAMES } from '@/lib/data/table-names'
 import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
-import { hasSupabaseCredentials, supabase } from '@/lib/supabase'
+import { hasSupabaseCredentials } from '@/lib/supabase-config'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type {
   DataWarning,
   PeopleDashboardSummary,
@@ -49,7 +52,7 @@ function buildLikelyRlsWarning(table: string, message: string): DataWarning {
   }
 }
 
-async function loadRawTableRows(table: string) {
+async function loadRawTableRows(table: string, supabase: SupabaseClient | null) {
   if (!supabase || !hasSupabaseCredentials) {
     return {
       rows: [] as RawRow[],
@@ -78,7 +81,10 @@ async function loadRawTableRows(table: string) {
 }
 
 async function loadRawPeopleData(): Promise<RawPersonDataBundle> {
-  const results = await Promise.all(PEOPLE_TABLE_LOAD_ORDER.map((table) => loadRawTableRows(table)))
+  const supabase = await createServerSupabaseClient()
+  const results = await Promise.all(
+    PEOPLE_TABLE_LOAD_ORDER.map((table) => loadRawTableRows(table, supabase))
+  )
   const warnings = results
     .map((result) => result.warning)
     .filter((warning): warning is DataWarning => Boolean(warning))

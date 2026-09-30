@@ -11,7 +11,7 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
-import { supabase } from '@/lib/supabase'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import { validateAuthUserTenantAccess } from '@/lib/services/auth-service'
 
 type AuthAppUser = {
@@ -46,6 +46,7 @@ function clearAccessState() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
   const [session, setSession] = useState<Session | null>(null)
   const [appUser, setAppUser] = useState<AuthAppUser | null>(null)
   const [tenant, setTenant] = useState<AuthTenant | null>(null)
@@ -123,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthReady(true)
       setIsRevalidating(false)
     },
-    [applyAnonymousState]
+    [applyAnonymousState, supabase]
   )
 
   const refreshAuthState = useCallback(async () => {
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await resolveAccessForSession(data.session ?? null, false)
-  }, [applyAnonymousState, resolveAccessForSession])
+  }, [applyAnonymousState, resolveAccessForSession, supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -194,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true
       authSubscription?.unsubscribe()
     }
-  }, [applyAnonymousState, resolveAccessForSession])
+  }, [applyAnonymousState, resolveAccessForSession, supabase])
 
   const value = useMemo<AuthContextValue>(
     () => ({

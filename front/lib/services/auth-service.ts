@@ -1,11 +1,11 @@
 import type { AuthError, User } from '@supabase/supabase-js'
 
-import { supabase } from '@/lib/supabase'
 import {
   selectTextFromRow,
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
+import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
 import type { RawRow } from '@/types/equitas-domain'
 
 type AuthValidationErrorCode =
@@ -39,6 +39,8 @@ const TENANT_USER_TENANT_KEY_CANDIDATES = ['tenant', 'tenant_id', 'id_tenant']
 const TENANT_USER_ROLE_KEY_CANDIDATES = ['role', 'role_id', 'user_role']
 
 async function findAppUserByAuthUserId(authUserId: string) {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return {
       row: null as RawRow | null,
@@ -73,6 +75,8 @@ async function findAppUserByAuthUserId(authUserId: string) {
 }
 
 async function findActiveTenantMembershipByAppUserId(appUserId: string | number) {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return {
       row: null as RawRow | null,
@@ -166,6 +170,8 @@ export function mapAuthErrorMessage(error: AuthError | { message: string } | nul
 }
 
 export async function signInWithPassword(email: string, password: string) {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return {
       error: {
@@ -180,6 +186,8 @@ export async function signInWithPassword(email: string, password: string) {
 }
 
 export async function signOutCurrentSession() {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return
   }
@@ -188,6 +196,8 @@ export async function signOutCurrentSession() {
 }
 
 export async function getCurrentAuthUser() {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return null
   }
@@ -204,6 +214,8 @@ export async function getCurrentAuthUser() {
 export async function validateAuthUserTenantAccess(
   authUserId: string
 ): Promise<TenantAccessValidation> {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return {
       isAuthorized: false,
@@ -296,6 +308,8 @@ export async function validateAuthUserTenantAccess(
 }
 
 export async function validateCurrentUserTenantAccess(): Promise<TenantAccessValidation> {
+  const supabase = createBrowserSupabaseClient()
+
   if (!supabase) {
     return {
       isAuthorized: false,

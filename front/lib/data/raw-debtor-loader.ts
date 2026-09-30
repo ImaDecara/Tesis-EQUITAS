@@ -1,8 +1,11 @@
-import { hasSupabaseCredentials, supabase } from '@/lib/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 import {
   RAW_DEBTOR_TABLE_LOAD_ORDER,
   type RawDebtorTableName,
 } from '@/lib/data/table-names'
+import { hasSupabaseCredentials } from '@/lib/supabase-config'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { DataWarning, RawDebtorDataBundle, RawRow } from '@/types/equitas-domain'
 
 const TABLE_LIMIT = 3000
@@ -30,7 +33,7 @@ function buildDataWarningFromSupabaseError(
 }
 
 // Lee una tabla en crudo y nunca rompe: devuelve filas o alerta.
-async function loadRawTableRows(table: RawDebtorTableName) {
+async function loadRawTableRows(table: RawDebtorTableName, supabase: SupabaseClient | null) {
   if (!supabase || !hasSupabaseCredentials) {
     return {
       rows: [] as RawRow[],
@@ -60,8 +63,9 @@ async function loadRawTableRows(table: RawDebtorTableName) {
 
 // Punto de entrada de datos crudos para objetos de deuda.
 export async function loadRawDebtorData(): Promise<RawDebtorDataBundle> {
+  const supabase = await createServerSupabaseClient()
   const results = await Promise.all(
-    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => loadRawTableRows(table))
+    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => loadRawTableRows(table, supabase))
   )
   const warnings = results
     .map((result) => result.warning)
