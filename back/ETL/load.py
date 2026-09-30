@@ -1,4 +1,7 @@
-from typing import Any, cast
+import time
+from typing import Any, Callable, TypeVar, cast
+
+import httpx
 
 from ETL.config import supabase
 
@@ -22,9 +25,47 @@ DEBTOR_CONTACT_TABLE = "debtor_contact"
 DEBTOR_PROFILE_TABLE = "debtor_profile"
 DEBTOR_PROFILE_DETAIL_TABLE = "debtor_profile_detail"
 
+TRANSIENT_SUPABASE_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.ConnectError,
+)
+MAX_SUPABASE_ATTEMPTS = 5
+SUPABASE_RETRY_DELAYS_SECONDS = (1, 2, 4, 8)
+
+T = TypeVar("T")
+
 # ============================================================
 # FUNCIONES BASE DE SUPABASE
 # ============================================================
+
+def execute_supabase_operation(
+    operation_name: str,
+    operation: Callable[[], T],
+    retry: bool = True,
+) -> T:
+    if not retry:
+        return operation()
+
+    for attempt in range(1, MAX_SUPABASE_ATTEMPTS + 1):
+        try:
+            return operation()
+        except TRANSIENT_SUPABASE_ERRORS as error:
+            if attempt == MAX_SUPABASE_ATTEMPTS:
+                raise
+
+            delay_seconds = SUPABASE_RETRY_DELAYS_SECONDS[attempt - 1]
+            print(
+                f"[Supabase retry] {operation_name} falló por "
+                f"{error.__class__.__name__}. "
+                f"Reintento {attempt + 1}/{MAX_SUPABASE_ATTEMPTS} "
+                f"en {delay_seconds}s."
+            )
+            time.sleep(delay_seconds)
+
+    raise RuntimeError(f"No se pudo ejecutar {operation_name}")
+
 
 # Valida que la respuesta de Supabase sea una lista con un diccionario
 def get_first_response_row(
@@ -54,9 +95,8 @@ def fetch_one(
     table_name: str,
     filters: dict[str, Any],
     columns: str = "*",
+    retry_http: bool = True,
 ) -> dict[str, Any] | None:
-
-    query = supabase.table(table_name).select(columns)
 
     for column, value in filters.items():
         if value is None:
@@ -64,9 +104,19 @@ def fetch_one(
                 f"No se puede buscar en {table_name} con {column}=None"
             )
 
-        query = query.eq(column, value)
+    def select_operation() -> Any:
+        query = supabase.table(table_name).select(columns)
 
-    response = query.limit(1).execute()
+        for column, value in filters.items():
+            query = query.eq(column, value)
+
+        return query.limit(1).execute()
+
+    response = execute_supabase_operation(
+        operation_name=f"select {table_name}",
+        operation=select_operation,
+        retry=retry_http,
+    )
 
     if not response.data:
         return None
@@ -82,9 +132,14 @@ def fetch_one(
 def insert_row(
     table_name: str,
     payload: dict[str, Any],
+    retry_http: bool = True,
 ) -> dict[str, Any]:
-    
-    response = supabase.table(table_name).insert(payload).execute()
+
+    response = execute_supabase_operation(
+        operation_name=f"insert {table_name}",
+        operation=lambda: supabase.table(table_name).insert(payload).execute(),
+        retry=retry_http,
+    )
 
     if not response.data:
         raise RuntimeError(
@@ -103,14 +158,19 @@ def update_row(
     table_name: str,
     row_id: int,
     payload: dict[str, Any],
+    retry_http: bool = True,
 ) -> dict[str, Any]:
-    
-    response = (
-        supabase
-        .table(table_name)
-        .update(payload)
-        .eq("id", row_id)
-        .execute()
+
+    response = execute_supabase_operation(
+        operation_name=f"update {table_name} id={row_id}",
+        operation=lambda: (
+            supabase
+            .table(table_name)
+            .update(payload)
+            .eq("id", row_id)
+            .execute()
+        ),
+        retry=retry_http,
     )
 
     if not response.data:
@@ -134,29 +194,38 @@ def insert_or_update_by_filters(
     payload: dict[str, Any],
     lookup_filters: dict[str, Any],
 ) -> dict[str, Any]:
-    
-    existing_row = fetch_one(
-        table_name=table_name,
-        filters=lookup_filters,
-    )
 
-    if existing_row:
-        row_id = existing_row.get("id")
-
-        if row_id is None:
-            raise RuntimeError(
-                f"El registro encontrado en {table_name} no tiene columna id."
-            )
-
-        return update_row(
+    def insert_or_update_operation() -> dict[str, Any]:
+        existing_row = fetch_one(
             table_name=table_name,
-            row_id=row_id,
-            payload=payload,
+            filters=lookup_filters,
+            retry_http=False,
         )
 
-    return insert_row(
-        table_name=table_name,
-        payload=payload,
+        if existing_row:
+            row_id = existing_row.get("id")
+
+            if row_id is None:
+                raise RuntimeError(
+                    f"El registro encontrado en {table_name} no tiene columna id."
+                )
+
+            return update_row(
+                table_name=table_name,
+                row_id=row_id,
+                payload=payload,
+                retry_http=False,
+            )
+
+        return insert_row(
+            table_name=table_name,
+            payload=payload,
+            retry_http=False,
+        )
+
+    return execute_supabase_operation(
+        operation_name=f"insert/update {table_name}",
+        operation=insert_or_update_operation,
     )
 
 
@@ -189,14 +258,18 @@ def load_person(payload: dict[str, Any]) -> dict[str, Any]:
 def load_debtor(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Regla de deduplicación:
-    debtor.tenant + debtor.external_id
+    debtor.tenant + debtor.type + debtor.external_id
     """
 
     tenant = payload.get("tenant")
+    debtor_type = payload.get("type")
     external_id = payload.get("external_id")
 
     if tenant is None:
         raise ValueError(f"Debtor sin tenant. Payload: {payload}")
+
+    if debtor_type is None:
+        raise ValueError(f"Debtor sin type. Payload: {payload}")
 
     if external_id is None:
         raise ValueError(f"Debtor sin external_id. Payload: {payload}")
@@ -206,6 +279,7 @@ def load_debtor(payload: dict[str, Any]) -> dict[str, Any]:
         payload=payload,
         lookup_filters={
             "tenant": tenant,
+            "type": debtor_type,
             "external_id": external_id,
         },
     )
@@ -448,7 +522,12 @@ def get_catalog_id_by_key(
 # Función para probar la conexión a Supabase. No inserta datos.
 def test_connection() -> None:
 
-    response = supabase.table(PERSON_TABLE).select("id").limit(1).execute()
+    response = execute_supabase_operation(
+        operation_name=f"test select {PERSON_TABLE}",
+        operation=lambda: (
+            supabase.table(PERSON_TABLE).select("id").limit(1).execute()
+        ),
+    )
 
     print("LOAD CONNECTION OK")
     print(f"Tabla consultada: {PERSON_TABLE}")
