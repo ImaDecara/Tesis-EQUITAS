@@ -10,6 +10,7 @@ export function GET() {
 
   return Response.json({
     sourceSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.QUALITY_SOURCE_SHA ?? null,
+    sourceBranch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
     environment: process.env.VERCEL_ENV ?? 'local',
     supabaseProjectRef,
   }, { headers: { 'Cache-Control': 'no-store' } })

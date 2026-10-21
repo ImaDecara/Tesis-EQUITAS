@@ -37,6 +37,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
           QUALITY_RUN_ID: ${{ github.event.workflow_run.id }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: python quality/wait_preview.py --sha "$SOURCE_SHA" --quality-run-id "$QUALITY_RUN_ID" --output .quality/preview
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

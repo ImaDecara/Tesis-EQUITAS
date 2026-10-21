@@ -80,7 +80,8 @@ try {
   }
   if (!info) throw Error('Timeout esperando /api/build-info disponible.')
   if (info.sourceSha !== sha || info.supabaseProjectRef !== fixture.project_ref
-    || info.environment !== (values.local ? 'local' : 'preview')) {
+    || info.environment !== (values.local ? 'local' : 'preview')
+    || (!values.local && info.sourceBranch !== policy.branch)) {
     throw Error('SHA, entorno o destino Supabase del despliegue no coinciden; login cancelado.')
   }
   report.build_info = info

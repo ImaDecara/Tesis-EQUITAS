@@ -3,7 +3,13 @@
 import copy
 import unittest
 
-from quality.wait_preview import POLICY, select_preview, validate_quality
+from quality.wait_preview import (
+    FIXTURE,
+    POLICY,
+    select_preview,
+    validate_build,
+    validate_quality,
+)
 
 
 class PreviewSelectionTests(unittest.TestCase):
@@ -53,3 +59,13 @@ class PreviewSelectionTests(unittest.TestCase):
             modified[field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
                 validate_quality(modified, self.sha, 'ImaDecara/Tesis-EQUITAS')
+
+    def test_build_probe_requires_testing_branch_and_project(self):
+        info = {'sourceSha': self.sha, 'sourceBranch': POLICY['branch'], 'environment': 'preview',
+                'supabaseProjectRef': FIXTURE['project_ref']}
+        self.assertTrue(validate_build(info, self.sha))
+        self.assertFalse(validate_build({**info, 'sourceBranch': 'other-preview-with-same-sha'}, self.sha))
+        for field, value in [('sourceSha', 'b' * 40), ('environment', 'production'),
+                             ('supabaseProjectRef', FIXTURE['original_project_ref'])]:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                validate_build({**info, field: value}, self.sha)

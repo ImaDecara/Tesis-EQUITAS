@@ -34,7 +34,7 @@ No compartir el valor del bypass por chat, capturas o Issues. El workflow lo uti
 
 ## 3. Versión y nuevo despliegue
 
-1. Comprobar que Vercel expone sus variables de sistema, en particular **`VERCEL_GIT_COMMIT_SHA`** y **`VERCEL_ENV`**. Si aparece **Automatically expose System Environment Variables**, debe estar habilitado. No escribir manualmente un SHA fijo como variable.
+1. Comprobar que Vercel expone sus variables de sistema, en particular **`VERCEL_GIT_COMMIT_SHA`**, **`VERCEL_GIT_COMMIT_REF`** y **`VERCEL_ENV`**. Si aparece **Automatically expose System Environment Variables**, debe estar habilitado. No escribir manualmente un SHA fijo como variable.
 2. Avisar cuando estén guardadas las dos variables de Preview y el secreto de GitHub. El flujo publica la versión candidata en `quality/tp-testing` y genera un **nuevo** despliegue con esa configuración.
 3. No utilizar una URL anterior como evidencia del cambio de variables: los cambios se aplican a despliegues nuevos.
 

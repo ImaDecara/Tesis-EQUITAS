@@ -36,7 +36,7 @@ El smoke completo pasó localmente con build productivo y Supabase cloud de test
 
 Durante la preparación se corrigieron el uso del timeout de Playwright, el selector accesible del enlace que incluye la prioridad y la aceptación de `/login?next=…` al salir. Los valores esperados de datos no se cambiaron. Estas correcciones pertenecen al ensayo, no se presentan como defectos nuevos del producto.
 
-Regresión local frontend: **107 pruebas aprobadas**, cero fallidas/omitidas; build, lint, auditoría y duplicación aprobados. Cobertura: **794/1.283 sentencias**, 61,88 % informado por Vitest. Las 54 pruebas de infraestructura pasan; las seis nuevas comprueban la selección del preview y la procedencia de CI. La auditoría mantiene los cinco altos dev de OBS-DEP-001 con el vencimiento original, sin hallazgos productivos.
+Regresión local frontend: **107 pruebas aprobadas**, cero fallidas/omitidas; build, lint, auditoría y duplicación aprobados. Cobertura: **794/1.283 sentencias**, 61,88 % informado por Vitest. Las 55 pruebas de infraestructura pasan; las siete nuevas comprueban la selección del preview y la procedencia de CI. La auditoría mantiene los cinco altos dev de OBS-DEP-001 con el vencimiento original, sin hallazgos productivos.
 
 ## Evidencia y condición de cierre pendiente
 
@@ -45,3 +45,5 @@ El runner conserva JSON, JUnit, resumen y capturas de datos sintéticos. No gene
 Para cerrar E07 faltan: guardar las variables de Preview de la rama y el bypass de GitHub; publicar el candidato aprobado en `quality/tp-testing`; comprobar el nuevo deployment y el smoke automático; incorporar URL, SHA y reportes reales a esta ficha, al catálogo y al roadmap. La etapa permanece abierta hasta esa comprobación.
 
 Recuperación: conservar el artefacto fallido; corregir configuración o código en una versión identificada; repetir CI y generar un preview nuevo. La rama de testing evita promover automáticamente un resultado fallido a Production. Un rollback manual de Vercel no se declara probado por este procedimiento.
+
+Se añadió además verificación de la rama reportada por Vercel: dos previews pueden compartir SHA, pero solo se acepta `quality/tp-testing` con el destino Supabase esperado. El identificador se comprueba antes de iniciar sesión.
