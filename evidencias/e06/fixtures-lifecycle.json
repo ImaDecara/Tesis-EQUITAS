@@ -1,0 +1,17 @@
+{
+  "project_ref": "iylwghgvtydpmwidojdo",
+  "cleanup_executed": true,
+  "after_cleanup": [
+    {
+      "auth_users": 0,
+      "tenants": 0,
+      "debtors": 0,
+      "people": 0,
+      "currency": 0
+    }
+  ],
+  "auth_fixtures_recreated": 4,
+  "business_fixtures_recreated": true,
+  "ci_secret_updated": true,
+  "scope": "Only reserved synthetic fixtures in isolated testing; no original-project mutations, no ETL/backups claim."
+}

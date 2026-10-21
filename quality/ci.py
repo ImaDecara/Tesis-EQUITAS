@@ -14,8 +14,10 @@ from xml.etree import ElementTree
 
 if __package__:
     from .gates import evaluate_gates
+    from .supabase_integration import validate_result as validate_supabase_result
 else:
     from gates import evaluate_gates
+    from supabase_integration import validate_result as validate_supabase_result
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,7 +100,7 @@ def component_run(component, output, install):
         'failure_probe': os.getenv('CI_FAILURE_PROBE') == 'true',
         'runtime': {'python': platform.python_version(), 'os': platform.platform()},
         'controls': [], 'report_errors': [], 'metrics': None,
-        'scope': 'Build/tests/analysis with E04 gates in summary; external integration E06 remains pending.',
+        'scope': 'Build/tests/analysis with E04 gates; real external integration has a separate E06 job.',
     }
     write_json(output / 'component.json', report)
     cwd = ROOT / ('front' if component == 'frontend' else 'back')
@@ -232,11 +234,25 @@ def summarize(artifacts, output):
               for key in ('passed', 'failed', 'skipped')}
     if not gate['passed']:
         errors.append('E04 quality gates failed; see gate.json')
+    external = None
+    if os.getenv('SUPABASE_REQUIRED') == 'true':
+        try:
+            if os.getenv('SUPABASE_RESULT') != 'success':
+                raise ValueError('El job real obligatorio no termino con success.')
+            external_paths = list(artifacts.rglob('supabase.json'))
+            if len(external_paths) != 1:
+                raise ValueError('Debe existir exactamente un reporte real de Supabase.')
+            external = read_json(external_paths[0])
+            validate_supabase_result(external, expected_sha, os.getenv('GITHUB_RUN_ID'), os.getenv('GITHUB_RUN_ATTEMPT'))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            errors.append(f'E06: {error}')
     summary = {'source_sha': expected_sha, 'run_id': os.getenv('GITHUB_RUN_ID'),
                'run_attempt': os.getenv('GITHUB_RUN_ATTEMPT'), 'passed': not errors,
                'errors': errors, 'tests': counts, 'components': reports,
                'release_approved': False, 'quality_gates_stage': 'E04 implemented',
-               'quality_gates_passed': gate['passed'], 'gate': gate}
+               'quality_gates_passed': gate['passed'], 'gate': gate,
+               'external_integration': external,
+               'external_integration_required': os.getenv('SUPABASE_REQUIRED') == 'true'}
     write_json(output / 'summary.json', summary)
     lines = ['# EQUITAS - Calidad con gates E04', '', f"SHA: `{expected_sha or 'local'}`", '',
              f"Pruebas de producto: **{counts['passed']} aprobadas, {counts['failed']} fallidas, {counts['skipped']} omitidas**.", '',
@@ -262,8 +278,9 @@ def summarize(artifacts, output):
         lines.append(f"| {item['id']} | {'aprobado' if item['passed'] else 'fallido'} | {item['criterion']} |")
     lines.extend(['', 'Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.',
         '', '## Alcance y pendientes', '',
-        'Los gates E04 no acreditan despliegue, smoke, cargas o integracion externa.',
-        'Supabase real se mantiene omitida de forma visible; E06 debera ejecutarla en testing sin omisiones.',
+        'Los gates E04 no acreditan despliegue, smoke o cargas.',
+        ('E06: integracion real obligatoria, verificada aparte: ' + str(external.get('tests') if external else 'sin reporte valido'))
+        if os.getenv('SUPABASE_REQUIRED') == 'true' else 'E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.',
         'La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.', '',
         'Resultado CI: **' + ('aprobado' if not errors else 'fallido') + '**.', *errors])
     markdown = '\n'.join(lines) + '\n'

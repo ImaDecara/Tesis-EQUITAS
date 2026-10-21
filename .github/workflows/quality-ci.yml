@@ -28,7 +28,6 @@ concurrency:
 env:
   CI: 'true'
   NEXT_TELEMETRY_DISABLED: '1'
-  SUPABASE_TEST_ENABLED: 'false'
 
 jobs:
   frontend:
@@ -92,9 +91,44 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  supabase:
+    name: Supabase - integracion real Auth y RLS
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: back/.python-version
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - name: Fijar npm
+        run: npm install --global npm@11.21.1 --ignore-scripts --no-audit --no-fund
+      - name: Instalar dependencias fijadas
+        working-directory: front
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ejecutar campana real obligatoria
+        env:
+          SUPABASE_TEST_CONFIG: ${{ secrets.SUPABASE_TEST_CONFIG }}
+        run: python quality/supabase_integration.py --output .quality/ci/supabase
+      - name: Conservar resultados reales aun con fallos
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-supabase-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .quality/ci/supabase/
+          if-no-files-found: error
+          retention-days: 30
+
   ci-summary:
     name: Quality gates y resumen
-    needs: [frontend, backend]
+    needs: [frontend, backend, supabase]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -120,6 +154,8 @@ jobs:
         env:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
+          SUPABASE_RESULT: ${{ needs.supabase.result }}
+          SUPABASE_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && 'true' || 'false' }}
         run: python quality/ci.py summary --artifacts .quality/download --output .quality/ci/summary
       - name: Conservar resumen aun con fallos
         if: always()

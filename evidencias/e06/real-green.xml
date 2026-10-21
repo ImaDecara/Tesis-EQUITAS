@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="12" failures="0" errors="0" time="55.5806662">
+    <testsuite name="tests/external/supabase.integration.test.ts" timestamp="2026-10-21T22:11:42.517Z" hostname="DESKTOP-EILD177" tests="12" failures="0" errors="0" skipped="0" time="55.5806662">
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-AUTH-01: contexto productivo esperado del usuario a" time="1.8044233">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-AUTH-01: contexto productivo esperado del usuario b" time="1.4607994">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-AUTH-02: password incorrecto no crea sesion ni permite leer negocio" time="4.9806736">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-DATA-02: filas, montos y riesgos conocidos de a mediante lector productivo" time="8.7596188">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-DATA-02: filas, montos y riesgos conocidos de b mediante lector productivo" time="7.8293454">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-RLS-01: anonimo recibe cero filas de todas las tablas" time="5.054406">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-RLS-02: identidad normal sin membresia recibe cero filas de negocio" time="6.2637757">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-RLS-03: usuario a no puede consultar IDs del tenant b" time="2.8395527">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-RLS-04: usuario b no puede consultar IDs del tenant a" time="2.782667">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-RLS-05: membresia inactiva permite diagnostico propio y niega negocio" time="6.4594751">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-AUTH-03: logout elimina sesion del cliente y la siguiente lectura queda anonima" time="5.4038588">
+        </testcase>
+        <testcase classname="tests/external/supabase.integration.test.ts" name="E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario &gt; SUP-WRITE-01: cliente normal no puede insertar, actualizar ni borrar negocio" time="1.938794">
+        </testcase>
+    </testsuite>
+</testsuites>

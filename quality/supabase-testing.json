@@ -1,0 +1,15 @@
+{
+  "project_ref": "iylwghgvtydpmwidojdo",
+  "project_name": "EQUITAS-TP-TESTING",
+  "url": "https://iylwghgvtydpmwidojdo.supabase.co",
+  "original_project_ref": "folyslqzqvnpolexcxjo",
+  "fixture_version": "e06-v1",
+  "tenants": { "a": 910001, "b": 910002 },
+  "app_users": { "a": 910001, "b": 910002, "none": 910003, "inactive": 910004 },
+  "role": 910001,
+  "row_ids": { "a": [910001], "b": [910002] },
+  "amounts": { "a": 1250, "b": 2500 },
+  "risk": { "a": 20, "b": 80 },
+  "business_tables": ["debtor", "debt", "person", "debtor_person", "debtor_contact", "debtor_profile", "debtor_profile_detail", "address", "data_source"],
+  "catalog_tables": ["city", "contact_type", "currency", "data_source_type", "debt_status", "debtor_type", "document_type", "person_status", "person_type", "province", "role"]
+}

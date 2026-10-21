@@ -144,6 +144,17 @@ class ExecutionContractTests(unittest.TestCase):
             self.assertFalse(result['quality_gates_passed'])
             self.assertFalse(json.loads((output / 'gate.json').read_text(encoding='utf-8'))['passed'])
 
+    def test_required_external_job_cannot_be_skipped_or_missing(self):
+        for job_result in ('skipped', 'failure', 'success'):
+            with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
+                'SUPABASE_REQUIRED': 'true', 'SUPABASE_RESULT': job_result,
+            }, clear=True):
+                source, output = Path(folder) / 'artifacts', Path(folder) / 'summary'
+                self.component_reports(source)
+                self.assertEqual(summarize(source, output), 1)
+                self.assertTrue(any(error.startswith('E06:') for error in json.loads(
+                    (output / 'summary.json').read_text(encoding='utf-8'))['errors']))
+
     def test_invalid_manifest_preserves_failure_report(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {}, clear=True):
             source, output = Path(folder) / 'artifacts', Path(folder) / 'summary'

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const { browserClient } = vi.hoisted(() => ({ browserClient: vi.fn() }))
 vi.mock('@/lib/supabase-browser', () => ({ createBrowserSupabaseClient: browserClient }))
@@ -93,6 +94,16 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
       { table: 'user', filters: [['auth_user', 'auth-test']], limit: 1 },
       { table: 'tenant_user', filters: [['user', 42], ['status', true]], limit: 1 },
     ])
+  })
+
+  it('AUTH-06 / E06: conserva el cliente y su sesion al validar pertenencia', async () => {
+    const { client, queries } = clientWithReplies([ok([{ id: 42 }]), ok([{ tenant: 7, role: 1 }])])
+    browserClient.mockClear()
+    expect(await validateAuthUserTenantAccess('auth-test', client as unknown as SupabaseClient)).toMatchObject({
+      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '1' },
+    })
+    expect(browserClient).not.toHaveBeenCalled()
+    expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user'])
   })
 
   it.each([

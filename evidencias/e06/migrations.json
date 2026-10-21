@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"migrations\":[{\"version\":\"20261021220156\",\"name\":\"equitas_testing_schema\"},{\"version\":\"20261021221030\",\"name\":\"active_membership_rls\"}]}"
+    }
+  ],
+  "isError": false
+}

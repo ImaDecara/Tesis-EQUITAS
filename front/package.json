@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "quality:duplicates": "jscpd app components lib ../back/ETL ../back/api ../back/services --min-lines 5 --min-tokens 50 --reporters console,json --output ../.quality/jscpd --no-colors",
-    "quality:complexity": "jscpd app components lib ../back/ETL ../back/api ../back/services --complexity --reporters console,json --output ../.quality/jscpd --report-name complexity --no-colors"
+    "quality:complexity": "jscpd app components lib ../back/ETL ../back/api ../back/services --complexity --reporters console,json --output ../.quality/jscpd --report-name complexity --no-colors",
+    "test:supabase": "vitest run --config vitest.supabase.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",

@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-21",
+  "project_ref": "iylwghgvtydpmwidojdo",
+  "test_source_sha256": "9f49b4981ca5a156ca8741c0d1e9c463d9ecfceadd6844b9a14e6fc93d67336e",
+  "source_version": "E06 working tree based on f93f1648cef29d4d8d71720c98a3971827fc3c91; test source identical before/after; published implementation identified by CI evidence.",
+  "red": {
+    "case": "SUP-RLS-02",
+    "passed": 0,
+    "failed": 1,
+    "not_selected": 11,
+    "expected_debtor_ids": [],
+    "observed_debtor_ids": [
+      910001,
+      910002
+    ],
+    "exit_code": 1,
+    "policy_state": "legacy authenticated USING(true)"
+  },
+  "green": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "exit_code": 0,
+    "policy_state": "active_membership_rls applied"
+  },
+  "scope": "Real Auth login and Data API, ordinary user JWT; no admin credential or HTTP mocks in tests; original project unchanged."
+}

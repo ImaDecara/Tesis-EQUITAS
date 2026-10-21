@@ -1,0 +1,49 @@
+
+ RUN  v4.1.12 C:/dev/Tesis-EQUITAS/front
+
+ ❯ tests/external/supabase.integration.test.ts (12 tests | 1 failed | 11 skipped) 3356ms
+     ↓ SUP-AUTH-01: contexto productivo esperado del usuario a
+     ↓ SUP-AUTH-01: contexto productivo esperado del usuario b
+     ↓ SUP-AUTH-02: password incorrecto no crea sesion ni permite leer negocio
+     ↓ SUP-DATA-02: filas, montos y riesgos conocidos de a mediante lector productivo
+     ↓ SUP-DATA-02: filas, montos y riesgos conocidos de b mediante lector productivo
+     ↓ SUP-RLS-01: anonimo recibe cero filas de todas las tablas
+     × SUP-RLS-02: identidad normal sin membresia recibe cero filas de negocio 3354ms
+     ↓ SUP-RLS-03: usuario a no puede consultar IDs del tenant b
+     ↓ SUP-RLS-04: usuario b no puede consultar IDs del tenant a
+     ↓ SUP-RLS-05: membresia inactiva permite diagnostico propio y niega negocio
+     ↓ SUP-AUTH-03: logout elimina sesion del cliente y la siguiente lectura queda anonima
+     ↓ SUP-WRITE-01: cliente normal no puede insertar, actualizar ni borrar negocio
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/external/supabase.integration.test.ts > E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario > SUP-RLS-02: identidad normal sin membresia recibe cero filas de negocio
+AssertionError: debtor: cero filas sin membresia activa: expected [ 910001, 910002 ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   910001,
++   910002,
++ ]
+
+ ❯ noBusiness tests/external/supabase.integration.test.ts:40:80
+     38| async function noBusiness(sdk: SupabaseClient) {
+     39|   for (const table of [...fixture.business_tables, 'tenant', ...fixtur…
+     40|     expect(await ids(sdk, table), `${table}: cero filas sin membresia …
+       |                                                                                ^
+     41|   }
+     42| }
+ ❯ tests/external/supabase.integration.test.ts:98:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 skipped (12)
+   Start at  19:04:25
+   Duration  5.52s (transform 150ms, setup 60ms, import 1.35s, tests 3.36s, environment 0ms)
+
+JSON report written to C:/dev/Tesis-EQUITAS/.quality/e06/rls-red.json

@@ -438,6 +438,8 @@ Los ensayos controlados del evaluador prueban que el gate funciona. No sustituye
 
 ## 12. E06 — Supabase aislado, autorización y cliente real
 
+**Avance E06:** entorno aislado creado, migraciones aplicadas, rojo/verde HTTP real y 12/12 variantes locales aprobadas. Integración obligatoria configurada en CI; cierre pendiente de verificarla en `main`. Ver [ficha E06](REGISTRO_EJECUCION_E06.md) y [procedimiento](SUPABASE_TESTING_CALIDAD.md).
+
 **Objetivo:** comprobar la integración de aplicación con un Supabase real de testing y tratar DEF-SUP-001 con regresión.  
 **Entrada:** E00–E02, snapshot observado y acceso a un entorno aislado.  
 **Requisitos relacionados:** R06, R13, R14, R16, R17.

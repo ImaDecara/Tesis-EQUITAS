@@ -1,4 +1,4 @@
-import type { AuthError, User } from '@supabase/supabase-js'
+import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js'
 
 import {
   selectTextFromRow,
@@ -38,8 +38,7 @@ const APP_USER_ID_CANDIDATES = ['id', 'user_id']
 const TENANT_USER_TENANT_KEY_CANDIDATES = ['tenant', 'tenant_id', 'id_tenant']
 const TENANT_USER_ROLE_KEY_CANDIDATES = ['role', 'role_id', 'user_role']
 
-async function findAppUserByAuthUserId(authUserId: string) {
-  const supabase = createBrowserSupabaseClient()
+async function findAppUserByAuthUserId(authUserId: string, supabase: SupabaseClient | null) {
 
   if (!supabase) {
     return {
@@ -74,8 +73,7 @@ async function findAppUserByAuthUserId(authUserId: string) {
   }
 }
 
-async function findActiveTenantMembershipByAppUserId(appUserId: string | number) {
-  const supabase = createBrowserSupabaseClient()
+async function findActiveTenantMembershipByAppUserId(appUserId: string | number, supabase: SupabaseClient | null) {
 
   if (!supabase) {
     return {
@@ -212,9 +210,9 @@ export async function getCurrentAuthUser() {
 }
 
 export async function validateAuthUserTenantAccess(
-  authUserId: string
+  authUserId: string,
+  supabase = createBrowserSupabaseClient()
 ): Promise<TenantAccessValidation> {
-  const supabase = createBrowserSupabaseClient()
 
   if (!supabase) {
     return {
@@ -224,7 +222,7 @@ export async function validateAuthUserTenantAccess(
       message: 'Supabase no esta configurado en el frontend.',
     }
   }
-  const appUserLookup = await findAppUserByAuthUserId(authUserId)
+  const appUserLookup = await findAppUserByAuthUserId(authUserId, supabase)
 
   if (appUserLookup.error) {
     return {
@@ -261,7 +259,7 @@ export async function validateAuthUserTenantAccess(
     }
   }
 
-  const tenantLookup = await findActiveTenantMembershipByAppUserId(appUserIdForTenantLookup)
+  const tenantLookup = await findActiveTenantMembershipByAppUserId(appUserIdForTenantLookup, supabase)
 
   if (tenantLookup.error && tenantLookup.error.code === 'TENANT_ACCESS_INACTIVE') {
     return {

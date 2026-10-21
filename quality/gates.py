@@ -222,7 +222,7 @@ def evaluate_gates(artifacts, root=ROOT, policy_path=POLICY):
             counts = manifest['metrics']['tests']
             controls_ok &= integer(counts['passed'], 1) > 0 and integer(counts['failed']) == 0
         check('build_and_tests', bool(controls_ok), {n: c['passed'] for n, c in controls.items()},
-              'All required controls and suites pass; external integration skip remains explicit until E06')
+              'All required isolated controls and suites pass; mandatory real integration is verified separately by CI summary')
         for name, directory in directories.items():
             cases = list(ElementTree.parse(directory / 'tests.xml').getroot().iter('testcase'))
             failed = sum(c.find('failure') is not None or c.find('error') is not None for c in cases)
