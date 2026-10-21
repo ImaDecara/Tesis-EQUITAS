@@ -1,0 +1,78 @@
+{
+  "dataset": {
+    "rows": 3507,
+    "id": "3 * (index + 1)",
+    "physical_order": "descending"
+  },
+  "red": [
+    {
+      "route": "objetos",
+      "serverMaxRows": 1000,
+      "expected": 3507,
+      "received": 1000,
+      "missing": 2507,
+      "duplicates": 0
+    },
+    {
+      "route": "objetos",
+      "serverMaxRows": 3000,
+      "expected": 3507,
+      "received": 3000,
+      "missing": 507,
+      "duplicates": 0
+    },
+    {
+      "route": "personas",
+      "serverMaxRows": 1000,
+      "expected": 3507,
+      "received": 1000,
+      "missing": 2507,
+      "duplicates": 0
+    },
+    {
+      "route": "personas",
+      "serverMaxRows": 3000,
+      "expected": 3507,
+      "received": 3000,
+      "missing": 507,
+      "duplicates": 0
+    }
+  ],
+  "green": [
+    {
+      "route": "objetos",
+      "serverMaxRows": 1000,
+      "expected": 3507,
+      "received": 3507,
+      "missing": 0,
+      "duplicates": 0
+    },
+    {
+      "route": "objetos",
+      "serverMaxRows": 3000,
+      "expected": 3507,
+      "received": 3507,
+      "missing": 0,
+      "duplicates": 0
+    },
+    {
+      "route": "personas",
+      "serverMaxRows": 1000,
+      "expected": 3507,
+      "received": 3507,
+      "missing": 0,
+      "duplicates": 0
+    },
+    {
+      "route": "personas",
+      "serverMaxRows": 3000,
+      "expected": 3507,
+      "received": 3507,
+      "missing": 0,
+      "duplicates": 0
+    }
+  ],
+  "original_describe_block_unchanged": true,
+  "original_describe_sha256": "90a42c73c1deb3a6928434d30ed6f4ecc58d7a24636164eff268c9e7491a378d",
+  "product_code_unchanged_in_red": true
+}

@@ -1,5 +1,7 @@
 # Pruebas de integracion - TP Integrador de Calidad de Software
 
+> **Actualización E03, 21/10/2026:** la [lectura completa](REGISTRO_EJECUCION_E03.md) quedó corregida en ambas rutas. Se agregaron 22 pruebas de integración con SDK Supabase real y transporte HTTP sintético, además de 20 unitarias del lector. Se conservaron cuatro fallos reales antes de corregir y los mismos casos aprobados después, con límites, errores y agregados. La integración Auth/Data API con el servicio de testing sigue omitida y pendiente E06; estos resultados aislados no cambian ese estado ni corrigen RLS.
+
 > **Actualización del 21/10/2026:** las secciones iniciales describen las suites históricas y su prueba Auth opcional omitida. Se amplió la revisión al proyecto real mediante el plugin Supabase: esquema, políticas, conteos e integridad fueron inspeccionados y se reprodujo un defecto de autorización sin pertenencia. El detalle está en `REVISION_SUPABASE.md`; la prueba Auth de Vitest no se ejecutó como parte de esa inspección.
 
 ## Alcance

@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.3, actualización de la etapa E02 el 21 de octubre de 2026.
+**Versión:** 1.4, cierre de la etapa E03 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00, E01 y E02 completadas en sus alcances; E03 en curso. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00–E03 completadas en sus alcances; E04 es la siguiente etapa. La cobertura frontend vigente es 57,96 % y requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -37,6 +37,8 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 - La preferencia del informe académico se mantiene: **sin índice**. El roadmap sí puede tener navegación y tablas de control.
 
 ## 2. Punto de partida comprobado
+
+**Actualización posterior E03:** DEF-DAT-001 corregido mediante paginación por `id` en ambas rutas y sus relaciones. Se conserva [CI rojo con cuatro fallos reales](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) y [CI verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) con 136 pruebas de producto aprobadas, cero fallidas y una externa omitida; otras 14 de infraestructura aprobaron. Los mismos casos recuperan 3.507 filas completas; límites, negativos y agregados también aprobaron. Cobertura frontend **57,96 %**, duplicación **3,83 %** y 28/28 líneas ejecutables nuevas de E03 cubiertas. Los gates completos y el mínimo global siguen pendientes para E04. Ver [ficha E03](REGISTRO_EJECUCION_E03.md), [aceptación y resultados](CASOS_E03_LECTURA_COMPLETA.md) y [evidencias](evidencias/e03/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre el estado anterior del defecto y las métricas históricas siguientes.
 
 **Actualización posterior E02:** el pipeline base está publicado y ejecutado en GitHub. La [ejecución normal](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) aprobó en Linux con 94 pruebas de producto y 14 de infraestructura aprobadas, una prueba externa omitida y los tres jobs correctos. El [ensayo controlado de fallo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493) terminó en rojo y conservó sus tres artefactos. Ambos usan el commit `5cfcc773a39fdaa7d5859744c430fd6b790c34d7`. La instalación Linux y `uvloop` condicional quedaron verificadas. Esto no cierra E03/E04 ni integración, smoke o cargas. Ver [ficha E02](REGISTRO_EJECUCION_E02.md) y [evidencias](evidencias/e02/ejecuciones-2026-10-21.json).
 
@@ -77,23 +79,22 @@ Los controles seleccionados de integridad no mostraron duplicados por clave de d
 
 | Defecto | Estado y evidencia | Qué falta |
 | --- | --- | --- |
-| **DEF-DAT-001** | El código limita las consultas a 3.000 filas; hay 56.286 deudas y 3.007 relaciones objeto–persona. | Prueba automatizada que reproduzca truncamiento, corrección y regresión. |
+| **DEF-DAT-001** | Condición inicial: consultas únicas limitadas y volumen superior. E03 lo corrigió con rojo/verde y regresión de ambas rutas; [ficha](REGISTRO_EJECUCION_E03.md). | Validar en integración/despliegue E06/E07; cierre automatizado de E03 comprobado. |
 | **DEF-SUP-001** | Las políticas SELECT son `TO authenticated USING (true)`. Una identidad SQL sintética sin pertenencia contó toda la cartera. | Corrección y validación por roles/tenants en testing, sin romper el acceso autorizado. |
 
 La simulación SQL fue READ ONLY con ROLLBACK. No creó una cuenta ni obtuvo un JWT válido. El rol anónimo vio cero filas. No se comprobó un ataque HTTP ni un recorrido entre dos tenants reales.
 
 ### 2.3. Qué sigue pendiente
 
-- Pipeline y reportes generados por CI.
 - Gates completos, incluyendo 80 % sobre código nuevo.
-- Rojo/verde completo y regresión por cada defecto corregido.
+- Corrección y validación de autorización RLS; mantener el rojo/verde de lectura ya conseguido en E03.
 - Integración Auth/Data API real desde el cliente de aplicación en testing.
 - Despliegue nuevo con smoke automático posterior.
 - Estrés y esfuerzo sostenido ejecutados con criterios previos.
 - Gestión completa de casos/defectos y herramienta incorporada mediante cinco pasos.
 - Consolidación del informe académico, PDF y demostración.
 
-Las 94 pruebas y las consultas de investigación no se convierten automáticamente en esos entregables.
+Las 136 pruebas actuales y las consultas de investigación no se convierten automáticamente en esos entregables.
 
 ## 3. Fuentes y función de cada documento
 
@@ -102,6 +103,8 @@ Las 94 pruebas y las consultas de investigación no se convierten automáticamen
 | [consigna_pdf.md](consigna_pdf.md) | Fuente de requisitos obligatorios. |
 | [PLAN_PRUEBAS_CALIDAD.md](PLAN_PRUEBAS_CALIDAD.md) | Plan vigente de alcance, objetivos, entornos, criterios y riesgos, formalizado en E00. |
 | [REGISTRO_EJECUCION_E00.md](REGISTRO_EJECUCION_E00.md) | Ficha de cierre y verificaciones de la primera etapa. |
+| [REGISTRO_EJECUCION_E03.md](REGISTRO_EJECUCION_E03.md) | Corrección de lectura completa, rojo/verde, regresión y métricas vigentes. |
+| [CASOS_E03_LECTURA_COMPLETA.md](CASOS_E03_LECTURA_COMPLETA.md) | Aceptación publicada antes de corregir y resultados vinculados. |
 | [tp-Calidad.md](tp-Calidad.md) | Base del informe académico recibido; llega hasta QA/QC y contiene capturas. |
 | [INFORME_TP_CALIDAD_SOFTWARE.md](INFORME_TP_CALIDAD_SOFTWARE.md) | Respaldo técnico extenso y actualización de resultados. |
 | [CALIDAD_SOFTWARE_PRUEBAS.md](CALIDAD_SOFTWARE_PRUEBAS.md) | Antecedentes de pruebas y cobertura. |
@@ -123,7 +126,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Completada; ver ficha de ejecución E00. | Evidencias existentes. |
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
 | **E02** | Pipeline base con build, suites y reportes. | **Completada**; ejecución normal y ensayo de fallo comprobados. | E00–E01. |
-| **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | En curso: casos de aceptación y reproducción. | E02; registro de defectos iniciado. |
+| **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | **Completada**; 27 controles, ambas rutas, rojo/verde y regresión verificados. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | Pendiente. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Inspección realizada; integración de aplicación pendiente. | E00–E02; entorno aislado disponible. |
@@ -135,7 +138,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00, E01 y E02 están completas; el siguiente objetivo ejecutable es E03. El pipeline base permite conservar una ejecución roja por un defecto real y otra verde tras corregirlo. El ensayo controlado de E02 no sustituye ese defecto real. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
+E00–E03 están completas; el siguiente objetivo ejecutable es E04. E03 conserva una ejecución roja por un defecto real y otra verde tras corregirlo. El ensayo controlado de E02 conserva su propósito de verificar CI. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -287,15 +290,17 @@ Si cambia el mecanismo de instalación o un comando, actualizar el plan y la tab
 **Entrada:** E02 y ficha de DEF-DAT-001.  
 **Requisitos relacionados:** R05, R06, R11, R13, R14, R18.
 
+**Cierre:** 27/27 controles verificados. [Ficha E03](REGISTRO_EJECUCION_E03.md), [rojo real](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249), [verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) y [evidencias](evidencias/e03/ejecuciones-2026-10-21.json). Código corregido `3bfe156…`; 136 pruebas de producto aprobadas, una externa omitida, 14 de infraestructura aprobadas. Siguiente etapa: E04.
+
 ### 9.1. Definir los casos antes de corregir
 
-- [ ] Asociar el requisito R-DAT-01 y un identificador de caso a cada prueba nueva.
-- [ ] Preparar datos sintéticos; no descargar datos personales reales para unitarias.
-- [ ] Incorporar un caso con más de 3.000 filas y un resultado completo conocido.
-- [ ] Cubrir ambas rutas de lectura afectadas: objetos de deuda y personas, incluyendo sus relaciones.
-- [ ] Definir orden estable por clave y comprobar ausencia de omisiones o duplicados.
-- [ ] Fijar el comportamiento esperado ante un error en una página intermedia: no presentar un conjunto parcial como si fuera completo.
-- [ ] Definir tamaños de página compatibles con los límites efectivos del servicio; un límite pedido por el cliente no garantiza que el servidor entregue esa cantidad.
+- [x] Asociar el requisito R-DAT-01 y un identificador de caso a cada prueba nueva.
+- [x] Preparar datos sintéticos; no descargar datos personales reales para unitarias.
+- [x] Incorporar un caso con más de 3.000 filas y un resultado completo conocido.
+- [x] Cubrir ambas rutas de lectura afectadas: objetos de deuda y personas, incluyendo sus relaciones.
+- [x] Definir orden estable por clave y comprobar ausencia de omisiones o duplicados.
+- [x] Fijar el comportamiento esperado ante un error en una página intermedia: no presentar un conjunto parcial como si fuera completo.
+- [x] Definir tamaños de página compatibles con los límites efectivos del servicio; un límite pedido por el cliente no garantiza que el servidor entregue esa cantidad.
 
 | Caso mínimo | Entrada o condición | Resultado esperado |
 | --- | --- | --- |
@@ -308,36 +313,36 @@ Si cambia el mecanismo de instalación o un comando, actualizar el plan y la tab
 | DAT-07 | Error en una página posterior. | Error/alerta según contrato; no éxito silencioso con datos parciales. |
 | DAT-08 | Relaciones de distintas páginas. | Mapeo y agregados coherentes con todas las filas. |
 
-Los casos DAT son IDs propuestos para crear. No deben marcarse ejecutados hasta existir en código y reportes.
+Los casos DAT-01–08 están implementados y aprobados; DAT-06 conserva su rojo previo. Ver [aceptación y resultados](CASOS_E03_LECTURA_COMPLETA.md) y [ficha E03](REGISTRO_EJECUCION_E03.md). DAT-09–14 complementan los negativos del lector.
 
 ### 9.2. Conservar el rojo real
 
-- [ ] Ejecutar la prueba de recuperación completa sobre el comportamiento anterior a la corrección.
-- [ ] Confirmar que falla por pérdida de filas y no por un mock mal construido, import roto o configuración ausente.
-- [ ] Conservar el commit con la prueba y el comportamiento defectuoso.
-- [ ] Ejecutar esa versión en CI y guardar URL, log y aserción fallida.
-- [ ] Vincular la evidencia a DEF-DAT-001. Evitar fusionar una versión roja como versión final de entrega.
+- [x] Ejecutar la prueba de recuperación completa sobre el comportamiento anterior a la corrección.
+- [x] Confirmar que falla por pérdida de filas y no por un mock mal construido, import roto o configuración ausente.
+- [x] Conservar el commit con la prueba y el comportamiento defectuoso.
+- [x] Ejecutar esa versión en CI y guardar URL, log y aserción fallida.
+- [x] Vincular la evidencia a DEF-DAT-001. Evitar fusionar una versión roja como versión final de entrega.
 
 ### 9.3. Corregir y conservar el verde
 
-- [ ] Implementar recuperación paginada de base o una solución equivalente que cubra el conjunto autorizado completo.
-- [ ] Mantener contrato de datos/advertencias compatible o documentar y probar cualquier cambio necesario.
-- [ ] Evitar sustituir 3.000 por otro límite fijo grande: eso no garantiza completitud.
-- [ ] Ejecutar la misma prueba que falló y verificar su aprobación.
-- [ ] Ejecutar casos límite/negativos, regresión, build y análisis pertinentes.
-- [ ] Medir la cobertura de las nuevas ramas y del código nuevo; enlazar con E04.
-- [ ] Conservar commit de corrección y ejecución verde de CI.
-- [ ] Medir antes/después sobre el mismo dataset sintético: recuperadas/esperadas, omisiones y duplicados.
-- [ ] Actualizar el defecto con causa, corrección, evidencia y regresión. Su cierre requiere el alcance completo afectado.
+- [x] Implementar recuperación paginada de base o una solución equivalente que cubra el conjunto autorizado completo.
+- [x] Mantener contrato de datos/advertencias compatible o documentar y probar cualquier cambio necesario.
+- [x] Evitar sustituir 3.000 por otro límite fijo grande: eso no garantiza completitud.
+- [x] Ejecutar la misma prueba que falló y verificar su aprobación.
+- [x] Ejecutar casos límite/negativos, regresión, build y análisis pertinentes.
+- [x] Medir la cobertura de las nuevas ramas y del código nuevo; enlazar con E04.
+- [x] Conservar commit de corrección y ejecución verde de CI.
+- [x] Medir antes/después sobre el mismo dataset sintético: recuperadas/esperadas, omisiones y duplicados.
+- [x] Actualizar el defecto con causa, corrección, evidencia y regresión. Su cierre requiere el alcance completo afectado.
 
 ### Verificar y cumplir
 
-- [ ] El rojo y el verde usan el mismo criterio de aceptación.
-- [ ] La corrección cambia el comportamiento productivo defectuoso; no debilita la aserción para aprobar.
-- [ ] Existe recuperación completa con más de 3.000 registros en la prueba.
-- [ ] La regresión anterior permanece aprobada; el nuevo total puede superar 94.
-- [ ] Hay evidencia de CI fallido por este problema real y CI aprobado tras corregirlo.
-- [ ] Los resultados sintéticos no se describen como importes comprobados en la interfaz real.
+- [x] El rojo y el verde usan el mismo criterio de aceptación.
+- [x] La corrección cambia el comportamiento productivo defectuoso; no debilita la aserción para aprobar.
+- [x] Existe recuperación completa con más de 3.000 registros en la prueba.
+- [x] La regresión anterior permanece aprobada; el nuevo total puede superar 94.
+- [x] Hay evidencia de CI fallido por este problema real y CI aprobado tras corregirlo.
+- [x] Los resultados sintéticos no se describen como importes comprobados en la interfaz real.
 
 **Salida y evidencia:** pruebas, corrección, comparación antes/después, defecto actualizado y dos ejecuciones vinculadas.  
 **No cerrar si:** se fabricó un fallo, solo se aumentó el límite fijo, quedó una ruta sin corregir o no se conservó evidencia del rojo.
@@ -350,7 +355,7 @@ Los casos DAT son IDs propuestos para crear. No deben marcarse ejecutados hasta 
 
 ### 10.1. Contrato del gate
 
-- [ ] Resolver **OBS-COB-001**: con Vitest 4.1.12 la cobertura frontend actual es 45,96 %. Ampliar pruebas significativas hasta al menos 60 % dentro del alcance declarado antes de cerrar E04; mantener el nuevo método y el umbral. No usar la cifra histórica ni recortar archivos sin cobertura para aprobar.
+- [ ] Resolver **OBS-COB-001**: con Vitest 4.1.12 la cobertura frontend actual es **57,96 %** tras E03 (E01/E02: 45,96 %). Ampliar pruebas significativas hasta al menos 60 % dentro del alcance declarado antes de cerrar E04; mantener el nuevo método y el umbral. No usar la cifra histórica ni recortar archivos sin cobertura para aprobar.
 
 | Control | Criterio de aceptación | Debe fallar cuando |
 | --- | --- | --- |
@@ -804,6 +809,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | --- | --- | --- | --- |
 | Preparación local/CI | [Versiones y comandos](REPRODUCIBILIDAD_CALIDAD.md): Node 22.23.2, npm 11.21.1, CPython 3.12.14; `npm ci` y requisitos/constraints Python. | `front` / `back` | Instalaciones nuevas Windows E01 y Linux E02 comprobadas. |
 | CI base E02 | Workflow [quality-ci.yml](.github/workflows/quality-ci.yml); push/PR/manual; [operación y descarga](quality/README.md). | GitHub Actions, Ubuntu 24.04. | [Normal aprobada](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471), [fallo controlado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493), JSON/JUnit/LCOV/HTML y resumen. |
+| Regresión E03 | `npm exec --no -- vitest run tests/integration/complete-data.integration.test.ts tests/unit/paginated-table-reader.test.ts` | `front`, con npm 11.21.1. | 42 pruebas; [rojo real](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) y [verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642). |
 | Suite frontend | `npm run test` | `front` | Reporte del SHA final. |
 | Unitarias frontend | `npm run test:unit` | `front` | Reporte local/CI. |
 | Integraciones frontend | `npm run test:integration` | `front` | Diferenciar simuladas y reales. |
@@ -838,4 +844,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E03 usando el CI de E02 para conservar el fallo real de lectura completa y su corrección. El ensayo controlado del pipeline no reemplaza ese defecto. Resolver la insuficiencia de cobertura frontend antes del cierre de E04. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E04: ampliar la cobertura frontend desde 57,96 % hasta al menos 60 % y construir/verificar el gate de existente, código nuevo, duplicación, críticos y reportes válidos. Conservar la base fija `531996f…` y la evidencia rojo/verde de E03. Este archivo debe actualizarse al completar cada etapa.

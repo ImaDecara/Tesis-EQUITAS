@@ -1,0 +1,418 @@
+{
+  "stage": "E03",
+  "status": "completed",
+  "owner": "Axel Azcune",
+  "observed_at_utc": "2026-10-21T20:53:17.353915+00:00",
+  "input_head": "00bc9971a6b1a5a396c0b1624eab74735d9089d2",
+  "branch": "quality/e03-lectura-completa",
+  "red_commit": "f155cfc1616c8edeacd533241c5dc2858745734a",
+  "green_commit": "3bfe15688a72360b336b7d8732867c6991a1d42e",
+  "workflow": ".github/workflows/quality-ci.yml",
+  "runner": "ubuntu-24.04",
+  "source_git_blob_sha256": {
+    "front/lib/data/paginated-table-reader.ts": "1c8e957df229525ea57909144efd65f4ec00b7e31eae16a4acb648d7587b3ac9",
+    "front/lib/data/raw-debtor-loader.ts": "3caec6d42d503ad9cc4d406283620c9f61123a66c2930db5356a484ebf6d5a43",
+    "front/lib/services/person-data-service.ts": "bd8cffa82ca41299e04fc703f2610fcadbe766a35d9422cc4f76ec06e4bcc1bb",
+    "front/tests/integration/complete-data.integration.test.ts": "9c4c904c8084fe43b16fac38be432653588fabc2b09cfb327ab4eaecfd9aed82",
+    "front/tests/unit/paginated-table-reader.test.ts": "be57dba0736a69576cc1d75126617203bd37d48292836e0a8156f1388a183f8a",
+    "front/tests/fixtures/paginated-supabase.ts": "f614b84b898b41a532dc695185d0cf18a84d7d90982e5e4bf6ade74ad284ae19",
+    "front/tests/integration/raw-debtor-loader.integration.test.ts": "62a721a51f699457bd975a86b556de3fcba6a9ebb78e119bc47ce373d360bb8c"
+  },
+  "runs": {
+    "red": {
+      "run_id": 39672114249,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249",
+      "source_sha": "f155cfc1616c8edeacd533241c5dc2858745734a",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at_utc": "2026-10-21T20:38:57Z",
+      "completed_at_utc": "2026-10-21T20:40:16Z",
+      "jobs": [
+        {
+          "databaseId": 119472398403,
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T20:39:00Z",
+          "completedAt": "2026-10-21T20:39:43Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249/job/119472398403"
+        },
+        {
+          "databaseId": 119472398780,
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "failure",
+          "startedAt": "2026-10-21T20:38:59Z",
+          "completedAt": "2026-10-21T20:39:57Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249/job/119472398780"
+        },
+        {
+          "databaseId": 119472889915,
+          "name": "Resumen y estado del CI base",
+          "conclusion": "failure",
+          "startedAt": "2026-10-21T20:39:59Z",
+          "completedAt": "2026-10-21T20:40:15Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249/job/119472889915"
+        }
+      ],
+      "tests": {
+        "passed": 95,
+        "failed": 4,
+        "skipped": 1
+      },
+      "artifacts": [
+        {
+          "id": 12380820634,
+          "name": "ci-frontend-39672114249-1",
+          "size_in_bytes": 663365,
+          "created_at": "2026-10-21T20:39:54Z",
+          "expires_at": "2026-11-20T20:39:53Z",
+          "digest": "sha256:db86f9074c712a67365cd58462e9c1d6d42b9441bcd664256de1cd6fe96b8062",
+          "verified_sha256": "db86f9074c712a67365cd58462e9c1d6d42b9441bcd664256de1cd6fe96b8062"
+        },
+        {
+          "id": 12380491978,
+          "name": "ci-backend-39672114249-1",
+          "size_in_bytes": 172314,
+          "created_at": "2026-10-21T20:39:39Z",
+          "expires_at": "2026-11-20T20:39:38Z",
+          "digest": "sha256:717f9f5413430888824d2c51b74871bffff3cf775a965cb567bf83a7e5575736",
+          "verified_sha256": "717f9f5413430888824d2c51b74871bffff3cf775a965cb567bf83a7e5575736"
+        },
+        {
+          "id": 12380187679,
+          "name": "ci-summary-39672114249-1",
+          "size_in_bytes": 3467,
+          "created_at": "2026-10-21T20:40:12Z",
+          "expires_at": "2026-11-20T20:40:11Z",
+          "digest": "sha256:322a0e0fb4ece097cc1c983e9ea07f5fb3c98817c92f4123a89bfa9ca2394a3f",
+          "verified_sha256": "322a0e0fb4ece097cc1c983e9ea07f5fb3c98817c92f4123a89bfa9ca2394a3f"
+        }
+      ],
+      "checks": {
+        "archive_hashes_match": true,
+        "json_and_xml_parsed": true,
+        "html_indexes_present": true,
+        "lcov_files": 54
+      }
+    },
+    "green": {
+      "run_id": 39673351642,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642",
+      "source_sha": "3bfe15688a72360b336b7d8732867c6991a1d42e",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at_utc": "2026-10-21T20:47:31Z",
+      "completed_at_utc": "2026-10-21T20:48:49Z",
+      "jobs": [
+        {
+          "databaseId": 119476696683,
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T20:47:33Z",
+          "completedAt": "2026-10-21T20:48:31Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642/job/119476696683"
+        },
+        {
+          "databaseId": 119476696881,
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T20:47:34Z",
+          "completedAt": "2026-10-21T20:48:14Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642/job/119476696881"
+        },
+        {
+          "databaseId": 119477196939,
+          "name": "Resumen y estado del CI base",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T20:48:33Z",
+          "completedAt": "2026-10-21T20:48:48Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642/job/119477196939"
+        }
+      ],
+      "tests": {
+        "passed": 136,
+        "failed": 0,
+        "skipped": 1
+      },
+      "artifacts": [
+        {
+          "id": 12380523458,
+          "name": "ci-summary-39673351642-1",
+          "size_in_bytes": 3383,
+          "created_at": "2026-10-21T20:48:45Z",
+          "expires_at": "2026-11-20T20:48:45Z",
+          "digest": "sha256:889a38855819377b6ca0a9a23d603988bf88b15c75d4fae67d5fdf3bd725f464",
+          "verified_sha256": "889a38855819377b6ca0a9a23d603988bf88b15c75d4fae67d5fdf3bd725f464"
+        },
+        {
+          "id": 12380114103,
+          "name": "ci-frontend-39673351642-1",
+          "size_in_bytes": 667268,
+          "created_at": "2026-10-21T20:48:28Z",
+          "expires_at": "2026-11-20T20:48:27Z",
+          "digest": "sha256:b81a78bc5ade7a945dcbdb9bc2b90fe39ceceb5742839bce44d08c03b196aa16",
+          "verified_sha256": "b81a78bc5ade7a945dcbdb9bc2b90fe39ceceb5742839bce44d08c03b196aa16"
+        },
+        {
+          "id": 12379728936,
+          "name": "ci-backend-39673351642-1",
+          "size_in_bytes": 172318,
+          "created_at": "2026-10-21T20:48:11Z",
+          "expires_at": "2026-11-20T20:48:11Z",
+          "digest": "sha256:0379f17e13c37070dea8b9c3b1ee89610046c78585e021e30760e2accf28c586",
+          "verified_sha256": "0379f17e13c37070dea8b9c3b1ee89610046c78585e021e30760e2accf28c586"
+        }
+      ],
+      "checks": {
+        "archive_hashes_match": true,
+        "json_and_xml_parsed": true,
+        "html_indexes_present": true,
+        "lcov_files": 55
+      }
+    }
+  },
+  "new_frontend_tests": 42,
+  "infrastructure_tests_passed_each_run": 14,
+  "local_frontend_context": "Working tree before green commit; component source_sha identifies the prior committed HEAD, while product changes were not committed yet. Remote green artifacts identify the exact committed implementation.",
+  "local_frontend": {
+    "component": "frontend",
+    "source_sha": "f155cfc1616c8edeacd533241c5dc2858745734a",
+    "run_id": null,
+    "run_attempt": null,
+    "event": "local",
+    "failure_probe": false,
+    "runtime": {
+      "python": "3.12.14",
+      "os": "Windows-10-10.0.19045-SP0",
+      "node": "v22.23.2",
+      "npm": "11.21.1"
+    },
+    "controls": [
+      {
+        "name": "dependencies",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "ls",
+          "--all",
+          "--json"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:46:45.699780+00:00",
+        "duration_seconds": 0.829375
+      },
+      {
+        "name": "tests",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "run",
+          "test:coverage",
+          "--",
+          "--reporter=default",
+          "--reporter=json",
+          "--reporter=junit",
+          "--outputFile.json=../.quality/e03/verified/frontend/tests.json",
+          "--outputFile.junit=../.quality/e03/verified/frontend/tests.xml",
+          "--coverage.reportsDirectory=../.quality/e03/verified/frontend/coverage",
+          "--coverage.reportOnFailure=true"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:46:46.530148+00:00",
+        "duration_seconds": 3.381941
+      },
+      {
+        "name": "lint",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "run",
+          "lint",
+          "--",
+          "--format",
+          "json",
+          "--output-file",
+          "../.quality/e03/verified/frontend/eslint.json"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:46:49.913090+00:00",
+        "duration_seconds": 4.455298
+      },
+      {
+        "name": "build",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "run",
+          "build"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:46:54.369385+00:00",
+        "duration_seconds": 7.983472
+      },
+      {
+        "name": "duplication",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "exec",
+          "--no",
+          "--",
+          "jscpd",
+          "app",
+          "components",
+          "lib",
+          "../back/ETL",
+          "../back/api",
+          "../back/services",
+          "--min-lines",
+          "5",
+          "--min-tokens",
+          "50",
+          "--reporters",
+          "console,json",
+          "--output",
+          "../.quality/e03/verified/frontend/duplication",
+          "--no-colors"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:47:02.354090+00:00",
+        "duration_seconds": 0.777423
+      },
+      {
+        "name": "complexity",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "exec",
+          "--no",
+          "--",
+          "jscpd",
+          "app",
+          "components",
+          "lib",
+          "../back/ETL",
+          "../back/api",
+          "../back/services",
+          "--complexity",
+          "--reporters",
+          "console,json",
+          "--output",
+          "../.quality/e03/verified/frontend/complexity",
+          "--no-colors"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:47:03.133514+00:00",
+        "duration_seconds": 0.670202
+      },
+      {
+        "name": "audit",
+        "command": [
+          "C:\\dev\\Tesis-EQUITAS\\back\\.venv\\Scripts\\python.exe",
+          "C:\\dev\\Tesis-EQUITAS\\quality\\audit_policy.py",
+          "--npm",
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\npm-cache\\_npx\\6b366a1f067b9097\\node_modules\\.bin\\npm.CMD",
+          "--output",
+          "C:\\dev\\Tesis-EQUITAS\\.quality\\e03\\verified\\frontend"
+        ],
+        "cwd": "front",
+        "exit_code": 0,
+        "started_at_utc": "2026-10-21T20:47:03.804852+00:00",
+        "duration_seconds": 2.582227
+      }
+    ],
+    "report_errors": [],
+    "metrics": {
+      "tests": {
+        "passed": 75,
+        "failed": 0,
+        "skipped": 1
+      },
+      "coverage": {
+        "lines": {
+          "total": 1206,
+          "covered": 694,
+          "skipped": 0,
+          "pct": 57.54
+        },
+        "statements": {
+          "total": 1280,
+          "covered": 742,
+          "skipped": 0,
+          "pct": 57.96
+        },
+        "functions": {
+          "total": 325,
+          "covered": 194,
+          "skipped": 0,
+          "pct": 59.69
+        },
+        "branches": {
+          "total": 1056,
+          "covered": 504,
+          "skipped": 0,
+          "pct": 47.72
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "lint": {
+        "errors": 0,
+        "warnings": 0,
+        "files": 74
+      },
+      "duplication": {
+        "clones": 36,
+        "duplicatedLines": 427,
+        "duplicatedTokens": 2533,
+        "lines": 11143,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 3.8320021538185407,
+        "percentageTokens": 4.764950431723697,
+        "sources": 63,
+        "tokens": 53159
+      },
+      "audit": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 5,
+        "critical": 0,
+        "total": 5
+      },
+      "audit_policy": {
+        "accepted": true,
+        "errors": [],
+        "accepted_packages": [
+          "@next/eslint-plugin-next",
+          "braces",
+          "eslint-config-next",
+          "fast-glob",
+          "micromatch"
+        ],
+        "exception": "OBS-DEP-001",
+        "expires_on": "2026-10-26",
+        "raw_exit_codes": {
+          "all": 1,
+          "production": 0
+        },
+        "evaluated_at_utc": "2026-10-21T20:47:06.378994+00:00",
+        "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+      }
+    },
+    "scope": "CI base E02; quality gates E04 and external integration E06 remain pending.",
+    "passed": true
+  },
+  "limitations": [
+    "Synthetic HTTP responses with real Supabase SDK; no real Auth/Data API integration validated here.",
+    "No transactional snapshot between page requests; concurrent writes may require refresh.",
+    "Reads materialize full tables in memory; no load/performance conclusion.",
+    "OBS-COB-001, OBS-DEP-001 and DEF-SUP-001 remain open; E04 and later stages pending."
+  ]
+}

@@ -1,6 +1,6 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-Versión 1.2 — 21/10/2026. Formalización E00 y actualizaciones E01/E02.
+Versión 1.3 — 21/10/2026. Formalización E00 y actualizaciones E01–E03.
 
 ## 1. Propósito y referencias de versión
 
@@ -15,6 +15,8 @@ La consigna de referencia es [consigna_pdf.md](consigna_pdf.md). La secuencia de
 | Cierre de E00 | Commit que incorpora este plan y el registro de ejecución de E00. | Su SHA se obtiene del historial del archivo; no reemplaza la referencia del producto. |
 
 Las cifras iniciales son antecedentes comprobados. El plan no presenta las actividades futuras como ejecutadas ni mantiene fijo el total de pruebas cuando se agreguen casos.
+
+**Actualización E03:** DEF-DAT-001 corregido en ambas rutas con un lector común por cursor `id`, sin límite total fijo. Se conserva [CI rojo por cuatro fallos reales](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) y [CI verde tras corregirlos](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642): 136 pruebas de producto aprobadas, cero fallidas y una externa omitida; 14 de infraestructura aprobadas por separado. Los mismos DAT-06 recuperan ahora 3.507 filas completas; límites, negativos y relaciones también aprobaron. Cobertura frontend 742/1.280 = **57,96 %**, aún menor al 60 %; las 28/28 líneas ejecutables nuevas de E03 están cubiertas. Duplicación 427/11.143 = **3,83 %**. E04 y la base fija del TP siguen pendientes de gate; DEF-SUP-001 y OBS-DEP-001 siguen abiertos. Ver [ficha E03](REGISTRO_EJECUCION_E03.md), [aceptación y resultados](CASOS_E03_LECTURA_COMPLETA.md) y [evidencias](evidencias/e03/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre el estado anterior de DEF-DAT-001 y las métricas de E01/E02.
 
 **Actualización E02:** workflow publicado en `5cfcc773a39fdaa7d5859744c430fd6b790c34d7`. [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) en Linux, con 94 pruebas de producto aprobadas, una omitida y 14 pruebas de infraestructura aprobadas informadas por separado. [Ensayo controlado fallido](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493) comprobó propagación del fallo y retención de artefactos; no cumple por sí mismo el defecto rojo/verde de E03. La instalación Linux, los reportes descargables y la excepción procesable de dependencias quedaron verificados. La cobertura frontend sigue en 45,96 % y E04 permanece pendiente. Ver [ficha E02](REGISTRO_EJECUCION_E02.md). Esta actualización prevalece sobre estados anteriores de CI o Linux pendientes.
 

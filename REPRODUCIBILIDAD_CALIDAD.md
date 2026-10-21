@@ -1,6 +1,8 @@
 # Reproducir los controles locales de calidad — EQUITAS
 
-Corte verificado: E01/E02, 21/10/2026. Resultados y decisiones en [E01](REGISTRO_EJECUCION_E01.md) y [E02](REGISTRO_EJECUCION_E02.md). Los controles locales tienen su equivalente remoto en [GitHub Actions](.github/workflows/quality-ci.yml), con [guía operativa](quality/README.md). Despliegue y cargas se incorporan en las siguientes etapas.
+Corte verificado: E01–E03, 21/10/2026. Resultados y decisiones en [E01](REGISTRO_EJECUCION_E01.md), [E02](REGISTRO_EJECUCION_E02.md) y [E03](REGISTRO_EJECUCION_E03.md). Los controles locales tienen su equivalente remoto en [GitHub Actions](.github/workflows/quality-ci.yml), con [guía operativa](quality/README.md). Despliegue y cargas se incorporan en las siguientes etapas.
+
+E03 conserva las versiones y comandos de preparación. La suite vigente aprueba **75 frontend y 61 backend**, con una integración externa omitida; infraestructura aporta otras 14 aprobadas por separado. La [ficha E03](REGISTRO_EJECUCION_E03.md) incluye el comando único de sus 42 pruebas y los enlaces al CI rojo/verde. Cobertura frontend 57,96 %: el gate completo y el mínimo global siguen pendientes para E04.
 
 ## 1. Herramientas y preparación
 

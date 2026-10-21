@@ -1,0 +1,50 @@
+[
+  {
+    "case": {
+      "classname": "tests/integration/complete-data.integration.test.ts",
+      "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz > DAT-06 / objetos: recupera 3507 filas con limite efectivo 1000",
+      "time": "0.025227111"
+    },
+    "failure": {
+      "message": "expected { route: 'objetos', …(5) } to deeply equal { route: 'objetos', …(5) }",
+      "type": "AssertionError"
+    },
+    "details": "\nAssertionError: expected { route: 'objetos', …(5) } to deeply equal { route: 'objetos', …(5) }\n\n- Expected\n+ Received\n\n  {\n    \"duplicates\": 0,\n    \"expected\": 3507,\n-   \"missing\": 0,\n-   \"received\": 3507,\n+   \"missing\": 2507,\n+   \"received\": 1000,\n    \"route\": \"objetos\",\n    \"serverMaxRows\": 1000,\n  }\n\n ❯ tests/integration/complete-data.integration.test.ts:72:27\n            "
+  },
+  {
+    "case": {
+      "classname": "tests/integration/complete-data.integration.test.ts",
+      "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz > DAT-06 / objetos: recupera 3507 filas con limite efectivo 3000",
+      "time": "0.02058523"
+    },
+    "failure": {
+      "message": "expected { route: 'objetos', …(5) } to deeply equal { route: 'objetos', …(5) }",
+      "type": "AssertionError"
+    },
+    "details": "\nAssertionError: expected { route: 'objetos', …(5) } to deeply equal { route: 'objetos', …(5) }\n\n- Expected\n+ Received\n\n  {\n    \"duplicates\": 0,\n    \"expected\": 3507,\n-   \"missing\": 0,\n-   \"received\": 3507,\n+   \"missing\": 507,\n+   \"received\": 3000,\n    \"route\": \"objetos\",\n    \"serverMaxRows\": 3000,\n  }\n\n ❯ tests/integration/complete-data.integration.test.ts:72:27\n            "
+  },
+  {
+    "case": {
+      "classname": "tests/integration/complete-data.integration.test.ts",
+      "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz > DAT-06 / personas: recupera 3507 filas con limite efectivo 1000",
+      "time": "0.056705827"
+    },
+    "failure": {
+      "message": "expected { route: 'personas', …(5) } to deeply equal { route: 'personas', …(5) }",
+      "type": "AssertionError"
+    },
+    "details": "\nAssertionError: expected { route: 'personas', …(5) } to deeply equal { route: 'personas', …(5) }\n\n- Expected\n+ Received\n\n  {\n    \"duplicates\": 0,\n    \"expected\": 3507,\n-   \"missing\": 0,\n-   \"received\": 3507,\n+   \"missing\": 2507,\n+   \"received\": 1000,\n    \"route\": \"personas\",\n    \"serverMaxRows\": 1000,\n  }\n\n ❯ tests/integration/complete-data.integration.test.ts:72:27\n            "
+  },
+  {
+    "case": {
+      "classname": "tests/integration/complete-data.integration.test.ts",
+      "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz > DAT-06 / personas: recupera 3507 filas con limite efectivo 3000",
+      "time": "0.057577209"
+    },
+    "failure": {
+      "message": "expected { route: 'personas', …(5) } to deeply equal { route: 'personas', …(5) }",
+      "type": "AssertionError"
+    },
+    "details": "\nAssertionError: expected { route: 'personas', …(5) } to deeply equal { route: 'personas', …(5) }\n\n- Expected\n+ Received\n\n  {\n    \"duplicates\": 0,\n    \"expected\": 3507,\n-   \"missing\": 0,\n-   \"received\": 3507,\n+   \"missing\": 507,\n+   \"received\": 3000,\n    \"route\": \"personas\",\n    \"serverMaxRows\": 3000,\n  }\n\n ❯ tests/integration/complete-data.integration.test.ts:72:27\n            "
+  }
+]

@@ -1,5 +1,7 @@
 # Pruebas unitarias - TP Integrador de Calidad de Software
 
+> **Actualización E03, 21/10/2026:** las secciones siguientes conservan antecedentes de la suite inicial. Con Vitest/V8 4.1.12, E03 agrega 42 pruebas de lectura completa y contratos: total vigente 75 frontend y 61 backend aprobadas, una externa omitida; 14 de infraestructura por separado. Sentencias frontend 742/1.280 = 57,96 %, backend 1.254/1.471 = 85,25 %. El mínimo global frontend sigue pendiente E04. Pruebas, cobertura nueva, comandos y rojo/verde están en [REGISTRO_EJECUCION_E03.md](REGISTRO_EJECUCION_E03.md), que prevalece para los resultados actuales.
+
 ## Alcance inicial
 
 EQUITAS se evalua como Nivel 2: un prototipo parcial con frontend Next.js, ETL Python e integracion con Supabase. Esta etapa incorpora pruebas unitarias sin conectarse a Supabase ni ejecutar cargas reales.

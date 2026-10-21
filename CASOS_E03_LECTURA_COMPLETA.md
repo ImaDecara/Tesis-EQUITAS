@@ -24,3 +24,13 @@ Se conserva el contrato `rows + warning` por tabla: un error devuelve cero filas
 El primer commit de pruebas conserva el codigo anterior para ejecutar DAT-06 en rojo en CI. Tras obtener URL y reportes fallidos se implementara la correccion y se ejecutaran esos mismos casos sin debilitar sus aserciones, junto con los limites, negativos y relaciones definidos aqui. Las mediciones `E03_DAT_06` guardan esperadas/recuperadas/omitidas/duplicadas para comparar antes y despues.
 
 Fuentes consultadas: [range y orden](https://supabase.com/docs/reference/javascript/using-modifiers-range), [limit](https://supabase.com/docs/reference/javascript/using-modifiers-limit), [changelog](https://supabase.com/changelog). Se mantienen las versiones del SDK fijadas en E01.
+
+## Ejecución y cierre
+
+La aceptación anterior se publicó antes de la corrección en `f155cfc1616c8edeacd533241c5dc2858745734a`. Sus cuatro DAT-06 fallaron por truncamiento en [CI rojo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249). El bloque original de pruebas y sus aserciones permanecen sin cambios en `3bfe15688a72360b336b7d8732867c6991a1d42e`, aprobado por [CI verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642).
+
+**DAT-01–08 aprobados**, incluidas ambas rutas, servidor con máximo inferior de 137 filas, error intermedio y mapeos/agregados con 3.507 relaciones. DAT-06 obtiene 3.507 recuperadas, cero omitidas y cero duplicadas en sus cuatro variantes. DAT-08 obtiene deuda sintética total 7.014, contactos y personas completos y riesgo de la última página. Las particiones DAT-01–05 usan 0, 7, 1.000, 1.001 y 2.000 filas.
+
+Se incorporaron casos complementarios de defensa del contrato del lector, identificados durante la implementación: **DAT-09** sin cliente/credenciales; **DAT-10** bigint en texto; **DAT-11** claves inválidas; **DAT-12** orden/cursor/duplicados inválidos; **DAT-13** respuesta no array; **DAT-14** mensajes/códigos de advertencia. Todos aprobaron. No reemplazan ni reducen las expectativas originales.
+
+La solución usa orden ascendente y [filtro `gt`](https://supabase.com/docs/reference/javascript/using-filters-gt) por la PK, con límite por request y terminación por página vacía. Pruebas, técnicas, cantidades, cobertura, artefactos y límites del cierre están en [REGISTRO_EJECUCION_E03.md](REGISTRO_EJECUCION_E03.md). La integración real queda para E06.

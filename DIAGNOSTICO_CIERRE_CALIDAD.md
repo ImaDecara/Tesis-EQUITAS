@@ -2,6 +2,8 @@
 
 Fecha de revisión: **21 de octubre de 2026**. Presentación: **26 de octubre de 2026**.
 
+**Actualización E03:** se corrigió DEF-DAT-001 en objetos y personas. [CI rojo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) conservó cuatro fallos por filas ausentes; [CI verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) recuperó 3.507 filas en los mismos casos y aprobó límites, errores y agregados. Resultado: 136 pruebas de producto aprobadas, ninguna fallida y una externa omitida; otras 14 de infraestructura aprobadas. Cobertura frontend **57,96 %**, todavía menor a 60 %; duplicación **3,83 %**; código ejecutable nuevo de E03 **28/28 cubierto**. Para el estado vigente prevalecen [la ficha E03](REGISTRO_EJECUCION_E03.md) y [sus evidencias](evidencias/e03/ejecuciones-2026-10-21.json). E04 es la siguiente etapa; RLS, integración real, despliegue, smoke, cargas y PDF continúan pendientes. Las observaciones siguientes conservan el diagnóstico histórico.
+
 Commit verificado: `531996f51243dc3d4c5a607338e2f35e32313f6b`, rama `main`. La consulta a GitHub confirmó el mismo commit en `main`, una sola rama publicada, ninguna PR encontrada y **0 ejecuciones de GitHub Actions** disponibles al momento de la revisión. Esto no permite descartar trabajo todavía no publicado por el equipo.
 
 **Conclusión del diagnóstico inicial:** la base local de EQUITAS compila, arranca y supera las suites existentes. Su medición histórica de sentencias superaba el 60 % en ambos módulos. La entrega completa del TP todavía no está demostrada: faltan automatización de CI/CD, quality gates, validación Auth real desde el cliente, smoke posterior al despliegue, cargas, defecto con corrección rojo/verde y cierre documental.
