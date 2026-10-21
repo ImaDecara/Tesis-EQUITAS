@@ -1,0 +1,85 @@
+{
+  "stage": "E07",
+  "status": "local preflight only; deployed pipeline remains pending",
+  "base_sha": "6ae18c24296f74a39e739d9fccc0ed67fb5d80c8",
+  "source_state": "uncommitted E07 implementation based on the stated E06 commit; not a deployed build",
+  "smoke": {
+    "case_id": "SMOKE-01",
+    "passed": true,
+    "source_sha": "6ae18c24296f74a39e739d9fccc0ed67fb5d80c8",
+    "run_id": null,
+    "run_attempt": null,
+    "started_at_utc": "2026-10-21T22:50:01.703Z",
+    "context": "local_preflight",
+    "fixture_version": "e06-v1",
+    "checks": [
+      {
+        "id": "availability",
+        "passed": true,
+        "observed": {
+          "sourceSha": "6ae18c24296f74a39e739d9fccc0ed67fb5d80c8",
+          "environment": "local",
+          "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+        }
+      },
+      {
+        "id": "login",
+        "passed": true,
+        "observed": "Dashboard autenticado disponible."
+      },
+      {
+        "id": "dashboard",
+        "passed": true,
+        "observed": {
+          "debt_amount": 1250,
+          "other_tenant_visible": false
+        }
+      },
+      {
+        "id": "navigation_filter",
+        "passed": true,
+        "observed": "Objeto A, filtro sin resultados, limpieza y persona A comprobados; B ausente."
+      },
+      {
+        "id": "logout",
+        "passed": true,
+        "observed": "Nueva navegacion protegida redirige a login y no muestra cartera."
+      }
+    ],
+    "errors": [],
+    "screenshots": [
+      "dashboard.png",
+      "objetos-filtro-restaurado.png",
+      "personas.png",
+      "logout-protegido.png"
+    ],
+    "tests": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "url": "http://127.0.0.1:3107",
+    "deployment_id": null,
+    "quality_run_id": null,
+    "build_info": {
+      "sourceSha": "6ae18c24296f74a39e739d9fccc0ed67fb5d80c8",
+      "environment": "local",
+      "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+    },
+    "console_errors": [],
+    "page_errors": [],
+    "finished_at_utc": "2026-10-21T22:50:14.697Z"
+  },
+  "frontend_tests": {
+    "passed": 107,
+    "failed": 0,
+    "skipped": 0
+  },
+  "backend_tests": {
+    "passed": 61,
+    "failed": 0,
+    "skipped": 0
+  },
+  "infrastructure_tests": 54,
+  "limitation": "This does not close E07; fresh Vercel deployment and automatic browser smoke required."
+}

@@ -1,0 +1,24 @@
+{
+  "provider": "Vercel",
+  "project_slug": "tesis-equitas",
+  "team_slug": "equitas",
+  "branch": "quality/tp-testing",
+  "environment": "Preview",
+  "creator": "vercel[bot]",
+  "hostname_pattern": "^tesis-equitas-[a-z0-9]+-equitas\\.vercel\\.app$",
+  "deployment_timeout_seconds": 600,
+  "availability_timeout_seconds": 120,
+  "case_timeout_seconds": 180,
+  "assertion_timeout_ms": 30000,
+  "fixture_version": "e06-v1",
+  "smoke_case_id": "SMOKE-01",
+  "expected": {
+    "account": "a",
+    "debtor_identifier": "TP-A",
+    "other_debtor_identifier": "TP-B",
+    "person_name": "Persona sintetica A",
+    "other_person_name": "Persona sintetica B",
+    "debt_amount": 1250,
+    "unmatched_filter": "E07-NO-EXISTE"
+  }
+}

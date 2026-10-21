@@ -1,0 +1,66 @@
+name: Preview - smoke posterior al despliegue
+
+on:
+  workflow_run:
+    workflows: ['Calidad - CI y gates']
+    types: [completed]
+    branches: [quality/tp-testing]
+
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
+concurrency:
+  group: preview-smoke-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Preview Vercel - navegador y datos de testing
+    if: github.event.workflow_run.head_repository.full_name == github.repository && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: back/.python-version
+      - name: Exigir CI correcto y esperar URL exacta del preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          QUALITY_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: python quality/wait_preview.py --sha "$SOURCE_SHA" --quality-run-id "$QUALITY_RUN_ID" --output .quality/preview
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - name: Fijar npm
+        run: npm install --global npm@11.21.1 --ignore-scripts --no-audit --no-fund
+      - name: Instalar dependencias fijadas y Chromium
+        working-directory: front
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx --no-install playwright install --with-deps chromium
+      - name: Ejecutar smoke real del navegador
+        working-directory: front
+        env:
+          SUPABASE_TEST_CONFIG: ${{ secrets.SUPABASE_TEST_CONFIG }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/preview
+      - name: Conservar resultados y capturas aun con fallos
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .quality/preview/
+          if-no-files-found: error
+          retention-days: 30

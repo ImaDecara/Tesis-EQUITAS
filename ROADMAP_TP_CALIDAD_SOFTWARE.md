@@ -513,6 +513,8 @@ Los nuevos casos se implementarán y ejecutarán; los IDs no indican por sí sol
 
 ## 13. E07 — Despliegue nuevo y smoke posterior automático
 
+**Avance E07:** proveedor Vercel identificado; implementación del smoke y workflow posterior en validación. Recorrido local con Supabase testing aprobado; configuración manual del preview y ejecución desplegada pendientes. [Guía de configuración](CONFIGURACION_VERCEL_E07.md), [ficha E07](REGISTRO_EJECUCION_E07.md). No se declara cerrada esta etapa.
+
 **Objetivo:** demostrar que una versión desplegada funciona en su recorrido básico y que esa comprobación ocurre después del despliegue.  
 **Entrada:** E04 y E06, configuración de despliegue y usuario/datos de testing.  
 **Requisitos relacionados:** R17–R19, R24, R25.

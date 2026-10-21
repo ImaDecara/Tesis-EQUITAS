@@ -93,7 +93,7 @@ jobs:
 
   supabase:
     name: Supabase - integracion real Auth y RLS
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/quality/tp-testing')
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -155,7 +155,7 @@ jobs:
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           SUPABASE_RESULT: ${{ needs.supabase.result }}
-          SUPABASE_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          SUPABASE_REQUIRED: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/quality/tp-testing') && 'true' || 'false' }}
         run: python quality/ci.py summary --artifacts .quality/download --output .quality/ci/summary
       - name: Conservar resumen aun con fallos
         if: always()
