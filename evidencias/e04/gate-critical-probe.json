@@ -1,0 +1,386 @@
+{
+  "stage": "E04",
+  "passed": false,
+  "checks": [
+    {
+      "id": "fixed_base",
+      "passed": true,
+      "observed": {
+        "base": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+        "head": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44"
+      },
+      "criterion": "Fixed base exists and is an ancestor of HEAD"
+    },
+    {
+      "id": "build_and_tests",
+      "passed": true,
+      "observed": {
+        "backend": true,
+        "frontend": true
+      },
+      "criterion": "All required controls and suites pass; external integration skip remains explicit until E06"
+    },
+    {
+      "id": "frontend_statements",
+      "passed": true,
+      "observed": {
+        "covered": 791,
+        "total": 1280,
+        "pct": 61.796875,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Statements >= 60%, declared full scope"
+    },
+    {
+      "id": "backend_statements",
+      "passed": true,
+      "observed": {
+        "covered": 1254,
+        "total": 1471,
+        "pct": 85.24813052345343,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Statements >= 60%, declared full scope"
+    },
+    {
+      "id": "frontend_new_lines",
+      "passed": true,
+      "observed": {
+        "covered": 28,
+        "total": 28,
+        "pct": 100.0,
+        "applicable": true,
+        "passed": true,
+        "files": [
+          {
+            "path": "front/lib/data/paginated-table-reader.ts",
+            "executable_new_lines": [
+              6,
+              11,
+              12,
+              13,
+              24,
+              31,
+              32,
+              42,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              51,
+              52,
+              53,
+              56,
+              58,
+              59,
+              60,
+              61,
+              66,
+              68,
+              71
+            ],
+            "covered_new_lines": [
+              6,
+              11,
+              12,
+              13,
+              24,
+              31,
+              32,
+              42,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              51,
+              52,
+              53,
+              56,
+              58,
+              59,
+              60,
+              61,
+              66,
+              68,
+              71
+            ],
+            "covered": 26,
+            "total": 26,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/lib/data/raw-debtor-loader.ts",
+            "executable_new_lines": [
+              10
+            ],
+            "covered_new_lines": [
+              10
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/lib/services/person-data-service.ts",
+            "executable_new_lines": [
+              32
+            ],
+            "covered_new_lines": [
+              32
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          }
+        ]
+      },
+      "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+    },
+    {
+      "id": "backend_new_lines",
+      "passed": true,
+      "observed": {
+        "covered": 15,
+        "total": 17,
+        "pct": 88.23529411764706,
+        "applicable": true,
+        "passed": true,
+        "files": [
+          {
+            "path": "back/ETL/config.py",
+            "executable_new_lines": [
+              1
+            ],
+            "covered_new_lines": [
+              1
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/export_preview.py",
+            "executable_new_lines": [
+              1,
+              314
+            ],
+            "covered_new_lines": [
+              1,
+              314
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/inspect_tsv.py",
+            "executable_new_lines": [
+              2,
+              4
+            ],
+            "covered_new_lines": [
+              2,
+              4
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/load.py",
+            "executable_new_lines": [
+              2,
+              3,
+              105,
+              233,
+              314
+            ],
+            "covered_new_lines": [
+              2,
+              3,
+              105
+            ],
+            "covered": 3,
+            "total": 5,
+            "pct": 60.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/run_etl.py",
+            "executable_new_lines": [
+              1,
+              8
+            ],
+            "covered_new_lines": [
+              1,
+              8
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/transform.py",
+            "executable_new_lines": [
+              1,
+              2,
+              4,
+              625
+            ],
+            "covered_new_lines": [
+              1,
+              2,
+              4,
+              625
+            ],
+            "covered": 4,
+            "total": 4,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/api/main.py",
+            "executable_new_lines": [],
+            "covered_new_lines": [],
+            "covered": 0,
+            "total": 0,
+            "pct": null,
+            "applicable": false
+          },
+          {
+            "path": "back/services/scoring_service.py",
+            "executable_new_lines": [
+              2
+            ],
+            "covered_new_lines": [
+              2
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          }
+        ]
+      },
+      "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+    },
+    {
+      "id": "duplication",
+      "passed": true,
+      "observed": {
+        "covered": 427,
+        "total": 11143,
+        "pct": 3.8320021538185407,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Duplicated lines <= 5% (not rounded percentage or tokens)"
+    },
+    {
+      "id": "critical_bugs",
+      "passed": false,
+      "observed": [
+        {
+          "tool": "ruff",
+          "path": "services/__e04_report_probe__.py",
+          "rule": "F821",
+          "line": 1,
+          "message": "E04 controlled synthetic diagnostic: undefined name"
+        }
+      ],
+      "criterion": "Zero project-classified critical findings"
+    },
+    {
+      "id": "static_analysis",
+      "passed": false,
+      "observed": [
+        {
+          "tool": "ruff",
+          "path": "services/__e04_report_probe__.py",
+          "rule": "F821",
+          "line": 1,
+          "message": "E04 controlled synthetic diagnostic: undefined name"
+        }
+      ],
+      "criterion": "Zero ESLint errors/warnings and unaccepted Ruff findings"
+    },
+    {
+      "id": "dependencies",
+      "passed": true,
+      "observed": {
+        "accepted": true,
+        "errors": [],
+        "accepted_packages": [
+          "@next/eslint-plugin-next",
+          "braces",
+          "eslint-config-next",
+          "fast-glob",
+          "micromatch"
+        ],
+        "exception": "OBS-DEP-001",
+        "expires_on": "2026-10-26",
+        "raw_exit_codes": {
+          "all": 1,
+          "production": 0
+        },
+        "evaluated_at_utc": "2026-10-21T21:18:32.415615+00:00",
+        "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+      },
+      "criterion": "Separate reviewed audit policy; no critical or production vulnerabilities"
+    }
+  ],
+  "errors": [],
+  "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+  "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+  "release_approved": false,
+  "policy_sha256": "243fc42a17fba79ffd48734885bbecf095d5bc146833b744a3da777cfd773e52",
+  "criteria": {
+    "version": 1,
+    "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+    "minimum_statements_pct": 60,
+    "minimum_new_lines_pct": 80,
+    "maximum_duplicated_lines_pct": 5,
+    "critical_rules": {
+      "eslint": [
+        "constructor-super",
+        "no-unreachable",
+        "no-unsafe-finally"
+      ],
+      "ruff": [
+        "F821",
+        "F822",
+        "F823",
+        "invalid-syntax"
+      ]
+    },
+    "scope": {
+      "frontend": [
+        "front/app/",
+        "front/components/",
+        "front/lib/"
+      ],
+      "backend": [
+        "back/ETL/",
+        "back/api/",
+        "back/services/"
+      ]
+    },
+    "meaning": "Critical is a project classification of selected analyzer rules, not a native Ruff severity or a proof that all functional/security bugs are absent. Dependencies use npm-audit-policy.json separately."
+  },
+  "diff_sha256": "9641a6ff5fff554e60a338140acbfbfe3bbda0e0bdfcab05608ac7fe26d1e92d"
+}

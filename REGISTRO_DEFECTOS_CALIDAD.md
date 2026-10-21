@@ -1,6 +1,6 @@
 # EQUITAS — Registro de defectos de calidad
 
-Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira ni demuestra que se hayan creado tickets externos. E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 permanece abierto, al igual que las observaciones de dependencias y cobertura. El despliegue y la integración real se verifican en etapas posteriores.
+Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira ni demuestra que se hayan creado tickets externos. E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. El despliegue y la integración real se verifican en etapas posteriores.
 
 ## DEF-SUP-001 — El rol autenticado lee cartera sin pertenencia al tenant
 
@@ -80,13 +80,15 @@ Criterios de cierre:
 | ID | Situación comprobada | Severidad / responsable | Tratamiento y criterio de cierre |
 | --- | --- | --- | --- |
 | **OBS-DEP-001** | Cinco paquetes de desarrollo afectados por una misma cadena del linter: `eslint-config-next` → plugin Next → `fast-glob` → `micromatch` → `braces` 3.0.3. Aviso GHSA-vfj7-8cjw-p6xm sin parche publicado al verificar. Auditoría completa devuelve 1; productiva, 0. | Alta según el aviso. Axel Azcune. **Abierta, con excepción temporal documentada para el TP**. | Mantener reportes y configuración del linter bajo control, runner acotado y revisión en E02/E11, antes del 26/10/2026 o al publicarse corrección. Cerrar únicamente tras retirar la cadena o actualizar a versión corregida compatible y aprobar lint/regresión. No es un bug funcional corregido para R14. |
-| **OBS-COB-001** | Vitest 4.1.12: 586/1.275 sentencias = **45,96 %**, con los mismos 54 archivos del alcance anterior. La medición actual incumple R07 frontend (60 %). Las 33 pruebas frontend continúan aprobadas. | Alta para el cumplimiento de entrega; no demuestra por sí sola un defecto funcional. Axel Azcune. **Abierta, bloquea el cierre de E04**. | Ampliar pruebas significativas hasta al menos 60 % del alcance declarado y verificar cobertura nueva >= 80 % según la base fija. Conservar reportes y gate. No cerrar con la cifra histórica del runner anterior ni retirando archivos sin cobertura. |
+| **OBS-COB-001** | E01/E02: 586/1.275 = 45,96 %; E03: 742/1.280 = 57,96 %. E04: **791/1.280, Vitest 61,79 %**, mismo alcance de 55 archivos. | Alta para cumplimiento; responsable Axel Azcune. **Cerrada y validada en E04**, no era por sí sola un defecto funcional. | 26 pruebas nuevas; gate existente >=60 % y nuevo >=80 % por módulo contra base fija, [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195) y [ensayo de bloqueo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162). Mantener controles; reabrir si dejan de cumplir. |
 
 Evidencia común: [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [resumen E01](evidencias/e01/resumen-2026-10-21.json) y auditorías en la misma carpeta. Las tres excepciones de Ruff y los avisos de mantenimiento se detallan en la ficha E01; no se convierten en bugs críticos de negocio por el nivel `error` del linter.
 
 **Seguimiento E02:** ambos registros permanecen abiertos. OBS-DEP-001 se volvió a verificar en Linux y tiene una [política versionada](quality/npm-audit-policy.json) que conserva las salidas crudas y rechaza cambios o vencimiento; no corrige los cinco avisos. OBS-COB-001 reproduce 45,96 % en CI y sigue bloqueando cerrar E04. [CI normal](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) y [ficha E02](REGISTRO_EJECUCION_E02.md). El fallo controlado de CI no cierra DEF-DAT-001 ni DEF-SUP-001.
 
 **Seguimiento E03:** OBS-COB-001 mejora a **742/1.280 = 57,96 %** de sentencias frontend sobre 55 archivos, todavía inferior a 60 %; permanece abierta. Las 42 pruebas nuevas cubren la lectura completa y sus contratos. OBS-DEP-001 conserva cinco altos de desarrollo y la misma excepción temporal; DEF-SUP-001 sigue sin corrección. El [CI verde de E03](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) no acredita los gates completos ni la autorización real.
+
+**Seguimiento E04:** OBS-COB-001 cerrada con [evidencia](REGISTRO_EJECUCION_E04.md): 61,79 % frontend; nuevo frontend 28/28 y backend 15/17 contra la base fija. Gates normales aprobados y ensayo crítico sintético bloqueado. Las pruebas Auth son aisladas; **DEF-SUP-001 sigue abierto**. OBS-DEP-001 conserva cinco altos de desarrollo y el vencimiento 26/10/2026; no se prorrogó. Esta actualización prevalece sobre el estado abierto de cobertura de E01–E03.
 
 ## Trazabilidad actual
 
@@ -97,6 +99,6 @@ Evidencia común: [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [resum
 | R-DAT-01, cartera completa | SUP-DATA-01 → DAT-01–08; DAT-09–14 complementarios | Cuatro DAT-06 fallan antes y recuperan 3.507/3.507 después. Límites, errores y agregados aprobados. | DEF-DAT-001 | `3bfe156…`, [rojo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) / [verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642). Corregido/validado en regresión aislada; integración de aplicación pendiente. |
 | R-INT-01, integridad de carga existente | SUP-INT-01 y agregados de revisión | Sin duplicados, huérfanos ni discrepancias seleccionadas: **cumple en ese alcance**. | Ninguno por esos casos. | No sustituye reejecución ETL real. |
 | R09 / dependencias | Auditorías npm completa y productiva E01 | 0 críticos; cinco altos de desarrollo pendientes, productivas sin avisos. | OBS-DEP-001 | Excepción temporal revisable; corrección pendiente. |
-| R07 / cobertura existente frontend | Vitest 4.1.12, 55 archivos tras incorporar el lector E03 | **57,96 %, no cumple 60 %**. | OBS-COB-001 | Ampliación de pruebas y gate antes de cerrar E04. |
+| R07 / cobertura existente frontend | Vitest 4.1.12, 55 archivos | **791/1.280, Vitest 61,79 %; cumple 60 %**. | OBS-COB-001 | Cerrada E04; gate automático contra regresiones. |
 
 Los IDs describen esta revisión; no aumentan el recuento de las suites Vitest/Pytest ni se atribuyen a Jira.

@@ -2,6 +2,8 @@
 
 ## Gates E04
 
+**Verificado:** [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195) y [ensayo crítico bloqueado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162). [Ficha E04](../REGISTRO_EJECUCION_E04.md) y [manifiesto de evidencias](../evidencias/e04/ejecuciones-2026-10-21.json). OBS-COB-001 cerrada; las etapas externas y la auditoría de desarrollo conservan sus pendientes.
+
 El job **Quality gates y resumen** ejecuta el evaluador [gates.py](gates.py) y devuelve salida 1 cuando falla cualquier condición. Conserva `gate.json`, `summary.json` y `summary.md` aun en rojo. Los [criterios previos](../CASOS_E04_GATES.md) y la [política versionada](gate-policy.json) definen la evaluación.
 
 | Control | Criterio bloqueante |

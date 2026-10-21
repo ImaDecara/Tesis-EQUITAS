@@ -1,0 +1,836 @@
+{
+  "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+  "run_id": "39677574162",
+  "run_attempt": "1",
+  "passed": false,
+  "errors": [
+    "E04 quality gates failed; see gate.json"
+  ],
+  "tests": {
+    "passed": 162,
+    "failed": 0,
+    "skipped": 1
+  },
+  "components": {
+    "backend": {
+      "component": "backend",
+      "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "run_id": "39677574162",
+      "run_attempt": "1",
+      "event": "workflow_dispatch",
+      "failure_probe": false,
+      "runtime": {
+        "python": "3.12.14",
+        "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"
+      },
+      "controls": [
+        {
+          "name": "venv",
+          "command": [
+            "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+            "-m",
+            "venv",
+            ".venv"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:17:46.378405+00:00",
+          "duration_seconds": 2.254953
+        },
+        {
+          "name": "pip",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "pip",
+            "install",
+            "pip==25.0.1"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:17:48.633809+00:00",
+          "duration_seconds": 0.420195
+        },
+        {
+          "name": "install",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            "requirements-dev.txt"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:17:49.054707+00:00",
+          "duration_seconds": 13.7741
+        },
+        {
+          "name": "infrastructure-tests",
+          "command": [
+            "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "../quality/tests",
+            "-v"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:02.834137+00:00",
+          "duration_seconds": 0.414305
+        },
+        {
+          "name": "infrastructure-lint",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "ruff",
+            "check",
+            "../quality",
+            "--output-format",
+            "json",
+            "--output-file",
+            "../.quality/ci/backend/infrastructure-ruff.json"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:03.249091+00:00",
+          "duration_seconds": 0.031461
+        },
+        {
+          "name": "versions",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "pip",
+            "freeze"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:03.281203+00:00",
+          "duration_seconds": 0.266623
+        },
+        {
+          "name": "dependencies",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "pip",
+            "check"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:03.548544+00:00",
+          "duration_seconds": 0.302487
+        },
+        {
+          "name": "tests",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "pytest",
+            "--cov",
+            "--cov-report=term-missing",
+            "--cov-report=json:../.quality/ci/backend/coverage.json",
+            "--cov-report=xml:../.quality/ci/backend/coverage.xml",
+            "--cov-report=html:../.quality/ci/backend/coverage-html",
+            "--junitxml=../.quality/ci/backend/tests.xml"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:03.851843+00:00",
+          "duration_seconds": 5.029566
+        },
+        {
+          "name": "lint",
+          "command": [
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/back/.venv/bin/python",
+            "-m",
+            "ruff",
+            "check",
+            "ETL",
+            "api",
+            "services",
+            "--output-format",
+            "json",
+            "--output-file",
+            "../.quality/ci/backend/ruff.json"
+          ],
+          "cwd": "back",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:08.912161+00:00",
+          "duration_seconds": 0.034645
+        }
+      ],
+      "report_errors": [],
+      "metrics": {
+        "tests": {
+          "passed": 61,
+          "failed": 0,
+          "skipped": 0
+        },
+        "coverage": {
+          "covered_lines": 1254,
+          "num_statements": 1471,
+          "percent_covered": 80.90401218892839,
+          "percent_covered_display": "81",
+          "missing_lines": 217,
+          "excluded_lines": 0,
+          "percent_statements_covered": 85.24813052345343,
+          "percent_statements_covered_display": "85",
+          "num_branches": 498,
+          "num_partial_branches": 129,
+          "covered_branches": 339,
+          "missing_branches": 159,
+          "percent_branches_covered": 68.07228915662651,
+          "percent_branches_covered_display": "68"
+        },
+        "lint": {
+          "unaccepted_findings": 0
+        }
+      },
+      "scope": "Build/tests/analysis with E04 gates in summary; external integration E06 remains pending.",
+      "passed": true
+    },
+    "frontend": {
+      "component": "frontend",
+      "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "run_id": "39677574162",
+      "run_attempt": "1",
+      "event": "workflow_dispatch",
+      "failure_probe": false,
+      "runtime": {
+        "python": "3.12.14",
+        "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "node": "v22.23.2",
+        "npm": "11.21.1"
+      },
+      "controls": [
+        {
+          "name": "install",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "ci",
+            "--no-audit",
+            "--no-fund"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:17:55.987664+00:00",
+          "duration_seconds": 11.998328
+        },
+        {
+          "name": "dependencies",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "ls",
+            "--all",
+            "--json"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:08.065002+00:00",
+          "duration_seconds": 0.474125
+        },
+        {
+          "name": "tests",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "run",
+            "test:coverage",
+            "--",
+            "--reporter=default",
+            "--reporter=json",
+            "--reporter=junit",
+            "--outputFile.json=../.quality/ci/frontend/tests.json",
+            "--outputFile.junit=../.quality/ci/frontend/tests.xml",
+            "--coverage.reportsDirectory=../.quality/ci/frontend/coverage",
+            "--coverage.reportOnFailure=true"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:08.539602+00:00",
+          "duration_seconds": 3.383563
+        },
+        {
+          "name": "lint",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "run",
+            "lint",
+            "--",
+            "--format",
+            "json",
+            "--output-file",
+            "../.quality/ci/frontend/eslint.json"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:11.928088+00:00",
+          "duration_seconds": 5.249265
+        },
+        {
+          "name": "build",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "run",
+            "build"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:17.177882+00:00",
+          "duration_seconds": 12.987035
+        },
+        {
+          "name": "duplication",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "exec",
+            "--no",
+            "--",
+            "jscpd",
+            "app",
+            "components",
+            "lib",
+            "../back/ETL",
+            "../back/api",
+            "../back/services",
+            "--min-lines",
+            "5",
+            "--min-tokens",
+            "50",
+            "--reporters",
+            "console,json",
+            "--output",
+            "../.quality/ci/frontend/duplication",
+            "--no-colors"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:30.165428+00:00",
+          "duration_seconds": 0.331346
+        },
+        {
+          "name": "complexity",
+          "command": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "exec",
+            "--no",
+            "--",
+            "jscpd",
+            "app",
+            "components",
+            "lib",
+            "../back/ETL",
+            "../back/api",
+            "../back/services",
+            "--complexity",
+            "--reporters",
+            "console,json",
+            "--output",
+            "../.quality/ci/frontend/complexity",
+            "--no-colors"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:30.497296+00:00",
+          "duration_seconds": 0.310346
+        },
+        {
+          "name": "audit",
+          "command": [
+            "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/quality/audit_policy.py",
+            "--npm",
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/npm",
+            "--output",
+            "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/.quality/ci/frontend"
+          ],
+          "cwd": "front",
+          "exit_code": 0,
+          "started_at_utc": "2026-10-21T21:18:30.808266+00:00",
+          "duration_seconds": 1.613618
+        }
+      ],
+      "report_errors": [],
+      "metrics": {
+        "tests": {
+          "passed": 101,
+          "failed": 0,
+          "skipped": 1
+        },
+        "coverage": {
+          "lines": {
+            "total": 1206,
+            "covered": 743,
+            "skipped": 0,
+            "pct": 61.6
+          },
+          "statements": {
+            "total": 1280,
+            "covered": 791,
+            "skipped": 0,
+            "pct": 61.79
+          },
+          "functions": {
+            "total": 325,
+            "covered": 199,
+            "skipped": 0,
+            "pct": 61.23
+          },
+          "branches": {
+            "total": 1056,
+            "covered": 554,
+            "skipped": 0,
+            "pct": 52.46
+          },
+          "branchesTrue": {
+            "total": 0,
+            "covered": 0,
+            "skipped": 0,
+            "pct": 100
+          }
+        },
+        "lint": {
+          "errors": 0,
+          "warnings": 0,
+          "files": 76
+        },
+        "duplication": {
+          "clones": 36,
+          "duplicatedLines": 427,
+          "duplicatedTokens": 2533,
+          "lines": 11143,
+          "newClones": 0,
+          "newDuplicatedLines": 0,
+          "percentage": 3.8320021538185407,
+          "percentageTokens": 4.764950431723697,
+          "sources": 63,
+          "tokens": 53159
+        },
+        "audit": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 5,
+          "critical": 0,
+          "total": 5
+        },
+        "audit_policy": {
+          "accepted": true,
+          "errors": [],
+          "accepted_packages": [
+            "@next/eslint-plugin-next",
+            "braces",
+            "eslint-config-next",
+            "fast-glob",
+            "micromatch"
+          ],
+          "exception": "OBS-DEP-001",
+          "expires_on": "2026-10-26",
+          "raw_exit_codes": {
+            "all": 1,
+            "production": 0
+          },
+          "evaluated_at_utc": "2026-10-21T21:18:32.415615+00:00",
+          "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+        }
+      },
+      "scope": "Build/tests/analysis with E04 gates in summary; external integration E06 remains pending.",
+      "lock_sha256": "f1d690464188da1f5bdbe9136f7f38aae93450cdbe9166da822c8d76a79f5902",
+      "passed": true
+    }
+  },
+  "release_approved": false,
+  "quality_gates_stage": "E04 implemented",
+  "quality_gates_passed": false,
+  "gate": {
+    "stage": "E04",
+    "passed": false,
+    "checks": [
+      {
+        "id": "fixed_base",
+        "passed": true,
+        "observed": {
+          "base": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+          "head": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44"
+        },
+        "criterion": "Fixed base exists and is an ancestor of HEAD"
+      },
+      {
+        "id": "build_and_tests",
+        "passed": true,
+        "observed": {
+          "backend": true,
+          "frontend": true
+        },
+        "criterion": "All required controls and suites pass; external integration skip remains explicit until E06"
+      },
+      {
+        "id": "frontend_statements",
+        "passed": true,
+        "observed": {
+          "covered": 791,
+          "total": 1280,
+          "pct": 61.796875,
+          "applicable": true,
+          "passed": true
+        },
+        "criterion": "Statements >= 60%, declared full scope"
+      },
+      {
+        "id": "backend_statements",
+        "passed": true,
+        "observed": {
+          "covered": 1254,
+          "total": 1471,
+          "pct": 85.24813052345343,
+          "applicable": true,
+          "passed": true
+        },
+        "criterion": "Statements >= 60%, declared full scope"
+      },
+      {
+        "id": "frontend_new_lines",
+        "passed": true,
+        "observed": {
+          "covered": 28,
+          "total": 28,
+          "pct": 100.0,
+          "applicable": true,
+          "passed": true,
+          "files": [
+            {
+              "path": "front/lib/data/paginated-table-reader.ts",
+              "executable_new_lines": [
+                6,
+                11,
+                12,
+                13,
+                24,
+                31,
+                32,
+                42,
+                43,
+                44,
+                45,
+                46,
+                47,
+                48,
+                49,
+                51,
+                52,
+                53,
+                56,
+                58,
+                59,
+                60,
+                61,
+                66,
+                68,
+                71
+              ],
+              "covered_new_lines": [
+                6,
+                11,
+                12,
+                13,
+                24,
+                31,
+                32,
+                42,
+                43,
+                44,
+                45,
+                46,
+                47,
+                48,
+                49,
+                51,
+                52,
+                53,
+                56,
+                58,
+                59,
+                60,
+                61,
+                66,
+                68,
+                71
+              ],
+              "covered": 26,
+              "total": 26,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "front/lib/data/raw-debtor-loader.ts",
+              "executable_new_lines": [
+                10
+              ],
+              "covered_new_lines": [
+                10
+              ],
+              "covered": 1,
+              "total": 1,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "front/lib/services/person-data-service.ts",
+              "executable_new_lines": [
+                32
+              ],
+              "covered_new_lines": [
+                32
+              ],
+              "covered": 1,
+              "total": 1,
+              "pct": 100.0,
+              "applicable": true
+            }
+          ]
+        },
+        "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+      },
+      {
+        "id": "backend_new_lines",
+        "passed": true,
+        "observed": {
+          "covered": 15,
+          "total": 17,
+          "pct": 88.23529411764706,
+          "applicable": true,
+          "passed": true,
+          "files": [
+            {
+              "path": "back/ETL/config.py",
+              "executable_new_lines": [
+                1
+              ],
+              "covered_new_lines": [
+                1
+              ],
+              "covered": 1,
+              "total": 1,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "back/ETL/export_preview.py",
+              "executable_new_lines": [
+                1,
+                314
+              ],
+              "covered_new_lines": [
+                1,
+                314
+              ],
+              "covered": 2,
+              "total": 2,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "back/ETL/inspect_tsv.py",
+              "executable_new_lines": [
+                2,
+                4
+              ],
+              "covered_new_lines": [
+                2,
+                4
+              ],
+              "covered": 2,
+              "total": 2,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "back/ETL/load.py",
+              "executable_new_lines": [
+                2,
+                3,
+                105,
+                233,
+                314
+              ],
+              "covered_new_lines": [
+                2,
+                3,
+                105
+              ],
+              "covered": 3,
+              "total": 5,
+              "pct": 60.0,
+              "applicable": true
+            },
+            {
+              "path": "back/ETL/run_etl.py",
+              "executable_new_lines": [
+                1,
+                8
+              ],
+              "covered_new_lines": [
+                1,
+                8
+              ],
+              "covered": 2,
+              "total": 2,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "back/ETL/transform.py",
+              "executable_new_lines": [
+                1,
+                2,
+                4,
+                625
+              ],
+              "covered_new_lines": [
+                1,
+                2,
+                4,
+                625
+              ],
+              "covered": 4,
+              "total": 4,
+              "pct": 100.0,
+              "applicable": true
+            },
+            {
+              "path": "back/api/main.py",
+              "executable_new_lines": [],
+              "covered_new_lines": [],
+              "covered": 0,
+              "total": 0,
+              "pct": null,
+              "applicable": false
+            },
+            {
+              "path": "back/services/scoring_service.py",
+              "executable_new_lines": [
+                2
+              ],
+              "covered_new_lines": [
+                2
+              ],
+              "covered": 1,
+              "total": 1,
+              "pct": 100.0,
+              "applicable": true
+            }
+          ]
+        },
+        "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+      },
+      {
+        "id": "duplication",
+        "passed": true,
+        "observed": {
+          "covered": 427,
+          "total": 11143,
+          "pct": 3.8320021538185407,
+          "applicable": true,
+          "passed": true
+        },
+        "criterion": "Duplicated lines <= 5% (not rounded percentage or tokens)"
+      },
+      {
+        "id": "critical_bugs",
+        "passed": false,
+        "observed": [
+          {
+            "tool": "ruff",
+            "path": "services/__e04_report_probe__.py",
+            "rule": "F821",
+            "line": 1,
+            "message": "E04 controlled synthetic diagnostic: undefined name"
+          }
+        ],
+        "criterion": "Zero project-classified critical findings"
+      },
+      {
+        "id": "static_analysis",
+        "passed": false,
+        "observed": [
+          {
+            "tool": "ruff",
+            "path": "services/__e04_report_probe__.py",
+            "rule": "F821",
+            "line": 1,
+            "message": "E04 controlled synthetic diagnostic: undefined name"
+          }
+        ],
+        "criterion": "Zero ESLint errors/warnings and unaccepted Ruff findings"
+      },
+      {
+        "id": "dependencies",
+        "passed": true,
+        "observed": {
+          "accepted": true,
+          "errors": [],
+          "accepted_packages": [
+            "@next/eslint-plugin-next",
+            "braces",
+            "eslint-config-next",
+            "fast-glob",
+            "micromatch"
+          ],
+          "exception": "OBS-DEP-001",
+          "expires_on": "2026-10-26",
+          "raw_exit_codes": {
+            "all": 1,
+            "production": 0
+          },
+          "evaluated_at_utc": "2026-10-21T21:18:32.415615+00:00",
+          "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+        },
+        "criterion": "Separate reviewed audit policy; no critical or production vulnerabilities"
+      }
+    ],
+    "errors": [],
+    "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+    "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+    "release_approved": false,
+    "policy_sha256": "243fc42a17fba79ffd48734885bbecf095d5bc146833b744a3da777cfd773e52",
+    "criteria": {
+      "version": 1,
+      "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+      "minimum_statements_pct": 60,
+      "minimum_new_lines_pct": 80,
+      "maximum_duplicated_lines_pct": 5,
+      "critical_rules": {
+        "eslint": [
+          "constructor-super",
+          "no-unreachable",
+          "no-unsafe-finally"
+        ],
+        "ruff": [
+          "F821",
+          "F822",
+          "F823",
+          "invalid-syntax"
+        ]
+      },
+      "scope": {
+        "frontend": [
+          "front/app/",
+          "front/components/",
+          "front/lib/"
+        ],
+        "backend": [
+          "back/ETL/",
+          "back/api/",
+          "back/services/"
+        ]
+      },
+      "meaning": "Critical is a project classification of selected analyzer rules, not a native Ruff severity or a proof that all functional/security bugs are absent. Dependencies use npm-audit-policy.json separately."
+    },
+    "diff_sha256": "9641a6ff5fff554e60a338140acbfbfe3bbda0e0bdfcab05608ac7fe26d1e92d"
+  }
+}

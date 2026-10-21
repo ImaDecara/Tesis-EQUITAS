@@ -1,6 +1,6 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-Versión 1.3 — 21/10/2026. Formalización E00 y actualizaciones E01–E03.
+Versión 1.4 — 21/10/2026. Formalización E00 y actualizaciones E01–E04.
 
 ## 1. Propósito y referencias de versión
 
@@ -15,6 +15,8 @@ La consigna de referencia es [consigna_pdf.md](consigna_pdf.md). La secuencia de
 | Cierre de E00 | Commit que incorpora este plan y el registro de ejecución de E00. | Su SHA se obtiene del historial del archivo; no reemplaza la referencia del producto. |
 
 Las cifras iniciales son antecedentes comprobados. El plan no presenta las actividades futuras como ejecutadas ni mantiene fijo el total de pruebas cuando se agreguen casos.
+
+**Actualización E04, 21/10/2026:** gates implementados en `c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44`. [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195) y [ensayo crítico controlado bloqueado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162), ambos con 162 pruebas de producto aprobadas, cero fallidas y una externa omitida; otras 41 de infraestructura aprobadas. Frontend **791/1.280 sentencias, 61,79 % informado por Vitest**, sobre el mismo alcance de 55 archivos. Nuevo frontend **28/28**, nuevo backend **15/17 (88,24 %)** contra la base fija `531996f…`; duplicación **3,83 %**. **OBS-COB-001 cerrada**. El gate rechaza insuficiencia, críticos y evidencia inválida; la inyección sintética demuestra el mecanismo y el defecto real conserva su evidencia E03. Ver [ficha E04](REGISTRO_EJECUCION_E04.md), [casos](CASOS_E04_GATES.md) y [evidencias](evidencias/e04/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre los estados históricos de cobertura/gates pendientes. DEF-SUP-001 y OBS-DEP-001 siguen abiertos; integración real, despliegue/smoke, cargas y cierre final permanecen pendientes.
 
 **Actualización E03:** DEF-DAT-001 corregido en ambas rutas con un lector común por cursor `id`, sin límite total fijo. Se conserva [CI rojo por cuatro fallos reales](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) y [CI verde tras corregirlos](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642): 136 pruebas de producto aprobadas, cero fallidas y una externa omitida; 14 de infraestructura aprobadas por separado. Los mismos DAT-06 recuperan ahora 3.507 filas completas; límites, negativos y relaciones también aprobaron. Cobertura frontend 742/1.280 = **57,96 %**, aún menor al 60 %; las 28/28 líneas ejecutables nuevas de E03 están cubiertas. Duplicación 427/11.143 = **3,83 %**. E04 y la base fija del TP siguen pendientes de gate; DEF-SUP-001 y OBS-DEP-001 siguen abiertos. Ver [ficha E03](REGISTRO_EJECUCION_E03.md), [aceptación y resultados](CASOS_E03_LECTURA_COMPLETA.md) y [evidencias](evidencias/e03/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre el estado anterior de DEF-DAT-001 y las métricas de E01/E02.
 

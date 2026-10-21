@@ -21,3 +21,9 @@ Base fija del producto: **531996f51243dc3d4c5a607338e2f35e32313f6b**. Alcance si
 Clasificador versionado en `quality/gate-policy.json`: ESLint `constructor-super`, `no-unreachable`, `no-unsafe-finally`, y errores de parsing; Ruff `F821`, `F822`, `F823`, `invalid-syntax`. Son reglas elegidas por el proyecto para detectar fallos estructurales/de ejecución. No garantizan detectar todos los defectos ni certificar autorización RLS. Los demás errores/advertencias no aceptados también bloquean análisis. Dependencias se evalúan aparte con la política de E02 y su vencimiento, manteniendo las salidas originales.
 
 Las nuevas pruebas Auth son aisladas con dobles; no prueban RLS remoto ni completan E06. Las recomendaciones cubren precedencia y límites 59/60 días y 349.999/350.000. Los resultados y enlaces de CI se incorporarán al registro de ejecución E04 después de verificarlos.
+
+## Resultado verificado
+
+**GATE-01–10 y COB-01 aprobados en su criterio de aceptación**: el ensayo negativo esperado terminó en fallo. Implementación `c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44`. [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195), [ensayo crítico bloqueado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162). En ambas ejecuciones: 162 pruebas de producto aprobadas, cero fallidas, una externa omitida y 41 de infraestructura aprobadas.
+
+Frontend: 791/1.280 sentencias (61,79 % informado por Vitest), sin reducir alcance. Nuevo frontend 28/28; nuevo backend 15/17; duplicación 427/11.143. El ensayo conservó las suites aprobadas y bloqueó el job resumen por un F821 sintético, con original/modificado y hashes. Pruebas de límites y datos inválidos, desglose y evidencias están en [REGISTRO_EJECUCION_E04.md](REGISTRO_EJECUCION_E04.md).

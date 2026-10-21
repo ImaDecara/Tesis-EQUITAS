@@ -1,0 +1,201 @@
+{
+  "stage": "E04",
+  "status": "completed",
+  "owner": "Axel Azcune",
+  "observed_at_utc": "2026-10-21T21:19:29.267285+00:00",
+  "input_head": "085c4759b03812451616cfc5cbf8d3507b4b1b2f",
+  "implementation_commit": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+  "branch": "quality/e04-gates",
+  "tp_fixed_base": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+  "runner": "ubuntu-24.04",
+  "workflow": ".github/workflows/quality-ci.yml",
+  "source_git_blob_sha256": {
+    "quality/gates.py": "eacfd0a19c1f8b1c6a1c6fd85fb9de157697d2032bf17e77b1c06a55a884994b",
+    "quality/gate-policy.json": "243fc42a17fba79ffd48734885bbecf095d5bc146833b744a3da777cfd773e52",
+    "quality/gate_probe.py": "bafc46186c26ecc78521c50cb724ee93b7912421d9c1a05c20e5c60825351508",
+    "quality/ci.py": "73fe799e504be0e7a2481fe148705844bb58aad9d707199957d89bcb10c717a2",
+    "quality/tests/test_gates.py": "ec43ce92c6e645225a283d10d6a105f5cbb2f0a4c078df54333e224521e56685",
+    "quality/tests/test_ci.py": "3ffb5a4ae6673a3405b9079e4ba95e7a7932026af0b2553b94eb34b0242a7d58",
+    ".github/workflows/quality-ci.yml": "3881f836d8e661c26851682b3b58d178c5ed4bcd99eb45d527c44fde6e0d588c",
+    "front/eslint.config.mjs": "9dad4afaa196842cf4fcb72861118a1038c69083584fee9a1cdd4ec845f4ef27",
+    "front/tests/unit/auth-service.test.ts": "494c58b16ee5658701ef24e94b12d85e90f27855600b7eab8f991982dec33548",
+    "front/tests/unit/recommendation-decisions.test.ts": "502bb734f3e56c6b52750ea087e789a3b5b6ba57a3aa8f351ef53014e761b80c",
+    "CASOS_E04_GATES.md": "cf84172591d495fe3c6f00e932af1ab1c2f3da6dd5a9313055830493ce5cfced"
+  },
+  "runs": {
+    "normal": {
+      "run_id": 39677574195,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "event": "push",
+      "conclusion": "success",
+      "created_at_utc": "2026-10-21T21:17:29Z",
+      "completed_at_utc": "2026-10-21T21:18:41Z",
+      "jobs": [
+        {
+          "databaseId": 119491313451,
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T21:17:31Z",
+          "completedAt": "2026-10-21T21:18:11Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195/job/119491313451"
+        },
+        {
+          "databaseId": 119491314073,
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T21:17:32Z",
+          "completedAt": "2026-10-21T21:18:25Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195/job/119491314073"
+        },
+        {
+          "databaseId": 119491747564,
+          "name": "Quality gates y resumen",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T21:18:27Z",
+          "completedAt": "2026-10-21T21:18:40Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195/job/119491747564"
+        }
+      ],
+      "tests": {
+        "passed": 162,
+        "failed": 0,
+        "skipped": 1
+      },
+      "infrastructure_passed": 41,
+      "artifacts": [
+        {
+          "id": 12382792437,
+          "name": "ci-summary-39677574195-1",
+          "size_in_bytes": 7186,
+          "created_at": "2026-10-21T21:18:38Z",
+          "expires_at": "2026-11-20T21:18:37Z",
+          "digest": "sha256:a8c798aa616ed4489cbc618f25c6441ee2fd8d92c1abf175693848129160913e",
+          "verified_sha256": "a8c798aa616ed4489cbc618f25c6441ee2fd8d92c1abf175693848129160913e"
+        },
+        {
+          "id": 12382707841,
+          "name": "ci-frontend-39677574195-1",
+          "size_in_bytes": 668701,
+          "created_at": "2026-10-21T21:18:22Z",
+          "expires_at": "2026-11-20T21:18:21Z",
+          "digest": "sha256:87a6bdf20e320189aaa8c6bee5f37baf2365e9839a4370a7f9533df906c94ed8",
+          "verified_sha256": "87a6bdf20e320189aaa8c6bee5f37baf2365e9839a4370a7f9533df906c94ed8"
+        },
+        {
+          "id": 12382638817,
+          "name": "ci-backend-39677574195-1",
+          "size_in_bytes": 173913,
+          "created_at": "2026-10-21T21:18:08Z",
+          "expires_at": "2026-11-20T21:18:08Z",
+          "digest": "sha256:af8345445f31086bf100c5585a1b28a0c331341540a26f647b660cd6ec993ebb",
+          "verified_sha256": "af8345445f31086bf100c5585a1b28a0c331341540a26f647b660cd6ec993ebb"
+        }
+      ],
+      "checks": {
+        "archive_hashes_match": true,
+        "json_and_xml_parsed": true,
+        "html_indexes_present": true,
+        "lcov_files": 55,
+        "infrastructure_lint_clean": true,
+        "failed_gates": []
+      }
+    },
+    "critical-probe": {
+      "run_id": 39677574162,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162",
+      "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "event": "workflow_dispatch",
+      "conclusion": "failure",
+      "created_at_utc": "2026-10-21T21:17:29Z",
+      "completed_at_utc": "2026-10-21T21:18:55Z",
+      "jobs": [
+        {
+          "databaseId": 119491319093,
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T21:17:32Z",
+          "completedAt": "2026-10-21T21:18:13Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162/job/119491319093"
+        },
+        {
+          "databaseId": 119491319783,
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "startedAt": "2026-10-21T21:17:33Z",
+          "completedAt": "2026-10-21T21:18:37Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162/job/119491319783"
+        },
+        {
+          "databaseId": 119491844105,
+          "name": "Quality gates y resumen",
+          "conclusion": "failure",
+          "startedAt": "2026-10-21T21:18:40Z",
+          "completedAt": "2026-10-21T21:18:55Z",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162/job/119491844105"
+        }
+      ],
+      "tests": {
+        "passed": 162,
+        "failed": 0,
+        "skipped": 1
+      },
+      "infrastructure_passed": 41,
+      "artifacts": [
+        {
+          "id": 12382633797,
+          "name": "ci-backend-39677574162-1",
+          "size_in_bytes": 173906,
+          "created_at": "2026-10-21T21:18:10Z",
+          "expires_at": "2026-11-20T21:18:09Z",
+          "digest": "sha256:72329180b853acb23edc68e096856bbd1f252329d6fd85d855b504f904c09d35",
+          "verified_sha256": "72329180b853acb23edc68e096856bbd1f252329d6fd85d855b504f904c09d35"
+        },
+        {
+          "id": 12382572917,
+          "name": "ci-summary-39677574162-1",
+          "size_in_bytes": 8249,
+          "created_at": "2026-10-21T21:18:52Z",
+          "expires_at": "2026-11-20T21:18:52Z",
+          "digest": "sha256:64bb45dbfb1ec21536aacf1b9d010b51f5c64fafc382871d5673bd0b6f916bed",
+          "verified_sha256": "64bb45dbfb1ec21536aacf1b9d010b51f5c64fafc382871d5673bd0b6f916bed"
+        },
+        {
+          "id": 12381694416,
+          "name": "ci-frontend-39677574162-1",
+          "size_in_bytes": 668863,
+          "created_at": "2026-10-21T21:18:34Z",
+          "expires_at": "2026-11-20T21:18:32Z",
+          "digest": "sha256:fa5e0f50ddb5d8d7ffb1c4782f730556308717143a3caf10f741f7e994f2e675",
+          "verified_sha256": "fa5e0f50ddb5d8d7ffb1c4782f730556308717143a3caf10f741f7e994f2e675"
+        }
+      ],
+      "checks": {
+        "archive_hashes_match": true,
+        "json_and_xml_parsed": true,
+        "html_indexes_present": true,
+        "lcov_files": 55,
+        "infrastructure_lint_clean": true,
+        "failed_gates": [
+          "critical_bugs",
+          "static_analysis"
+        ]
+      }
+    }
+  },
+  "new_frontend_tests": 26,
+  "infrastructure_tests": 41,
+  "new_infrastructure_tests": 27,
+  "observations": {
+    "OBS-COB-001": "closed: full-scope frontend >=60% and fixed-base new-code gates pass in CI",
+    "OBS-DEP-001": "open: same five high development findings, temporary policy expires 2026-10-26",
+    "DEF-SUP-001": "open: real authorization correction/integration remains E06"
+  },
+  "limitations": [
+    "Product scopes unchanged; frontend proxy.ts remains outside inherited coverage scope.",
+    "Analyzer rule classifier is project-defined and cannot prove absence of all functional or security defects.",
+    "The manual critical diagnostic is a disclosed report injection; the real E03 red/green remains distinct.",
+    "External integration is still skipped; deployment, smoke, load tests and final PDF remain pending.",
+    "Local checks used the working tree before commit; remote artifacts identify the exact committed source."
+  ]
+}

@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.4, cierre de la etapa E03 el 21 de octubre de 2026.
+**Versión:** 1.5, cierre de la etapa E04 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E03 completadas en sus alcances; E04 es la siguiente etapa. La cobertura frontend vigente es 57,96 % y requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00–E04 completadas en sus alcances; E05 es la siguiente etapa. Cobertura frontend 61,79 % informada por Vitest y gates verificados. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -37,6 +37,8 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 - La preferencia del informe académico se mantiene: **sin índice**. El roadmap sí puede tener navegación y tablas de control.
 
 ## 2. Punto de partida comprobado
+
+**Actualización E04, 21/10/2026:** gates implementados en `c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44`. [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195) y [ensayo crítico controlado bloqueado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162), ambos con 162 pruebas de producto aprobadas, cero fallidas y una externa omitida; otras 41 de infraestructura aprobadas. Frontend **791/1.280 sentencias, 61,79 % informado por Vitest**, sobre el mismo alcance de 55 archivos. Nuevo frontend **28/28**, nuevo backend **15/17 (88,24 %)** contra la base fija `531996f…`; duplicación **3,83 %**. **OBS-COB-001 cerrada**. El gate rechaza insuficiencia, críticos y evidencia inválida; la inyección sintética demuestra el mecanismo y el defecto real conserva su evidencia E03. Ver [ficha E04](REGISTRO_EJECUCION_E04.md), [casos](CASOS_E04_GATES.md) y [evidencias](evidencias/e04/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre los estados históricos de cobertura/gates pendientes. DEF-SUP-001 y OBS-DEP-001 siguen abiertos; integración real, despliegue/smoke, cargas y cierre final permanecen pendientes.
 
 **Actualización posterior E03:** DEF-DAT-001 corregido mediante paginación por `id` en ambas rutas y sus relaciones. Se conserva [CI rojo con cuatro fallos reales](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) y [CI verde](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) con 136 pruebas de producto aprobadas, cero fallidas y una externa omitida; otras 14 de infraestructura aprobaron. Los mismos casos recuperan 3.507 filas completas; límites, negativos y agregados también aprobaron. Cobertura frontend **57,96 %**, duplicación **3,83 %** y 28/28 líneas ejecutables nuevas de E03 cubiertas. Los gates completos y el mínimo global siguen pendientes para E04. Ver [ficha E03](REGISTRO_EJECUCION_E03.md), [aceptación y resultados](CASOS_E03_LECTURA_COMPLETA.md) y [evidencias](evidencias/e03/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre el estado anterior del defecto y las métricas históricas siguientes.
 
@@ -86,7 +88,6 @@ La simulación SQL fue READ ONLY con ROLLBACK. No creó una cuenta ni obtuvo un 
 
 ### 2.3. Qué sigue pendiente
 
-- Gates completos, incluyendo 80 % sobre código nuevo.
 - Corrección y validación de autorización RLS; mantener el rojo/verde de lectura ya conseguido en E03.
 - Integración Auth/Data API real desde el cliente de aplicación en testing.
 - Despliegue nuevo con smoke automático posterior.
@@ -94,7 +95,7 @@ La simulación SQL fue READ ONLY con ROLLBACK. No creó una cuenta ni obtuvo un 
 - Gestión completa de casos/defectos y herramienta incorporada mediante cinco pasos.
 - Consolidación del informe académico, PDF y demostración.
 
-Las 136 pruebas actuales y las consultas de investigación no se convierten automáticamente en esos entregables.
+Las 162 pruebas actuales y las consultas de investigación no se convierten automáticamente en esos entregables.
 
 ## 3. Fuentes y función de cada documento
 
@@ -103,6 +104,7 @@ Las 136 pruebas actuales y las consultas de investigación no se convierten auto
 | [consigna_pdf.md](consigna_pdf.md) | Fuente de requisitos obligatorios. |
 | [PLAN_PRUEBAS_CALIDAD.md](PLAN_PRUEBAS_CALIDAD.md) | Plan vigente de alcance, objetivos, entornos, criterios y riesgos, formalizado en E00. |
 | [REGISTRO_EJECUCION_E00.md](REGISTRO_EJECUCION_E00.md) | Ficha de cierre y verificaciones de la primera etapa. |
+| [REGISTRO_EJECUCION_E04.md](REGISTRO_EJECUCION_E04.md) | Gates, cobertura vigente y ensayo de bloqueo comprobado. |
 | [REGISTRO_EJECUCION_E03.md](REGISTRO_EJECUCION_E03.md) | Corrección de lectura completa, rojo/verde, regresión y métricas vigentes. |
 | [CASOS_E03_LECTURA_COMPLETA.md](CASOS_E03_LECTURA_COMPLETA.md) | Aceptación publicada antes de corregir y resultados vinculados. |
 | [tp-Calidad.md](tp-Calidad.md) | Base del informe académico recibido; llega hasta QA/QC y contiene capturas. |
@@ -127,7 +129,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
 | **E02** | Pipeline base con build, suites y reportes. | **Completada**; ejecución normal y ensayo de fallo comprobados. | E00–E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | **Completada**; 27 controles, ambas rutas, rojo/verde y regresión verificados. | E02; registro de defectos iniciado. |
-| **E04** | Quality gates completos y comprobados. | En curso: implementación y verificación de gates. | E01–E03. |
+| **E04** | Quality gates completos y comprobados. | **Completada**; 16 controles, CI normal y bloqueo crítico comprobados. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Inspección realizada; integración de aplicación pendiente. | E00–E02; entorno aislado disponible. |
 | **E07** | Despliegue nuevo y smoke automático posterior. | Pendiente. | E04, E06. |
@@ -138,7 +140,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E03 están completas; el siguiente objetivo ejecutable es E04. E03 conserva una ejecución roja por un defecto real y otra verde tras corregirlo. El ensayo controlado de E02 conserva su propósito de verificar CI. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
+E00–E04 están completas; el siguiente objetivo ejecutable es E05. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -353,9 +355,11 @@ Los casos DAT-01–08 están implementados y aprobados; DAT-06 conserva su rojo 
 **Entrada:** E01–E03.  
 **Requisitos relacionados:** R07–R10, R17.
 
+**Cierre:** 16/16 controles satisfechos. [Ficha E04](REGISTRO_EJECUCION_E04.md), [CI normal](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195), [ensayo crítico](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162). OBS-COB-001 cerrada; 61,79 % frontend, 100 % nuevo frontend, 88,24 % nuevo backend y 3,83 % de duplicación.
+
 ### 10.1. Contrato del gate
 
-- [ ] Resolver **OBS-COB-001**: con Vitest 4.1.12 la cobertura frontend actual es **57,96 %** tras E03 (E01/E02: 45,96 %). Ampliar pruebas significativas hasta al menos 60 % dentro del alcance declarado antes de cerrar E04; mantener el nuevo método y el umbral. No usar la cifra histórica ni recortar archivos sin cobertura para aprobar.
+- [x] Resolver **OBS-COB-001**: E04 obtiene **791/1.280 sentencias (61,79 % informado por Vitest)**, con el mismo alcance de 55 archivos, mediante 26 pruebas adicionales. Cumple el mínimo 60 % y queda protegido por el gate. Antecedentes: E01/E02 45,96 %, E03 57,96 %. No se recortó alcance ni cambió el método.
 
 | Control | Criterio de aceptación | Debe fallar cuando |
 | --- | --- | --- |
@@ -371,24 +375,24 @@ El umbral de 80 % se aplica al código nuevo, no al total histórico ni al núme
 
 ### 10.2. Medición de código nuevo
 
-- [ ] Registrar como base fija del TP el commit de producto revisado `531996f51243dc3d4c5a607338e2f35e32313f6b`, salvo una decisión distinta justificada y versionada antes de medir.
-- [ ] Obtener historia suficiente para resolver la base y el diff en CI.
-- [ ] Mapear líneas ejecutables añadidas/cambiadas a los reportes frontend y backend; excluir líneas eliminadas del denominador nuevo.
-- [ ] Incluir archivos productivos nuevos; tratar renombres, rutas y separadores de Windows/Linux de forma coherente.
-- [ ] Reportar cubiertas, ejecutables y porcentaje nuevo, preferentemente separado por módulo para evitar que uno oculte al otro.
-- [ ] Si no hay líneas productivas nuevas ejecutables, informar «no aplica, 0 líneas nuevas»; no inventar 100 % ni aprobar un reporte roto.
-- [ ] No cambiar la base a HEAD para vaciar el diff cuando la cobertura es insuficiente.
-- [ ] Si también se usa merge-base para PR, distinguir esa medición incremental de la base fija de evaluación del TP.
+- [x] Registrar como base fija del TP el commit de producto revisado `531996f51243dc3d4c5a607338e2f35e32313f6b`, salvo una decisión distinta justificada y versionada antes de medir.
+- [x] Obtener historia suficiente para resolver la base y el diff en CI.
+- [x] Mapear líneas ejecutables añadidas/cambiadas a los reportes frontend y backend; excluir líneas eliminadas del denominador nuevo.
+- [x] Incluir archivos productivos nuevos; tratar renombres, rutas y separadores de Windows/Linux de forma coherente.
+- [x] Reportar cubiertas, ejecutables y porcentaje nuevo, preferentemente separado por módulo para evitar que uno oculte al otro.
+- [x] Si no hay líneas productivas nuevas ejecutables, informar «no aplica, 0 líneas nuevas»; no inventar 100 % ni aprobar un reporte roto.
+- [x] No cambiar la base a HEAD para vaciar el diff cuando la cobertura es insuficiente.
+- [x] Si también se usa merge-base para PR, distinguir esa medición incremental de la base fija de evaluación del TP. **No aplica una segunda medición: push y PR usan la base fija del TP.**
 
 ### 10.3. Bugs críticos y pruebas del mecanismo
 
-- [ ] Elegir un analizador con severidades o un clasificador versionado y documentado que produzca un resultado procesable.
-- [ ] Definir qué se considera bug crítico y cómo se evalúan hallazgos sin severidad nativa. No atribuir severidad crítica automática a todas las reglas Ruff ni asegurar ausencia total de bugs porque pasan unitarias.
-- [ ] Mantener separados bugs funcionales, vulnerabilidades de dependencias y avisos informativos. Definir el tratamiento de cada conjunto.
-- [ ] Probar el gate con entradas controladas: 79,99 % nuevo falla; 80 % pasa; duplicación > 5 % falla; 5 % pasa; un crítico bloquea; reporte ausente no pasa.
-- [ ] Verificar que el código de salida llegue al estado del workflow.
-- [ ] Conservar reporte del gate con base, SHA, criterios y decisión por control.
-- [ ] Ejecutar nuevamente CI sobre el producto corregido.
+- [x] Elegir un analizador con severidades o un clasificador versionado y documentado que produzca un resultado procesable.
+- [x] Definir qué se considera bug crítico y cómo se evalúan hallazgos sin severidad nativa. No atribuir severidad crítica automática a todas las reglas Ruff ni asegurar ausencia total de bugs porque pasan unitarias.
+- [x] Mantener separados bugs funcionales, vulnerabilidades de dependencias y avisos informativos. Definir el tratamiento de cada conjunto.
+- [x] Probar el gate con entradas controladas: 79,99 % nuevo falla; 80 % pasa; duplicación > 5 % falla; 5 % pasa; un crítico bloquea; reporte ausente no pasa.
+- [x] Verificar que el código de salida llegue al estado del workflow.
+- [x] Conservar reporte del gate con base, SHA, criterios y decisión por control.
+- [x] Ejecutar nuevamente CI sobre el producto corregido.
 
 Los ensayos controlados del evaluador prueban que el gate funciona. No sustituyen la ejecución fallida por un defecto real de E03.
 
@@ -822,7 +826,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Integraciones backend | `.\.venv\Scripts\python.exe -m pytest tests/integration -q` | `back` | Reporte de dobles/fixtures actuales. |
 | Cobertura backend | `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing --cov-report=html` | `back` | Exportación procesable adicional para CI/gate. |
 | Análisis backend | `.\.venv\Scripts\python.exe -m ruff check ETL api services --output-format concise` | `back` | Reglas, versión y tratamiento de hallazgos. |
-| Gate completo / código nuevo | **Pendiente de implementar en E04.** | Por definir y registrar. | Base/diff/porcentajes y salida de bloqueo. |
+| Gate completo / código nuevo | `python quality/gates.py --artifacts .quality/local-ci --output .quality/local-gates`; integrado en `ci.py summary`. | Raíz, reportes del HEAD actual. | [Ficha E04](REGISTRO_EJECUCION_E04.md), base/diff/conteos y bloqueo crítico comprobado. |
 | Integración externa obligatoria | **Preparada parcialmente; completar E06.** | Según implementación final. | Auth/lectura reales sin skip final. |
 | Smoke desplegado | **Pendiente de implementar en E07.** | Según implementación final. | URL/SHA/reportes post-deploy. |
 | Estrés | **Pendiente de implementar en E08.** | Según implementación final. | Parámetros previos y reporte por pipeline. |
@@ -844,4 +848,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E04: ampliar la cobertura frontend desde 57,96 % hasta al menos 60 % y construir/verificar el gate de existente, código nuevo, duplicación, críticos y reportes válidos. Conservar la base fija `531996f…` y la evidencia rojo/verde de E03. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E05: formalizar plantillas, tickets en GitHub Issues y trazabilidad requisito → caso → defecto → corrección → regresión, incorporando E03/E04 y manteniendo los defectos abiertos. Luego continuar con Supabase de testing y autorización en E06. Este archivo debe actualizarse al completar cada etapa.
