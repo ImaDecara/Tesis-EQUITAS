@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.0, creada el 21 de octubre de 2026.  
+**Versión:** 1.1, actualización de la etapa E00 el 21 de octubre de 2026.  
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
-**Responsable de continuidad:** integrante que recibe el avance inicial del equipo y continúa hasta la entrega.  
-**Estado del roadmap:** planificación lista para ejecutar. Crear este archivo no implementa ni da por aprobadas sus etapas.
+**Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
+**Estado del roadmap:** E00 completada; E01 y E02 habilitadas para continuar. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -40,7 +40,7 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 
 ### 2.1. Línea base local del 21/10/2026
 
-Commit del producto revisado: `531996f51243dc3d4c5a607338e2f35e32313f6b`, rama `main`. Los documentos añadidos durante esta conversación todavía requieren su propio checkpoint de Git; el commit citado no contiene automáticamente estos archivos nuevos.
+Commit del producto revisado: `531996f51243dc3d4c5a607338e2f35e32313f6b`, rama `main`. El diagnóstico, las evidencias y este roadmap se publicaron en el checkpoint documental `d4e61644298b18f790a9effb3b8a38472f988698`. El código de producto no cambió entre ambos commits.
 
 | Medida o verificación | Resultado comprobado | Cómo se utilizará |
 | --- | --- | --- |
@@ -96,6 +96,8 @@ Las 94 pruebas y las consultas de investigación no se convierten automáticamen
 | Archivo existente | Función |
 | --- | --- |
 | [consigna_pdf.md](consigna_pdf.md) | Fuente de requisitos obligatorios. |
+| [PLAN_PRUEBAS_CALIDAD.md](PLAN_PRUEBAS_CALIDAD.md) | Plan vigente de alcance, objetivos, entornos, criterios y riesgos, formalizado en E00. |
+| [REGISTRO_EJECUCION_E00.md](REGISTRO_EJECUCION_E00.md) | Ficha de cierre y verificaciones de la primera etapa. |
 | [tp-Calidad.md](tp-Calidad.md) | Base del informe académico recibido; llega hasta QA/QC y contiene capturas. |
 | [INFORME_TP_CALIDAD_SOFTWARE.md](INFORME_TP_CALIDAD_SOFTWARE.md) | Respaldo técnico extenso y actualización de resultados. |
 | [CALIDAD_SOFTWARE_PRUEBAS.md](CALIDAD_SOFTWARE_PRUEBAS.md) | Antecedentes de pruebas y cobertura. |
@@ -114,7 +116,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 | Etapa | Propósito | Estado inicial | Depende de |
 | --- | --- | --- | --- |
-| **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Relevamiento realizado; formalización pendiente. | Evidencias existentes. |
+| **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Completada; ver ficha de ejecución E00. | Evidencias existentes. |
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | Pendiente. | E00. |
 | **E02** | Pipeline base con build, suites y reportes. | Pendiente. | E00; coordinar con E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | Pendiente. | E02; registro de defectos iniciado. |
@@ -171,24 +173,26 @@ La consigna ya queda cubierta por Supabase como integración elegida; no exige a
 
 ### Tareas
 
-- [ ] Revisar `git status`, rama y SHA actuales; diferenciar archivos recibidos, documentación nueva y cambios ajenos a la etapa.
-- [ ] Registrar el commit de partida y el estado del árbol de trabajo. No asumir que los archivos sin seguimiento ya están en GitHub.
-- [ ] Versionar los documentos y evidencias pertinentes mediante cambios revisables, sin descartar originales ni cambios del usuario.
-- [ ] Si se crea una rama de trabajo, utilizar un nombre descriptivo. Registrar su nombre real; no crear ramas ficticias en la documentación.
-- [ ] Mantener Nivel 2 y un alcance centrado en el primer MVP existente.
-- [ ] Crear o consolidar un plan versionado de pruebas. Puede ampliarse el informe técnico o separarse un archivo de plan para evitar duplicación.
-- [ ] Fijar criterios de entrada/salida, componentes, entornos, fuentes de datos y responsables.
-- [ ] Asignar un responsable nominal al trabajo y a los defectos; la continuidad corresponde al usuario, no a un tercero pendiente de entrega.
-- [ ] Elegir el soporte de casos/defectos: Jira si está disponible, o una herramienta del repositorio como GitHub Issues, vinculada al registro Markdown. Dejar la decisión y su ubicación explícitas.
-- [ ] Mantener las credenciales en configuración local o secretos del proveedor. El historial del chat sirve de contexto y no es un entregable que deba publicarse íntegro por defecto.
-- [ ] Registrar el alcance de las métricas y el commit `531996f51243dc3d4c5a607338e2f35e32313f6b` como referencia del producto revisado.
+- [x] Revisar `git status`, rama y SHA actuales; diferenciar archivos recibidos, documentación nueva y cambios ajenos a la etapa.
+- [x] Registrar el commit de partida y el estado del árbol de trabajo. No asumir que los archivos sin seguimiento ya están en GitHub.
+- [x] Versionar los documentos y evidencias pertinentes mediante cambios revisables, sin descartar originales ni cambios del usuario.
+- [x] Si se crea una rama de trabajo, utilizar un nombre descriptivo. Registrar su nombre real; no crear ramas ficticias en la documentación. **No aplica creación: se conserva `main`.**
+- [x] Mantener Nivel 2 y un alcance centrado en el primer MVP existente.
+- [x] Crear o consolidar un plan versionado de pruebas. **Formalizado en `PLAN_PRUEBAS_CALIDAD.md`.**
+- [x] Fijar criterios de entrada/salida, componentes, entornos, fuentes de datos y responsables.
+- [x] Asignar un responsable nominal al trabajo y a los defectos. **Axel Azcune (`AxAzc`).**
+- [x] Elegir el soporte de casos/defectos. **GitHub Issues y registro Markdown; altas de tickets previstas en E05.**
+- [x] Mantener las credenciales en configuración local o secretos del proveedor. El contexto de trabajo local se conserva fuera de la publicación.
+- [x] Registrar el alcance de las métricas y el commit `531996f51243dc3d4c5a607338e2f35e32313f6b` como referencia del producto revisado.
 
 ### Verificar y cumplir
 
-- [ ] El estado inicial está identificado con SHA y fecha, sin atribuir archivos nuevos a un commit anterior.
-- [ ] Los valores de la sección 2 se conservan como históricos; cualquier nueva medición tiene fecha/versión propia.
-- [ ] El plan distingue pruebas aisladas, integración real, smoke y rendimiento.
-- [ ] Queda claro qué se entregará y qué no forma parte de completar la tesis completa.
+- [x] El estado inicial está identificado con SHA y fecha, sin atribuir archivos nuevos a un commit anterior.
+- [x] Los valores de la sección 2 se conservan como históricos; cualquier nueva medición tiene fecha/versión propia.
+- [x] El plan distingue pruebas aisladas, integración real, smoke y rendimiento.
+- [x] Queda claro qué se entregará y qué no forma parte de completar la tesis completa.
+
+**Cierre E00:** [REGISTRO_EJECUCION_E00.md](REGISTRO_EJECUCION_E00.md) y [evidencia estructurada](evidencias/e00-consolidacion-2026-10-21.json). El checkpoint previo publicado es `d4e61644298b18f790a9effb3b8a38472f988698`; la versión que incorpora esta ficha identifica el cierre documental de la etapa.
 
 **Salida y evidencia:** checkpoint de Git, plan actualizado, responsable y soporte de seguimiento definidos.  
 **No cerrar si:** se perdió trabajo recibido, no se sabe qué versión se prueba o se declara completo algo solo por estar mencionado en el chat.
@@ -820,4 +824,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Primer paso concreto:** ejecutar E00, registrar el checkpoint y comenzar E01/E02. Con CI disponible, continuar E03 para conservar el fallo real de lectura y su corrección. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E01/E02 a partir del plan y checkpoint de E00 completada. Con CI disponible, continuar E03 para conservar el fallo real de lectura y su corrección. Este archivo debe actualizarse al completar cada etapa.

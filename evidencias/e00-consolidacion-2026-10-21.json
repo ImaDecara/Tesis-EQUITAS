@@ -1,0 +1,81 @@
+{
+  "stage": "E00",
+  "recorded_at": "2026-10-21T16:42:46.774725-03:00",
+  "status": "completed",
+  "responsible": {
+    "name": "Axel Azcune",
+    "github_login": "AxAzc"
+  },
+  "repository": {
+    "full_name": "ImaDecara/Tesis-EQUITAS",
+    "branch": "main",
+    "product_baseline_commit": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+    "published_before_stage_commit": "d4e61644298b18f790a9effb3b8a38472f988698",
+    "local_head_at_validation": "d4e61644298b18f790a9effb3b8a38472f988698",
+    "origin_main_at_validation": "d4e61644298b18f790a9effb3b8a38472f988698",
+    "initial_checkpoint_published": true
+  },
+  "tracking": {
+    "provider": "GitHub Issues",
+    "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues",
+    "issues_enabled_verified": true,
+    "account_push_and_triage_permissions_verified": true,
+    "tickets_created_in_this_stage": 0,
+    "ticket_creation_stage": "E05",
+    "portable_registry": "REGISTRO_DEFECTOS_CALIDAD.md"
+  },
+  "product_code_changed": false,
+  "historical_metrics": {
+    "source": "evidencias/validacion-2026-10-21.json",
+    "source_commit": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+    "frontend_passed": 33,
+    "backend_passed": 61,
+    "passed_total": 94,
+    "skipped": 1,
+    "frontend_statement_pct": 60.43010752688172,
+    "backend_statement_pct": 85.25815217391305,
+    "new_product_test_run_in_E00": false
+  },
+  "verification_scope": "Git references, unchanged product scope, local document links, checklist, JSON integrity and plan consistency; no product test suite or database query rerun",
+  "documents": [
+    "PLAN_PRUEBAS_CALIDAD.md",
+    "REGISTRO_EJECUCION_E00.md",
+    "ROADMAP_TP_CALIDAD_SOFTWARE.md",
+    "REGISTRO_DEFECTOS_CALIDAD.md",
+    "DIAGNOSTICO_CIERRE_CALIDAD.md",
+    "INFORME_TP_CALIDAD_SOFTWARE.md"
+  ],
+  "roadmap_tasks_checked": 15,
+  "roadmap_tasks_open": 0,
+  "defects_remain_open": [
+    "DEF-DAT-001",
+    "DEF-SUP-001"
+  ],
+  "next_stages": [
+    "E01",
+    "E02"
+  ],
+  "completion_commit_resolution": "git log -1 --format=%H -- REGISTRO_EJECUCION_E00.md",
+  "checks": {
+    "checkpoint_local_remote_match": true,
+    "branch_recorded": true,
+    "no_product_changes": true,
+    "local_document_links_valid": true,
+    "E00_checklist_complete": true,
+    "plan_has_entry_and_exit_criteria": true,
+    "plan_has_environments_risks_and_decision_table": true,
+    "historical_metrics_preserved": true,
+    "context_preserved_and_ignored": true,
+    "JSON_files_parse": true
+  },
+  "local_document_links_checked": 23,
+  "missing_links": [],
+  "document_sha256": {
+    "PLAN_PRUEBAS_CALIDAD.md": "7676f46fceb50739fd3fac75ce4dd65a25f3fae96dd317fc02c50b478a439873",
+    "REGISTRO_EJECUCION_E00.md": "a16755bb01bff20c96a45fe7a2e3a8f649384f588ecb8e87bd5763f25df864d7",
+    "ROADMAP_TP_CALIDAD_SOFTWARE.md": "3d9f9bafa16e80de6592d3937918031558ec4c2605f8dc674ff39cd7e3e7fe2e",
+    "REGISTRO_DEFECTOS_CALIDAD.md": "ee95a9f727ca2aa78d1c9cd55a8f7916f76398b0b116ad2448c95a1b8c6d7817",
+    "DIAGNOSTICO_CIERRE_CALIDAD.md": "f89644c9941c16c165a35680b326a05e6343e5a44d9e75d73837659cd5decc73",
+    "INFORME_TP_CALIDAD_SOFTWARE.md": "52914f0f3979d5d05527f12718ff4a01d270413cf555259f954ebd76d28d45e6"
+  }
+}

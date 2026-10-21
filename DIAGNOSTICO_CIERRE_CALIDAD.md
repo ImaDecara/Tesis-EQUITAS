@@ -8,6 +8,8 @@ Commit verificado: `531996f51243dc3d4c5a607338e2f35e32313f6b`, rama `main`. La c
 
 **Ampliación mediante el plugin Supabase, 21/10/2026:** se inspeccionó el servicio real, se confirmaron 2.933 objetos y 56.286 deudas, se verificaron restricciones y agregados, y se reprodujo una falla de autorización RLS mediante transacciones de solo lectura. El rol autenticado sin pertenencia ve toda la cartera. Ver `REVISION_SUPABASE.md`, `REGISTRO_DEFECTOS_CALIDAD.md` y `evidencias/supabase-2026-10-21.json`. La comprobación administrativa no convierte en aprobada la prueba Auth del frontend que sigue omitida. Jira conserva su estado previo, sin evidencia externa nueva.
 
+**Cierre de formalización E00:** el checkpoint documental se publicó en `d4e61644298b18f790a9effb3b8a38472f988698`. El plan vigente está en `PLAN_PRUEBAS_CALIDAD.md`, la continuidad corresponde a Axel Azcune (`AxAzc`) y se eligió GitHub Issues junto con el registro versionado para seguimiento; los tickets se completarán en E05. La ficha `REGISTRO_EJECUCION_E00.md` conserva los controles de esta etapa. CI, gates, integración de aplicación, smoke, cargas y correcciones siguen pendientes según el roadmap.
+
 ## 1. Fuentes revisadas y punto de partida
 
 | Fuente | Qué aporta | Situación al revisarla |
@@ -146,7 +148,7 @@ No es obligatorio agregar un servidor MCP: **Supabase ya es la integración exte
 
 | Orden | Trabajo | Criterio de cierre |
 | --- | --- | --- |
-| 1 | Consolidar el avance recibido y continuar los pendientes en esta conversación, a cargo del usuario responsable del cierre. | Alcance, evidencias existentes y pendientes identificados; sin esperar entregas de otro compañero. |
+| 1 | Consolidar el avance recibido y formalizar su continuidad. **Completado en E00.** | Checkpoint publicado, plan versionado y responsable/seguimiento identificados; ver ficha E00. |
 | 2 | Revisar dependencias y Ruff con cambios controlados; seleccionar un defecto funcional reproducible. | Triage registrado, pruebas de regresión y evidencia antes/después; sin fixes masivos para forzar verde. |
 | 3 | Automatizar controles y gates en CI. | Build + suites + análisis + 60 % existente + 80 % nuevo + duplicación <= 5 %; artefactos generados. |
 | 4 | Ejecutar Supabase real de testing. | Prueba aprobada contra URL aislada con usuario de prueba; datos esperados y límites del caso documentados. |

@@ -9,7 +9,7 @@
 | Asignatura | Calidad de Software |
 | Proyecto | EQUITAS — Recupero municipal |
 | Nivel declarado | Nivel 2 — Prototipo parcial |
-| Integrantes | **PENDIENTE:** completar nombres y legajos. |
+| Integrantes | Ignacio Magoia, Axel Azcune e Imanol Decara. Legajos pendientes. |
 | Docente | **PENDIENTE:** completar. |
 | Fecha de presentación | 26 de octubre de 2026 |
 | Versión del documento | 1.1 — Ampliación de revisión Supabase, 21/10/2026 |
@@ -158,6 +158,8 @@ El proyecto se clasifica como Nivel 2 porque presenta funcionalidades operativas
 
 <a id="plan-pruebas"></a>
 ## 6. Plan de pruebas, estrategia y niveles
+
+El plan vigente se formalizó en E00 y se conserva en [PLAN_PRUEBAS_CALIDAD.md](PLAN_PRUEBAS_CALIDAD.md), con alcance, objetivos, entornos, criterios y riesgos. El [registro de ejecución de E00](REGISTRO_EJECUCION_E00.md) identifica el checkpoint y sus verificaciones. Los resultados históricos y los trabajos posteriores conservan su estado y evidencia propios.
 
 ### 6.1. Estrategia general
 

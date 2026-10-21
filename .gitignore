@@ -18,6 +18,8 @@ coverage/
 .coverage.*
 htmlcov/
 .quality/
+.pytest_cache/
+.ruff_cache/
 
 # =========================
 # Next.js

@@ -9,7 +9,7 @@ Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira n
 | Estado | **Abierto, reproducido**. |
 | Severidad / prioridad | **Alta**, propuesta técnica por afectar autorización de información municipal. |
 | Entorno y versión | Supabase EQUITAS `folyslqzqvnpolexcxjo`, estado observado el 21/10/2026; cliente local base `531996f`. Las políticas son configuración remota, no un cambio de ese commit. |
-| Responsable | Usuario responsable de continuar y cerrar el TP en esta conversación; identificación nominal pendiente en el registro. |
+| Responsable | Axel Azcune (`AxAzc`). |
 | Requisito | R-SEG-01: las filas de negocio requieren pertenencia activa al tenant autorizado. |
 | Caso | **SUP-RLS-02**, en `database/verificacion_supabase_solo_lectura.sql`. |
 | Precondición | Conexión de administración autorizada para ejecutar una transacción READ ONLY y cambiar el rol local. |
@@ -45,7 +45,7 @@ Criterios de cierre:
 | Estado | **Abierto, condición confirmada por código y volumen real**. |
 | Severidad / prioridad | **Alta**, propuesta técnica por posible incompletitud de métricas y decisiones. |
 | Entorno y versión | Frontend `531996f`; Supabase conectado, volumen observado el 21/10/2026. |
-| Responsable | Usuario responsable de continuar y cerrar el TP en esta conversación; identificación nominal pendiente en el registro. |
+| Responsable | Axel Azcune (`AxAzc`). |
 | Requisito | R-DAT-01: los listados y agregados deben representar la cartera autorizada completa. |
 | Caso | **SUP-DATA-01**: comparar COUNT(*) con el límite y estrategia de los loaders. |
 | Precondición / entrada | Cartera con **56.286 deudas** y **3.007 relaciones objeto–persona**. |
