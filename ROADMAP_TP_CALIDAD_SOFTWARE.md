@@ -4,7 +4,7 @@
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00 y E01 completadas en sus alcances; E02 habilitada. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00 y E01 completadas en sus alcances; E02 en curso. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -120,7 +120,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | --- | --- | --- | --- |
 | **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Completada; ver ficha de ejecución E00. | Evidencias existentes. |
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
-| **E02** | Pipeline base con build, suites y reportes. | Pendiente. | E00; coordinar con E01. |
+| **E02** | Pipeline base con build, suites y reportes. | En curso. | E00; decisiones E01 disponibles. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | Pendiente. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | Pendiente. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |

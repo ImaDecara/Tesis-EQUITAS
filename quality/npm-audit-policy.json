@@ -1,0 +1,14 @@
+{
+  "exception": "OBS-DEP-001",
+  "owner": "Axel Azcune",
+  "expires_on": "2026-10-26",
+  "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+  "reason": "Cadena del linter de desarrollo sin parche compatible publicado; revisar en E02/E11. La auditoría productiva debe permanecer sin avisos.",
+  "packages": {
+    "@next/eslint-plugin-next": {"node_modules/@next/eslint-plugin-next": "16.4.2"},
+    "braces": {"node_modules/braces": "3.0.3"},
+    "eslint-config-next": {"node_modules/eslint-config-next": "16.4.2"},
+    "fast-glob": {"node_modules/fast-glob": "3.3.1"},
+    "micromatch": {"node_modules/micromatch": "4.0.8"}
+  }
+}
