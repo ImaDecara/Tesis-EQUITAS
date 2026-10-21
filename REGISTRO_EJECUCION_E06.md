@@ -1,6 +1,6 @@
 # E06 — Supabase aislado, Auth y autorización real
 
-**Fecha:** 21/10/2026. **Responsable:** Axel Azcune (`AxAzc`). **Estado:** implementación y validación local aprobadas; cierre pendiente de la ejecución obligatoria de CI en `main`.
+**Fecha:** 21/10/2026. **Responsable:** Axel Azcune (`AxAzc`). **Estado:** completada en su alcance: integración real obligatoria y gates aprobados en main.
 
 Entrada: E05 publicada en `f93f1648cef29d4d8d71720c98a3971827fc3c91`. Rama: `quality/e06-supabase-testing`. Requisitos R06, R13, R14, R16 y R17. [Procedimiento reproducible](SUPABASE_TESTING_CALIDAD.md).
 
@@ -33,7 +33,7 @@ El job real se exige en `main`. El resumen rechaza job omitido/fallido, reporte 
 
 Validación local: **102 frontend + 61 backend = 163 pruebas aisladas aprobadas**, cero fallidas/omitidas; **48 pruebas de infraestructura** aparte; integración real **12/12**. Build, ESLint, Ruff, actionlint y gates 60/80/5 aprobados. La primera pasada del backend tuvo siete errores de preparación por permisos del temporal de Windows; al fijar `--basetemp` dentro de `.quality/e06/` aprobó 61/61. No fue un fallo de las aserciones de producto. CI usa un runner nuevo.
 
-Cobertura local frontend 788/1.277 sentencias = 61,70 %; backend 1.254/1.471 = 85,25 %. La base fija de código nuevo sigue siendo `531996f51243dc3d4c5a607338e2f35e32313f6b`. OBS-DEP-001 conserva su excepción exacta y vencimiento 26/10/2026; no se corrigió ni prorrogó en E06.
+Cobertura local frontend 788/1.277 sentencias = 61,7071 % (Vitest informa 61,70 %); backend 1.254/1.471 = 85,25 %. La base fija de código nuevo sigue siendo `531996f51243dc3d4c5a607338e2f35e32313f6b`. OBS-DEP-001 conserva su excepción exacta y vencimiento 26/10/2026; no se corrigió ni prorrogó en E06.
 
 ## Alcance por entorno y avisos
 
@@ -42,3 +42,11 @@ Cobertura local frontend 788/1.277 sentencias = 61,70 %; backend 1.254/1.471 = 8
 Security Advisors de testing conserva un aviso de protección de contraseñas filtradas, función de plan pago; Performance Advisors informa 14 índices todavía sin uso en el dataset pequeño. [Seguridad](evidencias/e06/security.json), [performance](evidencias/e06/performance.json) y tratamiento en el procedimiento. No se infiere capacidad de carga a partir de estos avisos.
 
 Logout prueba la sesión y las siguientes consultas del cliente; no certifica revocación instantánea de JWT previamente copiados. La lectura real de E06 usa una cartera mínima; el volumen/paginación exhaustiva conserva sus regresiones aisladas E03. Navegador y despliegue corresponden a E07; cargas a E08.
+
+## Cierre comprobado en CI
+
+Implementación publicada: `4bb783f1a34c25e9003ee6ece66825668b1c1106`. [Ejecución obligatoria en main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), cuatro jobs **success**, incluidos Supabase y resumen. Artefactos descargados y verificados por SHA-256; [metadatos](evidencias/e06/ci-main.json), [resumen](evidencias/e06/resumen-ci.json), [Supabase real](evidencias/e06/supabase-ci.json) y [gates](evidencias/e06/gate-ci.json). **175 pruebas de producto aprobadas** (163 aisladas + 12 reales), **0 fallidas/omitidas**, **48 de infraestructura** aparte. Nuevo frontend 30/30 y backend 15/17; duplicación 427/11.141 = 3,83 %.
+
+Los 32 controles de la sección E06 del roadmap están comprobados. Catálogo actualizado a 50 IDs/familias e inventario a 175 resultados de producto. CAS-EXT #9 cerrado; DEF-SUP-001 #1 sigue abierto para el original, OBS-DEP-001 #3 conserva su tratamiento. [Snapshot de seguimiento](evidencias/e06/seguimiento-2026-10-21.json).
+
+**Siguiente etapa:** E07, despliegue nuevo con testing y smoke automático posterior. E06 no despliega la web ni ejecuta las cargas de E08.

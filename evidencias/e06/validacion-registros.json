@@ -1,0 +1,56 @@
+{
+  "stage": "E06",
+  "cases": 50,
+  "product_inventory": {
+    "passed": 175,
+    "failed": 0,
+    "skipped": 0
+  },
+  "isolated_product": 163,
+  "real_external": 12,
+  "infrastructure": 48,
+  "managed_variants_match_CI": 81,
+  "issues": {
+    "total": 9,
+    "open": 2,
+    "closed": 7
+  },
+  "roadmap_controls_completed": 32,
+  "checks": {
+    "fields_and_links_valid": true,
+    "historical_E05_preserved": true,
+    "variants_match_CI": true,
+    "issue_states_and_body_hashes": true,
+    "no_credentials_or_signed_urls": true,
+    "UTF8_valid": true
+  },
+  "content_hash_method": "SHA-256 of UTF-8 text normalized to LF",
+  "content_sha256": {
+    "CASOS_PRUEBA_CALIDAD.md": "e8f2eb91958cc0e01c46dba4a62840ad4ef4772ba710732da5393c0d0ea976a9",
+    "DIAGNOSTICO_CIERRE_CALIDAD.md": "5d946b644ab233a2046e89eba93c8074beee4d77dc748cd71f840547bcb17298",
+    "INFORME_TP_CALIDAD_SOFTWARE.md": "f1a340c76496229f73c110dff14ba575b167da6bf0dd8051e6acf89fbd16127b",
+    "PLAN_PRUEBAS_CALIDAD.md": "1e9b7975d8780a57e988b204cca985ab58420eb20d61edd68ea3d92f7088ce28",
+    "REGISTRO_DEFECTOS_CALIDAD.md": "b0a0a527fe104aefc1ddaf75046a9e95cc5f0706aa1185f331375902801306d7",
+    "REGISTRO_EJECUCION_E06.md": "a714cc13599151fedbdc66c81f27461d8a6c8344a85a5ad05fcacbef5ac2dad1",
+    "REPRODUCIBILIDAD_CALIDAD.md": "439d017f93aa7fc4111bba027109afaae9a63334fa77cade3ce15fb9ab2db3b0",
+    "REVISION_SUPABASE.md": "a8e04d05dee097b1c4bcc2fa74f88ce842d930ad14f2f73607b448a4910ff919",
+    "ROADMAP_TP_CALIDAD_SOFTWARE.md": "ad2b112831c36aa4319cd06f8364c1eabff6e8f686294c8b3c996072cacc6778",
+    "TRAZABILIDAD_CALIDAD.md": "3abcdfc699c495a1da84188b98b45d5bd3c45e51a307b8a272eb166315ee64f8",
+    "calidad/casos-prueba.json": "9c85846721b3f6b5003292af41d88c49fbe501e316b7c4b94a39236f6b98b2b9",
+    "calidad/inventario-pruebas.json": "cd9d5893fe9486969a87f9f48c388159b22e46063386f5dbd754c7386a905b14",
+    "evidencias/e05/inventario-pruebas-corte-e05.json": "27de452dc19575cefb82500f43106c4e960ab3ad5c34eebeedbb98b83bfda2ff",
+    "evidencias/e06/artefactos-ci.json": "e37d488192cc2dfa980cc51a07158dacf38d3e1142513c3a1cafbe7aadee7cfd",
+    "evidencias/e06/ci-main.json": "5cf31bc9f1c4e19a7da94d2e8a1ee5a903eaa9f5da58a633acfb30dc740c7f63",
+    "evidencias/e06/gate-ci.json": "66e0294a0f7220063db552797af2a1a60cd859b8e9d98def82581a1e9c731769",
+    "evidencias/e06/issues-antes.json": "6b17599c78642ca3a1ec8edec9a76337a65c92167f69f5e1f48744dba142777c",
+    "evidencias/e06/recreated-green.json": "3256f6e07e1a5679700b0c73bf255b891196659d5093f347c4774be18ce52877",
+    "evidencias/e06/resumen-ci.json": "4e0cfe339eadad94acdeee24a245a1419c998a8be2091fe424dfd83592aeac02",
+    "evidencias/e06/seguimiento-2026-10-21.json": "829ceb794c25fa7ee5e8a02a31c120d8a6b59de257bc5851048453e3faf3735a",
+    "evidencias/e06/supabase-ci-summary.md": "1afb45482225c105e5a0d48efa091a392d21b7d9e1962f6ddcfcd9210f8ce502",
+    "evidencias/e06/supabase-ci-tests.json": "aae9b6ddb7025e3e9d456819e2e8eef05dd7f15e74c4754142efc0e6e5469c29",
+    "evidencias/e06/supabase-ci-tests.xml": "dfc0ebef6096fa4ebaa0ccb3863381cb57e3a3aae1d8f9f1791843a3b61f5db2",
+    "evidencias/e06/supabase-ci.json": "6d9692598b3156fd7e3ca38596f36d73f7cb028cf3d60842228a76e99540f039",
+    "evidencias/e06/verificacion-entorno.json": "512854f5826cf9e954071c65d88a525b250ea40807f82f241feb434f8c1a7d70",
+    "evidencias/e06/verificacion-issues.json": "4229e73945b38ee7f187a59710bd78dbe66b3f939c4bc070640f92671e8edc98"
+  }
+}

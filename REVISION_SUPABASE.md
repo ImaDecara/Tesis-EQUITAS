@@ -1,5 +1,7 @@
 # EQUITAS — Revisión del proyecto Supabase conectado
 
+> **E06:** [testing aislado y cliente real](SUPABASE_TESTING_CALIDAD.md) completados; la corrección de RLS está aplicada allí y aprobó 12/12 en CI. **Este proyecto original no se modificó**: conserva 23 SELECT `USING(true)` y DEF-SUP-001 #1 abierto. La inspección SQL siguiente es histórica y no se reetiqueta como prueba HTTP.
+
 > **Seguimiento E03:** DEF-DAT-001 se corrigió y validó mediante regresión aislada en objetos/personas y sus relaciones. [Ficha, pruebas y CI rojo/verde](REGISTRO_EJECUCION_E03.md). Las cifras y observaciones de esta revisión permanecen como evidencia de detección; no son una nueva validación del cliente autenticado. DEF-SUP-001 sigue abierto. E03 no modificó datos, cuentas ni políticas del proyecto real; integración y despliegue siguen pendientes E06/E07.
 
 Revisión del **21/10/2026**, realizada mediante el plugin de Supabase y contrastada con el código del repositorio. Se consultaron catálogos, políticas, restricciones y conteos agregados. Las comprobaciones de roles utilizaron transacciones `READ ONLY` con `ROLLBACK`. No se modificaron datos, cuentas, políticas, esquema ni configuración del proyecto.

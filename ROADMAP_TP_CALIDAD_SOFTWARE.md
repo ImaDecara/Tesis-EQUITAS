@@ -1,10 +1,12 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.6, cierre de la etapa E05 el 21 de octubre de 2026.
+**Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
+
+**Versión:** 1.7, cierre de la etapa E06 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E05 completadas en sus alcances; E06 es la siguiente etapa. GitHub Issues formalizado con nueve tickets, catálogo y trazabilidad verificados. Las etapas externas y de entrega conservan sus pendientes.
+**Estado del roadmap:** E00–E06 completadas en sus alcances; E07 es la siguiente etapa. GitHub Issues formalizado con nueve tickets, catálogo y trazabilidad verificados. Las etapas externas y de entrega conservan sus pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -136,7 +138,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | **Completada**; 27 controles, ambas rutas, rojo/verde y regresión verificados. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | **Completada**; 16 controles, CI normal y bloqueo crítico comprobados. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | **Completada**; 15 controles, nueve issues y catálogo/matriz verificados. | Comienza en E00 y se actualiza en todas las etapas. |
-| **E06** | Supabase de testing, autorización y cliente real. | Inspección realizada; integración de aplicación pendiente. | E00–E02; entorno aislado disponible. |
+| **E06** | Supabase de testing, autorización y cliente real. | Completada en testing: 12/12 variantes reales en CI, cero omisiones; original pendiente. | E00–E02; entorno aislado disponible. |
 | **E07** | Despliegue nuevo y smoke automático posterior. | Pendiente. | E04, E06. |
 | **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Pendiente. | E02 y escenario aislado; E03/E06 según componente elegido. |
 | **E09** | Herramienta de cinco pasos y documentación transversal. | Parcial en los informes; cierre pendiente. | Puede avanzar junto con E01–E08. |
@@ -145,7 +147,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E05 están completas; el siguiente objetivo ejecutable es E06. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
+E00–E06 están completas; el siguiente objetivo ejecutable es E07. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -438,7 +440,7 @@ Los ensayos controlados del evaluador prueban que el gate funciona. No sustituye
 
 ## 12. E06 — Supabase aislado, autorización y cliente real
 
-**Avance E06:** entorno aislado creado, migraciones aplicadas, rojo/verde HTTP real y 12/12 variantes locales aprobadas. Integración obligatoria configurada en CI; cierre pendiente de verificarla en `main`. Ver [ficha E06](REGISTRO_EJECUCION_E06.md) y [procedimiento](SUPABASE_TESTING_CALIDAD.md).
+**Cierre E06:** entorno aislado preparado y 12/12 variantes reales aprobadas sin omisiones en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481). [Ficha E06](REGISTRO_EJECUCION_E06.md), [procedimiento](SUPABASE_TESTING_CALIDAD.md) y [comparación roja/verde](evidencias/e06/red-green.json). El proyecto original conserva DEF-SUP-001 abierto; la corrección de esta etapa está aplicada en testing.
 
 **Objetivo:** comprobar la integración de aplicación con un Supabase real de testing y tratar DEF-SUP-001 con regresión.  
 **Entrada:** E00–E02, snapshot observado y acceso a un entorno aislado.  
@@ -446,31 +448,31 @@ Los ensayos controlados del evaluador prueban que el gate funciona. No sustituye
 
 ### 12.1. Preparar el entorno y el contrato
 
-- [ ] Identificar y registrar URL/referencia del entorno de testing, separada de la cartera conectada investigada.
-- [ ] Elegir cómo provisionarlo y registrar recursos/costos reales si los hubiera antes de crear recursos que los generen. La conexión del plugin no demuestra que ya exista testing.
-- [ ] Preparar esquema, restricciones y políticas a partir del modelo observado, revisando el SQL necesario. El snapshot JSON no es un instalador.
-- [ ] Utilizar la skill Supabase y documentación vigente al implementar. Si se usa CLI, descubrir comandos con `--help`; no inventar comandos o nombres de migración.
-- [ ] Versionar los cambios de esquema/políticas y un procedimiento de preparación del entorno, separando estado observado, propuesta y cambio aplicado.
-- [ ] Crear datos sintéticos identificables: al menos tenants A/B, usuarios autorizados por tenant, usuario sin pertenencia activa y una cartera pequeña de valores conocidos.
-- [ ] Definir datos esperados para cada usuario. La lectura positiva debe comprobar filas conocidas, no solo que la respuesta sea un array vacío sin error.
-- [ ] Establecer alta/limpieza reproducibles de las fixtures, sin afectar datos ni cuentas ajenos al ensayo.
-- [ ] Configurar secretos de testing en local/CI. No poner service role en frontend, capturas, JSON de evidencias ni logs.
-- [ ] Usar una clave pública/publicable y una sesión de usuario normal para comprobar Auth y lectura de aplicación; una consulta administrativa no prueba RLS del usuario.
+- [x] Identificar y registrar URL/referencia del entorno de testing, separada de la cartera conectada investigada.
+- [x] Elegir cómo provisionarlo y registrar recursos/costos reales si los hubiera antes de crear recursos que los generen. La conexión del plugin no demuestra que ya exista testing.
+- [x] Preparar esquema, restricciones y políticas a partir del modelo observado, revisando el SQL necesario. El snapshot JSON no es un instalador.
+- [x] Utilizar la skill Supabase y documentación vigente al implementar. Si se usa CLI, descubrir comandos con `--help`; no inventar comandos o nombres de migración.
+- [x] Versionar los cambios de esquema/políticas y un procedimiento de preparación del entorno, separando estado observado, propuesta y cambio aplicado.
+- [x] Crear datos sintéticos identificables: al menos tenants A/B, usuarios autorizados por tenant, usuario sin pertenencia activa y una cartera pequeña de valores conocidos.
+- [x] Definir datos esperados para cada usuario. La lectura positiva debe comprobar filas conocidas, no solo que la respuesta sea un array vacío sin error.
+- [x] Establecer alta/limpieza reproducibles de las fixtures, sin afectar datos ni cuentas ajenos al ensayo.
+- [x] Configurar secretos de testing en local/CI. No poner service role en frontend, capturas, JSON de evidencias ni logs.
+- [x] Usar una clave pública/publicable y una sesión de usuario normal para comprobar Auth y lectura de aplicación; una consulta administrativa no prueba RLS del usuario.
 
-La prueba existente utiliza estas variables, cuyos nombres se conservan o se actualizan junto con su documentación: `SUPABASE_TEST_ENABLED`, `SUPABASE_TEST_URL`, `SUPABASE_TEST_PUBLISHABLE_KEY`, `SUPABASE_TEST_EMAIL`, `SUPABASE_TEST_PASSWORD`. Casos adicionales pueden requerir otras identidades de testing; registrar los nombres de configuración, no sus valores.
+La configuración opcional anterior fue reemplazada por el secreto JSON `SUPABASE_TEST_CONFIG`, que incluye URL, clave publicable y las cuatro identidades sintéticas. El comando obligatorio falla si falta. Nombres, estructura y preparación en [procedimiento](SUPABASE_TESTING_CALIDAD.md); los valores no están en Git.
 
 ### 12.2. Corregir y comprobar autorización
 
-- [ ] Conservar la evidencia roja de SUP-RLS-02 y reproducir el criterio sobre el entorno de testing preparado.
-- [ ] Definir la pertenencia activa como condición de acceso a datos de negocio y las relaciones necesarias para filas sin tenant directo.
-- [ ] Clasificar tablas de negocio y catálogos compartidos. No reemplazar todas las políticas con un mismo predicado sin revisar el modelo.
-- [ ] Asegurar que el lookup de `public.user`/`tenant_user` usado por la aplicación funciona con acceso limitado y sin recursión de políticas.
-- [ ] Comprobar objetos, deudas, personas, contactos, relaciones y perfiles; restringir solo `debtor` no prueba aislamiento de los datos relacionados.
-- [ ] Mantener explícita la política de escritura. Un GRANT observado no equivale a permiso efectivo de escritura por RLS.
-- [ ] Revisar los avisos de Security Advisors y clasificar tratamiento. La función `rls_auto_enable` es un event trigger; no ejecutar RPCs privilegiados para intentar explotar el aviso.
-- [ ] Ejecutar advisors después de cambios aplicados y conservar el resultado junto con pruebas de negocio: no sustituyen estas pruebas.
-- [ ] Repetir el caso rojo y comprobar cero filas de negocio sin pertenencia.
-- [ ] Registrar el estado por entorno. Una corrección aplicada solo en testing no significa que el proyecto conectado original ya esté corregido.
+- [x] Conservar la evidencia roja de SUP-RLS-02 y reproducir el criterio sobre el entorno de testing preparado.
+- [x] Definir la pertenencia activa como condición de acceso a datos de negocio y las relaciones necesarias para filas sin tenant directo.
+- [x] Clasificar tablas de negocio y catálogos compartidos. No reemplazar todas las políticas con un mismo predicado sin revisar el modelo.
+- [x] Asegurar que el lookup de `public.user`/`tenant_user` usado por la aplicación funciona con acceso limitado y sin recursión de políticas.
+- [x] Comprobar objetos, deudas, personas, contactos, relaciones y perfiles; restringir solo `debtor` no prueba aislamiento de los datos relacionados.
+- [x] Mantener explícita la política de escritura. Un GRANT observado no equivale a permiso efectivo de escritura por RLS.
+- [x] Revisar los avisos de Security Advisors y clasificar tratamiento. La función `rls_auto_enable` es un event trigger; no ejecutar RPCs privilegiados para intentar explotar el aviso.
+- [x] Ejecutar advisors después de cambios aplicados y conservar el resultado junto con pruebas de negocio: no sustituyen estas pruebas.
+- [x] Repetir el caso rojo y comprobar cero filas de negocio sin pertenencia.
+- [x] Registrar el estado por entorno. Una corrección aplicada solo en testing no significa que el proyecto conectado original ya esté corregido.
 
 ### 12.3. Casos reales mínimos
 
@@ -490,21 +492,21 @@ Los nuevos casos se implementarán y ejecutarán; los IDs no indican por sí sol
 
 ### 12.4. Integrar en CI
 
-- [ ] Mantener las pruebas aisladas ejecutables sin credenciales externas.
-- [ ] Crear un job/ejecución obligatoria para integración real de la entrega.
-- [ ] Si faltan secretos en esa ejecución obligatoria, fallar indicando configuración ausente; no completar la entrega con el caso omitido.
-- [ ] Usar un evento/contexto confiable para los secretos de testing. Un PR sin acceso a secretos puede conservar una omisión explícita, pero necesita luego la ejecución real obligatoria.
-- [ ] Guardar reporte con proyecto de testing, fecha, SHA, casos y esperado/obtenido, sin credenciales ni tokens.
-- [ ] Documentar condiciones de indisponibilidad externa y comportamiento del pipeline.
+- [x] Mantener las pruebas aisladas ejecutables sin credenciales externas.
+- [x] Crear un job/ejecución obligatoria para integración real de la entrega.
+- [x] Si faltan secretos en esa ejecución obligatoria, fallar indicando configuración ausente; no completar la entrega con el caso omitido.
+- [x] Usar un evento/contexto confiable para los secretos de testing. Un PR sin acceso a secretos puede conservar una omisión explícita, pero necesita luego la ejecución real obligatoria.
+- [x] Guardar reporte con proyecto de testing, fecha, SHA, casos y esperado/obtenido, sin credenciales ni tokens.
+- [x] Documentar condiciones de indisponibilidad externa y comportamiento del pipeline.
 
 ### Verificar y cumplir
 
-- [ ] Hay Auth y lectura reales desde el cliente, sin mocks y sin credencial administrativa que evada RLS.
-- [ ] Se comprueba acceso positivo a datos conocidos y rechazo de accesos no autorizados.
-- [ ] El defecto RLS tiene resultado antes/después en el entorno declarado y su regresión permanece automatizada.
-- [ ] Se conserva la distinción entre corrección en testing y eventual aplicación al proyecto conectado.
-- [ ] Las pruebas existentes de frontend/backend siguen aprobando después de cambios necesarios.
-- [ ] La integración real requerida no está omitida en la ejecución final.
+- [x] Hay Auth y lectura reales desde el cliente, sin mocks y sin credencial administrativa que evada RLS.
+- [x] Se comprueba acceso positivo a datos conocidos y rechazo de accesos no autorizados.
+- [x] El defecto RLS tiene resultado antes/después en el entorno declarado y su regresión permanece automatizada.
+- [x] Se conserva la distinción entre corrección en testing y eventual aplicación al proyecto conectado.
+- [x] Las pruebas existentes de frontend/backend siguen aprobando después de cambios necesarios.
+- [x] La integración real requerida no está omitida en la ejecución final.
 
 **Salida y evidencia:** entorno preparado, SQL/configuración versionados, fixtures sintéticas, reportes reales y estado de DEF-SUP-001 por entorno.  
 **No cerrar si:** solo se usó MCP administrativo, solo hubo simulación SQL, el caso positivo acepta cualquier vacío, falta comprobar pertenencia o se conserva un skip en la validación final.
@@ -836,7 +838,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Cobertura backend | `.\.venv\Scripts\python.exe -m pytest --cov --cov-report=term-missing --cov-report=html` | `back` | Exportación procesable adicional para CI/gate. |
 | Análisis backend | `.\.venv\Scripts\python.exe -m ruff check ETL api services --output-format concise` | `back` | Reglas, versión y tratamiento de hallazgos. |
 | Gate completo / código nuevo | `python quality/gates.py --artifacts .quality/local-ci --output .quality/local-gates`; integrado en `ci.py summary`. | Raíz, reportes del HEAD actual. | [Ficha E04](REGISTRO_EJECUCION_E04.md), base/diff/conteos y bloqueo crítico comprobado. |
-| Integración externa obligatoria | **Preparada parcialmente; completar E06.** | Según implementación final. | Auth/lectura reales sin skip final. |
+| Integración externa obligatoria | `python quality/supabase_integration.py --config-file .quality/e06/credentials.json --output .quality/e06/nueva-ejecucion` | Raíz; secreto local ignorado. | Auth/lectura/RLS reales, 12/12 en E06; falla por configuración ausente. |
 | Smoke desplegado | **Pendiente de implementar en E07.** | Según implementación final. | URL/SHA/reportes post-deploy. |
 | Estrés | **Pendiente de implementar en E08.** | Según implementación final. | Parámetros previos y reporte por pipeline. |
 | Esfuerzo sostenido | **Pendiente de implementar en E08.** | Según implementación final. | Duración/serie temporal y reporte. |
@@ -857,4 +859,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E06: identificar/provisionar Supabase de testing aislado, preparar dos tenants/usuarios/datos sintéticos, reproducir y corregir DEF-SUP-001 y validar Auth/Data API con cliente normal y filas conocidas. Usar los casos de CAS-EXT #9, manteniendo la distinción entre SQL histórico, dobles y prueba HTTP real. Conservar el control de OBS-DEP-001 antes del vencimiento 26/10/2026.
+**Siguiente paso concreto:** E07: desplegar una versión nueva del frontend con el proyecto de testing preparado por E06 y ejecutar smoke automático posterior desde pipeline, vinculando URL, SHA y resultado. Mantener DEF-SUP-001 abierto para el proyecto original y revisar OBS-DEP-001 antes del 26/10/2026.

@@ -1,14 +1,14 @@
 # EQUITAS — Registro de defectos de calidad
 
-Registro versionado iniciado el **21/10/2026** y vinculado a **tickets reales de GitHub Issues en E05**. No es una exportación de Jira. [Matriz completa](TRAZABILIDAD_CALIDAD.md), [casos](CASOS_PRUEBA_CALIDAD.md) y [snapshot de seguimiento](evidencias/e05/seguimiento-2026-10-21.json). E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. El despliegue y la integración real se verifican en etapas posteriores.
+Registro versionado iniciado el **21/10/2026** y vinculado a **tickets reales de GitHub Issues en E05**. No es una exportación de Jira. [Matriz completa](TRAZABILIDAD_CALIDAD.md), [casos](CASOS_PRUEBA_CALIDAD.md) y [snapshot de seguimiento](evidencias/e05/seguimiento-2026-10-21.json). E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. E06 verificó integración real y corrigió RLS exclusivamente en testing; el despliegue sigue en E07. [Seguimiento E06](evidencias/e06/seguimiento-2026-10-21.json).
 
 ## DEF-SUP-001 — El rol autenticado lee cartera sin pertenencia al tenant
 
-**Ticket:** [#1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), abierto/reproducido; [campaña externa #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9). Prioridad P1 para E06 por impacto de autorización.
+**Ticket:** [#1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), abierto/reproducido; [campaña externa #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9). Prioridad P1 por impacto de autorización en el proyecto original. E06 completada en testing aislado; campaña #9 cerrada en ese alcance.
 
 | Campo | Valor |
 | --- | --- |
-| Estado | **Abierto, reproducido**. |
+| Estado | **Original: abierto/reproducido. Testing: corregido y validado E06**. |
 | Severidad / prioridad | **Alta**, propuesta técnica por afectar autorización de información municipal. |
 | Entorno y versión | Supabase EQUITAS `folyslqzqvnpolexcxjo`, estado observado el 21/10/2026; cliente local base `531996f`. Las políticas son configuración remota, no un cambio de ese commit. |
 | Responsable | Axel Azcune (`AxAzc`). |
@@ -20,8 +20,8 @@ Registro versionado iniciado el **21/10/2026** y vinculado a **tickets reales de
 | Resultado obtenido | **2.933 objetos, 56.286 deudas y 2.493 personas**; usuarios coincidentes **0**, pertenencias activas coincidentes **0**. |
 | Causa observada | Las políticas SELECT de las 23 tablas públicas permiten `TO authenticated USING (true)`. |
 | Evidencia | `evidencias/supabase-2026-10-21.json`, `probes.authenticated_without_membership`; snapshot de políticas y `REVISION_SUPABASE.md`. |
-| Corrección / commit | Pendiente; no se alteraron políticas. |
-| Regresión / verde | Pendiente. |
+| Corrección / commit | Solo testing: políticas por membresía/relación en `4bb783f1a34c25e9003ee6ece66825668b1c1106` y migración `20261021221030_active_membership_rls.sql`. El original no se modificó. |
+| Regresión / verde | [CI E06](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481): 12 variantes reales aprobadas sin omisiones; rojo sin membresía devolvió IDs A/B, verde devuelve cero. [Comparación](evidencias/e06/red-green.json). |
 
 Pasos de reproducción:
 
@@ -40,13 +40,15 @@ Criterios de cierre:
 - La consulta de usuario/pertenencia usada por el frontend funciona sin recursión ni acceso global a otros usuarios.
 - Conservar prueba antes/después y regresión automatizada sobre un entorno de testing. La inspección actual de una sola organización no sustituye ese caso con dos tenants.
 
+**Actualización E06:** los pasos SQL anteriores describen la detección original. El ensayo HTTP real se ejecutó después en `iylwghgvtydpmwidojdo`, con cuatro identidades, dos tenants y filas conocidas. [Procedimiento](SUPABASE_TESTING_CALIDAD.md). Para cerrar este issue globalmente falta aplicar/revisar y validar la corrección en el proyecto original; no se declara corregido por asociación con testing.
+
 ## DEF-DAT-001 — La lectura de datos se trunca antes de paginar la interfaz
 
-**Ticket:** [#2](https://github.com/ImaDecara/Tesis-EQUITAS/issues/2), cerrado en código/regresión aislada; [casos #5](https://github.com/ImaDecara/Tesis-EQUITAS/issues/5). Prioridad histórica P1 por integridad de la cartera. La [campaña real #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9) permanece abierta.
+**Ticket:** [#2](https://github.com/ImaDecara/Tesis-EQUITAS/issues/2), cerrado en código/regresión aislada; [casos #5](https://github.com/ImaDecara/Tesis-EQUITAS/issues/5). Prioridad histórica P1 por integridad de la cartera. La [campaña real #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9) quedó cerrada E06 para lectura mínima y autorización en testing; volumen real e interfaz desplegada no se infieren de esa campaña.
 
 | Campo | Valor |
 | --- | --- |
-| Estado | **Cerrado en código y regresión automatizada aislada de ambas rutas/relaciones**, validados E03. Validación en entorno de aplicación/despliegue pendiente E06/E07, registrada en campaña externa abierta. |
+| Estado | **Cerrado en código y regresión automatizada aislada de ambas rutas/relaciones**, validados E03. E06 verificó el lector con datos mínimos y RLS reales; despliegue/interfaz siguen en E07. La prueba de gran volumen conserva el alcance aislado E03. |
 | Severidad / prioridad | **Alta**, propuesta técnica por posible incompletitud de métricas y decisiones. |
 | Entorno y versión | Condición detectada en frontend `531996f` y volumen real del 21/10/2026. Reproducción roja `f155cfc1616c8edeacd533241c5dc2858745734a`; corrección verde `3bfe15688a72360b336b7d8732867c6991a1d42e`, Ubuntu 24.04, SDK real con transporte HTTP sintético. |
 | Responsable | Axel Azcune (`AxAzc`). |

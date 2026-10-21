@@ -1,0 +1,39 @@
+{
+  "run_id": 39686380481,
+  "sha": "4bb783f1a34c25e9003ee6ece66825668b1c1106",
+  "downloaded_and_sha256_verified": true,
+  "artifacts": [
+    {
+      "id": 12387285165,
+      "name": "ci-summary-39686380481-1",
+      "digest": "sha256:26b72dad6d2b91fc69c2cecbf24396bf3c009d706ad8d89ed9addcf6ad0d2830",
+      "size_in_bytes": 8057,
+      "created_at": "2026-10-21T22:26:45Z",
+      "expires_at": "2026-11-20T22:26:45Z"
+    },
+    {
+      "id": 12386741388,
+      "name": "ci-supabase-39686380481-1",
+      "digest": "sha256:79d2282efc9a290eb80a7a4cb5aec1e7b5ac800cb7a96ce98dc5061aa0ae37cb",
+      "size_in_bytes": 4724,
+      "created_at": "2026-10-21T22:26:23Z",
+      "expires_at": "2026-11-20T22:26:22Z"
+    },
+    {
+      "id": 12386497396,
+      "name": "ci-backend-39686380481-1",
+      "digest": "sha256:0a6bd328e4a90e373bdb5de7ef83848c983c489a120240da8c4fff10eec72e29",
+      "size_in_bytes": 174184,
+      "created_at": "2026-10-21T22:26:09Z",
+      "expires_at": "2026-11-20T22:26:08Z"
+    },
+    {
+      "id": 12385554887,
+      "name": "ci-frontend-39686380481-1",
+      "digest": "sha256:0f5cbba5ee4c4695aa1b4c204e17fcd9a024d06b63c40c5dfc9d3c5a1ef0bf1b",
+      "size_in_bytes": 668458,
+      "created_at": "2026-10-21T22:26:29Z",
+      "expires_at": "2026-11-20T22:26:28Z"
+    }
+  ]
+}

@@ -1,0 +1,383 @@
+{
+  "conclusion": "success",
+  "createdAt": "2026-10-21T22:25:29Z",
+  "event": "push",
+  "headSha": "4bb783f1a34c25e9003ee6ece66825668b1c1106",
+  "jobs": [
+    {
+      "completedAt": "2026-10-21T22:26:11Z",
+      "conclusion": "success",
+      "databaseId": 119521378686,
+      "name": "Backend - pruebas, cobertura y Ruff",
+      "startedAt": "2026-10-21T22:25:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-21T22:25:33Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-21T22:25:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:33Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-10-21T22:25:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:41Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 3,
+          "startedAt": "2026-10-21T22:25:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:08Z",
+          "conclusion": "success",
+          "name": "Instalar en entorno nuevo y ejecutar controles backend",
+          "number": 4,
+          "startedAt": "2026-10-21T22:25:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:09Z",
+          "conclusion": "success",
+          "name": "Conservar reportes backend aun con fallos",
+          "number": 5,
+          "startedAt": "2026-10-21T22:26:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:09Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 9,
+          "startedAt": "2026-10-21T22:26:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:09Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 10,
+          "startedAt": "2026-10-21T22:26:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:09Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "startedAt": "2026-10-21T22:26:09Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481/job/119521378686"
+    },
+    {
+      "completedAt": "2026-10-21T22:26:27Z",
+      "conclusion": "success",
+      "databaseId": 119521379122,
+      "name": "Supabase - integracion real Auth y RLS",
+      "startedAt": "2026-10-21T22:25:31Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-21T22:25:34Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-21T22:25:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:35Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-10-21T22:25:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:42Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 3,
+          "startedAt": "2026-10-21T22:25:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:53Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "number": 4,
+          "startedAt": "2026-10-21T22:25:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:55Z",
+          "conclusion": "success",
+          "name": "Fijar npm",
+          "number": 5,
+          "startedAt": "2026-10-21T22:25:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:04Z",
+          "conclusion": "success",
+          "name": "Instalar dependencias fijadas",
+          "number": 6,
+          "startedAt": "2026-10-21T22:25:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:22Z",
+          "conclusion": "success",
+          "name": "Ejecutar campana real obligatoria",
+          "number": 7,
+          "startedAt": "2026-10-21T22:26:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:23Z",
+          "conclusion": "success",
+          "name": "Conservar resultados reales aun con fallos",
+          "number": 8,
+          "startedAt": "2026-10-21T22:26:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "number": 14,
+          "startedAt": "2026-10-21T22:26:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 15,
+          "startedAt": "2026-10-21T22:26:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:23Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 16,
+          "startedAt": "2026-10-21T22:26:23Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:23Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "startedAt": "2026-10-21T22:26:23Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481/job/119521379122"
+    },
+    {
+      "completedAt": "2026-10-21T22:26:33Z",
+      "conclusion": "success",
+      "databaseId": 119521379350,
+      "name": "Frontend - pruebas, build y analisis",
+      "startedAt": "2026-10-21T22:25:32Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-21T22:25:34Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-21T22:25:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:36Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-10-21T22:25:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:48Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 3,
+          "startedAt": "2026-10-21T22:25:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:56Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "number": 4,
+          "startedAt": "2026-10-21T22:25:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:25:58Z",
+          "conclusion": "success",
+          "name": "Fijar npm",
+          "number": 5,
+          "startedAt": "2026-10-21T22:25:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:27Z",
+          "conclusion": "success",
+          "name": "Instalar y ejecutar controles frontend",
+          "number": 6,
+          "startedAt": "2026-10-21T22:25:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:29Z",
+          "conclusion": "success",
+          "name": "Conservar reportes frontend aun con fallos",
+          "number": 7,
+          "startedAt": "2026-10-21T22:26:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:29Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "number": 12,
+          "startedAt": "2026-10-21T22:26:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:29Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 13,
+          "startedAt": "2026-10-21T22:26:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:29Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 14,
+          "startedAt": "2026-10-21T22:26:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:30Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-10-21T22:26:29Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481/job/119521379350"
+    },
+    {
+      "completedAt": "2026-10-21T22:26:47Z",
+      "conclusion": "success",
+      "databaseId": 119521824714,
+      "name": "Quality gates y resumen",
+      "startedAt": "2026-10-21T22:26:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-21T22:26:37Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-21T22:26:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:38Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 2,
+          "startedAt": "2026-10-21T22:26:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:44Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 3,
+          "startedAt": "2026-10-21T22:26:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:45Z",
+          "conclusion": "success",
+          "name": "Run actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
+          "number": 4,
+          "startedAt": "2026-10-21T22:26:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:45Z",
+          "conclusion": "skipped",
+          "name": "Ensayo manual de bloqueo por critico en reporte",
+          "number": 5,
+          "startedAt": "2026-10-21T22:26:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:45Z",
+          "conclusion": "success",
+          "name": "Crear resumen y propagar el estado real",
+          "number": 6,
+          "startedAt": "2026-10-21T22:26:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:46Z",
+          "conclusion": "success",
+          "name": "Conservar resumen aun con fallos",
+          "number": 7,
+          "startedAt": "2026-10-21T22:26:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:46Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+          "number": 13,
+          "startedAt": "2026-10-21T22:26:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:46Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "number": 14,
+          "startedAt": "2026-10-21T22:26:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-21T22:26:46Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "startedAt": "2026-10-21T22:26:46Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481/job/119521824714"
+    }
+  ],
+  "status": "completed",
+  "updatedAt": "2026-10-21T22:26:48Z",
+  "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481"
+}

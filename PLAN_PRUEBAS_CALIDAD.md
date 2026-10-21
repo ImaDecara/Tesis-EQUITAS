@@ -1,6 +1,8 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-Versión 1.5 — 21/10/2026. Formalización E00 y actualizaciones E01–E05.
+**Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
+
+Versión 1.6 — 21/10/2026. Formalización E00 y actualizaciones E01–E06.
 
 ## 1. Propósito y referencias de versión
 
@@ -94,7 +96,7 @@ Los avisos Ruff, las vulnerabilidades de dependencias y los bugs de negocio se r
 
 Datos para las pruebas aisladas: fixtures sintéticas, archivos temporales y respuestas controladas. Datos para integración: filas conocidas y etiquetadas en testing. No se utilizarán cuentas o escrituras de la cartera real para fabricar una demostración.
 
-Las variables externas se documentan por nombre. La prueba Auth existente requiere `SUPABASE_TEST_ENABLED`, `SUPABASE_TEST_URL`, `SUPABASE_TEST_PUBLISHABLE_KEY`, `SUPABASE_TEST_EMAIL` y `SUPABASE_TEST_PASSWORD`. Los valores se configuran fuera de Git. La ejecución final obligatoria de integración debe fallar por configuración ausente en lugar de aprobar mediante una omisión.
+La integración real utiliza el secreto `SUPABASE_TEST_CONFIG` y el proyecto aislado registrado en `quality/supabase-testing.json`. Su comando obligatorio falla si falta configuración y está exigido en main. El esquema del JSON y las cuatro identidades están documentados sin valores secretos en [Supabase testing](SUPABASE_TESTING_CALIDAD.md). La antigua configuración opcional fue retirada.
 
 ## 6. Niveles de prueba y línea base
 

@@ -1,0 +1,37 @@
+{
+  "method": "GitHub plugin read after authenticated CLI mutations",
+  "issues": [
+    {
+      "number": 1,
+      "state": "open",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/1",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 6,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 8,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 9,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+      "assignees": [
+        "AxAzc"
+      ]
+    }
+  ]
+}

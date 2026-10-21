@@ -1,5 +1,7 @@
 # Trabajo Práctico Integrador de Calidad de Software
 
+**Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
+
 ## Evaluación del primer MVP de EQUITAS
 
 | Dato | Información |
@@ -12,7 +14,7 @@
 | Integrantes | Ignacio Magoia, Axel Azcune e Imanol Decara. Legajos pendientes. |
 | Docente | **PENDIENTE:** completar. |
 | Fecha de presentación | 26 de octubre de 2026 |
-| Versión del documento | 1.6 — Casos, tickets y trazabilidad formalizados E05, 21/10/2026 |
+| Versión del documento | 1.7 — Integración real y autorización en testing verificadas E06, 21/10/2026 |
 
 > **Nota de integridad académica.** Este informe contiene solamente resultados obtenidos durante las ejecuciones documentadas en el repositorio. Las actividades no realizadas se identifican explícitamente como **PENDIENTE**; no se simulan capturas, métricas ni validaciones externas.
 
@@ -241,7 +243,7 @@ Las pruebas se diseñaron para aislar dependencias externas mediante mocks, `mon
 | Auth/RLS simulada | `front/tests/integration/auth-service.integration.test.ts` | 4 aprobadas: acceso autorizado, usuario/dato inválido y permisos denegados. |
 | ETL extracción → transformación → carga simulada | `back/tests/integration/test_etl_pipeline_integration.py` | 3 aprobadas: flujo, duplicados/idempotencia e inválidos/fallo de carga. |
 | Retry del loader | `back/tests/integration/test_supabase_loader_integration.py` | 5 aprobadas: errores transitorios y agotamiento de reintentos. |
-| Supabase real de testing | `front/tests/integration/supabase-testing.integration.test.ts` | **Omitida:** faltan URL, publishable key y usuario del proyecto de testing. |
+| Supabase real de testing E06 | `front/tests/external/supabase.integration.test.ts` | **12/12 aprobadas** por Auth/Data API reales en testing aislado; ver actualización E06 y ficha. |
 
 La prueba real opcional es de solo lectura y no usa `service_role`. No se intentó conexión a Supabase de producción durante las ejecuciones registradas.
 
@@ -468,7 +470,7 @@ No se confirmaron defectos funcionales a partir de las 94 pruebas aprobadas. Los
 | FE-P-02 | Login, carga y recurso inexistente. | `front/tests/pages/static-pages.test.ts` | Aprobado. | Ninguno confirmado. |
 | FE-I-01 | Lectura y errores Supabase simulados. | `front/tests/integration/raw-debtor-loader.integration.test.ts` | Aprobado. | Ninguno confirmado. |
 | FE-I-02 | Autorización usuario–tenant simulada. | `front/tests/integration/auth-service.integration.test.ts` | Aprobado. | Ninguno confirmado. |
-| FE-I-03 | Lectura real de Supabase testing. | `front/tests/integration/supabase-testing.integration.test.ts` | Omitido. | **Pendiente:** entorno de testing. |
+| FE-I-03 / E06 | Auth y lectura real de Supabase testing. | `front/tests/external/supabase.integration.test.ts` | 12 variantes aprobadas. | Testing preparado; CI main real sin skips. |
 | BE-U-01 | Extracción y transformación TSV. | `back/tests/test_extract.py`, `back/tests/test_transform.py` | Aprobado. | Ninguno confirmado. |
 | BE-U-02 | Carga, deduplicación e idempotencia simulada. | `back/tests/test_load_unit.py`, `back/tests/test_load_extended.py` | Aprobado. | Ninguno confirmado. |
 | BE-U-03 | Scoring y grupos operativos. | `back/tests/test_scoring_service.py` | Aprobado. | Ninguno confirmado. |
