@@ -114,3 +114,6 @@ back/data/processed/**
 
 # Generated Excel previews
 *.xlsx
+
+# Local project context
+original_conversation_*.json

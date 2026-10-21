@@ -1,0 +1,2121 @@
+{
+  "observed_at": "2026-10-21T18:49:43Z",
+  "project_id": "folyslqzqvnpolexcxjo",
+  "scope": "Observed catalog snapshot, not a migration and contains no business-row payloads",
+  "columns": [
+    {
+      "table_name": "address",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 2,
+      "column_name": "person",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 3,
+      "column_name": "street",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 4,
+      "column_name": "number",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 5,
+      "column_name": "neighborhood",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 6,
+      "column_name": "city",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 7,
+      "column_name": "floor",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 8,
+      "column_name": "apartment",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 9,
+      "column_name": "tower",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 10,
+      "column_name": "building_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 11,
+      "column_name": "lot",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 12,
+      "column_name": "block",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 13,
+      "column_name": "reference",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 14,
+      "column_name": "coordinates",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "address",
+      "ordinal_position": 15,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "city",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "city",
+      "ordinal_position": 2,
+      "column_name": "province",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "city",
+      "ordinal_position": 3,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "city",
+      "ordinal_position": 4,
+      "column_name": "postal_code",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "city",
+      "ordinal_position": 5,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "contact_type",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "contact_type",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "contact_type",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "contact_type",
+      "ordinal_position": 4,
+      "column_name": "priority",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "contact_type",
+      "ordinal_position": 5,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "currency",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "currency",
+      "ordinal_position": 2,
+      "column_name": "code",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "currency",
+      "ordinal_position": 3,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "currency",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 2,
+      "column_name": "tenant",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 3,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 4,
+      "column_name": "type",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 5,
+      "column_name": "connection_info",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source",
+      "ordinal_position": 6,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "data_source_type",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source_type",
+      "ordinal_position": 2,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source_type",
+      "ordinal_position": 3,
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "data_source_type",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 2,
+      "column_name": "external_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 3,
+      "column_name": "debtor",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 4,
+      "column_name": "type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 5,
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 6,
+      "column_name": "original_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 7,
+      "column_name": "current_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 8,
+      "column_name": "updated_amount",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 9,
+      "column_name": "currency",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 10,
+      "column_name": "issue_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 11,
+      "column_name": "due_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 12,
+      "column_name": "last_collection_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 13,
+      "column_name": "period",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt",
+      "ordinal_position": 14,
+      "column_name": "status",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt_status",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt_status",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt_status",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debt_status",
+      "ordinal_position": 4,
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debt_status",
+      "ordinal_position": 5,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 2,
+      "column_name": "tenant",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 3,
+      "column_name": "external_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 4,
+      "column_name": "type",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 5,
+      "column_name": "identifier",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 6,
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor",
+      "ordinal_position": 7,
+      "column_name": "status",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor_contact",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_contact",
+      "ordinal_position": 2,
+      "column_name": "person",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_contact",
+      "ordinal_position": 3,
+      "column_name": "type",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_contact",
+      "ordinal_position": 4,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_contact",
+      "ordinal_position": 5,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 2,
+      "column_name": "debtor",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 3,
+      "column_name": "person",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 4,
+      "column_name": "priority",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 5,
+      "column_name": "role",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_person",
+      "ordinal_position": 6,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 2,
+      "column_name": "debtor",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 3,
+      "column_name": "total_debt_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 4,
+      "column_name": "overdue_debt_amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 5,
+      "column_name": "debt_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 6,
+      "column_name": "overdue_debt_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 7,
+      "column_name": "oldest_debt_days",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 8,
+      "column_name": "average_debt_age_days",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 9,
+      "column_name": "active_person_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 10,
+      "column_name": "available_contact_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 11,
+      "column_name": "previous_contact_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 12,
+      "column_name": "previous_response_count",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 13,
+      "column_name": "socioeconomic_risk_level",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 14,
+      "column_name": "profile_generated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile",
+      "ordinal_position": 15,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 2,
+      "column_name": "debtor_profile",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 3,
+      "column_name": "person",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 4,
+      "column_name": "risk_value",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 5,
+      "column_name": "reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "ordinal_position": 6,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "debtor_type",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_type",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_type",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "debtor_type",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "document_type",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "document_type",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "document_type",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "document_type",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 2,
+      "column_name": "external_id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 3,
+      "column_name": "document_type",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 4,
+      "column_name": "document_number",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 5,
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 6,
+      "column_name": "type",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 7,
+      "column_name": "birth_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person",
+      "ordinal_position": 8,
+      "column_name": "status",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "person_status",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_status",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_status",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_status",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "person_type",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_type",
+      "ordinal_position": 2,
+      "column_name": "key",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_type",
+      "ordinal_position": 3,
+      "column_name": "value",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "person_type",
+      "ordinal_position": 4,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "province",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "province",
+      "ordinal_position": 2,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "province",
+      "ordinal_position": 3,
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "role",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "role",
+      "ordinal_position": 2,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "role",
+      "ordinal_position": 3,
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 2,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 3,
+      "column_name": "legal_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 4,
+      "column_name": "schema_name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 5,
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'ACTIVE'::text"
+    },
+    {
+      "table_name": "tenant",
+      "ordinal_position": 6,
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 2,
+      "column_name": "tenant",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 3,
+      "column_name": "user",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 4,
+      "column_name": "role",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 5,
+      "column_name": "status",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "table_name": "tenant_user",
+      "ordinal_position": 6,
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 1,
+      "column_name": "id",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 2,
+      "column_name": "auth_user",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 3,
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 4,
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 5,
+      "column_name": "password_hash",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 6,
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'ACTIVE'::text"
+    },
+    {
+      "table_name": "user",
+      "ordinal_position": 7,
+      "column_name": "last_login_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "address",
+      "constraint_name": "address_city_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (city) REFERENCES city(id)"
+    },
+    {
+      "table_name": "address",
+      "constraint_name": "address_person_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (person) REFERENCES person(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "address",
+      "constraint_name": "address_person_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (person)"
+    },
+    {
+      "table_name": "address",
+      "constraint_name": "address_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "city",
+      "constraint_name": "city_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "city",
+      "constraint_name": "city_province_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (province) REFERENCES province(id)"
+    },
+    {
+      "table_name": "city",
+      "constraint_name": "city_province_name_postal_code_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (province, name, postal_code)"
+    },
+    {
+      "table_name": "contact_type",
+      "constraint_name": "contact_type_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "contact_type",
+      "constraint_name": "contact_type_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "currency",
+      "constraint_name": "currency_code_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (code)"
+    },
+    {
+      "table_name": "currency",
+      "constraint_name": "currency_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "data_source",
+      "constraint_name": "data_source_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "data_source",
+      "constraint_name": "data_source_tenant_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tenant) REFERENCES tenant(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "data_source",
+      "constraint_name": "data_source_type_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (type) REFERENCES data_source_type(id)"
+    },
+    {
+      "table_name": "data_source_type",
+      "constraint_name": "data_source_type_name_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (name)"
+    },
+    {
+      "table_name": "data_source_type",
+      "constraint_name": "data_source_type_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debt",
+      "constraint_name": "debt_currency_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (currency) REFERENCES currency(id)"
+    },
+    {
+      "table_name": "debt",
+      "constraint_name": "debt_debtor_external_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (debtor, external_id)"
+    },
+    {
+      "table_name": "debt",
+      "constraint_name": "debt_debtor_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (debtor) REFERENCES debtor(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debt",
+      "constraint_name": "debt_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debt",
+      "constraint_name": "debt_status_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (status) REFERENCES debt_status(id)"
+    },
+    {
+      "table_name": "debt_status",
+      "constraint_name": "debt_status_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "debt_status",
+      "constraint_name": "debt_status_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor",
+      "constraint_name": "debtor_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor",
+      "constraint_name": "debtor_tenant_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tenant) REFERENCES tenant(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor",
+      "constraint_name": "debtor_tenant_type_external_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (tenant, type, external_id)"
+    },
+    {
+      "table_name": "debtor",
+      "constraint_name": "debtor_type_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (type) REFERENCES debtor_type(id)"
+    },
+    {
+      "table_name": "debtor_contact",
+      "constraint_name": "debtor_contact_person_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (person) REFERENCES person(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_contact",
+      "constraint_name": "debtor_contact_person_type_value_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (person, type, value)"
+    },
+    {
+      "table_name": "debtor_contact",
+      "constraint_name": "debtor_contact_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor_contact",
+      "constraint_name": "debtor_contact_type_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (type) REFERENCES contact_type(id)"
+    },
+    {
+      "table_name": "debtor_person",
+      "constraint_name": "debtor_person_debtor_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (debtor) REFERENCES debtor(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_person",
+      "constraint_name": "debtor_person_debtor_person_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (debtor, person)"
+    },
+    {
+      "table_name": "debtor_person",
+      "constraint_name": "debtor_person_person_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (person) REFERENCES person(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_person",
+      "constraint_name": "debtor_person_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor_profile",
+      "constraint_name": "debtor_profile_debtor_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (debtor) REFERENCES debtor(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_profile",
+      "constraint_name": "debtor_profile_debtor_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (debtor)"
+    },
+    {
+      "table_name": "debtor_profile",
+      "constraint_name": "debtor_profile_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor_profile",
+      "constraint_name": "debtor_profile_socioeconomic_risk_level_check",
+      "constraint_type": "c",
+      "definition": "CHECK (((socioeconomic_risk_level >= 0) AND (socioeconomic_risk_level <= 100)))"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "constraint_name": "debtor_profile_detail_debtor_profile_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (debtor_profile) REFERENCES debtor_profile(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "constraint_name": "debtor_profile_detail_debtor_profile_person_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (debtor_profile, person)"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "constraint_name": "debtor_profile_detail_person_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (person) REFERENCES person(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "constraint_name": "debtor_profile_detail_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "constraint_name": "debtor_profile_detail_risk_value_check",
+      "constraint_type": "c",
+      "definition": "CHECK (((risk_value >= (0)::numeric) AND (risk_value <= (100)::numeric)))"
+    },
+    {
+      "table_name": "debtor_type",
+      "constraint_name": "debtor_type_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "debtor_type",
+      "constraint_name": "debtor_type_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "document_type",
+      "constraint_name": "document_type_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "document_type",
+      "constraint_name": "document_type_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "person",
+      "constraint_name": "person_document_type_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (document_type) REFERENCES document_type(id)"
+    },
+    {
+      "table_name": "person",
+      "constraint_name": "person_external_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (external_id)"
+    },
+    {
+      "table_name": "person",
+      "constraint_name": "person_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "person",
+      "constraint_name": "person_status_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (status) REFERENCES person_status(id)"
+    },
+    {
+      "table_name": "person",
+      "constraint_name": "person_type_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (type) REFERENCES person_type(id)"
+    },
+    {
+      "table_name": "person_status",
+      "constraint_name": "person_status_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "person_status",
+      "constraint_name": "person_status_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "person_type",
+      "constraint_name": "person_type_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (key)"
+    },
+    {
+      "table_name": "person_type",
+      "constraint_name": "person_type_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "province",
+      "constraint_name": "province_name_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (name)"
+    },
+    {
+      "table_name": "province",
+      "constraint_name": "province_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "role",
+      "constraint_name": "role_name_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (name)"
+    },
+    {
+      "table_name": "role",
+      "constraint_name": "role_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tenant",
+      "constraint_name": "tenant_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tenant_user",
+      "constraint_name": "tenant_user_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tenant_user",
+      "constraint_name": "tenant_user_role_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (role) REFERENCES role(id)"
+    },
+    {
+      "table_name": "tenant_user",
+      "constraint_name": "tenant_user_tenant_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tenant) REFERENCES tenant(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "tenant_user",
+      "constraint_name": "tenant_user_tenant_user_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (tenant, \"user\")"
+    },
+    {
+      "table_name": "tenant_user",
+      "constraint_name": "tenant_user_user_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (\"user\") REFERENCES \"user\"(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "user",
+      "constraint_name": "user_auth_user_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (auth_user) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "user",
+      "constraint_name": "user_auth_user_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (auth_user)"
+    },
+    {
+      "table_name": "user",
+      "constraint_name": "user_email_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (email)"
+    },
+    {
+      "table_name": "user",
+      "constraint_name": "user_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "address",
+      "policyname": "authenticated_read_address",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "city",
+      "policyname": "authenticated_read_city",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "contact_type",
+      "policyname": "authenticated_read_contact_type",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "currency",
+      "policyname": "authenticated_read_currency",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "data_source",
+      "policyname": "authenticated_read_data_source",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "data_source_type",
+      "policyname": "authenticated_read_data_source_type",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debt",
+      "policyname": "authenticated_read_debt",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debt_status",
+      "policyname": "authenticated_read_debt_status",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor",
+      "policyname": "authenticated_read_debtor",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor_contact",
+      "policyname": "authenticated_read_debtor_contact",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor_person",
+      "policyname": "authenticated_read_debtor_person",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor_profile",
+      "policyname": "authenticated_read_debtor_profile",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor_profile_detail",
+      "policyname": "authenticated_read_debtor_profile_detail",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "debtor_type",
+      "policyname": "authenticated_read_debtor_type",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "document_type",
+      "policyname": "authenticated_read_document_type",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "person",
+      "policyname": "authenticated_read_person",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "person_status",
+      "policyname": "authenticated_read_person_status",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "person_type",
+      "policyname": "authenticated_read_person_type",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "province",
+      "policyname": "authenticated_read_province",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "role",
+      "policyname": "authenticated_read_role",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenant",
+      "policyname": "authenticated_read_tenant",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tenant_user",
+      "policyname": "authenticated_read_tenant_user",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user",
+      "policyname": "authenticated_read_user",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    }
+  ],
+  "privileges": [
+    {
+      "table_name": "address",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "city",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "contact_type",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "currency",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "data_source",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "data_source_type",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debt",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debt_status",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor_contact",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor_person",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor_profile",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor_profile_detail",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "debtor_type",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "document_type",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "person",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "person_status",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "person_type",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "province",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "role",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "tenant",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "tenant_user",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    },
+    {
+      "table_name": "user",
+      "rls_enabled": true,
+      "rls_forced": false,
+      "anon_select": true,
+      "authenticated_select": true,
+      "authenticated_insert": true,
+      "authenticated_update": true,
+      "authenticated_delete": true
+    }
+  ],
+  "functions_and_views": {
+    "views": [],
+    "functions": [
+      {
+        "name": "rls_auto_enable",
+        "definition": "CREATE OR REPLACE FUNCTION public.rls_auto_enable()\n RETURNS event_trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$\nDECLARE\n  cmd record;\nBEGIN\n  FOR cmd IN\n    SELECT *\n    FROM pg_event_trigger_ddl_commands()\n    WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')\n      AND object_type IN ('table','partitioned table')\n  LOOP\n     IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN\n      BEGIN\n        EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);\n        RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;\n      EXCEPTION\n        WHEN OTHERS THEN\n          RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;\n      END;\n     ELSE\n        RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;\n     END IF;\n  END LOOP;\nEND;\n$function$\n",
+        "return_type": "event_trigger",
+        "anon_execute": true,
+        "configuration": [
+          "search_path=pg_catalog"
+        ],
+        "security_definer": true,
+        "identity_arguments": "",
+        "authenticated_execute": true
+      }
+    ],
+    "event_triggers": [
+      {
+        "name": "issue_graphql_placeholder",
+        "event": "sql_drop",
+        "enabled": "O"
+      },
+      {
+        "name": "pgrst_ddl_watch",
+        "event": "ddl_command_end",
+        "enabled": "O"
+      },
+      {
+        "name": "pgrst_drop_watch",
+        "event": "sql_drop",
+        "enabled": "O"
+      },
+      {
+        "name": "issue_pg_cron_access",
+        "event": "ddl_command_end",
+        "enabled": "O"
+      },
+      {
+        "name": "issue_pg_net_access",
+        "event": "ddl_command_end",
+        "enabled": "O"
+      },
+      {
+        "name": "issue_pg_graphql_access",
+        "event": "ddl_command_end",
+        "enabled": "O"
+      },
+      {
+        "name": "ensure_rls",
+        "event": "ddl_command_end",
+        "enabled": "O"
+      }
+    ]
+  }
+}

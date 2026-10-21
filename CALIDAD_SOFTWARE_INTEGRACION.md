@@ -1,5 +1,7 @@
 # Pruebas de integracion - TP Integrador de Calidad de Software
 
+> **Actualización del 21/10/2026:** las secciones iniciales describen las suites históricas y su prueba Auth opcional omitida. Se amplió la revisión al proyecto real mediante el plugin Supabase: esquema, políticas, conteos e integridad fueron inspeccionados y se reprodujo un defecto de autorización sin pertenencia. El detalle está en `REVISION_SUPABASE.md`; la prueba Auth de Vitest no se ejecutó como parte de esa inspección.
+
 ## Alcance
 
 Esta etapa incorpora pruebas de integracion para el MVP Nivel 2 sin escribir datos en Supabase ni ejecutar cargas reales. Se distinguen las pruebas simuladas, que se ejecutan siempre, de la prueba real opcional contra un proyecto exclusivo de testing.
@@ -103,3 +105,13 @@ Desde `back`:
 ## Actualización de regresión
 
 En la ejecución ampliada del 16 de octubre de 2026, las integraciones simuladas continuaron aprobando dentro de las suites completas: 8 de frontend y 8 de backend. La prueba de lectura real contra Supabase de testing permaneció omitida por ausencia de variables de entorno específicas de testing; no se intentó ninguna conexión a producción. El total final de las suites fue 94 pruebas aprobadas, 0 fallidas y 1 omitida. Ver `INFORME_TP_CALIDAD_SOFTWARE.md` para la cobertura y trazabilidad consolidadas.
+
+## Revisión real por plugin Supabase — 21/10/2026
+
+Proyecto identificado: EQUITAS, referencia `folyslqzqvnpolexcxjo`, estado `ACTIVE_HEALTHY`. Se observaron 23 tablas públicas con RLS y se comprobaron exactamente 2.933 objetos, 56.286 deudas y 2.493 personas. Las claves únicas y relaciones respaldan la deduplicación; los agregados seleccionados no mostraron duplicados, huérfanos ni discrepancias de conteo o importe de perfiles.
+
+La prueba `SUP-RLS-01` con rol anónimo devolvió cero filas. La prueba `SUP-RLS-02`, con rol autenticado y una identidad sintética sin usuario de aplicación ni pertenencia activa, pudo contar toda la cartera. Sus políticas SELECT son `TO authenticated USING (true)`. Este comportamiento incumple el criterio de autorización por tenant y se registró como **DEF-SUP-001**, abierto, en `REGISTRO_DEFECTOS_CALIDAD.md`.
+
+Las consultas de roles utilizaron `BEGIN READ ONLY`, configuración local y `ROLLBACK`; no se crearon usuarios ni se obtuvieron JWT. La verificación prueba el comportamiento RLS de PostgreSQL, no un login real por HTTP ni la sesión SSR del frontend. La suite conserva sus 94 aprobadas y una omitida: esta inspección no se suma a ese recuento ni declara completado el flujo de testing del cliente.
+
+Evidencias: `evidencias/supabase-2026-10-21.json`, `database/schema-observado-2026-10-21.json` y `database/verificacion_supabase_solo_lectura.sql`. No hay branches de desarrollo ni migraciones devueltas por el plugin. Para cerrar la integración de aplicación y el rojo/verde siguen pendientes un entorno de testing, el tratamiento del defecto, la repetición del caso y la regresión automatizada.

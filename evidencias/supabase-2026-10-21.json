@@ -1,0 +1,426 @@
+{
+  "observed_at": "2026-10-21T18:49:43Z",
+  "method": "Supabase MCP connector; metadata, aggregates and READ ONLY transactions rolled back",
+  "project": {
+    "id": "folyslqzqvnpolexcxjo",
+    "name": "EQUITAS",
+    "status": "ACTIVE_HEALTHY",
+    "region": "us-east-2",
+    "postgres_version": "17.6.1.166"
+  },
+  "schema_summary": {
+    "tables": 23,
+    "columns": 146,
+    "primary_keys": 23,
+    "foreign_keys": 24,
+    "unique_constraints": 22,
+    "check_constraints": 2,
+    "rls_enabled_tables": 23,
+    "select_policies": 23,
+    "all_authenticated_select_policies_using_true": true
+  },
+  "exact_counts": {
+    "debt": 56286,
+    "debtor": 2933,
+    "person": 2493,
+    "tenant": 1,
+    "app_user": 1,
+    "auth_users": 1,
+    "tenant_user": 1,
+    "debtor_person": 3007,
+    "debtor_contact": 2289,
+    "debtor_profile": 2933,
+    "debtor_profile_detail": 3007
+  },
+  "integrity": {
+    "active_memberships": 1,
+    "duplicate_debt_keys": 0,
+    "debts_without_debtor": 0,
+    "app_users_without_auth": 0,
+    "debtors_without_profile": 0,
+    "profile_debt_count_mismatches": 0
+  },
+  "contract_checks": {
+    "debtor_types": [
+      {
+        "count": 37,
+        "type_key": "INMUEBLE"
+      },
+      {
+        "count": 1832,
+        "type_key": "RODADO"
+      },
+      {
+        "count": 1064,
+        "type_key": "AGUA"
+      }
+    ],
+    "postgrest_role_settings": [],
+    "debt_amount_profile_mismatches": 0,
+    "auth_registered_without_membership": 0
+  },
+  "probes": {
+    "anonymous": {
+      "database_role": "anon",
+      "visible_debtors": 0,
+      "visible_debts": 0,
+      "visible_people": 0,
+      "visible_app_users": 0
+    },
+    "authenticated_without_membership": {
+      "database_role": "authenticated",
+      "synthetic_identity_applied": true,
+      "matching_app_users": 0,
+      "matching_active_memberships": 0,
+      "visible_debtors": 2933,
+      "visible_debts": 56286,
+      "visible_people": 2493,
+      "visible_app_users": 1
+    }
+  },
+  "security_advisors": [
+    {
+      "name": "anon_security_definer_function_executable",
+      "title": "Public Can Execute SECURITY DEFINER Function",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "SECURITY"
+      ],
+      "description": "Detects `SECURITY DEFINER` functions that are callable without signing in. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if it is not meant to be public.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable",
+      "count": 1,
+      "findings": [
+        {
+          "detail": "Function `public.rls_auto_enable()` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/rls_auto_enable`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+          "metadata": {
+            "name": "rls_auto_enable",
+            "schema": "public",
+            "language": "plpgsql",
+            "arguments": "",
+            "security_definer": true
+          },
+          "observed_at": "2026-10-21T18:46:36.571Z"
+        }
+      ]
+    },
+    {
+      "name": "authenticated_security_definer_function_executable",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "SECURITY"
+      ],
+      "description": "Detects `SECURITY DEFINER` functions that are callable by signed-in users. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if signed-in users should not call it.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable",
+      "count": 1,
+      "findings": [
+        {
+          "detail": "Function `public.rls_auto_enable()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/rls_auto_enable`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+          "metadata": {
+            "name": "rls_auto_enable",
+            "schema": "public",
+            "language": "plpgsql",
+            "arguments": "",
+            "security_definer": true
+          },
+          "observed_at": "2026-10-21T18:46:36.571Z"
+        }
+      ]
+    },
+    {
+      "name": "auth_leaked_password_protection",
+      "title": "Leaked Password Protection Disabled",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "SECURITY"
+      ],
+      "description": "Leaked password protection is currently disabled.",
+      "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+      "count": 1,
+      "findings": [
+        {
+          "detail": "Supabase Auth prevents the use of compromised passwords by checking against HaveIBeenPwned.org. Enable this feature to enhance security.",
+          "metadata": {
+            "type": "auth",
+            "entity": "Auth"
+          }
+        }
+      ]
+    }
+  ],
+  "performance_advisors": [
+    {
+      "name": "unindexed_foreign_keys",
+      "title": "Unindexed foreign keys",
+      "level": "INFO",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Identifies foreign key constraints without a covering index, which can impact database performance.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys",
+      "count": 10,
+      "findings": [
+        {
+          "detail": "Table \\`public.address\\` has a foreign key \\`address_city_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "address",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "address_city_fkey",
+            "fkey_columns": [
+              6
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.data_source\\` has a foreign key \\`data_source_tenant_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "data_source",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "data_source_tenant_fkey",
+            "fkey_columns": [
+              2
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.data_source\\` has a foreign key \\`data_source_type_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "data_source",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "data_source_type_fkey",
+            "fkey_columns": [
+              4
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.debt\\` has a foreign key \\`debt_currency_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "debt",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "debt_currency_fkey",
+            "fkey_columns": [
+              9
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.debtor_contact\\` has a foreign key \\`debtor_contact_type_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "debtor_contact",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "debtor_contact_type_fkey",
+            "fkey_columns": [
+              3
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.person\\` has a foreign key \\`person_document_type_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "person",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "person_document_type_fkey",
+            "fkey_columns": [
+              3
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.person\\` has a foreign key \\`person_status_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "person",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "person_status_fkey",
+            "fkey_columns": [
+              8
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.person\\` has a foreign key \\`person_type_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "person",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "person_type_fkey",
+            "fkey_columns": [
+              6
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.tenant_user\\` has a foreign key \\`tenant_user_role_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "tenant_user",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "tenant_user_role_fkey",
+            "fkey_columns": [
+              4
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Table \\`public.tenant_user\\` has a foreign key \\`tenant_user_user_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+          "metadata": {
+            "name": "tenant_user",
+            "type": "table",
+            "schema": "public",
+            "fkey_name": "tenant_user_user_fkey",
+            "fkey_columns": [
+              3
+            ]
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        }
+      ]
+    },
+    {
+      "name": "unused_index",
+      "title": "Unused Index",
+      "level": "INFO",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if an index has never been used and may be a candidate for removal.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index",
+      "count": 9,
+      "findings": [
+        {
+          "detail": "Index \\`idx_person_external_id\\` on table \\`public.person\\` has not been used",
+          "metadata": {
+            "name": "person",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_person_document_number\\` on table \\`public.person\\` has not been used",
+          "metadata": {
+            "name": "person",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_debtor_type\\` on table \\`public.debtor\\` has not been used",
+          "metadata": {
+            "name": "debtor",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_debtor_external_id\\` on table \\`public.debtor\\` has not been used",
+          "metadata": {
+            "name": "debtor",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_debtor_person_debtor\\` on table \\`public.debtor_person\\` has not been used",
+          "metadata": {
+            "name": "debtor_person",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_debtor_person_person\\` on table \\`public.debtor_person\\` has not been used",
+          "metadata": {
+            "name": "debtor_person",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_debt_due_date\\` on table \\`public.debt\\` has not been used",
+          "metadata": {
+            "name": "debt",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_contact_person\\` on table \\`public.debtor_contact\\` has not been used",
+          "metadata": {
+            "name": "debtor_contact",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        },
+        {
+          "detail": "Index \\`idx_profile_detail_person\\` on table \\`public.debtor_profile_detail\\` has not been used",
+          "metadata": {
+            "name": "debtor_profile_detail",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-10-21T18:48:15.327Z"
+        }
+      ]
+    }
+  ],
+  "branches": [],
+  "migrations": [],
+  "edge_functions": [],
+  "findings": [
+    {
+      "id": "DEF-SUP-001",
+      "status": "open",
+      "severity": "high",
+      "case_id": "SUP-RLS-02",
+      "expected": "A subject with no app user or active tenant membership sees zero business rows",
+      "actual": "Synthetic authenticated database role without membership can count every business row",
+      "scope": "Real Postgres RLS authorization check; no signed JWT or HTTP login was tested"
+    },
+    {
+      "id": "DEF-DAT-001",
+      "status": "open",
+      "severity": "high",
+      "case_id": "SUP-DATA-01",
+      "expected": "Debt summaries use the full authorized dataset",
+      "actual": "Database contains 56286 debts, while frontend requests at most 3000 without DB pagination",
+      "scope": "Confirmed code/data-volume incompatibility; authenticated UI totals have not been independently measured"
+    }
+  ],
+  "limitations": [
+    "No persistent changes, data loads, users, branches or migrations created",
+    "No real Auth sign-in, password retrieval, token issuance or authenticated HTTP API journey",
+    "Only one tenant and one account exist; no two-real-tenant journey executed",
+    "Role simulation tests SQL/RLS only; synthetic subject does not assert valid JWT issuance",
+    "MCP management access does not replace the application's skipped Supabase testing suite",
+    "No stress or sustained load was run against this project"
+  ]
+}

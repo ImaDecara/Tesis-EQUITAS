@@ -12,9 +12,11 @@
 | Integrantes | **PENDIENTE:** completar nombres y legajos. |
 | Docente | **PENDIENTE:** completar. |
 | Fecha de presentación | 26 de octubre de 2026 |
-| Versión del documento | 1.0 — Consolidación de resultados verificados |
+| Versión del documento | 1.1 — Ampliación de revisión Supabase, 21/10/2026 |
 
 > **Nota de integridad académica.** Este informe contiene solamente resultados obtenidos durante las ejecuciones documentadas en el repositorio. Las actividades no realizadas se identifican explícitamente como **PENDIENTE**; no se simulan capturas, métricas ni validaciones externas.
+
+> **Actualización del 21/10/2026.** El cuerpo original conserva la etapa de pruebas y planificación del 16/10. La nueva ejecución local reprodujo las 94 pruebas aprobadas y una omitida. Además, se inspeccionó Supabase real por plugin: 23 tablas, 2.933 objetos, 56.286 deudas y consistencia de los agregados seleccionados. Se reprodujo un defecto de autorización RLS: el rol autenticado sin pertenencia accede a conteos de toda la cartera. También se confirmó que el volumen supera el límite de lectura de la web. Ambos están abiertos en `REGISTRO_DEFECTOS_CALIDAD.md`. El alcance y evidencias actuales están en `REVISION_SUPABASE.md` y `DIAGNOSTICO_CIERRE_CALIDAD.md`; estas actualizaciones prevalecen sobre los estados históricos de «sin defectos confirmados» o «servicio externo no inspeccionado». La prueba Auth del cliente sigue omitida y CI/CD, smoke, cargas y rojo/verde completo siguen pendientes. No se aplicaron cambios a Supabase.
 
 ---
 

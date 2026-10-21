@@ -1,0 +1,151 @@
+{
+  "recorded_at": "2026-10-21T13:34:21.327915-03:00",
+  "commit": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+  "scope": "Local diagnostic; does not certify external integration, post-deploy smoke or performance",
+  "source_sha256": {
+    "consigna_pdf.md": "db784bacf8ef64bf1a7eb6325994d3004585a68d2a9164025c9889a36bc936f7",
+    "tp-Calidad.md": "0940a349d00c1a9ea42b20072339c06ca052c7b294a2a560ef84e4ddf8803c89",
+    "INFORME_TP_CALIDAD_SOFTWARE.md": "89b50e5b412203b7e8464c5506c1063ea6f8e6e0043b4521727ff4c7c85781fc"
+  },
+  "runtime": {
+    "node": "v22.23.2",
+    "python": "Python 3.12.14"
+  },
+  "frontend": {
+    "passed": 33,
+    "failed": 0,
+    "skipped": 1,
+    "coverage": {
+      "statements": {
+        "covered": 3372,
+        "total": 5580,
+        "pct": 60.43010752688172
+      },
+      "functions": {
+        "covered": 74,
+        "total": 135,
+        "pct": 54.81481481481482
+      },
+      "branches": {
+        "covered": 292,
+        "total": 472,
+        "pct": 61.86440677966102
+      }
+    },
+    "eslint_files": 70,
+    "eslint_errors": 0,
+    "eslint_warnings": 0,
+    "build_passed": true
+  },
+  "backend": {
+    "pytest_summary": "======================== 61 passed, 1 warning in 5.72s ========================",
+    "coverage": {
+      "covered_lines": 1255,
+      "num_statements": 1472,
+      "percent_covered": 80.91370558375634,
+      "percent_covered_display": "81",
+      "missing_lines": 217,
+      "excluded_lines": 0,
+      "percent_statements_covered": 85.25815217391305,
+      "percent_statements_covered_display": "85",
+      "num_branches": 498,
+      "num_partial_branches": 129,
+      "covered_branches": 339,
+      "missing_branches": 159,
+      "percent_branches_covered": 68.07228915662651,
+      "percent_branches_covered_display": "68"
+    },
+    "ruff_findings": 19,
+    "ruff_rules": {
+      "I001": 8,
+      "F401": 2,
+      "C401": 1,
+      "UP035": 1,
+      "TRY004": 3,
+      "F841": 1,
+      "RUF046": 1,
+      "UP017": 1,
+      "SIM118": 1
+    },
+    "ruff_files": 8,
+    "ruff_working_directory": "back"
+  },
+  "duplication": {
+    "clones": 38,
+    "duplicatedLines": 474,
+    "duplicatedTokens": 2742,
+    "lines": 11188,
+    "newClones": 0,
+    "newDuplicatedLines": 0,
+    "percentage": 4.23668215945656,
+    "percentageTokens": 5.1561706688730515,
+    "sources": 62,
+    "tokens": 53179
+  },
+  "npm_audit": {
+    "info": 0,
+    "low": 1,
+    "moderate": 2,
+    "high": 12,
+    "critical": 4,
+    "total": 19
+  },
+  "local_http_checks": [
+    {
+      "service": "backend",
+      "path": "/health",
+      "status": 200,
+      "expected_status": 200,
+      "marker": "\"status\":\"ok\"",
+      "passed": true
+    },
+    {
+      "service": "backend",
+      "path": "/case-groups/definitions",
+      "status": 200,
+      "expected_status": 200,
+      "marker": "critical_no_contact",
+      "passed": true
+    },
+    {
+      "service": "backend",
+      "path": "/case-groups?limit=0",
+      "status": 422,
+      "expected_status": 422,
+      "marker": "greater_than_equal",
+      "passed": true
+    },
+    {
+      "service": "frontend",
+      "path": "/login",
+      "status": 200,
+      "expected_status": 200,
+      "marker": "Iniciar sesion",
+      "passed": true
+    },
+    {
+      "service": "frontend",
+      "path": "/",
+      "status": 200,
+      "expected_status": 200,
+      "marker": "Validando sesion",
+      "passed": true
+    },
+    {
+      "service": "frontend",
+      "path": "/ruta-de-auditoria-inexistente",
+      "status": 404,
+      "expected_status": 404,
+      "marker": "Objeto de deuda no encontrado",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Real Supabase test skipped: testing credentials not configured",
+    "No authenticated browser journey or real RLS validation",
+    "No stress or sustained-load execution",
+    "No pipeline or deployed smoke execution",
+    "Initial build failed on blocked Google Fonts download; network-enabled retry passed",
+    "Initial HTTP assertions were corrected to match the actual login fallback and Spanish not-found page"
+  ]
+}
