@@ -13,6 +13,8 @@ vi.mock('@/lib/supabase-server', () => ({
 }))
 
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
+import type { RawRow } from '@/types/equitas-domain'
+import { createPaginatedSupabase } from '../fixtures/paginated-supabase'
 
 type SupabaseQueryResult = {
   data: unknown
@@ -20,17 +22,10 @@ type SupabaseQueryResult = {
 }
 
 function buildSupabaseClient(results: Record<string, SupabaseQueryResult>) {
-  const from = vi.fn((table: string) => {
-    const result = results[table] ?? { data: [], error: null }
-
-    return {
-      select: vi.fn(() => ({
-        limit: vi.fn().mockResolvedValue(result),
-      })),
-    }
-  })
-
-  return { from }
+  const tables = Object.fromEntries(Object.entries(results).map(([table, result]) => [table, (result.data ?? []) as RawRow[]]))
+  const { client } = createPaginatedSupabase(tables, { fail: (request) => results[request.table]?.error ?? null })
+  vi.spyOn(client, 'from')
+  return client
 }
 
 describe('integracion simulada de lectura de objetos de deuda', () => {
@@ -51,7 +46,8 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(result.debts).toEqual([{ id: 11, debtor: 1 }])
     expect(result.debtorTypes).toEqual([])
     expect(result.warnings).toEqual([])
-    expect(client.from).toHaveBeenCalledTimes(8)
+    // Ocho tablas y una consulta terminal adicional por cada tabla con datos.
+    expect(client.from).toHaveBeenCalledTimes(10)
   })
 
   it('acepta respuestas vacias como listados validos sin alerta', async () => {

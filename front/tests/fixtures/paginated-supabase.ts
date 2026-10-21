@@ -12,7 +12,7 @@ export type DataRequest = {
 
 type Options = {
   serverMaxRows?: number
-  fail?: (request: DataRequest) => { message: string; code?: string } | null
+  fail?: (request: DataRequest) => { message: string; code?: string | null } | null
 }
 
 // El SDK real construye las consultas; solo se sustituye el transporte HTTP.

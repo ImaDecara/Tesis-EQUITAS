@@ -1,71 +1,13 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-
-import {
-  RAW_DEBTOR_TABLE_LOAD_ORDER,
-  type RawDebtorTableName,
-} from '@/lib/data/table-names'
-import { hasSupabaseCredentials } from '@/lib/supabase-config'
+import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
+import { RAW_DEBTOR_TABLE_LOAD_ORDER } from '@/lib/data/table-names'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import type { DataWarning, RawDebtorDataBundle, RawRow } from '@/types/equitas-domain'
-
-const TABLE_LIMIT = 3000
-
-// Convierte un error de Supabase en una alerta uniforme para la interfaz.
-function buildDataWarningFromSupabaseError(
-  table: string,
-  error: { message: string; code?: string | null }
-): DataWarning {
-  const message = error.message || 'Error desconocido al leer datos'
-  const loweredMessage = message.toLowerCase()
-  const code = error.code ?? undefined
-  const needsSelectPolicy =
-    code === '42501' ||
-    loweredMessage.includes('permission denied') ||
-    loweredMessage.includes('row-level security') ||
-    loweredMessage.includes('rls')
-
-  return {
-    table,
-    message,
-    code,
-    needsSelectPolicy,
-  }
-}
-
-// Lee una tabla en crudo y nunca rompe: devuelve filas o alerta.
-async function loadRawTableRows(table: RawDebtorTableName, supabase: SupabaseClient | null) {
-  if (!supabase || !hasSupabaseCredentials) {
-    return {
-      rows: [] as RawRow[],
-      warning: {
-        table,
-        message:
-          'Credenciales de Supabase no configuradas (NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY).',
-        needsSelectPolicy: false,
-      } satisfies DataWarning,
-    }
-  }
-
-  const response = await supabase.from(table).select('*').limit(TABLE_LIMIT)
-
-  if (response.error) {
-    return {
-      rows: [] as RawRow[],
-      warning: buildDataWarningFromSupabaseError(table, response.error),
-    }
-  }
-
-  return {
-    rows: (response.data ?? []) as RawRow[],
-    warning: null,
-  }
-}
+import type { DataWarning, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // Punto de entrada de datos crudos para objetos de deuda.
 export async function loadRawDebtorData(): Promise<RawDebtorDataBundle> {
   const supabase = await createServerSupabaseClient()
   const results = await Promise.all(
-    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => loadRawTableRows(table, supabase))
+    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => loadAllTableRows(table, supabase))
   )
   const warnings = results
     .map((result) => result.warning)
