@@ -1,0 +1,2366 @@
+{
+  "version": 1,
+  "formalizado_en": "E05, 21/10/2026",
+  "responsable": "Axel Azcune",
+  "source_sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+  "source_run": 39677574195,
+  "alcance": "Catálogo de casos seleccionados E03/E04 e inspección/planificación externa. No sustituye todas las suites: el inventario conserva cada prueba real y los 162/0/1 de producto, con 41 de infraestructura aparte.",
+  "campos_heredados": "Cada ficha combina contexto y campos propios; un campo propio tiene precedencia. Los IDs de caso agrupan variantes y no son un contador de tests.",
+  "contextos": {
+    "DAT": {
+      "nivel": "Integración aislada y unidad del lector",
+      "requisitos": [
+        "R-DAT-01",
+        "R05",
+        "R06",
+        "R13",
+        "R14"
+      ],
+      "precondiciones": "Dependencias E01 preparadas; SDK real con transporte HTTP sintético, sin credenciales reales; tablas estables durante la lectura.",
+      "comando": "cd front; npm exec --no -- vitest run tests/integration/complete-data.integration.test.ts tests/unit/paginated-table-reader.test.ts",
+      "codigo": [
+        "front/tests/integration/complete-data.integration.test.ts",
+        "front/tests/unit/paginated-table-reader.test.ts"
+      ],
+      "evidencias": [
+        "evidencias/e03/comparacion-dat-06.json",
+        "evidencias/e03/aserciones-red.json",
+        "evidencias/e04/resumen-ci-normal.json"
+      ],
+      "grupo_issue": "CAS-DAT",
+      "defectos": [
+        "DEF-DAT-001"
+      ]
+    },
+    "AUTH": {
+      "nivel": "Unidad / contrato aislado Auth y pertenencia",
+      "requisitos": [
+        "R-SEG-01",
+        "R05",
+        "R06"
+      ],
+      "precondiciones": "Cliente browser sustituido por doble; respuestas de Auth/user/tenant_user sintéticas; sin consultas al servicio real.",
+      "comando": "cd front; npm exec --no -- vitest run tests/unit/auth-service.test.ts",
+      "codigo": [
+        "front/tests/unit/auth-service.test.ts"
+      ],
+      "evidencias": [
+        "evidencias/e04/resumen-ci-normal.json"
+      ],
+      "grupo_issue": "CAS-AUTH",
+      "defectos": []
+    },
+    "REC": {
+      "nivel": "Unidad de reglas de recomendación",
+      "requisitos": [
+        "R-FUN-01",
+        "R05",
+        "R06"
+      ],
+      "precondiciones": "Reglas existentes sin modificar; entradas de deuda/riesgo sintéticas.",
+      "comando": "cd front; npm exec --no -- vitest run tests/unit/recommendation-decisions.test.ts",
+      "codigo": [
+        "front/tests/unit/recommendation-decisions.test.ts"
+      ],
+      "evidencias": [
+        "evidencias/e04/resumen-ci-normal.json"
+      ],
+      "grupo_issue": "CAS-REC",
+      "defectos": []
+    },
+    "GATE": {
+      "nivel": "Infraestructura de calidad; unidad, contratos y ensayo CI",
+      "requisitos": [
+        "R07",
+        "R08",
+        "R09",
+        "R10",
+        "R17"
+      ],
+      "precondiciones": "Reportes controlados; base fija 531996f51243dc3d4c5a607338e2f35e32313f6b; umbrales 60/80/5 sin modificar.",
+      "comando": "python -m unittest discover -s quality/tests -v",
+      "codigo": [
+        "quality/tests/test_gates.py",
+        "quality/tests/test_ci.py"
+      ],
+      "evidencias": [
+        "evidencias/e04/gate-normal.json",
+        "evidencias/e04/gate-critical-probe.json",
+        "evidencias/e04/ensayo-critico.json"
+      ],
+      "grupo_issue": "CAS-GATE",
+      "defectos": []
+    },
+    "COB": {
+      "nivel": "Medición de cobertura y gate CI",
+      "requisitos": [
+        "R07",
+        "R08"
+      ],
+      "precondiciones": "Mismo alcance de 55 archivos frontend y método Vitest/V8 4.1.12; ampliación de pruebas E04.",
+      "comando": "python quality/ci.py run frontend --output .quality/nueva-ejecucion/frontend; python quality/ci.py run backend --output .quality/nueva-ejecucion/backend; python quality/ci.py summary --artifacts .quality/nueva-ejecucion --output .quality/nuevo-resumen",
+      "codigo": [
+        "quality/gates.py",
+        "front/tests/unit/auth-service.test.ts",
+        "front/tests/unit/recommendation-decisions.test.ts"
+      ],
+      "evidencias": [
+        "evidencias/e04/gate-normal.json"
+      ],
+      "grupo_issue": "CAS-GATE",
+      "defectos": [
+        "OBS-COB-001"
+      ]
+    },
+    "AUD": {
+      "nivel": "Control de dependencias y contratos de política",
+      "requisitos": [
+        "R09",
+        "R17"
+      ],
+      "precondiciones": "Lockfile y política E02; excepción OBS-DEP-001 vigente únicamente para la cadena exacta, sin prórroga.",
+      "comando": "python quality/ci.py run frontend --output .quality/nueva-auditoria/frontend",
+      "codigo": [
+        "quality/audit_policy.py",
+        "quality/tests/test_ci.py",
+        "quality/npm-audit-policy.json"
+      ],
+      "evidencias": [
+        "evidencias/e04/resumen-ci-normal.json"
+      ],
+      "grupo_issue": "CAS-GATE",
+      "defectos": [
+        "OBS-DEP-001"
+      ]
+    },
+    "SQL": {
+      "nivel": "Inspección SQL real READ ONLY con ROLLBACK; sin Auth HTTP",
+      "requisitos": [
+        "R-SEG-01",
+        "R-SEG-02",
+        "R-INT-01",
+        "R-DAT-01"
+      ],
+      "precondiciones": "Snapshot de inspección del proyecto conectado el 21/10; conexión administrativa autorizada, sin escrituras.",
+      "comando": "Procedimiento SQL seleccionado en database/verificacion_supabase_solo_lectura.sql; no ejecutar cargas ni modificaciones.",
+      "codigo": [
+        "database/verificacion_supabase_solo_lectura.sql"
+      ],
+      "evidencias": [
+        "evidencias/supabase-2026-10-21.json",
+        "REVISION_SUPABASE.md"
+      ],
+      "grupo_issue": "CAS-EXT",
+      "defectos": []
+    },
+    "EXT": {
+      "nivel": "Integración real de aplicación, pendiente E06",
+      "requisitos": [
+        "R16",
+        "R-SEG-01"
+      ],
+      "precondiciones": "Requiere entorno de testing aislado, cuentas, dos tenants y fixtures conocidas; esa preparación aún no está validada.",
+      "comando": "Pendiente E06: preparar ejecución obligatoria con Auth/Data API reales y falla por secretos ausentes. No usar la omisión actual como aprobación.",
+      "codigo": [
+        "front/tests/integration/supabase-testing.integration.test.ts",
+        "ROADMAP_TP_CALIDAD_SOFTWARE.md"
+      ],
+      "evidencias": [
+        "evidencias/e04/resumen-ci-normal.json"
+      ],
+      "grupo_issue": "CAS-EXT",
+      "defectos": [
+        "DEF-SUP-001"
+      ]
+    }
+  },
+  "casos": [
+    {
+      "id": "DAT-01",
+      "contexto": "DAT",
+      "objetivo": "Tabla vacía",
+      "tecnicas": [
+        "equivalencias",
+        "valores límite",
+        "regresión"
+      ],
+      "entrada": "Ambas rutas; N=0, máximo efectivo 1.000; IDs con huecos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas, IDs esperados ordenados y únicos, sin advertencias; 1 consultas a tabla principal, incluida vacía final.",
+      "obtenido": "Ambas rutas cumplen N=0, sin omisiones/duplicados y con 1 consultas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-01 / objetos: 0 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-01 / personas: 0 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-02",
+      "contexto": "DAT",
+      "objetivo": "Página parcial",
+      "tecnicas": [
+        "equivalencias",
+        "valores límite",
+        "regresión"
+      ],
+      "entrada": "Ambas rutas; N=7, máximo efectivo 1.000; IDs con huecos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "7 filas, IDs esperados ordenados y únicos, sin advertencias; 2 consultas a tabla principal, incluida vacía final.",
+      "obtenido": "Ambas rutas cumplen N=7, sin omisiones/duplicados y con 2 consultas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-02",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-02 / objetos: 7 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-02 / personas: 7 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-03",
+      "contexto": "DAT",
+      "objetivo": "Una página exacta",
+      "tecnicas": [
+        "equivalencias",
+        "valores límite",
+        "regresión"
+      ],
+      "entrada": "Ambas rutas; N=1000, máximo efectivo 1.000; IDs con huecos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "1000 filas, IDs esperados ordenados y únicos, sin advertencias; 2 consultas a tabla principal, incluida vacía final.",
+      "obtenido": "Ambas rutas cumplen N=1000, sin omisiones/duplicados y con 2 consultas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-03",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-03 / objetos: 1000 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-03 / personas: 1000 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-04",
+      "contexto": "DAT",
+      "objetivo": "Dos páginas con última parcial",
+      "tecnicas": [
+        "equivalencias",
+        "valores límite",
+        "regresión"
+      ],
+      "entrada": "Ambas rutas; N=1001, máximo efectivo 1.000; IDs con huecos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "1001 filas, IDs esperados ordenados y únicos, sin advertencias; 3 consultas a tabla principal, incluida vacía final.",
+      "obtenido": "Ambas rutas cumplen N=1001, sin omisiones/duplicados y con 3 consultas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-04",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-04 / objetos: 1001 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-04 / personas: 1001 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-05",
+      "contexto": "DAT",
+      "objetivo": "Múltiplo exacto",
+      "tecnicas": [
+        "equivalencias",
+        "valores límite",
+        "regresión"
+      ],
+      "entrada": "Ambas rutas; N=2000, máximo efectivo 1.000; IDs con huecos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "2000 filas, IDs esperados ordenados y únicos, sin advertencias; 3 consultas a tabla principal, incluida vacía final.",
+      "obtenido": "Ambas rutas cumplen N=2000, sin omisiones/duplicados y con 3 consultas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-05",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-05 / objetos: 2000 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-05 / personas: 2000 filas, con pagina efectiva de 1000",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-06",
+      "contexto": "DAT",
+      "objetivo": "Recuperar más de 3.000 filas en ambas rutas",
+      "tecnicas": [
+        "equivalencias",
+        "límite superior histórico",
+        "regresión"
+      ],
+      "entrada": "3.507 filas; IDs 3*(índice+1), orden físico inverso; servidor máximo 1.000/3.000 y variante 137.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "3.507 recuperadas, 0 omitidas y 0 duplicadas; orden estable. Con máximo 137, 27 requests a tabla principal.",
+      "obtenido": "Seis variantes aprobadas. Antes: 1.000/3.507 o 3.000/3.507 en cuatro variantes; después 3.507/3.507 en todas.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-06",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz DAT-06 / objetos: recupera 3507 filas con limite efectivo 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz DAT-06 / objetos: recupera 3507 filas con limite efectivo 3000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz DAT-06 / personas: recupera 3507 filas con limite efectivo 1000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz DAT-06 / personas: recupera 3507 filas con limite efectivo 3000",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-06-L / objetos: continua si el servidor devuelve solo 137 filas por consulta",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-06-L / personas: continua si el servidor devuelve solo 137 filas por consulta",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 6,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-07",
+      "contexto": "DAT",
+      "objetivo": "Evitar éxito con tablas parciales",
+      "tecnicas": [
+        "equivalencias inválidas",
+        "pruebas negativas",
+        "regresión"
+      ],
+      "entrada": "Fallo API/permisos/transporte después de página válida; excepciones del cliente.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Descartar filas de tabla afectada, devolver advertencia, mantener tablas independientes y terminar.",
+      "obtenido": "Cinco variantes aprobadas: debtors independientes preservados, debts/detalles parciales descartados; error de red informado.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-07",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-07 / objetos: descarta la tabla parcial ante un error RLS en la segunda pagina",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-07 / personas: alerta y descarta detalles parciales sin perder personas completas",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-07-T: un fallo de transporte posterior no expone el prefijo como tabla completa",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-07-C: convierte una excepcion del cliente en alerta",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-07-C: convierte una excepcion del cliente en alerta",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 5,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-08",
+      "contexto": "DAT",
+      "objetivo": "Preservar agregados y relaciones entre páginas",
+      "tecnicas": [
+        "integración de relaciones",
+        "regresión"
+      ],
+      "entrada": "3.507 deudas de importe 2, personas, contactos y relaciones; riesgo 99 en persona 10521 de última página.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Deuda 7.014 y conteos 3.507; última persona con riesgo 99/contacto y deuda asociada 7.014; un riesgo alto, cero sin contacto.",
+      "obtenido": "Dos variantes aprobadas con esos valores exactos.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-08",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-08 / objetos: el dashboard y las relaciones incluyen deudas/personas de paginas posteriores",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01: limites, fallos y relaciones de la lectura completa DAT-08 / personas: materializa riesgo, contacto y deuda de la persona de la ultima pagina",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-09",
+      "contexto": "DAT",
+      "objetivo": "Sin cliente/credenciales",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "Cliente null o credenciales deshabilitadas.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas, advertencia de configuración, ninguna consulta.",
+      "obtenido": "Aprobado: 0 filas, advertencia de configuración, ninguna consulta. Verificado en 2 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-09",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-09: no consulta sin cliente configurado",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-09-C: no consulta con credenciales deshabilitadas",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-10",
+      "contexto": "DAT",
+      "objetivo": "Cursor bigint preciso",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "IDs en texto 9007199254740993 y 9007199254740994.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Preservar ambos IDs y filtros gt exactos sin pérdida de precisión.",
+      "obtenido": "Aprobado: Preservar ambos IDs y filtros gt exactos sin pérdida de precisión. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-10",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-10: preserva cursores bigint representados como texto sin perder precision",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-11",
+      "contexto": "DAT",
+      "objetivo": "ID inválido",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "undefined/null/true/texto inválido/1.5/entero no seguro.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas y DATA_PAGINATION_INVALID; detener en primer request.",
+      "obtenido": "Aprobado: 0 filas y DATA_PAGINATION_INVALID; detener en primer request. Verificado en 6 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-11",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida undefined sin publicar filas parciales",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida null sin publicar filas parciales",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida true sin publicar filas parciales",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida invalid sin publicar filas parciales",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida 1.5 sin publicar filas parciales",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-11: rechaza clave id invalida 9007199254740992 sin publicar filas parciales",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 6,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-12",
+      "contexto": "DAT",
+      "objetivo": "Cursor/orden/duplicados inválidos",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "Cursor repetido, filas desordenadas o duplicadas.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas y DATA_PAGINATION_INVALID; como máximo dos consultas.",
+      "obtenido": "Aprobado: 0 filas y DATA_PAGINATION_INVALID; como máximo dos consultas. Verificado en 3 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-12",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 3,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-13",
+      "contexto": "DAT",
+      "objetivo": "Respuesta no array",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "Objeto {id:1} como página.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas y advertencia DATA_PAGINATION_INVALID.",
+      "obtenido": "Aprobado: 0 filas y advertencia DATA_PAGINATION_INVALID. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-13",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-13: rechaza una pagina que no sea un array",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "DAT-14",
+      "contexto": "DAT",
+      "objetivo": "Contrato de advertencias",
+      "tecnicas": [
+        "equivalencias",
+        "validación de entradas",
+        "pruebas negativas"
+      ],
+      "entrada": "42501 y mensajes permission denied/row-level security/RLS; mensaje vacío y código null.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "needsSelectPolicy=true en cuatro variantes de permisos; false con error vacío, mensaje desconocido y código omitido.",
+      "obtenido": "Aprobado: needsSelectPolicy=true en cuatro variantes de permisos; false con error vacío, mensaje desconocido y código omitido. Verificado en 5 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DAT-14",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-14: conserva el contrato de advertencia {\"message\":\"denied\",\"code\":\"42501\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-14: conserva el contrato de advertencia {\"message\":\"permission denied\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-14: conserva el contrato de advertencia {\"message\":\"row-level security rejected\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-14: conserva el contrato de advertencia {\"message\":\"RLS rejected\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/paginated-table-reader.test.ts",
+          "name": "R-DAT-01 / lector paginado: validacion y fallos seguros DAT-14: conserva el contrato de advertencia {\"message\":\"\",\"code\":null}",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 5,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "FIXTURE-01",
+      "contexto": "DAT",
+      "objetivo": "Verificar el doble HTTP del SDK",
+      "tecnicas": [
+        "control del doble"
+      ],
+      "entrada": "8 IDs invertidos; servidor máximo 3; limit 3000 y consulta ordenada gt 9 limit 3.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "IDs [24,21,18] y [12,15,18]; segunda consulta order=id.asc, after=9, limit=3.",
+      "obtenido": "Ambas respuestas y parámetros exactos comprobados.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "FIXTURE-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/integration/complete-data.integration.test.ts",
+          "name": "R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz FIXTURE-01: el SDK aplica limite de servidor, orden y cursor sobre HTTP simulado",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-DAT",
+        "number": 5,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-01",
+      "contexto": "AUTH",
+      "objetivo": "Configuración ausente",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Cliente browser null.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "No autoriza; SUPABASE_NOT_CONFIGURED; getUser null, login error de configuración, logout sin error.",
+      "obtenido": "Aprobado: No autoriza; SUPABASE_NOT_CONFIGURED; getUser null, login error de configuración, logout sin error. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-01: sin configuracion no autoriza, no inicia sesion y permite salir sin error",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-02",
+      "contexto": "AUTH",
+      "objetivo": "Contrato de login",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Email/password sintéticos; respuesta sin error o Invalid login credentials.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Transmitir ambos valores al SDK y conservar exactamente error=null o el objeto de error recibido.",
+      "obtenido": "Aprobado: Transmitir ambos valores al SDK y conservar exactamente error=null o el objeto de error recibido. Verificado en 2 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-02",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-02: transmite credenciales y conserva el error null",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-02: transmite credenciales y conserva el error {\"message\":\"Invalid login credentials\"}",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-03",
+      "contexto": "AUTH",
+      "objetivo": "Cierre de sesión",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Cliente configurado.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Invocar signOut exactamente una vez.",
+      "obtenido": "Aprobado: Invocar signOut exactamente una vez. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-03",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-03: solicita cerrar la sesion exactamente una vez",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-04",
+      "contexto": "AUTH",
+      "objetivo": "Mensajes de usuario",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Error null, credenciales inválidas en dos formas, email no confirmado y servicio no disponible.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Mensajes No se pudo iniciar sesion / Email o password incorrectos / El email aun no fue confirmado / texto original del error.",
+      "obtenido": "Aprobado: Mensajes No se pudo iniciar sesion / Email o password incorrectos / El email aun no fue confirmado / texto original del error. Verificado en 5 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-04",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-04: mensaje de usuario para null",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-04: mensaje de usuario para {\"message\":\"INVALID LOGIN CREDENTIALS\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-04: mensaje de usuario para {\"message\":\"invalid_credentials\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-04: mensaje de usuario para {\"message\":\"Email not confirmed\"}",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-04: mensaje de usuario para {\"message\":\"Service unavailable\"}",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 5,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-05",
+      "contexto": "AUTH",
+      "objetivo": "Sesión ausente o inválida",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Auth devuelve usuario null o error expired con usuario presente.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "isAuthorized=false, requiresLogin=true, AUTH_REQUIRED y ninguna consulta a tablas.",
+      "obtenido": "Aprobado: isAuthorized=false, requiresLogin=true, AUTH_REQUIRED y ninguna consulta a tablas. Verificado en 2 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-05",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-05: sesion ausente o invalida requiere login, sin consultar tablas",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-05: sesion ausente o invalida requiere login, sin consultar tablas",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 2,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-06",
+      "contexto": "AUTH",
+      "objetivo": "Contexto autorizado aislado",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Auth id auth-test; app id texto 42; pertenencia tenant 7 y role operator.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Contexto auth-test/42/7/operator; filtro auth_user=auth-test; pertenencia user=42 y status=true.",
+      "obtenido": "Aprobado: Contexto auth-test/42/7/operator; filtro auth_user=auth-test; pertenencia user=42 y status=true. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-06",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-06: usa el usuario validado por Auth y la pertenencia activa",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-07",
+      "contexto": "AUTH",
+      "objetivo": "Sin pertenencia activa",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Búsqueda activa vacía; fallback vacío / status=false / error 42501.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "TENANT_ACCESS_NOT_FOUND / TENANT_ACCESS_INACTIVE / DATABASE_ERROR; sin contexto; fallback user=42 limit=20.",
+      "obtenido": "Aprobado: TENANT_ACCESS_NOT_FOUND / TENANT_ACCESS_INACTIVE / DATABASE_ERROR; sin contexto; fallback user=42 limit=20. Verificado en 3 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-07",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-07: sin pertenencia activa consulta estados y rechaza { data: [], error: null }",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-07: sin pertenencia activa consulta estados y rechaza { data: [ { status: false } ], error: null }",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-07: sin pertenencia activa consulta estados y rechaza { data: null, error: { message: 'membership read failed', code: '42501' } }",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 3,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-08",
+      "contexto": "AUTH",
+      "objetivo": "Error de consulta de pertenencia",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Usuario de aplicación 42; búsqueda de pertenencia con permission denied.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "DATABASE_ERROR, acceso denegado; exactamente dos consultas, sin fallback adicional.",
+      "obtenido": "Aprobado: DATABASE_ERROR, acceso denegado; exactamente dos consultas, sin fallback adicional. Verificado en 1 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-08",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-08: error leyendo pertenencia no autoriza ni consulta estados adicionales",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUTH-09",
+      "contexto": "AUTH",
+      "objetivo": "ID de usuario vacío",
+      "tecnicas": [
+        "equivalencias",
+        "tabla de decisión",
+        "pruebas negativas"
+      ],
+      "entrada": "Fila {}, id=null o id=\"\".",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "APP_USER_NOT_FOUND; una sola consulta, sin buscar pertenencias.",
+      "obtenido": "Aprobado: APP_USER_NOT_FOUND; una sola consulta, sin buscar pertenencias. Verificado en 3 variantes del reporte.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUTH-09",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-09: identificador de aplicacion vacio {} no consulta pertenencias",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-09: identificador de aplicacion vacio {\"id\":null} no consulta pertenencias",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/auth-service.test.ts",
+          "name": "R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia AUTH-09: identificador de aplicacion vacio {\"id\":\"\"} no consulta pertenencias",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 3,
+      "issue": {
+        "id": "CAS-AUTH",
+        "number": 6,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "REC-01",
+      "contexto": "REC",
+      "objetivo": "Aplicar decisiones y precedencia de recomendaciones",
+      "tecnicas": [
+        "tabla de decisión",
+        "valores límite",
+        "equivalencias"
+      ],
+      "entrada": "Siete combinaciones: ALTO con/sin contacto; mora 59/60; saldo 349.999/350.000; deuda cero.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Tipos y urgencia de la tabla de decisión de CASOS_PRUEBA_CALIDAD.md; riesgo alto prevalece.",
+      "obtenido": "7/7 variantes aprobadas: llamado o revisión urgente según riesgo/contacto, revisión a 60 días, recordatorio a 59 o saldo 350.000, seguimiento con saldo inferior sin mora.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "REC-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: alto con contacto prevalece sobre mora",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: alto sin contacto requiere revision",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: mora de 60 dias",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: mora de 59 dias",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: sin mora, saldo justo en limite",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: sin mora, saldo debajo del limite",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/recommendation-decisions.test.ts",
+          "name": "R-FUN-01 / E04: tabla de decision de recomendaciones REC-01: sin deuda",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 7,
+      "issue": {
+        "id": "CAS-REC",
+        "number": 7,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/7",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "GATE-01",
+      "contexto": "GATE",
+      "objetivo": "Cobertura existente",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "5.999/10.000 y 6.000/10.000 sentencias.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "59,99 % falla; 60 % pasa.",
+      "obtenido": "Contrato aprobado: 59,99 % falla; 60 % pasa. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_existing_coverage_5999_fails_and_60_passes",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_existing_coverage_5999_fails_and_60_passes",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R07"
+      ]
+    },
+    {
+      "id": "GATE-02",
+      "contexto": "GATE",
+      "objetivo": "Cobertura nueva",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "7.999/10.000 y 8.000/10.000 líneas; diff contra base fija.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "79,99 % falla; 80 % pasa; módulo insuficiente bloquea evaluación.",
+      "obtenido": "Contrato aprobado: 79,99 % falla; 80 % pasa; módulo insuficiente bloquea evaluación. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_new_coverage_7999_fails_and_80_passes; test_new_lines_below_80_block_whole_evaluation",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_new_lines_below_80_block_whole_evaluation",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_new_coverage_7999_fails_and_80_passes",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R08"
+      ]
+    },
+    {
+      "id": "GATE-03",
+      "contexto": "GATE",
+      "objetivo": "Duplicación",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "500/10.000, 501/10.000 y 50.001/1.000.000 líneas duplicadas.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "5 % pasa; 5,01 % y 5,0001 % fallan sin redondear.",
+      "obtenido": "Contrato aprobado: 5 % pasa; 5,01 % y 5,0001 % fallan sin redondear. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_duplication_5_passes_501_fails_without_rounding",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_duplication_5_passes_501_fails_without_rounding",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R10"
+      ]
+    },
+    {
+      "id": "GATE-04",
+      "contexto": "GATE",
+      "objetivo": "Crítico versus estilo",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "F821, I001, no-unsafe-finally y parsing fatal.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Crítico bloquea como crítico; estilo bloquea análisis, con lista de críticos vacía.",
+      "obtenido": "Contrato aprobado: Crítico bloquea como crítico; estilo bloquea análisis, con lista de críticos vacía. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_critical_and_noncritical_rules_remain_separate; test_eslint_selected_rule_and_parse_error_are_critical",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_critical_and_noncritical_rules_remain_separate",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_eslint_selected_rule_and_parse_error_are_critical",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R09"
+      ]
+    },
+    {
+      "id": "GATE-05",
+      "contexto": "GATE",
+      "objetivo": "Reportes inválidos",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "JSON roto/null/lista, ausencia de LCOV/JSON/lint, JUnit roto y conteos discrepantes.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Evaluación fallida y explicación conservada, nunca aprobación por ausencia.",
+      "obtenido": "Contrato aprobado: Evaluación fallida y explicación conservada, nunca aprobación por ausencia. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_missing_required_reports_never_pass; test_json_and_counts_corruption_preserve_a_failure_explanation; test_test_reports_are_required_and_must_agree",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_json_and_counts_corruption_preserve_a_failure_explanation",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_missing_required_reports_never_pass",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_test_reports_are_required_and_must_agree",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R17"
+      ]
+    },
+    {
+      "id": "GATE-06",
+      "contexto": "GATE",
+      "objetivo": "Base y procedencia",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "Base no resoluble/cambiada a HEAD; SHA/run/intento incorrectos; manifiesto duplicado.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Rechazar sin vaciar el diff ni mezclar ejecuciones.",
+      "obtenido": "Contrato aprobado: Rechazar sin vaciar el diff ni mezclar ejecuciones. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_absent_base_cannot_silently_become_head; test_wrong_sha_run_attempt_and_duplicate_manifest_are_rejected",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_absent_base_cannot_silently_become_head",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_wrong_sha_run_attempt_and_duplicate_manifest_are_rejected",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R08",
+        "R17"
+      ]
+    },
+    {
+      "id": "GATE-07",
+      "contexto": "GATE",
+      "objetivo": "Sin código nuevo",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "Diff vacío con reportes válidos, y repetición con reporte backend eliminado.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 líneas, pct=null, no aplica; reporte ausente sigue bloqueando.",
+      "obtenido": "Contrato aprobado: 0 líneas, pct=null, no aplica; reporte ausente sigue bloqueando. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_no_new_lines_has_null_percentage_not_invented_100; test_no_diff_does_not_hide_missing_reports",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_no_diff_does_not_hide_missing_reports",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_no_new_lines_has_null_percentage_not_invented_100",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R08"
+      ]
+    },
+    {
+      "id": "GATE-08",
+      "contexto": "GATE",
+      "objetivo": "Mapeo de diff y rutas",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "Renombre real en Git temporal con espacio en nombre; borrados; rutas Windows/Linux.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Alta completa del nuevo archivo, sin líneas borradas; normalización equivalente.",
+      "obtenido": "Contrato aprobado: Alta completa del nuevo archivo, sin líneas borradas; normalización equivalente. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_real_git_rename_is_a_complete_new_file_with_no_renames; test_deleted_lines_do_not_enter_new_denominator; test_windows_linux_and_relative_paths_are_equivalent",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_deleted_lines_do_not_enter_new_denominator",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_real_git_rename_is_a_complete_new_file_with_no_renames",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.ThresholdTests.test_windows_linux_and_relative_paths_are_equivalent",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R08"
+      ]
+    },
+    {
+      "id": "GATE-09",
+      "contexto": "GATE",
+      "objetivo": "Propagación de fallos",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "Build con salida 7/control ausente; evaluador fallido y manifiesto inválido.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "No aprobación global; salida 1 y gate/summary persistidos.",
+      "obtenido": "Contrato aprobado: No aprobación global; salida 1 y gate/summary persistidos. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_failed_build_and_missing_control_block; test_gate_failure_reaches_summary_exit_and_report; test_invalid_manifest_preserves_failure_report",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_ci.py",
+          "name": "test_ci.ExecutionContractTests.test_gate_failure_reaches_summary_exit_and_report",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_ci.py",
+          "name": "test_ci.ExecutionContractTests.test_invalid_manifest_preserves_failure_report",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_failed_build_and_missing_control_block",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R17"
+      ]
+    },
+    {
+      "id": "GATE-10",
+      "contexto": "GATE",
+      "objetivo": "Ensayo remoto controlado",
+      "tecnicas": [
+        "valores límite",
+        "contratos de infraestructura",
+        "pruebas negativas"
+      ],
+      "entrada": "Mismo SHA c95a9ab: push normal frente a workflow_dispatch con crítico sintético F821 en reporte.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Normal aprobado; ensayo con suites aprobadas pero job resumen fallido, ocho gates pasan y dos bloquean.",
+      "obtenido": "Contrato aprobado: Normal aprobado; ensayo con suites aprobadas pero job resumen fallido, ocho gates pasan y dos bloquean. Los métodos indicados están aprobados en el log de infraestructura.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "test_controlled_probe_retains_original_and_blocks_critical_gate; test_probe_is_restricted_to_manual_opt_in",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "metodos_reportados": [
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_controlled_probe_retains_original_and_blocks_critical_gate",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        },
+        {
+          "file": "quality/tests/test_gates.py",
+          "name": "test_gates.GateReportTests.test_probe_is_restricted_to_manual_opt_in",
+          "status": "passed",
+          "status_source": "unittest log header and aggregate Ran 41 tests / OK"
+        }
+      ],
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      },
+      "requisitos": [
+        "R09",
+        "R17"
+      ]
+    },
+    {
+      "id": "COB-01",
+      "contexto": "COB",
+      "objetivo": "Cerrar insuficiencia de cobertura",
+      "tecnicas": [
+        "cobertura",
+        "regresión del control"
+      ],
+      "entrada": "26 pruebas adicionales; mismo denominador de 1.280 sentencias.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Sentencias >=60 % y gate nuevo >=80 % por módulo, sin reducir alcance.",
+      "obtenido": "791/1.280, Vitest 61,79 %; nuevo frontend 28/28 y backend 15/17.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "COB-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUD-01",
+      "contexto": "AUD",
+      "objetivo": "Evaluar la excepción revisada de desarrollo",
+      "tecnicas": [
+        "equivalencias",
+        "política temporal"
+      ],
+      "entrada": "Cadena de cinco altos de desarrollo exacta; auditoría completa salida cruda 1.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Mantener los cinco avisos visibles y aceptación solo según política vigente; variaciones o vencimiento bloquean.",
+      "obtenido": "5 altos dev, 0 críticos; salida cruda 1 y accepted=true. OBS-DEP-001 permanece abierta.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUD-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "AUD-PROD-01",
+      "contexto": "AUD",
+      "objetivo": "Exigir dependencias productivas sin avisos",
+      "tecnicas": [
+        "control de dependencias"
+      ],
+      "entrada": "Auditoría npm --omit=dev.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 avisos y salida cruda 0.",
+      "obtenido": "0 avisos productivos y salida 0.",
+      "estado": "aprobado",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "AUD-PROD-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "issue": {
+        "id": "CAS-GATE",
+        "number": 8,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+        "state_at_E05": "closed"
+      }
+    },
+    {
+      "id": "SUP-RLS-01",
+      "contexto": "SQL",
+      "objetivo": "Denegar lectura anónima en controles SQL",
+      "tecnicas": [
+        "partición de rol",
+        "inspección SQL"
+      ],
+      "entrada": "Rol anon en debtor, debt, person y public.user.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas visibles en las cuatro tablas.",
+      "obtenido": "0 objetos, 0 deudas, 0 personas y 0 usuarios.",
+      "estado": "aprobado en alcance SQL",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21T18:49:43Z",
+      "version_ejecutada": "531996f51243dc3d4c5a607338e2f35e32313f6b (cliente inspeccionado); estado remoto según snapshot",
+      "entorno": "Supabase conectado, transacción SQL administrativa READ ONLY con ROLLBACK",
+      "selector": "SUP-RLS-01",
+      "run_url": null,
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      },
+      "requisitos": [
+        "R-SEG-02"
+      ]
+    },
+    {
+      "id": "SUP-RLS-02",
+      "contexto": "SQL",
+      "objetivo": "Denegar cartera sin pertenencia",
+      "tecnicas": [
+        "partición de autorización",
+        "inspección SQL"
+      ],
+      "entrada": "Rol authenticated, identidad sintética sin usuario/pertenencia coincidentes.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "0 filas de negocio visibles.",
+      "obtenido": "2.933 objetos, 56.286 deudas y 2.493 personas visibles; 0 usuarios coincidentes y 0 pertenencias activas.",
+      "estado": "fallido en alcance SQL; HTTP pendiente E06",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21T18:49:43Z",
+      "version_ejecutada": "531996f51243dc3d4c5a607338e2f35e32313f6b (cliente inspeccionado); estado remoto según snapshot",
+      "entorno": "Supabase conectado, transacción SQL administrativa READ ONLY con ROLLBACK",
+      "selector": "SUP-RLS-02",
+      "run_url": null,
+      "defectos": [
+        "DEF-SUP-001"
+      ],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      },
+      "requisitos": [
+        "R-SEG-01",
+        "R13"
+      ]
+    },
+    {
+      "id": "SUP-DATA-01",
+      "contexto": "SQL",
+      "objetivo": "Detectar riesgo de truncamiento",
+      "tecnicas": [
+        "inspección de volumen y código"
+      ],
+      "entrada": "Volumen 56.286 deudas y 3.007 relaciones; loaders originales con una consulta limit 3000.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "El acceso de aplicación debe cubrir el conjunto autorizado completo.",
+      "obtenido": "La estrategia original no cubre ese volumen; condición detectada. Corrección aislada E03 vinculada a DAT-06.",
+      "estado": "detección histórica; corregido en regresión aislada",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21T18:49:43Z",
+      "version_ejecutada": "531996f51243dc3d4c5a607338e2f35e32313f6b (cliente inspeccionado); estado remoto según snapshot",
+      "entorno": "Supabase conectado, transacción SQL administrativa READ ONLY con ROLLBACK",
+      "selector": "SUP-DATA-01",
+      "run_url": null,
+      "defectos": [
+        "DEF-DAT-001"
+      ],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      },
+      "requisitos": [
+        "R-DAT-01",
+        "R13"
+      ]
+    },
+    {
+      "id": "SUP-INT-01",
+      "contexto": "SQL",
+      "objetivo": "Inspeccionar integridad seleccionada",
+      "tecnicas": [
+        "integridad de datos",
+        "inspección SQL"
+      ],
+      "entrada": "Conteos, claves, huérfanos y agregados del snapshot observado.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Sin duplicados/huérfanos/discrepancias en los controles seleccionados.",
+      "obtenido": "Sin anomalías seleccionadas en la inspección; no se reejecutó ETL ni se probó idempotencia real.",
+      "estado": "aprobado en alcance SQL",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21T18:49:43Z",
+      "version_ejecutada": "531996f51243dc3d4c5a607338e2f35e32313f6b (cliente inspeccionado); estado remoto según snapshot",
+      "entorno": "Supabase conectado, transacción SQL administrativa READ ONLY con ROLLBACK",
+      "selector": "SUP-INT-01",
+      "run_url": null,
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      },
+      "requisitos": [
+        "R-INT-01"
+      ],
+      "limite_reproduccion": "El bloque SQL versionado conserva conteos; las comprobaciones adicionales de integridad proceden del snapshot de inspección. E06 debe conservar consultas completas de su nueva verificación."
+    },
+    {
+      "id": "SUP-AUTH-01",
+      "contexto": "EXT",
+      "objetivo": "Autenticar y recuperar contexto real de testing",
+      "tecnicas": [
+        "integración externa"
+      ],
+      "entrada": "Testing exclusivo y credenciales configuradas; contrato E06 de usuario/contexto/datos conocidos.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Auth válido, contexto esperado y filas conocidas del tenant; ampliar la prueba preparada para exigir esos datos antes del cierre.",
+      "obtenido": "Omitido en CI: requiere habilitación y credenciales de testing; la preparación existente solo verifica Auth y array de debtor, sin validar cartera conocida.",
+      "estado": "omitido; implementación E06 parcial",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-21",
+      "version_ejecutada": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "integracion real opcional con Supabase de testing",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195",
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-AUTH-02",
+      "contexto": "EXT",
+      "objetivo": "Credenciales inválidas",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Cuenta/clave inválidas en testing.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Rechazo de login y acceso no autorizado.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-AUTH-02",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-AUTH-03",
+      "contexto": "EXT",
+      "objetivo": "Logout real",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Sesión válida de testing y cierre.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Sesión finalizada; siguiente acceso protegido denegado.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-AUTH-03",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-DATA-02",
+      "contexto": "EXT",
+      "objetivo": "Lectura positiva por tenant",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Usuario A activo y fixtures conocidas A/B.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Recuperar todas las filas conocidas de A y cero filas de B.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-DATA-02",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-RLS-03",
+      "contexto": "EXT",
+      "objetivo": "A no accede a B",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Sesión normal A; consulta filas conocidas B.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Cero filas de B en tablas y relaciones seleccionadas.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-RLS-03",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-RLS-04",
+      "contexto": "EXT",
+      "objetivo": "B no accede a A",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Sesión normal B; consulta filas conocidas A.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Cero filas de A en tablas y relaciones seleccionadas.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-RLS-04",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    },
+    {
+      "id": "SUP-RLS-05",
+      "contexto": "EXT",
+      "objetivo": "Pertenencia inactiva",
+      "tecnicas": [
+        "particiones de autorización",
+        "integración externa"
+      ],
+      "entrada": "Usuario de testing con pertenencia inactiva.",
+      "pasos": [
+        "Preparar la entrada indicada según las precondiciones del contexto.",
+        "Ejecutar el comando/procedimiento del contexto y seleccionar el caso indicado.",
+        "Comparar cada variante con el esperado; conservar salida, fecha, entorno y SHA."
+      ],
+      "esperado": "Cero filas de negocio y acceso denegado.",
+      "obtenido": "Sin ejecutar; implementación/provisionamiento pendientes E06.",
+      "estado": "pendiente",
+      "responsable": "Axel Azcune",
+      "fecha": null,
+      "version_ejecutada": null,
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "SUP-RLS-05",
+      "run_url": null,
+      "codigo": [],
+      "issue": {
+        "id": "CAS-EXT",
+        "number": 9,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+        "state_at_E05": "open"
+      }
+    }
+  ]
+}

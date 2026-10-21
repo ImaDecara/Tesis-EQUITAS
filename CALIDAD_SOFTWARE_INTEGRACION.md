@@ -1,5 +1,7 @@
 # Pruebas de integracion - TP Integrador de Calidad de Software
 
+> **Formalización E05:** [CAS-DAT #5](https://github.com/ImaDecara/Tesis-EQUITAS/issues/5) y [CAS-AUTH #6](https://github.com/ImaDecara/Tesis-EQUITAS/issues/6) cerrados en alcance aislado. [CAS-EXT #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9) y [DEF-SUP-001 #1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1) siguen abiertos para E06. [Casos y técnicas](CASOS_PRUEBA_CALIDAD.md) y [matriz](TRAZABILIDAD_CALIDAD.md) distinguen SQL histórico, dobles, integración omitida y futuros casos sin ejecutar.
+
 > **Actualización E04:** se agregaron 19 pruebas aisladas del contrato Auth y 7 de recomendaciones. Total de producto 162 aprobadas/0 fallidas/1 omitida; las 41 de infraestructura van aparte. Cobertura frontend y gates completos aprobados; [ficha E04](REGISTRO_EJECUCION_E04.md). Los dobles no validan autorización RLS remota: la integración real sigue pendiente E06.
 
 > **Actualización E03, 21/10/2026:** la [lectura completa](REGISTRO_EJECUCION_E03.md) quedó corregida en ambas rutas. Se agregaron 22 pruebas de integración con SDK Supabase real y transporte HTTP sintético, además de 20 unitarias del lector. Se conservaron cuatro fallos reales antes de corregir y los mismos casos aprobados después, con límites, errores y agregados. La integración Auth/Data API con el servicio de testing sigue omitida y pendiente E06; estos resultados aislados no cambian ese estado ni corrigen RLS.

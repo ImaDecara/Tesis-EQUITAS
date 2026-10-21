@@ -1,0 +1,77 @@
+{
+  "method": "GitHub connector read after CLI issue writes",
+  "issues": [
+    {
+      "number": 1,
+      "state": "open",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/1",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 2,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/2",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 3,
+      "state": "open",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/3",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 4,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/4",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 5,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 6,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 7,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/7",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 8,
+      "state": "closed",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+      "assignees": [
+        "AxAzc"
+      ]
+    },
+    {
+      "number": 9,
+      "state": "open",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+      "assignees": [
+        "AxAzc"
+      ]
+    }
+  ]
+}

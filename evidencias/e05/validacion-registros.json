@@ -1,0 +1,59 @@
+{
+  "stage": "E05",
+  "verified_at_utc": "2026-10-21T21:51:29.569139+00:00",
+  "cases": 49,
+  "case_states": {
+    "aprobado": 38,
+    "aprobado en alcance SQL": 2,
+    "fallido en alcance SQL; HTTP pendiente E06": 1,
+    "detección histórica; corregido en regresión aislada": 1,
+    "omitido; implementación E06 parcial": 1,
+    "pendiente": 6
+  },
+  "product_inventory": {
+    "passed": 162,
+    "failed": 0,
+    "skipped": 1
+  },
+  "infrastructure_passed": 41,
+  "managed_report_variants": 68,
+  "issues": {
+    "total": 9,
+    "open": 3,
+    "closed": 6
+  },
+  "checks": {
+    "case_fields_and_unique_ids": true,
+    "variant_results_match_original_E04_report": true,
+    "inventory_source_paths_exist": true,
+    "issue_bodies_hash_and_states_valid": true,
+    "connector_read_matches_CLI_write": true,
+    "git_contributions_verified": true,
+    "UTF8_JSON_links_and_case_anchors_valid": true,
+    "roadmap_E05_15_of_15": true,
+    "product_tests_dependencies_workflows_unchanged": true
+  },
+  "content_hash_method": "SHA-256 of UTF-8 text normalized to LF, avoiding Windows CRLF differences",
+  "content_sha256": {
+    ".github/ISSUE_TEMPLATE/caso_prueba.md": "047a04198a64786377a97a44ad766b09a5b1e3b02f59230e7a54b72431dd76c2",
+    ".github/ISSUE_TEMPLATE/defecto_calidad.md": "09670897228cacadbbbf2e4dab5a1836c28f31aee2c6cbf6e104a6b3d47a839e",
+    "APORTES_TP_CALIDAD.md": "56cb43b5800ecf4aabeef2a1d6a5fc687c0aacef467d1f6cc34f36b0c57837c3",
+    "CALIDAD_SOFTWARE_INTEGRACION.md": "fec67658288e3d30309662eec04634f7ee315913b63e3d1b30ef99ed108144b7",
+    "CALIDAD_SOFTWARE_PRUEBAS.md": "8d0adb500c2313147a5442f74f177b70659c10287178ee2598c0d741d124f42d",
+    "CASOS_PRUEBA_CALIDAD.md": "48fbde2081b0e71996e42787e0fbbb0f025bdc56e0ffe000d1b04d82e11684f1",
+    "DIAGNOSTICO_CIERRE_CALIDAD.md": "8a279618c9484fd4f0bba186a98fd411cf6a2871fd1f4abec77d0495b28a7e4c",
+    "GESTION_CALIDAD.md": "3e7cef72180192ff85d0a7a7fd78a017d3ba367c77c01478a774494ad258e3bd",
+    "INFORME_TP_CALIDAD_SOFTWARE.md": "eb2a97f9aa9fccb9bbe712a8598e11aeb2c1e15601225f90e4ecf83ddb8aa7e4",
+    "PLAN_PRUEBAS_CALIDAD.md": "e6581779c8f60dd39c84c58e3b542e144e5519a716f4cd91d705c391a3543810",
+    "REGISTRO_DEFECTOS_CALIDAD.md": "b9c77ef01a11f26b82c8b623d72131edefaaed948ae06e0a2dc1020556685f11",
+    "REGISTRO_EJECUCION_E05.md": "84ee9fb946b93adbcb103359610888ab918693632c5252b3ad595c92db3e4d95",
+    "ROADMAP_TP_CALIDAD_SOFTWARE.md": "254d80dc107009901bdede4933ed22be382e28a003d859a67a25c3c7619eb3cd",
+    "TRAZABILIDAD_CALIDAD.md": "3c95e9ca4046c9395d2dc4ff84205ec465f789caaecd31ded34ca9a776e3eabb",
+    "calidad/casos-prueba.json": "94de86d8ce52c88607c0131019516e117810ec877245681537e2bb0f3d6b4be9",
+    "calidad/inventario-pruebas.json": "27de452dc19575cefb82500f43106c4e960ab3ad5c34eebeedbb98b83bfda2ff",
+    "evidencias/e05/aportes-historial.json": "114235b10949c419c997861b1db40d499efde8f4c7582785cdaac88c5143de00",
+    "evidencias/e05/issues-antes.json": "287a52a3c4a1a84c4e6814e9fcd2d5435e158fa67f9e73c942cff149cb7ceab2",
+    "evidencias/e05/seguimiento-2026-10-21.json": "57df5f296e38eafc49478599232ed4a74ae8e921a4e942d82e85e3f1413549b1",
+    "evidencias/e05/verificacion-issues.json": "0a24fb4a61ad256c08f593343c34346665877a9a0720cafab5880a3437da58c4"
+  }
+}

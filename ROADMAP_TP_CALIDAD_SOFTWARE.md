@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.5, cierre de la etapa E04 el 21 de octubre de 2026.
+**Versión:** 1.6, cierre de la etapa E05 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E04 completadas en sus alcances; E05 es la siguiente etapa. Cobertura frontend 61,79 % informada por Vitest y gates verificados. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00–E05 completadas en sus alcances; E06 es la siguiente etapa. GitHub Issues formalizado con nueve tickets, catálogo y trazabilidad verificados. Las etapas externas y de entrega conservan sus pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -37,6 +37,8 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 - La preferencia del informe académico se mantiene: **sin índice**. El roadmap sí puede tener navegación y tablas de control.
 
 ## 2. Punto de partida comprobado
+
+**Actualización E05, 21/10/2026:** gestión formalizada en **GitHub Issues**, con nueve tickets reales asignados a `AxAzc`: seis cerrados en su alcance y tres abiertos. [Catálogo](CASOS_PRUEBA_CALIDAD.md) de 49 IDs/casos-familia, [matriz](TRAZABILIDAD_CALIDAD.md), [gestión y plantillas](GESTION_CALIDAD.md), [aportes del historial](APORTES_TP_CALIDAD.md) y [ficha E05](REGISTRO_EJECUCION_E05.md). El inventario conserva 162 aprobadas/0 fallidas/1 omitida de producto y 41 de infraestructura de E04, sin convertir documentación en nuevas pruebas. DEF-DAT-001 se cierra por código y regresión aislada; OBS-COB-001, por cobertura/gates. [DEF-SUP-001 #1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), [OBS-DEP-001 #3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3) y [CAS-EXT #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9) siguen abiertos. Esta actualización prevalece sobre los estados históricos de tickets/trazabilidad pendientes; integración real y RLS siguen en E06. No se utiliza Jira.
 
 **Actualización E04, 21/10/2026:** gates implementados en `c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44`. [CI normal aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574195) y [ensayo crítico controlado bloqueado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39677574162), ambos con 162 pruebas de producto aprobadas, cero fallidas y una externa omitida; otras 41 de infraestructura aprobadas. Frontend **791/1.280 sentencias, 61,79 % informado por Vitest**, sobre el mismo alcance de 55 archivos. Nuevo frontend **28/28**, nuevo backend **15/17 (88,24 %)** contra la base fija `531996f…`; duplicación **3,83 %**. **OBS-COB-001 cerrada**. El gate rechaza insuficiencia, críticos y evidencia inválida; la inyección sintética demuestra el mecanismo y el defecto real conserva su evidencia E03. Ver [ficha E04](REGISTRO_EJECUCION_E04.md), [casos](CASOS_E04_GATES.md) y [evidencias](evidencias/e04/ejecuciones-2026-10-21.json). Esta actualización prevalece sobre los estados históricos de cobertura/gates pendientes. DEF-SUP-001 y OBS-DEP-001 siguen abiertos; integración real, despliegue/smoke, cargas y cierre final permanecen pendientes.
 
@@ -92,7 +94,7 @@ La simulación SQL fue READ ONLY con ROLLBACK. No creó una cuenta ni obtuvo un 
 - Integración Auth/Data API real desde el cliente de aplicación en testing.
 - Despliegue nuevo con smoke automático posterior.
 - Estrés y esfuerzo sostenido ejecutados con criterios previos.
-- Gestión completa de casos/defectos y herramienta incorporada mediante cinco pasos.
+- Herramienta incorporada mediante cinco pasos; gestión de casos/defectos formalizada en E05 y por mantener en todas las etapas.
 - Consolidación del informe académico, PDF y demostración.
 
 Las 162 pruebas actuales y las consultas de investigación no se convierten automáticamente en esos entregables.
@@ -104,6 +106,9 @@ Las 162 pruebas actuales y las consultas de investigación no se convierten auto
 | [consigna_pdf.md](consigna_pdf.md) | Fuente de requisitos obligatorios. |
 | [PLAN_PRUEBAS_CALIDAD.md](PLAN_PRUEBAS_CALIDAD.md) | Plan vigente de alcance, objetivos, entornos, criterios y riesgos, formalizado en E00. |
 | [REGISTRO_EJECUCION_E00.md](REGISTRO_EJECUCION_E00.md) | Ficha de cierre y verificaciones de la primera etapa. |
+| [REGISTRO_EJECUCION_E05.md](REGISTRO_EJECUCION_E05.md) | Gestión de casos/defectos, issues reales, técnicas y trazabilidad. |
+| [TRAZABILIDAD_CALIDAD.md](TRAZABILIDAD_CALIDAD.md) | Navegación requisito → caso → ticket → evidencia → corrección → regresión. |
+| [CASOS_PRUEBA_CALIDAD.md](CASOS_PRUEBA_CALIDAD.md) | Catálogo operativo de casos, técnicas y resultados. |
 | [REGISTRO_EJECUCION_E04.md](REGISTRO_EJECUCION_E04.md) | Gates, cobertura vigente y ensayo de bloqueo comprobado. |
 | [REGISTRO_EJECUCION_E03.md](REGISTRO_EJECUCION_E03.md) | Corrección de lectura completa, rojo/verde, regresión y métricas vigentes. |
 | [CASOS_E03_LECTURA_COMPLETA.md](CASOS_E03_LECTURA_COMPLETA.md) | Aceptación publicada antes de corregir y resultados vinculados. |
@@ -130,7 +135,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E02** | Pipeline base con build, suites y reportes. | **Completada**; ejecución normal y ensayo de fallo comprobados. | E00–E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | **Completada**; 27 controles, ambas rutas, rojo/verde y regresión verificados. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | **Completada**; 16 controles, CI normal y bloqueo crítico comprobados. | E01–E03. |
-| **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |
+| **E05** | Formalizar gestión de casos, defectos y trazabilidad. | **Completada**; 15 controles, nueve issues y catálogo/matriz verificados. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Inspección realizada; integración de aplicación pendiente. | E00–E02; entorno aislado disponible. |
 | **E07** | Despliegue nuevo y smoke automático posterior. | Pendiente. | E04, E06. |
 | **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Pendiente. | E02 y escenario aislado; E03/E06 según componente elegido. |
@@ -140,7 +145,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E04 están completas; el siguiente objetivo ejecutable es E05. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
+E00–E05 están completas; el siguiente objetivo ejecutable es E06. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -405,26 +410,28 @@ Los ensayos controlados del evaluador prueban que el gate funciona. No sustituye
 **Entrada:** registro inicial; comenzar junto con E00 y mantener hasta E11.  
 **Requisitos relacionados:** R03, R05, R06, R12–R14, R24.
 
+**Cierre:** 15/15 controles. [Ficha E05](REGISTRO_EJECUCION_E05.md), [casos](CASOS_PRUEBA_CALIDAD.md), [matriz](TRAZABILIDAD_CALIDAD.md), [gestión/plantillas](GESTION_CALIDAD.md) y [snapshot de Issues](evidencias/e05/seguimiento-2026-10-21.json). Nueve tickets, seis cerrados y tres abiertos, con alcance explícito y responsable.
+
 ### Tareas
 
-- [ ] Formalizar el soporte elegido en E00. Jira es una opción; la consigna admite otra herramienta. Si se utiliza GitHub Issues, guardar URLs reales e identificadores y enlazarlos al registro.
-- [ ] Conservar los IDs DEF-DAT-001 y DEF-SUP-001 y asociarlos a los casos implementados, commits y ejecuciones.
-- [ ] Crear una plantilla de caso con ID, requisito, objetivo, nivel, técnica, precondiciones, entrada, pasos, resultado esperado, resultado obtenido, entorno, fecha y evidencia.
-- [ ] Crear una plantilla de defecto con ID, caso origen, severidad/prioridad justificadas, versión, pasos, esperado/obtenido, evidencia, responsable, estado, corrección y regresión.
-- [ ] Documentar clases de equivalencia y valores límite de casos realmente ejecutados.
-- [ ] Crear al menos una tabla de decisión con combinaciones y resultados que correspondan a código real y estén vinculadas a pruebas.
-- [ ] Sustituir resultados vagos como «aplicar la regla definida» por salidas verificables.
-- [ ] Mantener estados: abierto, reproducido, en corrección, corregido pendiente de validación, cerrado o reabierto, según corresponda.
-- [ ] Incorporar una prueba de regresión por cada defecto que se declare corregido.
-- [ ] Registrar la participación real de cada integrante mediante commits/documentos o actividades identificadas; no inventar autorías.
+- [x] Formalizar el soporte elegido en E00. Jira es una opción; la consigna admite otra herramienta. Si se utiliza GitHub Issues, guardar URLs reales e identificadores y enlazarlos al registro.
+- [x] Conservar los IDs DEF-DAT-001 y DEF-SUP-001 y asociarlos a los casos implementados, commits y ejecuciones.
+- [x] Crear una plantilla de caso con ID, requisito, objetivo, nivel, técnica, precondiciones, entrada, pasos, resultado esperado, resultado obtenido, entorno, fecha y evidencia.
+- [x] Crear una plantilla de defecto con ID, caso origen, severidad/prioridad justificadas, versión, pasos, esperado/obtenido, evidencia, responsable, estado, corrección y regresión.
+- [x] Documentar clases de equivalencia y valores límite de casos realmente ejecutados.
+- [x] Crear al menos una tabla de decisión con combinaciones y resultados que correspondan a código real y estén vinculadas a pruebas.
+- [x] Sustituir resultados vagos como «aplicar la regla definida» por salidas verificables.
+- [x] Mantener estados: abierto, reproducido, en corrección, corregido pendiente de validación, cerrado o reabierto, según corresponda.
+- [x] Incorporar una prueba de regresión por cada defecto que se declare corregido.
+- [x] Registrar la participación real de cada integrante mediante commits/documentos o actividades identificadas; no inventar autorías.
 
 ### Verificar y cumplir
 
-- [ ] Se puede navegar requisito → caso → resultado → defecto → commit → regresión.
-- [ ] Un caso aprobado tiene una ejecución identificable; un caso propuesto no figura como ejecutado.
-- [ ] Un defecto cerrado tiene corrección y validación posterior, no solo una descripción.
-- [ ] Los pendientes conservan estado, impacto y siguiente acción.
-- [ ] Si no se utiliza Jira, el informe identifica claramente el soporte efectivamente usado.
+- [x] Se puede navegar requisito → caso → resultado → defecto → commit → regresión.
+- [x] Un caso aprobado tiene una ejecución identificable; un caso propuesto no figura como ejecutado.
+- [x] Un defecto cerrado tiene corrección y validación posterior, no solo una descripción.
+- [x] Los pendientes conservan estado, impacto y siguiente acción.
+- [x] Si no se utiliza Jira, el informe identifica claramente el soporte efectivamente usado.
 
 **Salida y evidencia:** plantillas utilizadas, registro actualizado, tabla de trazabilidad y enlaces reales a la herramienta elegida.  
 **No cerrar si:** existen tickets sin esperado/obtenido, cierres sin regresión o enlaces inventados.
@@ -848,4 +855,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E05: formalizar plantillas, tickets en GitHub Issues y trazabilidad requisito → caso → defecto → corrección → regresión, incorporando E03/E04 y manteniendo los defectos abiertos. Luego continuar con Supabase de testing y autorización en E06. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E06: identificar/provisionar Supabase de testing aislado, preparar dos tenants/usuarios/datos sintéticos, reproducir y corregir DEF-SUP-001 y validar Auth/Data API con cliente normal y filas conocidas. Usar los casos de CAS-EXT #9, manteniendo la distinción entre SQL histórico, dobles y prueba HTTP real. Conservar el control de OBS-DEP-001 antes del vencimiento 26/10/2026.

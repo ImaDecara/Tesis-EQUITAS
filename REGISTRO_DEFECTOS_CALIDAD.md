@@ -1,8 +1,10 @@
 # EQUITAS — Registro de defectos de calidad
 
-Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira ni demuestra que se hayan creado tickets externos. E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. El despliegue y la integración real se verifican en etapas posteriores.
+Registro versionado iniciado el **21/10/2026** y vinculado a **tickets reales de GitHub Issues en E05**. No es una exportación de Jira. [Matriz completa](TRAZABILIDAD_CALIDAD.md), [casos](CASOS_PRUEBA_CALIDAD.md) y [snapshot de seguimiento](evidencias/e05/seguimiento-2026-10-21.json). E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. El despliegue y la integración real se verifican en etapas posteriores.
 
 ## DEF-SUP-001 — El rol autenticado lee cartera sin pertenencia al tenant
+
+**Ticket:** [#1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), abierto/reproducido; [campaña externa #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9). Prioridad P1 para E06 por impacto de autorización.
 
 | Campo | Valor |
 | --- | --- |
@@ -40,9 +42,11 @@ Criterios de cierre:
 
 ## DEF-DAT-001 — La lectura de datos se trunca antes de paginar la interfaz
 
+**Ticket:** [#2](https://github.com/ImaDecara/Tesis-EQUITAS/issues/2), cerrado en código/regresión aislada; [casos #5](https://github.com/ImaDecara/Tesis-EQUITAS/issues/5). Prioridad histórica P1 por integridad de la cartera. La [campaña real #9](https://github.com/ImaDecara/Tesis-EQUITAS/issues/9) permanece abierta.
+
 | Campo | Valor |
 | --- | --- |
-| Estado | **Corregido y validado mediante regresión automatizada aislada en E03**. Validación en entorno de aplicación pendiente E06/E07. |
+| Estado | **Cerrado en código y regresión automatizada aislada de ambas rutas/relaciones**, validados E03. Validación en entorno de aplicación/despliegue pendiente E06/E07, registrada en campaña externa abierta. |
 | Severidad / prioridad | **Alta**, propuesta técnica por posible incompletitud de métricas y decisiones. |
 | Entorno y versión | Condición detectada en frontend `531996f` y volumen real del 21/10/2026. Reproducción roja `f155cfc1616c8edeacd533241c5dc2858745734a`; corrección verde `3bfe15688a72360b336b7d8732867c6991a1d42e`, Ubuntu 24.04, SDK real con transporte HTTP sintético. |
 | Responsable | Axel Azcune (`AxAzc`). |
@@ -73,9 +77,11 @@ Criterios de cierre:
 - Totales del dashboard coherentes con los registros autorizados completos.
 - Prueba fallida sobre el comportamiento anterior y aprobada después de la corrección; conservar regresión y cobertura de código nuevo.
 
-**Criterios anteriores satisfechos en el alcance automatizado de E03:** ambas rutas, páginas vacías/exactas/parciales, servidor inferior al límite solicitado, errores, orden/unicidad y agregados con relaciones de varias páginas. Se mantiene la regresión en CI. El recorrido no garantiza snapshot transaccional entre requests ni rendimiento para toda la cartera; integración real, despliegue y cargas corresponden a E06–E08. E04 implementará el gate sobre la base fija del TP.
+**Criterios anteriores satisfechos en el alcance automatizado de E03:** ambas rutas, páginas vacías/exactas/parciales, servidor inferior al límite solicitado, errores, orden/unicidad y agregados con relaciones de varias páginas. Se mantiene la regresión en CI. El recorrido no garantiza snapshot transaccional entre requests ni rendimiento para toda la cartera; integración real, despliegue y cargas corresponden a E06–E08. E04 implementó y comprobó el gate sobre la base fija del TP.
 
 ## Observaciones de calidad incorporadas en E01
+
+**Tickets E05:** [OBS-DEP-001 #3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3), abierto con prioridad P1 antes del vencimiento; [OBS-COB-001 #4](https://github.com/ImaDecara/Tesis-EQUITAS/issues/4), cerrado con validación E04. Los [contratos #8](https://github.com/ImaDecara/Tesis-EQUITAS/issues/8) están aprobados; no cierran el riesgo temporal de dependencias.
 
 | ID | Situación comprobada | Severidad / responsable | Tratamiento y criterio de cierre |
 | --- | --- | --- | --- |
@@ -91,6 +97,8 @@ Evidencia común: [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [resum
 **Seguimiento E04:** OBS-COB-001 cerrada con [evidencia](REGISTRO_EJECUCION_E04.md): 61,79 % frontend; nuevo frontend 28/28 y backend 15/17 contra la base fija. Gates normales aprobados y ensayo crítico sintético bloqueado. Las pruebas Auth son aisladas; **DEF-SUP-001 sigue abierto**. OBS-DEP-001 conserva cinco altos de desarrollo y el vencimiento 26/10/2026; no se prorrogó. Esta actualización prevalece sobre el estado abierto de cobertura de E01–E03.
 
 ## Trazabilidad actual
+
+E05 formaliza los estados, tickets y enlaces recíprocos en [TRAZABILIDAD_CALIDAD.md](TRAZABILIDAD_CALIDAD.md). Los criterios de detección/cierre y reportes anteriores se conservan. Una aceptación temporal no cierra OBS-DEP-001 y un aprobado aislado no cierra DEF-SUP-001.
 
 | Requisito | Caso | Evidencia / resultado | Defecto | Corrección y regresión |
 | --- | --- | --- | --- | --- |

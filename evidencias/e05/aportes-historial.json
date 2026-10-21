@@ -1,0 +1,152 @@
+{
+  "cutoff": "930f807e3d6c8d12c6e8a25f84e4d21a4c105755",
+  "source": "git show metadata and diff-tree paths; selected commits, not a productivity score",
+  "commits": [
+    {
+      "sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+      "author": "Ignacio Magoia",
+      "author_date": "2026-10-16T19:45:25-03:00",
+      "subject": "subo",
+      "files": [
+        ".gitignore",
+        "CALIDAD_SOFTWARE_INTEGRACION.md",
+        "CALIDAD_SOFTWARE_PRUEBAS.md",
+        "INFORME_TP_CALIDAD_SOFTWARE.md",
+        "back/.coveragerc",
+        "back/pytest.ini",
+        "back/requirements-dev.txt",
+        "back/tests/conftest.py",
+        "back/tests/integration/test_etl_pipeline_integration.py",
+        "back/tests/integration/test_supabase_loader_integration.py",
+        "back/tests/test_api_endpoints.py",
+        "back/tests/test_export_preview.py",
+        "back/tests/test_extract.py",
+        "back/tests/test_inspect_tsv.py",
+        "back/tests/test_load_extended.py",
+        "back/tests/test_load_unit.py",
+        "back/tests/test_scoring_service.py",
+        "back/tests/test_transform.py",
+        "front/eslint.config.mjs",
+        "front/package-lock.json",
+        "front/package.json",
+        "front/tests/helpers/equitas-fixtures.ts",
+        "front/tests/helpers/react-tree.ts",
+        "front/tests/integration/auth-service.integration.test.ts",
+        "front/tests/integration/raw-debtor-loader.integration.test.ts",
+        "front/tests/integration/supabase-testing.integration.test.ts",
+        "front/tests/pages/data-pages.test.ts",
+        "front/tests/pages/static-pages.test.ts",
+        "front/tests/unit/debtor-mapper-and-selectors.test.ts",
+        "front/tests/unit/pagination.test.ts",
+        "front/tests/unit/risk-and-aging.test.ts",
+        "front/vitest.config.ts"
+      ]
+    },
+    {
+      "sha": "21c7f5e46d79f3f117c929edf2b6aab4bbdf7160",
+      "author": "Ignacio Magoia",
+      "author_date": "2026-06-07T20:25:30-03:00",
+      "subject": "cambie el front",
+      "files": [
+        "front/app/debt-aging/page.tsx",
+        "front/app/debtors/page.tsx",
+        "front/app/login/page.tsx",
+        "front/app/no-contact/page.tsx",
+        "front/app/page.tsx",
+        "front/app/people/page.tsx",
+        "front/app/priority-cases/page.tsx",
+        "front/app/recommended-actions/page.tsx",
+        "front/app/risk-analysis/page.tsx",
+        "front/components/charts/debtor-dashboard-charts.tsx",
+        "front/components/equitas/pagination-controls.tsx",
+        "front/components/layout/app-shell.tsx",
+        "front/components/layout/logout-button.tsx",
+        "front/lib/equitas-view-selectors.ts",
+        "front/lib/pagination.ts",
+        "front/next.config.ts"
+      ]
+    },
+    {
+      "sha": "ed074f570bc50d5297053c6a65b02c4c47148556",
+      "author": "Imanol Decara",
+      "author_date": "2026-05-27T15:00:29-03:00",
+      "subject": "Back Final para MVP",
+      "files": [
+        "back/ETL/transform.py",
+        "back/api/main.py",
+        "back/requirements.txt",
+        "back/services/scoring_service.py"
+      ]
+    },
+    {
+      "sha": "12c52e4a5da7da2c77b4e228e9a29b838c13bdcc",
+      "author": "Imanol Decara",
+      "author_date": "2026-05-21T20:24:00-03:00",
+      "subject": "ETL Final",
+      "files": [
+        "back/ETL/export_preview.py",
+        "back/ETL/extract.py",
+        "back/ETL/load.py",
+        "back/ETL/run_etl.py",
+        "back/ETL/transform.py"
+      ]
+    },
+    {
+      "sha": "d4e61644298b18f790a9effb3b8a38472f988698",
+      "author": "Axel",
+      "author_date": "2026-10-21T16:36:09-03:00",
+      "subject": "docs(calidad): registrar diagnostico, evidencias y roadmap del TP",
+      "files": [
+        ".gitignore",
+        "CALIDAD_SOFTWARE_INTEGRACION.md",
+        "DIAGNOSTICO_CIERRE_CALIDAD.md",
+        "INFORME_TP_CALIDAD_SOFTWARE.md",
+        "REGISTRO_DEFECTOS_CALIDAD.md",
+        "REVISION_SUPABASE.md",
+        "ROADMAP_TP_CALIDAD_SOFTWARE.md",
+        "consigna_pdf.md",
+        "database/schema-observado-2026-10-21.json",
+        "database/verificacion_supabase_solo_lectura.sql",
+        "evidencias/supabase-2026-10-21.json",
+        "evidencias/validacion-2026-10-21.json",
+        "tp-Calidad.md"
+      ]
+    },
+    {
+      "sha": "c95a9ab4adcd0d342fc30ca9fe7c4d75109bca44",
+      "author": "Axel",
+      "author_date": "2026-10-21T18:17:24-03:00",
+      "subject": "feat(calidad): aplicar gates de cobertura duplicacion y criticos",
+      "files": [
+        ".github/workflows/quality-ci.yml",
+        "CASOS_E04_GATES.md",
+        "ROADMAP_TP_CALIDAD_SOFTWARE.md",
+        "front/eslint.config.mjs",
+        "front/tests/unit/auth-service.test.ts",
+        "front/tests/unit/recommendation-decisions.test.ts",
+        "quality/README.md",
+        "quality/ci.py",
+        "quality/gate-policy.json",
+        "quality/gate_probe.py",
+        "quality/gates.py",
+        "quality/tests/test_ci.py",
+        "quality/tests/test_gates.py"
+      ]
+    },
+    {
+      "sha": "3bfe15688a72360b336b7d8732867c6991a1d42e",
+      "author": "Axel",
+      "author_date": "2026-10-21T17:47:26-03:00",
+      "subject": "fix: recuperar la cartera completa con paginacion por id",
+      "files": [
+        "front/lib/data/paginated-table-reader.ts",
+        "front/lib/data/raw-debtor-loader.ts",
+        "front/lib/services/person-data-service.ts",
+        "front/tests/fixtures/paginated-supabase.ts",
+        "front/tests/integration/complete-data.integration.test.ts",
+        "front/tests/integration/raw-debtor-loader.integration.test.ts",
+        "front/tests/unit/paginated-table-reader.test.ts"
+      ]
+    }
+  ]
+}
