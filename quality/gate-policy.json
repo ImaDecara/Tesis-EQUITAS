@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+  "minimum_statements_pct": 60,
+  "minimum_new_lines_pct": 80,
+  "maximum_duplicated_lines_pct": 5,
+  "critical_rules": {
+    "eslint": ["constructor-super", "no-unreachable", "no-unsafe-finally"],
+    "ruff": ["F821", "F822", "F823", "invalid-syntax"]
+  },
+  "scope": {
+    "frontend": ["front/app/", "front/components/", "front/lib/"],
+    "backend": ["back/ETL/", "back/api/", "back/services/"]
+  },
+  "meaning": "Critical is a project classification of selected analyzer rules, not a native Ruff severity or a proof that all functional/security bugs are absent. Dependencies use npm-audit-policy.json separately."
+}

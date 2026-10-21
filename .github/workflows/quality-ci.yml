@@ -1,4 +1,4 @@
-name: Calidad - CI base
+name: Calidad - CI y gates
 
 on:
   push:
@@ -8,6 +8,11 @@ on:
     inputs:
       verify_failure:
         description: 'Ensayo controlado: una prueba frontend debe fallar y conservar reportes'
+        required: false
+        default: false
+        type: boolean
+      verify_gate_failure:
+        description: 'Ensayo controlado: inyectar diagnostico critico en reporte y bloquear gate'
         required: false
         default: false
         type: boolean
@@ -88,7 +93,7 @@ jobs:
           retention-days: 30
 
   ci-summary:
-    name: Resumen y estado del CI base
+    name: Quality gates y resumen
     needs: [frontend, backend]
     if: always()
     runs-on: ubuntu-24.04
@@ -96,6 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -104,6 +110,11 @@ jobs:
         with:
           pattern: ci-*-${{ github.run_id }}-${{ github.run_attempt }}
           path: .quality/download
+      - name: Ensayo manual de bloqueo por critico en reporte
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_gate_failure
+        env:
+          CI_GATE_PROBE: critical
+        run: python quality/gate_probe.py --artifacts .quality/download --output .quality/ci/summary
       - name: Crear resumen y propagar el estado real
         if: always()
         env:

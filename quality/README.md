@@ -1,11 +1,52 @@
-# CI base del TP de Calidad — E02
+# CI y quality gates del TP de Calidad — E02/E04
+
+## Gates E04
+
+El job **Quality gates y resumen** ejecuta el evaluador [gates.py](gates.py) y devuelve salida 1 cuando falla cualquier condición. Conserva `gate.json`, `summary.json` y `summary.md` aun en rojo. Los [criterios previos](../CASOS_E04_GATES.md) y la [política versionada](gate-policy.json) definen la evaluación.
+
+| Control | Criterio bloqueante |
+| --- | --- |
+| Controles y pruebas | Todos los controles obligatorios aprobados; JUnit/Vitest coherentes. |
+| Existente | Sentencias >= 60 % en frontend y backend, evaluados por separado. |
+| Nuevo | Líneas ejecutables nuevas/cambiadas >= 80 % por módulo contra la base fija. |
+| Duplicación | Líneas duplicadas <= 5 % en el alcance conjunto de jscpd. |
+| Críticos | Cero hallazgos de reglas clasificadas como críticas por el proyecto. |
+| Análisis | Cero errores/advertencias ESLint y hallazgos Ruff no aceptados; también se analiza `quality/` por separado. |
+| Dependencias | Política de auditoría E02 aprobada, sin críticos ni avisos productivos. |
+| Evidencia | Base resoluble/ancestral, procedencia correcta y reportes completos/válidos, sin mezclar runs/intentos. |
+
+La base fija es `531996f51243dc3d4c5a607338e2f35e32313f6b`. El checkout del job resumen descarga toda la historia. `git diff --no-ext-diff --no-renames --unified=0 BASE HEAD` obtiene las líneas añadidas/cambiadas; se intersectan con las líneas ejecutables `DA` de LCOV y con `executed_lines ∪ missing_lines` de coverage.py. Los archivos nuevos entran completos; los eliminados no suman; un renombre se evalúa como eliminación/alta completa. Se normalizan separadores y prefijos de rutas Windows/Linux. Si un módulo no tiene líneas nuevas ejecutables se informa 0 y porcentaje nulo («no aplica»), exigiendo igualmente reportes válidos. El desglose por archivo explica el total; el umbral se decide por módulo.
+
+Se conservan los alcances: `front/app`, `front/components`, `front/lib` (TS/TSX salvo `.d.ts`) y `back/ETL`, `back/api`, `back/services` (Python). Se cotejan los archivos reportados con el inventario Git, se validan totales por archivo y se exige coherencia entre LCOV/JSON y reportes de pruebas. No se retiran archivos sin cobertura. `front/proxy.ts` sigue fuera del alcance heredado, declarado desde E00. Los scripts/tests de infraestructura no se suman al denominador del producto.
+
+Se comparan **conteos sin redondear** mediante productos cruzados; 79,99 % nuevo falla, 80 % aprueba, 5 % de duplicación aprueba y un valor mayor falla aunque se muestre redondeado como 5,00 %. Vitest trunca algunos porcentajes a dos decimales; `gate.json` conserva el cociente calculado desde los conteos.
+
+### Clasificación de bugs críticos
+
+Ruff no asigna una severidad crítica nativa a cada regla. La política del proyecto clasifica como críticas `F821`, `F822`, `F823` e `invalid-syntax`; ESLint clasifica `constructor-super`, `no-unreachable`, `no-unsafe-finally` y errores fatales de parsing. Las tres reglas ESLint quedan activas explícitamente. Los otros hallazgos no aceptados también bloquean análisis, sin etiquetarlos todos como críticos.
+
+La clasificación prioriza fallos estructurales/de ejecución: por ejemplo, [F821](https://docs.astral.sh/ruff/rules/undefined-name/) identifica nombres no definidos y [F823](https://docs.astral.sh/ruff/rules/undefined-local/) variables locales usadas antes de asignarse. [no-unsafe-finally](https://eslint.org/docs/latest/rules/no-unsafe-finally) detecta alteraciones del flujo desde `finally`. Es una política acotada: cero hallazgos no significa ausencia de defectos funcionales ni certifica RLS. DEF-SUP-001 permanece abierto para E06. Vulnerabilidades npm y defectos de negocio conservan sus registros y tratamiento propios.
+
+### Ensayo remoto del gate
+
+El input manual `verify_gate_failure=true` mantiene las suites normales y añade un diagnóstico **sintético F821 al reporte descargado** antes de evaluarlo. No modifica fuentes ni los artefactos originales de frontend/backend. El artefacto del resumen guarda `ruff-before-probe.json`, `ruff-after-probe.json`, `gate-probe.json` con hashes, y el gate fallido. El job resumen debe fallar aun con ambos componentes aprobados.
+
+```bash
+gh workflow run quality-ci.yml --repo ImaDecara/Tesis-EQUITAS --ref main -f verify_gate_failure=true
+```
+
+Usar solo para verificar el mecanismo y registrar el resultado como ensayo controlado. El defecto real rojo/verde sigue siendo E03. El input anterior `verify_failure=true` conserva el ensayo E02 de una prueba fallida; por defecto ambos inputs son falsos. Las pruebas automatizadas del evaluador cubren los límites, datos incompletos y la propagación del fallo.
+
+Un resultado verde de estos gates **no aprueba una entrega/despliegue integral**: `release_approved=false` sigue indicando que faltan integración real, despliegue/smoke, cargas y cierre final del TP.
+
+## Antecedentes del pipeline base
 
 Workflow: [quality-ci.yml](../.github/workflows/quality-ci.yml). Se ejecuta en push, pull request hacia `main` y manualmente. **E02 comprobada:** [ejecución normal aprobada](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) y [fallo controlado propagado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493). Consultar [la ficha E02](../REGISTRO_EJECUCION_E02.md) y [sus evidencias](../evidencias/e02/ejecuciones-2026-10-21.json).
 
 ## Controles y resultados
 
 - **Frontend:** Node 22.23.2/npm 11.21.1; `npm ci`, verificación del árbol, Vitest/V8 con JSON/JUnit/LCOV/HTML, ESLint JSON, build/TypeScript, duplicación, complejidad y auditorías npm completa/productiva.
-- **Backend:** CPython 3.12.14, venv nuevo, pip 25.0.1, requisitos y constraints E01; pruebas de infraestructura, `pip freeze`, `pip check`, Pytest con JUnit/cobertura JSON/XML/HTML y Ruff JSON.
+- **Backend:** CPython 3.12.14, venv nuevo, pip 25.0.1, requisitos y constraints E01; pruebas y lint de infraestructura, `pip freeze`, `pip check`, Pytest con JUnit/cobertura JSON/XML/HTML y Ruff JSON. Infraestructura y producto tienen reportes separados.
 - **Resumen:** descarga los artefactos de ambos jobs, comprueba SHA/run/intento, reúne estados, pruebas, métricas y versiones, y publica JSON/Markdown en el resumen de Actions. Un job fallido o un reporte requerido ausente/inválido bloquea el resumen.
 
 `ci.py` ejecuta los controles desde `front` o `back`, conserva el código de salida de cada proceso y continúa los controles independientes para recoger sus reportes. Al finalizar devuelve 1 si alguno falló o falta evidencia requerida. No se usa `continue-on-error`, `|| true` ni una copia manual de reportes históricos.
@@ -18,7 +59,7 @@ Los jobs utilizan permisos de lectura, acciones oficiales fijadas por SHA, `pers
 
 No se incorporan secretos de Supabase. La integración real existente queda visiblemente omitida mediante `SUPABASE_TEST_ENABLED=false`; las pruebas aisladas usan respuestas sintéticas. E06 deberá agregar un job de integración con testing y credenciales propias, sin permitir que su ausencia apruebe la entrega. No usar `pull_request_target` para ejecutar código de terceros con secretos.
 
-**Un CI base aprobado no acredita la entrega integral.** La cobertura frontend vigente sigue por debajo del 60 % (OBS-COB-001). Los gates completos de cobertura existente/nueva, duplicación y bugs críticos se implementan y prueban en E04. Despliegue, smoke, cargas e integración externa corresponden a etapas posteriores. Las pruebas de infraestructura se informan aparte de las 94 pruebas de producto de la línea base.
+**Un CI aprobado no acredita la entrega integral.** Los gates E04 anteriores evalúan cobertura existente/nueva, duplicación, críticos y reportes. Despliegue, smoke, cargas e integración externa corresponden a etapas posteriores. Las pruebas de infraestructura se informan aparte del producto; las 94 pruebas son la línea base histórica E00–E02, no el total vigente después de ampliar suites.
 
 ## Auditoría y excepción temporal
 
@@ -34,6 +75,8 @@ Preparar las herramientas según [REPRODUCIBILIDAD_CALIDAD.md](../REPRODUCIBILID
 python quality/ci.py run frontend --output .quality/local-ci/frontend
 python quality/ci.py run backend --output .quality/local-ci/backend
 python quality/ci.py summary --artifacts .quality/local-ci --output .quality/local-ci-summary
+# Evaluar solamente los gates sobre reportes existentes del HEAD actual.
+python quality/gates.py --artifacts .quality/local-ci --output .quality/local-gates
 ```
 
 Sin `--install` se usan las dependencias ya instaladas. Con `--install`, frontend ejecuta `npm ci` y backend prepara el entorno e instala las dependencias; usar un checkout/venv apropiado para una instalación nueva. Cada directorio de reportes debe estar vacío: el script rechaza reportes previos para impedir mezclas de versiones. Elegir otra carpeta al repetir.

@@ -127,7 +127,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
 | **E02** | Pipeline base con build, suites y reportes. | **Completada**; ejecución normal y ensayo de fallo comprobados. | E00–E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | **Completada**; 27 controles, ambas rutas, rojo/verde y regresión verificados. | E02; registro de defectos iniciado. |
-| **E04** | Quality gates completos y comprobados. | Pendiente. | E01–E03. |
+| **E04** | Quality gates completos y comprobados. | En curso: implementación y verificación de gates. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Inspección realizada; integración de aplicación pendiente. | E00–E02; entorno aislado disponible. |
 | **E07** | Despliegue nuevo y smoke automático posterior. | Pendiente. | E04, E06. |

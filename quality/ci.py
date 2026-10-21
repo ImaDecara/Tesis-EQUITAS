@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree import ElementTree
 
+if __package__:
+    from .gates import evaluate_gates
+else:
+    from gates import evaluate_gates
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -93,7 +98,7 @@ def component_run(component, output, install):
         'failure_probe': os.getenv('CI_FAILURE_PROBE') == 'true',
         'runtime': {'python': platform.python_version(), 'os': platform.platform()},
         'controls': [], 'report_errors': [], 'metrics': None,
-        'scope': 'CI base E02; quality gates E04 and external integration E06 remain pending.',
+        'scope': 'Build/tests/analysis with E04 gates in summary; external integration E06 remains pending.',
     }
     write_json(output / 'component.json', report)
     cwd = ROOT / ('front' if component == 'frontend' else 'back')
@@ -154,6 +159,8 @@ def component_run(component, output, install):
                 ready = control('install', [python, '-m', 'pip', 'install', '-r', 'requirements-dev.txt'])
         if ready:
             control('infrastructure-tests', [sys.executable, '-m', 'unittest', 'discover', '-s', '../quality/tests', '-v'])
+            control('infrastructure-lint', [python, '-m', 'ruff', 'check', '../quality',
+                '--output-format', 'json', '--output-file', f'{relative}/infrastructure-ruff.json'])
             control('versions', [python, '-m', 'pip', 'freeze'])
             control('dependencies', [python, '-m', 'pip', 'check'])
             control('tests', [python, '-m', 'pytest', '--cov', '--cov-report=term-missing',
@@ -178,10 +185,26 @@ def component_run(component, output, install):
 
 def summarize(artifacts, output):
     output.mkdir(parents=True, exist_ok=True)
+    gate = evaluate_gates(artifacts)
+    write_json(output / 'gate.json', gate)
     reports, errors = {}, []
     for path in artifacts.rglob('component.json'):
-        report = read_json(path)
-        name = report['component']
+        try:
+            report = read_json(path)
+            name = report['component']
+            if name not in ('frontend', 'backend') or not isinstance(report['metrics'], dict):
+                raise ValueError('Unknown component or invalid metrics')
+            if not isinstance(report['controls'], list) or any(
+                not isinstance(c['name'], str) or type(c['exit_code']) is not int for c in report['controls']
+            ):
+                raise ValueError('Invalid controls')
+            for key in ('passed', 'failed', 'skipped'):
+                value = report['metrics']['tests'][key]
+                if type(value) is not int or value < 0:
+                    raise ValueError('Invalid test counts')
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            errors.append(f'Invalid component report {path.name}: {error}')
+            continue
         if name in reports:
             errors.append(f'Duplicate report: {name}')
         reports[name] = report
@@ -191,11 +214,11 @@ def summarize(artifacts, output):
             errors.append(f'Missing component report: {name}')
             continue
         report = reports[name]
-        if expected_sha and report['source_sha'] != expected_sha:
+        if expected_sha and report.get('source_sha') != expected_sha:
             errors.append(f'{name}: wrong source SHA')
-        if os.getenv('GITHUB_RUN_ID') and report['run_id'] != os.getenv('GITHUB_RUN_ID'):
+        if os.getenv('GITHUB_RUN_ID') and report.get('run_id') != os.getenv('GITHUB_RUN_ID'):
             errors.append(f'{name}: wrong run ID')
-        if os.getenv('GITHUB_RUN_ATTEMPT') and report['run_attempt'] != os.getenv('GITHUB_RUN_ATTEMPT'):
+        if os.getenv('GITHUB_RUN_ATTEMPT') and report.get('run_attempt') != os.getenv('GITHUB_RUN_ATTEMPT'):
             errors.append(f'{name}: wrong run attempt')
         if not report.get('controls') or not isinstance(report.get('metrics'), dict):
             errors.append(f'{name}: incomplete component report')
@@ -207,12 +230,15 @@ def summarize(artifacts, output):
     counts = {key: sum(report.get('metrics', {}).get('tests', {}).get(key, 0)
                         for report in reports.values() if report.get('metrics'))
               for key in ('passed', 'failed', 'skipped')}
+    if not gate['passed']:
+        errors.append('E04 quality gates failed; see gate.json')
     summary = {'source_sha': expected_sha, 'run_id': os.getenv('GITHUB_RUN_ID'),
                'run_attempt': os.getenv('GITHUB_RUN_ATTEMPT'), 'passed': not errors,
                'errors': errors, 'tests': counts, 'components': reports,
-               'release_approved': False, 'quality_gates_stage': 'E04 pending'}
+               'release_approved': False, 'quality_gates_stage': 'E04 implemented',
+               'quality_gates_passed': gate['passed'], 'gate': gate}
     write_json(output / 'summary.json', summary)
-    lines = ['# EQUITAS - CI base E02', '', f"SHA: `{expected_sha or 'local'}`", '',
+    lines = ['# EQUITAS - Calidad con gates E04', '', f"SHA: `{expected_sha or 'local'}`", '',
              f"Pruebas de producto: **{counts['passed']} aprobadas, {counts['failed']} fallidas, {counts['skipped']} omitidas**.", '',
              '| Componente | Control | Salida |', '| --- | --- | --- |']
     for name, report in sorted(reports.items()):
@@ -222,20 +248,24 @@ def summarize(artifacts, output):
     for name, report in sorted(reports.items()):
         lines.append(f"{name}: `{json.dumps(report.get('runtime', {}))}`.")
         metrics = report.get('metrics')
-        if metrics and name == 'frontend':
+        if metrics and name == 'frontend' and all(k in metrics for k in ('coverage', 'duplication', 'audit', 'audit_policy')):
             lines.extend(['', (f"Frontend: sentencias **{metrics['coverage']['statements']['pct']} %**; "
                 f"ramas {metrics['coverage']['branches']['pct']} %; duplicacion {metrics['duplication']['percentage']:.2f} %."),
                 (f"Auditoria completa: {metrics['audit']}; salida cruda "
                 f"{metrics['audit_policy']['raw_exit_codes']}. Excepcion temporal OBS-DEP-001, no corregida.")])
-        if metrics and name == 'backend':
+        if metrics and name == 'backend' and 'coverage' in metrics:
             lines.extend(['', (f"Backend: sentencias **{metrics['coverage']['percent_statements_covered']:.2f} %**; "
                 f"ramas {metrics['coverage']['percent_branches_covered']:.2f} %.")])
-    lines.extend(['', '## Alcance y pendientes', '',
-        'Pipeline base: no acredita el cierre de los gates E04, despliegue, smoke, cargas o integracion externa.',
-        'OBS-COB-001: frontend requiere >= 60 % antes de cerrar E04. Codigo nuevo requiere >= 80 % en E04.',
+    lines.extend(['', '## Quality gates E04', '', f"Base fija: `{gate['base_sha']}`.", '',
+                  '| Gate | Resultado | Criterio |', '| --- | --- | --- |'])
+    for item in gate['checks']:
+        lines.append(f"| {item['id']} | {'aprobado' if item['passed'] else 'fallido'} | {item['criterion']} |")
+    lines.extend(['', 'Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.',
+        '', '## Alcance y pendientes', '',
+        'Los gates E04 no acreditan despliegue, smoke, cargas o integracion externa.',
         'Supabase real se mantiene omitida de forma visible; E06 debera ejecutarla en testing sin omisiones.',
         'La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.', '',
-        'Resultado CI base: **' + ('aprobado' if not errors else 'fallido') + '**.', *errors])
+        'Resultado CI: **' + ('aprobado' if not errors else 'fallido') + '**.', *errors])
     markdown = '\n'.join(lines) + '\n'
     (output / 'summary.md').write_text(markdown, encoding='utf-8')
     if os.getenv('GITHUB_STEP_SUMMARY'):
