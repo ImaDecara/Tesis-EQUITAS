@@ -1,8 +1,7 @@
-from typing import Any, cast
 import argparse
+from typing import Any, cast
 
 from ETL.config import supabase
-
 
 # ============================================================
 # DEFINICIÓN DE GRUPOS PARA DASHBOARD
@@ -464,7 +463,7 @@ def get_case_groups_summary() -> dict[str, Any]:
 
     group_counts: dict[str, int] = {
         group_key: 0
-        for group_key in GROUP_DEFINITIONS.keys()
+        for group_key in GROUP_DEFINITIONS
     }
 
     risk_band_counts: dict[str, int] = {

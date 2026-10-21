@@ -1,8 +1,7 @@
-from pathlib import Path
 import argparse
+from pathlib import Path
+
 import pandas as pd
-
-
 
 # CAMPOS LÓGICOS ESPERADOS EN CABECERA
 CABECERA_REQUIRED_FIELDS = {

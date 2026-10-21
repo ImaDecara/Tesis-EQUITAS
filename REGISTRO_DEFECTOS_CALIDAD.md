@@ -1,6 +1,6 @@
 # EQUITAS — Registro de defectos de calidad
 
-Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira ni demuestra que se hayan creado tickets externos. Los defectos permanecen abiertos; no hay una corrección o ejecución verde que se pueda declarar todavía.
+Registro versionado iniciado el **21/10/2026**. No es una exportación de Jira ni demuestra que se hayan creado tickets externos. Los defectos funcionales permanecen abiertos. E01 añade observaciones de dependencias y cobertura; su tratamiento no cierra los defectos de datos o autorización.
 
 ## DEF-SUP-001 — El rol autenticado lee cartera sin pertenencia al tenant
 
@@ -72,6 +72,15 @@ Criterios de cierre:
 - Totales del dashboard coherentes con los registros autorizados completos.
 - Prueba fallida sobre el comportamiento anterior y aprobada después de la corrección; conservar regresión y cobertura de código nuevo.
 
+## Observaciones de calidad incorporadas en E01
+
+| ID | Situación comprobada | Severidad / responsable | Tratamiento y criterio de cierre |
+| --- | --- | --- | --- |
+| **OBS-DEP-001** | Cinco paquetes de desarrollo afectados por una misma cadena del linter: `eslint-config-next` → plugin Next → `fast-glob` → `micromatch` → `braces` 3.0.3. Aviso GHSA-vfj7-8cjw-p6xm sin parche publicado al verificar. Auditoría completa devuelve 1; productiva, 0. | Alta según el aviso. Axel Azcune. **Abierta, con excepción temporal documentada para el TP**. | Mantener reportes y configuración del linter bajo control, runner acotado y revisión en E02/E11, antes del 26/10/2026 o al publicarse corrección. Cerrar únicamente tras retirar la cadena o actualizar a versión corregida compatible y aprobar lint/regresión. No es un bug funcional corregido para R14. |
+| **OBS-COB-001** | Vitest 4.1.12: 586/1.275 sentencias = **45,96 %**, con los mismos 54 archivos del alcance anterior. La medición actual incumple R07 frontend (60 %). Las 33 pruebas frontend continúan aprobadas. | Alta para el cumplimiento de entrega; no demuestra por sí sola un defecto funcional. Axel Azcune. **Abierta, bloquea el cierre de E04**. | Ampliar pruebas significativas hasta al menos 60 % del alcance declarado y verificar cobertura nueva >= 80 % según la base fija. Conservar reportes y gate. No cerrar con la cifra histórica del runner anterior ni retirando archivos sin cobertura. |
+
+Evidencia común: [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [resumen E01](evidencias/e01/resumen-2026-10-21.json) y auditorías en la misma carpeta. Las tres excepciones de Ruff y los avisos de mantenimiento se detallan en la ficha E01; no se convierten en bugs críticos de negocio por el nivel `error` del linter.
+
 ## Trazabilidad actual
 
 | Requisito | Caso | Evidencia / resultado | Defecto | Corrección y regresión |
@@ -80,5 +89,7 @@ Criterios de cierre:
 | R-SEG-02, impedir lectura anónima | SUP-RLS-01 | Cero filas en cuatro tablas consultadas: **cumple en ese alcance**. | Ninguno por ese caso. | Mantener como regresión. |
 | R-DAT-01, cartera completa | SUP-DATA-01 | Volumen supera lectura máxima: **no cumple**. | DEF-DAT-001 | Pendientes. |
 | R-INT-01, integridad de carga existente | SUP-INT-01 y agregados de revisión | Sin duplicados, huérfanos ni discrepancias seleccionadas: **cumple en ese alcance**. | Ninguno por esos casos. | No sustituye reejecución ETL real. |
+| R09 / dependencias | Auditorías npm completa y productiva E01 | 0 críticos; cinco altos de desarrollo pendientes, productivas sin avisos. | OBS-DEP-001 | Excepción temporal revisable; corrección pendiente. |
+| R07 / cobertura existente frontend | Vitest 4.1.12, mismo conjunto de 54 archivos | **45,96 %, no cumple 60 %**. | OBS-COB-001 | Ampliación de pruebas y gate antes de cerrar E04. |
 
 Los IDs describen esta revisión; no aumentan el recuento de las suites Vitest/Pytest ni se atribuyen a Jira.

@@ -1,0 +1,377 @@
+{
+  "stage": "E01",
+  "status": "completed",
+  "observed_at_utc": "2026-10-21T20:00:04.279981+00:00",
+  "owner": "Axel Azcune",
+  "input_head": "a96b48281b1782c71cbc9f48407cf1dcc19dd52b",
+  "working_tree_changes_included": true,
+  "version_note": "The publishing commit is obtained from git log for REGISTRO_EJECUCION_E01.md; input_head is the entry version.",
+  "runtime": {
+    "node": "22.23.2",
+    "npm_before": "10.9.8",
+    "npm_after": "11.21.1",
+    "python": "3.12.14",
+    "pip": "25.0.1"
+  },
+  "frontend_versions": {
+    "next": "16.4.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "vitest": "4.1.12",
+    "@vitest/coverage-v8": "4.1.12",
+    "vite": "7.3.7",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.2",
+    "jscpd": "5.4.2",
+    "typescript": "5.9.3",
+    "@supabase/ssr": "0.10.3",
+    "@supabase/supabase-js": "2.105.4"
+  },
+  "install": {
+    "frontend": {
+      "exitCode": 0,
+      "lockSha256": "E55C95B363B8BE552F0EABDB363C5902F6B0FD84EB8EDBA9FD134B163FBE809B",
+      "lockUnchanged": true
+    },
+    "backend": {
+      "fresh_venv": true,
+      "exit_code": 0,
+      "pip_check_exit_code": 0,
+      "matches_baseline_pins": true,
+      "verified_os": "Windows x64",
+      "linux_execution": "Pending E02; uvloop conditional pin added for CPython/Linux."
+    }
+  },
+  "tests": {
+    "frontend": {
+      "passed": 33,
+      "failed": 0,
+      "skipped": 1
+    },
+    "backend": {
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "warnings": 1
+    },
+    "total_passed": 94,
+    "total_failed": 0,
+    "total_skipped": 1
+  },
+  "coverage": {
+    "frontend_before": {
+      "statements": {
+        "covered": 3372,
+        "total": 5580,
+        "percent": 60.43010752688171
+      },
+      "functions": {
+        "covered": 74,
+        "total": 135,
+        "percent": 54.81481481481482
+      },
+      "branches": {
+        "covered": 292,
+        "total": 472,
+        "percent": 61.86440677966102
+      },
+      "files": [
+        "app/debt-aging/page.tsx",
+        "app/debtors/[debtorId]/page.tsx",
+        "app/debtors/page.tsx",
+        "app/layout.tsx",
+        "app/loading.tsx",
+        "app/login/page.tsx",
+        "app/no-contact/page.tsx",
+        "app/not-found.tsx",
+        "app/page.tsx",
+        "app/people/page.tsx",
+        "app/priority-cases/page.tsx",
+        "app/recommended-actions/page.tsx",
+        "app/risk-analysis/page.tsx",
+        "components/auth/auth-guard.tsx",
+        "components/auth/auth-provider.tsx",
+        "components/auth/login-form.tsx",
+        "components/charts/debtor-dashboard-charts.tsx",
+        "components/dashboard/chart-cards.tsx",
+        "components/dashboard/metric-card.tsx",
+        "components/debtors/contact-availability-badge.tsx",
+        "components/debtors/debtors-filters-form.tsx",
+        "components/equitas/data-warnings.tsx",
+        "components/equitas/pagination-controls.tsx",
+        "components/equitas/risk-badge.tsx",
+        "components/layout/app-shell.tsx",
+        "components/layout/logout-button.tsx",
+        "components/people/people-filters-form.tsx",
+        "components/people/person-risk-badge.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/button.tsx",
+        "components/ui/card.tsx",
+        "components/ui/table.tsx",
+        "components/ui/tabs.tsx",
+        "lib/data/raw-debtor-loader.ts",
+        "lib/data/table-names.ts",
+        "lib/equitas-data.ts",
+        "lib/equitas-view-selectors.ts",
+        "lib/mappers/dashboard-metrics-mapper.ts",
+        "lib/mappers/debtor-object-mapper.ts",
+        "lib/mappers/person-risk-mapper.ts",
+        "lib/pagination.ts",
+        "lib/parsers/date-value-parser.ts",
+        "lib/parsers/generic-value-selector.ts",
+        "lib/parsers/numeric-value-parser.ts",
+        "lib/services/auth-service.ts",
+        "lib/services/dashboard-data-service.ts",
+        "lib/services/debtor-data-service.ts",
+        "lib/services/debtor-recommendation-generator.ts",
+        "lib/services/debtor-risk-calculator.ts",
+        "lib/services/person-data-service.ts",
+        "lib/supabase-browser.ts",
+        "lib/supabase-config.ts",
+        "lib/supabase-server.ts",
+        "lib/utils.ts"
+      ]
+    },
+    "frontend_after": {
+      "statements": {
+        "covered": 586,
+        "total": 1275,
+        "percent": 45.96078431372549
+      },
+      "functions": {
+        "covered": 153,
+        "total": 326,
+        "percent": 46.93251533742331
+      },
+      "branches": {
+        "covered": 415,
+        "total": 1055,
+        "percent": 39.33649289099526
+      },
+      "files": [
+        "app/debt-aging/page.tsx",
+        "app/debtors/[debtorId]/page.tsx",
+        "app/debtors/page.tsx",
+        "app/layout.tsx",
+        "app/loading.tsx",
+        "app/login/page.tsx",
+        "app/no-contact/page.tsx",
+        "app/not-found.tsx",
+        "app/page.tsx",
+        "app/people/page.tsx",
+        "app/priority-cases/page.tsx",
+        "app/recommended-actions/page.tsx",
+        "app/risk-analysis/page.tsx",
+        "components/auth/auth-guard.tsx",
+        "components/auth/auth-provider.tsx",
+        "components/auth/login-form.tsx",
+        "components/charts/debtor-dashboard-charts.tsx",
+        "components/dashboard/chart-cards.tsx",
+        "components/dashboard/metric-card.tsx",
+        "components/debtors/contact-availability-badge.tsx",
+        "components/debtors/debtors-filters-form.tsx",
+        "components/equitas/data-warnings.tsx",
+        "components/equitas/pagination-controls.tsx",
+        "components/equitas/risk-badge.tsx",
+        "components/layout/app-shell.tsx",
+        "components/layout/logout-button.tsx",
+        "components/people/people-filters-form.tsx",
+        "components/people/person-risk-badge.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/button.tsx",
+        "components/ui/card.tsx",
+        "components/ui/table.tsx",
+        "components/ui/tabs.tsx",
+        "lib/data/raw-debtor-loader.ts",
+        "lib/data/table-names.ts",
+        "lib/equitas-data.ts",
+        "lib/equitas-view-selectors.ts",
+        "lib/mappers/dashboard-metrics-mapper.ts",
+        "lib/mappers/debtor-object-mapper.ts",
+        "lib/mappers/person-risk-mapper.ts",
+        "lib/pagination.ts",
+        "lib/parsers/date-value-parser.ts",
+        "lib/parsers/generic-value-selector.ts",
+        "lib/parsers/numeric-value-parser.ts",
+        "lib/services/auth-service.ts",
+        "lib/services/dashboard-data-service.ts",
+        "lib/services/debtor-data-service.ts",
+        "lib/services/debtor-recommendation-generator.ts",
+        "lib/services/debtor-risk-calculator.ts",
+        "lib/services/person-data-service.ts",
+        "lib/supabase-browser.ts",
+        "lib/supabase-config.ts",
+        "lib/supabase-server.ts",
+        "lib/utils.ts"
+      ]
+    },
+    "same_frontend_file_set": true,
+    "method_change": "Vitest 3.2.4 to 4.1.12; V8 AST remapping. No product frontend changes or scope narrowing.",
+    "backend_before": {
+      "statements_covered": 1255,
+      "statements_total": 1472,
+      "branches_covered": 339,
+      "branches_total": 498
+    },
+    "backend_after": {
+      "covered_lines": 1254,
+      "num_statements": 1471,
+      "percent_covered": 80.90401218892839,
+      "percent_covered_display": "81",
+      "missing_lines": 217,
+      "excluded_lines": 0,
+      "percent_statements_covered": 85.24813052345343,
+      "percent_statements_covered_display": "85",
+      "num_branches": 498,
+      "num_partial_branches": 129,
+      "covered_branches": 339,
+      "missing_branches": 159,
+      "percent_branches_covered": 68.07228915662651,
+      "percent_branches_covered_display": "68"
+    },
+    "R07_frontend_60_percent": "NOT MET; OBS-COB-001 to address before closing E04."
+  },
+  "static": {
+    "ruff_version": "0.17.1",
+    "same_enabled_rules": true,
+    "enabled_rule_count": 407,
+    "before": 19,
+    "corrected": 16,
+    "accepted_local_exceptions": 3,
+    "after_unaccepted": 0,
+    "exit_codes": {
+      "withDocumentedExceptions": 0,
+      "withoutDocumentedExceptions": 1
+    },
+    "eslint_files": 70,
+    "eslint_errors": 0,
+    "eslint_warnings": 0
+  },
+  "audit": {
+    "before": {
+      "info": 0,
+      "low": 1,
+      "moderate": 2,
+      "high": 12,
+      "critical": 4,
+      "total": 19
+    },
+    "after": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 5,
+      "critical": 0,
+      "total": 5
+    },
+    "production": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "exit_codes": {
+      "all": 1,
+      "production": 0
+    },
+    "remaining": "OBS-DEP-001; five affected packages, one unpatched braces advisory, dev-only chain."
+  },
+  "duplication": {
+    "before": {
+      "clones": 38,
+      "duplicatedLines": 474,
+      "lines": 11188,
+      "tool": "jscpd 5.4.1"
+    },
+    "after": {
+      "clones": 38,
+      "duplicatedLines": 474,
+      "duplicatedTokens": 2742,
+      "lines": 11182,
+      "newClones": 0,
+      "newDuplicatedLines": 0,
+      "percentage": 4.238955464138795,
+      "percentageTokens": 5.159275217792161,
+      "sources": 62,
+      "tokens": 53147
+    },
+    "tool_after": "5.4.2",
+    "scope_changed": false
+  },
+  "complexity_top": [
+    {
+      "bytes": 28322,
+      "complexity": 118,
+      "duplicatedLines": 0,
+      "duplicatedTokens": 0,
+      "format": "python",
+      "lines": 908,
+      "path": "transform.py",
+      "tokens": 3483
+    },
+    {
+      "bytes": 16732,
+      "complexity": 109,
+      "duplicatedLines": 0,
+      "duplicatedTokens": 0,
+      "format": "typescript",
+      "lines": 563,
+      "path": "mappers/debtor-object-mapper.ts",
+      "tokens": 2586
+    },
+    {
+      "bytes": 18158,
+      "complexity": 98,
+      "duplicatedLines": 0,
+      "duplicatedTokens": 0,
+      "format": "python",
+      "lines": 573,
+      "path": "scoring_service.py",
+      "tokens": 2253
+    },
+    {
+      "bytes": 22006,
+      "complexity": 97,
+      "duplicatedLines": 0,
+      "duplicatedTokens": 0,
+      "format": "python",
+      "lines": 766,
+      "path": "load.py",
+      "tokens": 3002
+    }
+  ],
+  "build": {
+    "exit_code": 0,
+    "next": "16.4.2",
+    "typescript_passed": true
+  },
+  "limitations": [
+    "External Auth test still skipped; E06.",
+    "No CI execution yet; E02.",
+    "Frontend existing coverage below 60% with the new measurement; E04.",
+    "Five dev dependency audit findings remain with temporary documented treatment.",
+    "pip check verifies compatibility, not vulnerabilities."
+  ],
+  "input_files_sha256": {
+    ".nvmrc": "08062faf0d7a2d22f5d7933c50e975dd1527034275597be7c1b3b9fd2b9d079a",
+    "back/.python-version": "f50159fad3f4319868eb38717b91d55843c41e9803014c8de05e116a6d0bcfdc",
+    "back/ETL/config.py": "2e3b46c95ea87ef670b09d582c2bca4b0872e6f3f2972ea533f78d0f1a5622b7",
+    "back/ETL/export_preview.py": "5bffd3d59a0816fc7494edf8691bef2872e40ee3be666c9a8280f9a7f3d6a973",
+    "back/ETL/extract.py": "f8afa7f1958b44b44424c5d8aa645d72dcf6aaf4a33d98983eb9f67584f7df8e",
+    "back/ETL/inspect_tsv.py": "1a2b90a65b0eec8c0f42ccb4b09e8a8701704a83cefa1cbf9b241974afdff151",
+    "back/ETL/load.py": "254a236f9c656cd82db531939fcdd097fb581d15e5d3d83280ef012d4e4928a4",
+    "back/ETL/run_etl.py": "0f09174063fe4d1a3189dd183fb1ca7aecc734926e07728fac8e091478275c45",
+    "back/ETL/transform.py": "26f29a33bd5bd15de381a783dc4dd0f11869a06503d7cf6bcd8a4d9cf9699646",
+    "back/api/main.py": "89803bef2a6d9808f3c68d426d66003950f8ce112dab5b9c385cc5f0aa52405e",
+    "back/constraints.txt": "85c44c6525b5cd525498bb136d1acbd28abc55e8c7db02b35d05230af8e3e610",
+    "back/requirements-dev.txt": "8b1c38fb3f4c5f287f917ea497276044ab720b98ae47e0cfb58b60887d3c390e",
+    "back/requirements.txt": "d4b59bf95ad04ac3a8edfc3495f41311fc7115471292b450d8368374e626c3b7",
+    "back/ruff.toml": "868d2ec958724cd699eaba726e2b517ff3872a13ab31cc7016ff800c54722d1d",
+    "back/services/scoring_service.py": "ee04a11625d16bbe05429981ffbb8a2ec01263168df05ae2d650d604a118ec1b",
+    "front/package-lock.json": "e55c95b363b8be552f0eabdb363c5902f6b0fd84eb8edba9fd134b163fbe809b",
+    "front/package.json": "7f414cd8408008bf2d72d26c4e9d275fa53f67dc7725440a71489e8c6aac3185",
+    "front/vitest.config.ts": "56a2c95883da41c9a282a938f77a141a7473f86211b381aced01ebbac7d52eb3"
+  }
+}

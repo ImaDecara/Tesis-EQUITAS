@@ -1,6 +1,7 @@
-pandas
-python-dotenv
-supabase
-openpyxl
-fastapi
-uvicorn[standard]
+-c constraints.txt
+pandas==3.0.6
+python-dotenv==1.2.4
+supabase==2.33.0
+openpyxl==3.1.5
+fastapi==0.157.0
+uvicorn[standard]==0.54.0

@@ -1,0 +1,641 @@
+[
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 43,
+      "row": 6
+    },
+    "filename": "back/ETL/config.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\r\nfrom dataclasses import dataclass\r\nfrom pathlib import Path\r\n\r\nfrom dotenv import load_dotenv\r\nfrom supabase import Client, create_client\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 31
+    },
+    "filename": "back/ETL/export_preview.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import argparse\r\nfrom collections.abc import Hashable, Mapping\r\nfrom pathlib import Path\r\nfrom typing import Any\r\n\r\nimport pandas as pd\r\n\r\n# Este módulo se encarga de generar un archivo Excel de preview del proceso de ETL, con hojas que muestran los datos transformados antes de cargarlos a Supabase.\r\nfrom ETL.config import settings\r\nfrom ETL.extract import extract_from_input_folder_limited\r\nfrom ETL.transform import (\r\n    DEFAULT_CURRENCY_ID,\r\n    build_address_payload,\r\n    build_city_payload,\r\n    build_debtor_contact_payloads,\r\n    build_debtor_payload,\r\n    build_debtor_profile_detail_payload,\r\n    build_debtor_profile_payload,\r\n    build_header_context_by_clave,\r\n    build_person_payload,\r\n    build_province_payload,\r\n    clean_text,\r\n    get_issue_date_from_header,\r\n    get_last_collection_date_from_header,\r\n    infer_debt_status_id,\r\n    infer_debt_type_key,\r\n    parse_date,\r\n    parse_decimal,\r\n    parse_int,\r\n    parse_optional_decimal,\r\n)\r\n\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 34
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 26,
+      "row": 12
+    },
+    "filename": "back/ETL/export_preview.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from ETL.transform import (\r\n    build_debtor_contact_payloads,\r\n    build_debtor_profile_detail_payload,\r\n    build_debtor_profile_payload,\r\n    build_debtor_payload,\r\n    build_header_context_by_clave,\r\n    build_person_payload,\r\n    build_province_payload,\r\n    clean_text,\r\n    get_issue_date_from_header,\r\n    get_last_collection_date_from_header,\r\n    parse_decimal,\r\n    parse_optional_decimal,\r\n    parse_int,\r\n    parse_date,\r\n    infer_debt_status_id,\r\n    infer_debt_type_key,\r\n    DEFAULT_CURRENCY_ID,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 31
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 12
+    },
+    "message": "`ETL.transform.build_address_payload` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 12,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 23,
+      "row": 13
+    },
+    "filename": "back/ETL/export_preview.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from ETL.transform import (\r\n    build_debtor_contact_payloads,\r\n    build_debtor_profile_detail_payload,\r\n    build_debtor_profile_payload,\r\n    build_debtor_payload,\r\n    build_header_context_by_clave,\r\n    build_person_payload,\r\n    build_province_payload,\r\n    clean_text,\r\n    get_issue_date_from_header,\r\n    get_last_collection_date_from_header,\r\n    parse_decimal,\r\n    parse_optional_decimal,\r\n    parse_int,\r\n    parse_date,\r\n    infer_debt_status_id,\r\n    infer_debt_type_key,\r\n    DEFAULT_CURRENCY_ID,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 31
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 13
+    },
+    "message": "`ETL.transform.build_city_payload` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 13,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "C401",
+    "end_location": {
+      "column": 14,
+      "row": 319
+    },
+    "filename": "back/ETL/export_preview.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "{",
+          "end_location": {
+            "column": 39,
+            "row": 316
+          },
+          "location": {
+            "column": 35,
+            "row": 316
+          }
+        },
+        {
+          "content": "}",
+          "end_location": {
+            "column": 14,
+            "row": 319
+          },
+          "location": {
+            "column": 13,
+            "row": 319
+          }
+        }
+      ],
+      "message": "Rewrite as a set comprehension"
+    },
+    "location": {
+      "column": 35,
+      "row": 316
+    },
+    "message": "Unnecessary generator (rewrite as a set comprehension)",
+    "name": "unnecessary-generator-set",
+    "noqa_row": 316,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unnecessary-generator-set"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 20,
+      "row": 3
+    },
+    "filename": "back/ETL/inspect_tsv.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import argparse\r\nfrom pathlib import Path\r\n\r\nimport pandas as pd\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 7
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 32,
+      "row": 6
+    },
+    "filename": "back/ETL/load.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import time\r\nfrom typing import Any, Callable, TypeVar, cast\r\n\r\nimport httpx\r\n\r\nfrom ETL.config import supabase\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "UP035",
+    "end_location": {
+      "column": 48,
+      "row": 2
+    },
+    "filename": "back/ETL/load.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Any, TypeVar, cast\r\nfrom collections.abc import Callable",
+          "end_location": {
+            "column": 48,
+            "row": 2
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Import from `collections.abc`"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import from `collections.abc` instead: `Callable`",
+    "name": "deprecated-import",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/deprecated-import"
+  },
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 107
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 104
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 104,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  },
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 234
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 231
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 231,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  },
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 314
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 311
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 311,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 40
+    },
+    "filename": "back/ETL/run_etl.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import argparse\r\nfrom collections.abc import Hashable, Mapping\r\nfrom typing import Any\r\n\r\nimport pandas as pd\r\n\r\nfrom ETL.extract import extract_from_input_folder_limited\r\nfrom ETL.load import (\r\n    load_address,\r\n    load_city,\r\n    load_debtor,\r\n    load_debtor_contact,\r\n    load_debtor_person,\r\n    load_debtor_profile,\r\n    load_debtor_profile_detail,\r\n    load_debts_bulk,\r\n    load_person,\r\n    load_province,\r\n)\r\n\r\n# El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame\r\nfrom ETL.transform import (\r\n    build_address_payload,\r\n    build_city_payload,\r\n    build_debt_payload,\r\n    build_debtor_contact_payloads,\r\n    build_debtor_payload,\r\n    build_debtor_person_payload,\r\n    build_debtor_profile_detail_payload,\r\n    build_debtor_profile_payload,\r\n    build_header_context_by_clave,\r\n    build_person_payload,\r\n    build_province_payload,\r\n    clean_text,\r\n    get_issue_date_from_header,\r\n    get_last_collection_date_from_header,\r\n    parse_decimal,\r\n    parse_int,\r\n    print_transform_summary,\r\n)\r\n\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 43
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 50,
+      "row": 10
+    },
+    "filename": "back/ETL/transform.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import re\r\nfrom collections.abc import Hashable, Mapping\r\nfrom dataclasses import dataclass\r\nfrom datetime import date, datetime, timezone\r\nfrom typing import Any\r\n\r\nimport pandas as pd\r\n\r\nfrom ETL.config import settings\r\nfrom ETL.extract import extract_from_input_folder\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 25,
+      "row": 613
+    },
+    "filename": "back/ETL/transform.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 28,
+            "row": 613
+          },
+          "location": {
+            "column": 5,
+            "row": 613
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `original_debt_amount`"
+    },
+    "location": {
+      "column": 5,
+      "row": 613
+    },
+    "message": "Local variable `original_debt_amount` is assigned to but never used",
+    "name": "unused-variable",
+    "noqa_row": 613,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "RUF046",
+    "end_location": {
+      "column": 72,
+      "row": 628
+    },
+    "filename": "back/ETL/transform.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "round(sum(debt_ages) / len(debt_ages))",
+          "end_location": {
+            "column": 72,
+            "row": 628
+          },
+          "location": {
+            "column": 29,
+            "row": 628
+          }
+        }
+      ],
+      "message": "Remove unnecessary `int` call"
+    },
+    "location": {
+      "column": 29,
+      "row": 628
+    },
+    "message": "Value being cast to `int` is already an integer",
+    "name": "unnecessary-cast-to-int",
+    "noqa_row": 628,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unnecessary-cast-to-int"
+  },
+  {
+    "cell": null,
+    "code": "UP017",
+    "end_location": {
+      "column": 58,
+      "row": 651
+    },
+    "filename": "back/ETL/transform.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import date, datetime, timezone, UTC",
+          "end_location": {
+            "column": 46,
+            "row": 2
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        },
+        {
+          "content": "UTC",
+          "end_location": {
+            "column": 58,
+            "row": 651
+          },
+          "location": {
+            "column": 46,
+            "row": 651
+          }
+        }
+      ],
+      "message": "Convert to `datetime.UTC` alias"
+    },
+    "location": {
+      "column": 46,
+      "row": 651
+    },
+    "message": "Use `datetime.UTC` alias",
+    "name": "datetime-timezone-utc",
+    "noqa_row": 651,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/datetime-timezone-utc"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 10
+    },
+    "filename": "back/api/main.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Any\r\n\r\nfrom fastapi import FastAPI, Query\r\nfrom fastapi.middleware.cors import CORSMiddleware\r\n\r\nfrom services.scoring_service import (\r\n    GROUP_DEFINITIONS,\r\n    get_case_groups,\r\n    get_case_groups_summary,\r\n)\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 32,
+      "row": 4
+    },
+    "filename": "back/services/scoring_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import argparse\r\nfrom typing import Any, cast\r\n\r\nfrom ETL.config import supabase\r\n\r\n",
+          "end_location": {
+            "column": 1,
+            "row": 7
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "SIM118",
+    "end_location": {
+      "column": 50,
+      "row": 467
+    },
+    "filename": "back/services/scoring_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 50,
+            "row": 467
+          },
+          "location": {
+            "column": 43,
+            "row": 467
+          }
+        }
+      ],
+      "message": "Remove `.keys()`"
+    },
+    "location": {
+      "column": 13,
+      "row": 467
+    },
+    "message": "Use `key in dict` instead of `key in dict.keys()`",
+    "name": "in-dict-keys",
+    "noqa_row": 467,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/in-dict-keys"
+  }
+]

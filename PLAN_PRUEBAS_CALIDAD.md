@@ -1,6 +1,6 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-Versión 1.0 — 21/10/2026. Etapa de formalización: **E00**.
+Versión 1.1 — 21/10/2026. Formalización E00 y actualización técnica E01.
 
 ## 1. Propósito y referencias de versión
 
@@ -15,6 +15,8 @@ La consigna de referencia es [consigna_pdf.md](consigna_pdf.md). La secuencia de
 | Cierre de E00 | Commit que incorpora este plan y el registro de ejecución de E00. | Su SHA se obtiene del historial del archivo; no reemplaza la referencia del producto. |
 
 Las cifras iniciales son antecedentes comprobados. El plan no presenta las actividades futuras como ejecutadas ni mantiene fijo el total de pruebas cuando se agreguen casos.
+
+**Actualización E01:** instalación nueva comprobada en Windows con Node 22.23.2, npm 11.21.1 y CPython 3.12.14. Next 16.4.2, Vitest/V8 4.1.12 y Vite 7.3.7; requisitos Python directos y transitivos fijados. Ver [reproducción de comandos](REPRODUCIBILIDAD_CALIDAD.md) y [ficha E01](REGISTRO_EJECUCION_E01.md). La ejecución Linux se verificará en E02. Se mantienen 94 aprobadas y 1 omitida. La cobertura frontend vigente es **45,96 %**, por cambio de mapeo V8 y con los mismos 54 archivos; requiere ampliación de pruebas antes de cerrar E04. La meta del 60 % se conserva. La auditoría completa devuelve 1 por cinco altos de desarrollo conocidos, con tratamiento temporal explícito; la productiva devuelve 0. Ninguna de estas observaciones se presenta como una entrega aprobada.
 
 ## 2. Responsabilidades y seguimiento
 

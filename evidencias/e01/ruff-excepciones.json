@@ -1,0 +1,59 @@
+[
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 108
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 105
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 105,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  },
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 236
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 233
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 233,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  },
+  {
+    "cell": null,
+    "code": "TRY004",
+    "end_location": {
+      "column": 10,
+      "row": 317
+    },
+    "filename": "back/ETL/load.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 314
+    },
+    "message": "Prefer `TypeError` exception for invalid type",
+    "name": "type-check-without-type-error",
+    "noqa_row": 314,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/type-check-without-type-error"
+  }
+]

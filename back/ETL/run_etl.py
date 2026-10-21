@@ -1,9 +1,22 @@
+import argparse
 from collections.abc import Hashable, Mapping
 from typing import Any
-import argparse
+
 import pandas as pd
 
 from ETL.extract import extract_from_input_folder_limited
+from ETL.load import (
+    load_address,
+    load_city,
+    load_debtor,
+    load_debtor_contact,
+    load_debtor_person,
+    load_debtor_profile,
+    load_debtor_profile_detail,
+    load_debts_bulk,
+    load_person,
+    load_province,
+)
 
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
 from ETL.transform import (
@@ -11,10 +24,10 @@ from ETL.transform import (
     build_city_payload,
     build_debt_payload,
     build_debtor_contact_payloads,
-    build_debtor_profile_detail_payload,
-    build_debtor_profile_payload,
     build_debtor_payload,
     build_debtor_person_payload,
+    build_debtor_profile_detail_payload,
+    build_debtor_profile_payload,
     build_header_context_by_clave,
     build_person_payload,
     build_province_payload,
@@ -24,19 +37,6 @@ from ETL.transform import (
     parse_decimal,
     parse_int,
     print_transform_summary,
-)
-
-from ETL.load import (
-    load_address,
-    load_city,
-    load_debts_bulk,
-    load_debtor,
-    load_debtor_contact,
-    load_debtor_person,
-    load_debtor_profile,
-    load_debtor_profile_detail,
-    load_person,
-    load_province,
 )
 
 

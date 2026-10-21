@@ -1,10 +1,10 @@
 import time
-from typing import Any, Callable, TypeVar, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 
 import httpx
 
 from ETL.config import supabase
-
 
 # ============================================================
 # NOMBRES DE TABLAS
@@ -101,7 +101,8 @@ def get_first_response_row(
     first_row = data[0]
 
     if not isinstance(first_row, dict):
-        raise RuntimeError(
+        # Invalid remote response: preserve the loader's RuntimeError contract.
+        raise RuntimeError(  # noqa: TRY004
             f"La respuesta de {table_name} no es un objeto/dict válido. "
             f"Data recibida: {data}"
         )
@@ -228,7 +229,8 @@ def bulk_insert_rows(
         )
 
     if not isinstance(response.data, list):
-        raise RuntimeError(
+        # Invalid remote response: preserve the loader's RuntimeError contract.
+        raise RuntimeError(  # noqa: TRY004
             f"Respuesta inválida al insertar bulk en {table_name}. "
             f"Data recibida: {response.data}"
         )
@@ -308,7 +310,8 @@ def fetch_existing_debts_by_key(
         return rows_by_key
 
     if not isinstance(response.data, list):
-        raise RuntimeError(
+        # Invalid remote response: preserve the loader's RuntimeError contract.
+        raise RuntimeError(  # noqa: TRY004
             f"Respuesta inválida al buscar deudas existentes. "
             f"Data recibida: {response.data}"
         )

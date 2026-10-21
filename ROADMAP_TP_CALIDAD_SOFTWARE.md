@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.1, actualización de la etapa E00 el 21 de octubre de 2026.  
+**Versión:** 1.2, actualización de la etapa E01 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00 completada; E01 y E02 habilitadas para continuar. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00 y E01 completadas en sus alcances; E02 habilitada. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -37,6 +37,8 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 - La preferencia del informe académico se mantiene: **sin índice**. El roadmap sí puede tener navegación y tablas de control.
 
 ## 2. Punto de partida comprobado
+
+**Actualización posterior E01:** la instalación y las dependencias quedaron controladas, con 94 pruebas aprobadas y una omitida, build aprobado, 16 correcciones Ruff y tres excepciones locales justificadas. La auditoría npm actual conserva cinco altos de desarrollo, sin críticos ni avisos productivos. Vitest 4.1.12 mide **45,96 % de sentencias frontend sobre los mismos 54 archivos**; la cifra histórica 60,43 % no es la medición actual. **OBS-COB-001 bloquea cerrar E04 hasta ampliar pruebas y cumplir el 60 %.** Ver [ficha E01](REGISTRO_EJECUCION_E01.md), [reproducción](REPRODUCIBILIDAD_CALIDAD.md) y [evidencias](evidencias/e01/resumen-2026-10-21.json). Las tablas de línea base siguientes conservan sus valores históricos.
 
 ### 2.1. Línea base local del 21/10/2026
 
@@ -117,7 +119,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | Etapa | Propósito | Estado inicial | Depende de |
 | --- | --- | --- | --- |
 | **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Completada; ver ficha de ejecución E00. | Evidencias existentes. |
-| **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | Pendiente. | E00. |
+| **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
 | **E02** | Pipeline base con build, suites y reportes. | Pendiente. | E00; coordinar con E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | Pendiente. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | Pendiente. | E01–E03. |
@@ -131,7 +133,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-El primer objetivo ejecutable es E00 y luego E01/E02. El pipeline base permite conservar una ejecución roja por un defecto real y otra verde tras corregirlo. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
+E00 y E01 están completas; el siguiente objetivo ejecutable es E02. El pipeline base permite conservar una ejecución roja por un defecto real y otra verde tras corregirlo. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -205,18 +207,18 @@ La consigna ya queda cubierta por Supabase como integración elegida; no exige a
 
 ### Tareas
 
-- [ ] Registrar versiones efectivas de Node, npm, Python, paquetes de pruebas y analizadores.
-- [ ] Mantener `npm ci` y el lockfile frontend. No sustituirlo por una instalación que resuelva versiones distintas sin registrar el cambio.
-- [ ] Definir versiones reproducibles de dependencias Python. El `pip freeze` de la auditoría es evidencia del entorno observado; revisarlo antes de adoptarlo como lockfile para otra plataforma.
-- [ ] Ejecutar la regresión sobre las dependencias elegidas, evitando repetir suites sin motivo después de una verificación suficiente.
-- [ ] Revisar Ruff desde `back`, conservando versión, reglas, alcance y directorio de ejecución. Los 19 hallazgos son una línea base, no un resultado aprobado.
-- [ ] Corregir observaciones seguras y revisar manualmente las que afecten excepciones, datos o comportamiento. No ejecutar fixes inseguros masivos para obtener cero.
-- [ ] Clasificar hallazgos por tipo, severidad y tratamiento. La severidad de negocio no se deriva automáticamente del nombre de una regla Ruff.
-- [ ] Revisar las vulnerabilidades npm, separando dependencias productivas y de desarrollo, alcance, corrección disponible y regresión necesaria.
-- [ ] Tratar los hallazgos que incumplan los criterios de liberación; justificar explícitamente cualquier pendiente, sin ocultarlo con filtros globales o ignorando códigos de salida.
-- [ ] Si se actualizan Next.js, Supabase u otros paquetes con cambios de API, consultar documentación de la versión y las instrucciones locales antes de modificar código.
-- [ ] Documentar la dependencia de red de `next/font` o adoptar una solución reproducible si es necesaria. Un fallo de descarga de fuentes no cuenta como defecto funcional corregido para R14.
-- [ ] Capturar métricas antes/después de los cambios aplicados y ejecutar build, análisis y regresión que correspondan.
+- [x] Registrar versiones efectivas de Node, npm, Python, paquetes de pruebas y analizadores.
+- [x] Mantener `npm ci` y el lockfile frontend. No sustituirlo por una instalación que resuelva versiones distintas sin registrar el cambio.
+- [x] Definir versiones reproducibles de dependencias Python. El `pip freeze` de la auditoría es evidencia del entorno observado; revisarlo antes de adoptarlo como lockfile para otra plataforma.
+- [x] Ejecutar la regresión sobre las dependencias elegidas, evitando repetir suites sin motivo después de una verificación suficiente.
+- [x] Revisar Ruff desde `back`, conservando versión, reglas, alcance y directorio de ejecución. Los 19 hallazgos son una línea base, no un resultado aprobado.
+- [x] Corregir observaciones seguras y revisar manualmente las que afecten excepciones, datos o comportamiento. No ejecutar fixes inseguros masivos para obtener cero.
+- [x] Clasificar hallazgos por tipo, severidad y tratamiento. La severidad de negocio no se deriva automáticamente del nombre de una regla Ruff.
+- [x] Revisar las vulnerabilidades npm, separando dependencias productivas y de desarrollo, alcance, corrección disponible y regresión necesaria.
+- [x] Tratar los hallazgos que incumplan los criterios de liberación; justificar explícitamente cualquier pendiente, sin ocultarlo con filtros globales o ignorando códigos de salida.
+- [x] Si se actualizan Next.js, Supabase u otros paquetes con cambios de API, consultar documentación de la versión y las instrucciones locales antes de modificar código.
+- [x] Documentar la dependencia de red de `next/font` o adoptar una solución reproducible si es necesaria. Un fallo de descarga de fuentes no cuenta como defecto funcional corregido para R14.
+- [x] Capturar métricas antes/después de los cambios aplicados y ejecutar build, análisis y regresión que correspondan.
 
 ### Comandos actuales de referencia
 
@@ -226,15 +228,19 @@ Desde `back`, con el entorno ya preparado: `.\.venv\Scripts\python.exe -m pytest
 
 Si cambia el mecanismo de instalación o un comando, actualizar el plan y la tabla final de reproducción. No depender exclusivamente de una ruta de runtime privada de esta máquina.
 
+**Herramientas elegidas al cerrar E01:** Node 22.23.2, npm 11.21.1 y CPython 3.12.14. La instalación con npm puede ejecutarse mediante `npx --yes --package=npm@11.21.1 npm ci`. Los comandos de esta guía presuponen esas versiones; [REPRODUCIBILIDAD_CALIDAD.md](REPRODUCIBILIDAD_CALIDAD.md) detalla preparación, comandos y salidas esperadas, incluida la auditoría completa con salida 1 y tratamiento explícito.
+
 ### Verificar y cumplir
 
-- [ ] Se puede preparar un entorno nuevo con las versiones declaradas.
-- [ ] Build y suites pasan después de cualquier actualización/corrección de esta etapa.
-- [ ] Cada control fallido tiene resultado y tratamiento registrados.
-- [ ] No se presenta `pip check` como auditoría de vulnerabilidades.
-- [ ] El alcance de cobertura y duplicación permanece explicado y comparable.
+- [x] Se puede preparar un entorno nuevo con las versiones declaradas.
+- [x] Build y suites pasan después de cualquier actualización/corrección de esta etapa.
+- [x] Cada control fallido tiene resultado y tratamiento registrados.
+- [x] No se presenta `pip check` como auditoría de vulnerabilidades.
+- [x] El alcance de cobertura y duplicación permanece explicado y comparable.
 
-**Salida y evidencia:** dependencias/configuración reproducibles, triage de análisis y dependencias, reportes y comparación antes/después si hubo cambios.  
+**Cierre E01:** [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [evidencia estructurada](evidencias/e01/resumen-2026-10-21.json) y seis reportes Ruff/auditoría en esa carpeta. Windows comprobado con instalaciones nuevas; Linux se comprobará en E02. OBS-DEP-001 y OBS-COB-001 permanecen abiertas con tratamiento y responsables; el cierre de reproducibilidad no las declara resueltas.
+
+**Salida y evidencia:** dependencias/configuración reproducibles, triage de análisis y dependencias, reportes y comparación antes/después si hubo cambios.
 **No cerrar si:** una actualización rompe la regresión, la instalación depende de versiones desconocidas o un control fallido se convierte en verde ignorando su salida.
 
 ## 8. E02 — Pipeline base con pruebas y reportes
@@ -339,6 +345,8 @@ Los casos DAT son IDs propuestos para crear. No deben marcarse ejecutados hasta 
 **Requisitos relacionados:** R07–R10, R17.
 
 ### 10.1. Contrato del gate
+
+- [ ] Resolver **OBS-COB-001**: con Vitest 4.1.12 la cobertura frontend actual es 45,96 %. Ampliar pruebas significativas hasta al menos 60 % dentro del alcance declarado antes de cerrar E04; mantener el nuevo método y el umbral. No usar la cifra histórica ni recortar archivos sin cobertura para aprobar.
 
 | Control | Criterio de aceptación | Debe fallar cuando |
 | --- | --- | --- |
@@ -790,6 +798,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 
 | Clase | Comando actual o estado | Directorio | Evidencia final requerida |
 | --- | --- | --- | --- |
+| Preparación local | [Versiones y comandos E01](REPRODUCIBILIDAD_CALIDAD.md): Node 22.23.2, npm 11.21.1, CPython 3.12.14; `npm ci` y requisitos/constraints Python. | `front` / `back` | Instalaciones nuevas locales comprobadas; Linux pendiente de E02. |
 | Suite frontend | `npm run test` | `front` | Reporte del SHA final. |
 | Unitarias frontend | `npm run test:unit` | `front` | Reporte local/CI. |
 | Integraciones frontend | `npm run test:integration` | `front` | Diferenciar simuladas y reales. |
@@ -824,4 +833,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E01/E02 a partir del plan y checkpoint de E00 completada. Con CI disponible, continuar E03 para conservar el fallo real de lectura y su corrección. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E02 a partir de las versiones y comandos comprobados en E01. Con CI disponible, continuar E03 para conservar el fallo real de lectura y su corrección. Resolver la insuficiencia de cobertura frontend antes del cierre de E04. Este archivo debe actualizarse al completar cada etapa.

@@ -1,0 +1,6 @@
+# Defaults frozen by the required Ruff version; same scope as the E00 baseline.
+required-version = "==0.17.1"
+src = [".", "src"]
+
+[lint.isort]
+known-first-party = ["ETL", "api", "services"]

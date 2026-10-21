@@ -12,9 +12,11 @@
 | Integrantes | Ignacio Magoia, Axel Azcune e Imanol Decara. Legajos pendientes. |
 | Docente | **PENDIENTE:** completar. |
 | Fecha de presentación | 26 de octubre de 2026 |
-| Versión del documento | 1.1 — Ampliación de revisión Supabase, 21/10/2026 |
+| Versión del documento | 1.2 — Reproducibilidad y análisis E01, 21/10/2026 |
 
 > **Nota de integridad académica.** Este informe contiene solamente resultados obtenidos durante las ejecuciones documentadas en el repositorio. Las actividades no realizadas se identifican explícitamente como **PENDIENTE**; no se simulan capturas, métricas ni validaciones externas.
+
+> **Actualización E01, 21/10/2026.** Se comprobaron instalaciones nuevas y se fijaron runtimes, dependencias y transitivas. Next 16.4.2 y Vitest/V8 4.1.12 mantienen 94 pruebas aprobadas y una omitida; build/TypeScript y lint aprueban. Ruff: 16 correcciones y tres excepciones locales justificadas. npm audit: cinco altos de desarrollo por una cadena sin parche, cero críticos y cero avisos productivos; la auditoría completa conserva salida 1 y tratamiento temporal. La cobertura frontend vigente es **586/1.275 = 45,96 %**, por el nuevo mapeo AST de V8 y con los mismos 54 archivos: no cumple aún el 60 % y requiere nuevas pruebas antes del cierre de E04. Backend: 85,25 % de sentencias y 68,07 % de ramas. Duplicación: 474/11.182 = 4,24 %. Las cifras anteriores del cuerpo se conservan como históricas; para el estado técnico actual prevalecen [la ficha E01](REGISTRO_EJECUCION_E01.md) y [su evidencia](evidencias/e01/resumen-2026-10-21.json). El informe final y PDF siguen pendientes.
 
 > **Actualización del 21/10/2026.** El cuerpo original conserva la etapa de pruebas y planificación del 16/10. La nueva ejecución local reprodujo las 94 pruebas aprobadas y una omitida. Además, se inspeccionó Supabase real por plugin: 23 tablas, 2.933 objetos, 56.286 deudas y consistencia de los agregados seleccionados. Se reprodujo un defecto de autorización RLS: el rol autenticado sin pertenencia accede a conteos de toda la cartera. También se confirmó que el volumen supera el límite de lectura de la web. Ambos están abiertos en `REGISTRO_DEFECTOS_CALIDAD.md`. El alcance y evidencias actuales están en `REVISION_SUPABASE.md` y `DIAGNOSTICO_CIERRE_CALIDAD.md`; estas actualizaciones prevalecen sobre los estados históricos de «sin defectos confirmados» o «servicio externo no inspeccionado». La prueba Auth del cliente sigue omitida y CI/CD, smoke, cargas y rojo/verde completo siguen pendientes. No se aplicaron cambios a Supabase.
 

@@ -1,10 +1,9 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
-
 
 # RUTAS BASE DEL PROYECTO
 CURRENT_FILE = Path(__file__).resolve()

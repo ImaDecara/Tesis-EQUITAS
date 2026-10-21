@@ -1,7 +1,7 @@
+import argparse
 from collections.abc import Hashable, Mapping
 from pathlib import Path
 from typing import Any
-import argparse
 
 import pandas as pd
 
@@ -9,25 +9,23 @@ import pandas as pd
 from ETL.config import settings
 from ETL.extract import extract_from_input_folder_limited
 from ETL.transform import (
-    build_address_payload,
-    build_city_payload,
+    DEFAULT_CURRENCY_ID,
     build_debtor_contact_payloads,
+    build_debtor_payload,
     build_debtor_profile_detail_payload,
     build_debtor_profile_payload,
-    build_debtor_payload,
     build_header_context_by_clave,
     build_person_payload,
     build_province_payload,
     clean_text,
     get_issue_date_from_header,
     get_last_collection_date_from_header,
-    parse_decimal,
-    parse_optional_decimal,
-    parse_int,
-    parse_date,
     infer_debt_status_id,
     infer_debt_type_key,
-    DEFAULT_CURRENCY_ID,
+    parse_date,
+    parse_decimal,
+    parse_int,
+    parse_optional_decimal,
 )
 
 
@@ -313,10 +311,10 @@ def build_debtor_profile_preview(
         person_external_ids = set()
 
         if not debtor_people.empty:
-            person_external_ids = set(
+            person_external_ids = {
                 int(value)
                 for value in debtor_people["person_external_id"].dropna().tolist()
-            )
+            }
 
         if not debtor_contact_df.empty and person_external_ids:
             debtor_contacts = debtor_contact_df[

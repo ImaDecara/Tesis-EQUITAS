@@ -1,14 +1,13 @@
-from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Any
-from collections.abc import Hashable, Mapping
 import re
+from collections.abc import Hashable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from typing import Any
 
 import pandas as pd
 
 from ETL.config import settings
 from ETL.extract import extract_from_input_folder
-
 
 # ============================================================
 # IDS DE CATÁLOGOS SEGÚN SUPABASE
@@ -607,10 +606,8 @@ def build_debtor_profile_payload(
     average_total_debt_amount: float,
 ) -> dict[str, Any]:
     current_amounts = [parse_decimal(row.get("current_amount")) for row in debt_rows]
-    original_amounts = [parse_decimal(row.get("original_amount")) for row in debt_rows]
 
     total_debt_amount = round(sum(current_amounts), 2)
-    original_debt_amount = round(sum(original_amounts), 2)
 
     overdue_rows = [
         row for row in debt_rows
@@ -625,7 +622,7 @@ def build_debtor_profile_payload(
     overdue_debt_count = len(overdue_rows)
 
     oldest_debt_days = max(debt_ages) if debt_ages else 0
-    average_debt_age_days = int(round(sum(debt_ages) / len(debt_ages))) if debt_ages else 0
+    average_debt_age_days = round(sum(debt_ages) / len(debt_ages)) if debt_ages else 0
 
     risk_level = calculate_socioeconomic_risk_level(
         total_debt_amount=total_debt_amount,
@@ -648,7 +645,7 @@ def build_debtor_profile_payload(
         "active_person_count": active_person_count,
         "available_contact_count": available_contact_count,
         "socioeconomic_risk_level": risk_level,
-        "profile_generated_at": datetime.now(timezone.utc).isoformat(),
+        "profile_generated_at": datetime.now(UTC).isoformat(),
         "active": True,
     }
 

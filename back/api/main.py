@@ -9,7 +9,6 @@ from services.scoring_service import (
     get_case_groups_summary,
 )
 
-
 app = FastAPI(
     title="EQUITAS Backend",
     version="0.1.0",
