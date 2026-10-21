@@ -1,10 +1,10 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
-**Versión:** 1.2, actualización de la etapa E01 el 21 de octubre de 2026.
+**Versión:** 1.3, actualización de la etapa E02 el 21 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00 y E01 completadas en sus alcances; E02 en curso. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
+**Estado del roadmap:** E00, E01 y E02 completadas en sus alcances; E03 habilitada. La cobertura frontend vigente requiere ampliación de pruebas antes de cerrar E04. Las etapas siguientes conservan sus estados pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -37,6 +37,8 @@ Los estados admitidos son **Pendiente**, **En curso**, **Bloqueada** y **Complet
 - La preferencia del informe académico se mantiene: **sin índice**. El roadmap sí puede tener navegación y tablas de control.
 
 ## 2. Punto de partida comprobado
+
+**Actualización posterior E02:** el pipeline base está publicado y ejecutado en GitHub. La [ejecución normal](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) aprobó en Linux con 94 pruebas de producto y 14 de infraestructura aprobadas, una prueba externa omitida y los tres jobs correctos. El [ensayo controlado de fallo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493) terminó en rojo y conservó sus tres artefactos. Ambos usan el commit `5cfcc773a39fdaa7d5859744c430fd6b790c34d7`. La instalación Linux y `uvloop` condicional quedaron verificadas. Esto no cierra E03/E04 ni integración, smoke o cargas. Ver [ficha E02](REGISTRO_EJECUCION_E02.md) y [evidencias](evidencias/e02/ejecuciones-2026-10-21.json).
 
 **Actualización posterior E01:** la instalación y las dependencias quedaron controladas, con 94 pruebas aprobadas y una omitida, build aprobado, 16 correcciones Ruff y tres excepciones locales justificadas. La auditoría npm actual conserva cinco altos de desarrollo, sin críticos ni avisos productivos. Vitest 4.1.12 mide **45,96 % de sentencias frontend sobre los mismos 54 archivos**; la cifra histórica 60,43 % no es la medición actual. **OBS-COB-001 bloquea cerrar E04 hasta ampliar pruebas y cumplir el 60 %.** Ver [ficha E01](REGISTRO_EJECUCION_E01.md), [reproducción](REPRODUCIBILIDAD_CALIDAD.md) y [evidencias](evidencias/e01/resumen-2026-10-21.json). Las tablas de línea base siguientes conservan sus valores históricos.
 
@@ -120,7 +122,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | --- | --- | --- | --- |
 | **E00** | Consolidar alcance, línea base y checkpoint de trabajo. | Completada; ver ficha de ejecución E00. | Evidencias existentes. |
 | **E01** | Reproducibilidad, dependencias y tratamiento del análisis estático. | **Completada**; riesgos residuales documentados. | E00. |
-| **E02** | Pipeline base con build, suites y reportes. | En curso. | E00; decisiones E01 disponibles. |
+| **E02** | Pipeline base con build, suites y reportes. | **Completada**; ejecución normal y ensayo de fallo comprobados. | E00–E01. |
 | **E03** | Reproducir y corregir DEF-DAT-001 con rojo/verde. | Pendiente. | E02; registro de defectos iniciado. |
 | **E04** | Quality gates completos y comprobados. | Pendiente. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | Registro inicial creado; formalización pendiente. | Comienza en E00 y se actualiza en todas las etapas. |
@@ -133,7 +135,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00 y E01 están completas; el siguiente objetivo ejecutable es E02. El pipeline base permite conservar una ejecución roja por un defecto real y otra verde tras corregirlo. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
+E00, E01 y E02 están completas; el siguiente objetivo ejecutable es E03. El pipeline base permite conservar una ejecución roja por un defecto real y otra verde tras corregirlo. El ensayo controlado de E02 no sustituye ese defecto real. Una ejecución verde del pipeline base no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -251,30 +253,32 @@ Si cambia el mecanismo de instalación o un comando, actualizar el plan y la tab
 
 ### Tareas
 
-- [ ] Crear el workflow versionado de CI, por ejemplo bajo `.github/workflows/`. El archivo debe existir en el repositorio entregado.
-- [ ] Definir disparadores para cambios y revisión de código; agregar ejecución manual cuando ayude a reproducir la entrega.
-- [ ] Configurar directorios de trabajo: `front` para npm y `back` para Python/Ruff.
-- [ ] Usar versiones de runtime declaradas y cache asociada a los lockfiles/configuración.
-- [ ] Ejecutar build, ESLint, Vitest con cobertura, Pytest con cobertura, Ruff y duplicación con los criterios documentados.
-- [ ] Exportar resultados procesables de pruebas y cobertura: JSON/XML/LCOV según la herramienta elegida, además de reportes HTML para lectura.
-- [ ] Configurar los reporteros necesarios. La configuración frontend inicial tiene texto, JSON y HTML; LCOV u otro formato adicional debe incorporarse si el gate lo necesita.
-- [ ] Generar reportes de análisis, no solo imprimir comandos o conservar una captura vacía.
-- [ ] Subir los artefactos que existan aun si falló una prueba o un control. Identificar lo que no pudo generarse por un fallo anterior.
-- [ ] Crear un resumen de ejecución con aprobadas, fallidas, omitidas, coberturas, análisis, versión y resultado.
-- [ ] Evitar que `continue-on-error`, `|| true`, un paso omitido o un código de salida perdido produzcan verde engañoso.
-- [ ] Distinguir los jobs sin servicios externos de los que requieren secretos de testing; no exponer secretos a código no confiable.
-- [ ] Publicar y ejecutar el workflow en GitHub. Guardar su URL, SHA y resultado real.
+- [x] Crear el workflow versionado de CI, por ejemplo bajo `.github/workflows/`. El archivo debe existir en el repositorio entregado.
+- [x] Definir disparadores para cambios y revisión de código; agregar ejecución manual cuando ayude a reproducir la entrega.
+- [x] Configurar directorios de trabajo: `front` para npm y `back` para Python/Ruff.
+- [x] Usar versiones de runtime declaradas y cache asociada a los lockfiles/configuración.
+- [x] Ejecutar build, ESLint, Vitest con cobertura, Pytest con cobertura, Ruff y duplicación con los criterios documentados.
+- [x] Exportar resultados procesables de pruebas y cobertura: JSON/XML/LCOV según la herramienta elegida, además de reportes HTML para lectura.
+- [x] Configurar los reporteros necesarios. La configuración frontend inicial tiene texto, JSON y HTML; LCOV u otro formato adicional debe incorporarse si el gate lo necesita.
+- [x] Generar reportes de análisis, no solo imprimir comandos o conservar una captura vacía.
+- [x] Subir los artefactos que existan aun si falló una prueba o un control. Identificar lo que no pudo generarse por un fallo anterior.
+- [x] Crear un resumen de ejecución con aprobadas, fallidas, omitidas, coberturas, análisis, versión y resultado.
+- [x] Evitar que `continue-on-error`, `|| true`, un paso omitido o un código de salida perdido produzcan verde engañoso.
+- [x] Distinguir los jobs sin servicios externos de los que requieren secretos de testing; no exponer secretos a código no confiable.
+- [x] Publicar y ejecutar el workflow en GitHub. Guardar su URL, SHA y resultado real.
 
 ### Verificar y cumplir
 
-- [ ] Un cambio dispara CI según la configuración declarada.
-- [ ] Los jobs realmente ejecutan las suites y build del proyecto.
-- [ ] Un fallo de prueba provoca fallo del job y del control que corresponde.
-- [ ] Los reportes se pueden abrir/descargar y pertenecen a esa ejecución.
-- [ ] Una prueba externa omitida queda visible como omitida; no se declara aprobada.
-- [ ] El pipeline base se identifica como base: aún faltan gates definitivos, despliegue, smoke y cargas para el ciclo integral.
+- [x] Un cambio dispara CI según la configuración declarada.
+- [x] Los jobs realmente ejecutan las suites y build del proyecto.
+- [x] Un fallo de prueba provoca fallo del job y del control que corresponde.
+- [x] Los reportes se pueden abrir/descargar y pertenecen a esa ejecución.
+- [x] Una prueba externa omitida queda visible como omitida; no se declara aprobada.
+- [x] El pipeline base se identifica como base: aún faltan gates definitivos, despliegue, smoke y cargas para el ciclo integral.
 
-**Salida y evidencia:** workflow, URL de ejecución, reportes automáticos y resumen.  
+**Cierre E02:** [REGISTRO_EJECUCION_E02.md](REGISTRO_EJECUCION_E02.md), [guía operativa del pipeline](quality/README.md) y [metadata/evidencias](evidencias/e02/ejecuciones-2026-10-21.json). CI normal aprobado y fallo de prueba propagado, con seis ZIP descargados/verificados. Las 14 pruebas de infraestructura se informan aparte de las 94 de producto. El caso externo permanece omitido y los gates completos siguen pendientes de E04.
+
+**Salida y evidencia:** workflow, URL de ejecución, reportes automáticos y resumen.
 **No cerrar si:** solo funciona localmente, no hay una ejecución remota o los reportes se copiaron a mano desde la auditoría anterior.
 
 ## 9. E03 — Defecto real de lectura completa, rojo/verde y regresión
@@ -798,7 +802,8 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 
 | Clase | Comando actual o estado | Directorio | Evidencia final requerida |
 | --- | --- | --- | --- |
-| Preparación local | [Versiones y comandos E01](REPRODUCIBILIDAD_CALIDAD.md): Node 22.23.2, npm 11.21.1, CPython 3.12.14; `npm ci` y requisitos/constraints Python. | `front` / `back` | Instalaciones nuevas locales comprobadas; Linux pendiente de E02. |
+| Preparación local/CI | [Versiones y comandos](REPRODUCIBILIDAD_CALIDAD.md): Node 22.23.2, npm 11.21.1, CPython 3.12.14; `npm ci` y requisitos/constraints Python. | `front` / `back` | Instalaciones nuevas Windows E01 y Linux E02 comprobadas. |
+| CI base E02 | Workflow [quality-ci.yml](.github/workflows/quality-ci.yml); push/PR/manual; [operación y descarga](quality/README.md). | GitHub Actions, Ubuntu 24.04. | [Normal aprobada](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471), [fallo controlado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493), JSON/JUnit/LCOV/HTML y resumen. |
 | Suite frontend | `npm run test` | `front` | Reporte del SHA final. |
 | Unitarias frontend | `npm run test:unit` | `front` | Reporte local/CI. |
 | Integraciones frontend | `npm run test:integration` | `front` | Diferenciar simuladas y reales. |
@@ -833,4 +838,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** comenzar E02 a partir de las versiones y comandos comprobados en E01. Con CI disponible, continuar E03 para conservar el fallo real de lectura y su corrección. Resolver la insuficiencia de cobertura frontend antes del cierre de E04. Este archivo debe actualizarse al completar cada etapa.
+**Siguiente paso concreto:** comenzar E03 usando el CI de E02 para conservar el fallo real de lectura completa y su corrección. El ensayo controlado del pipeline no reemplaza ese defecto. Resolver la insuficiencia de cobertura frontend antes del cierre de E04. Este archivo debe actualizarse al completar cada etapa.

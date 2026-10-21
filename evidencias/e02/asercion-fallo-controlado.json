@@ -1,0 +1,4 @@
+{
+  "name": "E02: ensayo controlado de propagacion de fallo",
+  "message": "expected 1 to be 2 // Object.is equality"
+}

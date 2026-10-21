@@ -81,6 +81,8 @@ Criterios de cierre:
 
 Evidencia común: [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md), [resumen E01](evidencias/e01/resumen-2026-10-21.json) y auditorías en la misma carpeta. Las tres excepciones de Ruff y los avisos de mantenimiento se detallan en la ficha E01; no se convierten en bugs críticos de negocio por el nivel `error` del linter.
 
+**Seguimiento E02:** ambos registros permanecen abiertos. OBS-DEP-001 se volvió a verificar en Linux y tiene una [política versionada](quality/npm-audit-policy.json) que conserva las salidas crudas y rechaza cambios o vencimiento; no corrige los cinco avisos. OBS-COB-001 reproduce 45,96 % en CI y sigue bloqueando cerrar E04. [CI normal](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) y [ficha E02](REGISTRO_EJECUCION_E02.md). El fallo controlado de CI no cierra DEF-DAT-001 ni DEF-SUP-001.
+
 ## Trazabilidad actual
 
 | Requisito | Caso | Evidencia / resultado | Defecto | Corrección y regresión |

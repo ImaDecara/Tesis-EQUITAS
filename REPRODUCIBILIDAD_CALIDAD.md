@@ -1,6 +1,6 @@
 # Reproducir los controles locales de calidad — EQUITAS
 
-Corte verificado: E01, 21/10/2026. Resultados y decisiones en [REGISTRO_EJECUCION_E01.md](REGISTRO_EJECUCION_E01.md). Estos comandos corresponden a controles locales; CI, despliegue y cargas se incorporan en las siguientes etapas.
+Corte verificado: E01/E02, 21/10/2026. Resultados y decisiones en [E01](REGISTRO_EJECUCION_E01.md) y [E02](REGISTRO_EJECUCION_E02.md). Los controles locales tienen su equivalente remoto en [GitHub Actions](.github/workflows/quality-ci.yml), con [guía operativa](quality/README.md). Despliegue y cargas se incorporan en las siguientes etapas.
 
 ## 1. Herramientas y preparación
 
@@ -59,7 +59,7 @@ Usar una carpeta de entorno vacía para comprobar una instalación nueva; no hac
 
 Consultar `.\.venv\Scripts\python.exe -m pip --version`. Si el entorno trae una versión distinta y se necesita reproducir exactamente la herramienta de instalación de este corte, fijarla primero con `.\.venv\Scripts\python.exe -m pip install pip==25.0.1`.
 
-En Linux, el equivalente planificado para E02 es:
+En Linux, el equivalente comprobado por E02 es:
 
 ```bash
 cd back
@@ -70,7 +70,7 @@ python -m venv .venv
 .venv/bin/python -m ruff check ETL api services --output-format concise
 ```
 
-Los comandos Windows se comprobaron en un entorno nuevo. **La ejecución Linux está pendiente de E02**. Las versiones directas son exactas y `requirements.txt` incorpora `constraints.txt`, con los pins transitivos y la dependencia condicional `uvloop`. No usar `--no-deps`: deben evaluarse también los requisitos condicionales de la plataforma.
+Los comandos Windows se comprobaron en un entorno nuevo. **La ejecución Linux quedó comprobada en E02**, con Ubuntu 24.04, CPython 3.12.14 y `uvloop==0.23.0` instalado. Las versiones directas son exactas y `requirements.txt` incorpora `constraints.txt`, con los pins transitivos y la dependencia condicional `uvloop`. No usar `--no-deps`: deben evaluarse también los requisitos condicionales de la plataforma.
 
 Resultados E01: 61 pruebas aprobadas, una advertencia Starlette/TestClient, 85,25 % de sentencias y 68,07 % de ramas. Ruff normal devuelve 0 con tres excepciones locales TRY004 justificadas. Para auditarlas, este comando debe mostrar exactamente esas tres observaciones y devolver 1:
 
@@ -86,4 +86,4 @@ La cobertura frontend incluye `app/`, `components/`, `lib/` y excluye `.d.ts`; `
 
 Una actualización deliberada requiere revisar avisos y compatibilidad, cambiar pins/locks, instalar desde cero y ejecutar los controles afectados. No adoptar un `pip freeze` ajeno sin revisar paquetes condicionales ni asumir compatibilidad Linux porque funciona en Windows. No borrar avisos mediante filtros globales o códigos de salida ignorados.
 
-Los reportes de esta etapa son [evidencias/e01](evidencias/e01/resumen-2026-10-21.json). El JSON identifica la versión de entrada y los hashes del código/configuración comprobados; el commit de publicación se consulta en el historial de la ficha E01.
+Los reportes locales de partida son [evidencias/e01](evidencias/e01/resumen-2026-10-21.json). Los resultados remotos, SHA, artefactos y comprobaciones Linux están en [evidencias/e02](evidencias/e02/ejecuciones-2026-10-21.json). El commit de cierre documental de cada etapa se consulta en el historial de su ficha.

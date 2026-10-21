@@ -1,6 +1,6 @@
 # CI base del TP de Calidad — E02
 
-Workflow: [quality-ci.yml](../.github/workflows/quality-ci.yml). Se ejecuta en push, pull request hacia `main` y manualmente. El corte inicial está en comprobación remota; la ficha de ejecución documentará las URLs y resultados antes de cerrar E02.
+Workflow: [quality-ci.yml](../.github/workflows/quality-ci.yml). Se ejecuta en push, pull request hacia `main` y manualmente. **E02 comprobada:** [ejecución normal aprobada](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471) y [fallo controlado propagado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493). Consultar [la ficha E02](../REGISTRO_EJECUCION_E02.md) y [sus evidencias](../evidencias/e02/ejecuciones-2026-10-21.json).
 
 ## Controles y resultados
 
@@ -10,7 +10,7 @@ Workflow: [quality-ci.yml](../.github/workflows/quality-ci.yml). Se ejecuta en p
 
 `ci.py` ejecuta los controles desde `front` o `back`, conserva el código de salida de cada proceso y continúa los controles independientes para recoger sus reportes. Al finalizar devuelve 1 si alguno falló o falta evidencia requerida. No se usa `continue-on-error`, `|| true` ni una copia manual de reportes históricos.
 
-Los artefactos `ci-frontend-<run>-<attempt>`, `ci-backend-<run>-<attempt>` y `ci-summary-<run>-<attempt>` se conservan **30 días**. La subida se ejecuta con `always()`, incluyendo las ejecuciones fallidas. Si una preparación impide producir un reporte, su ausencia queda como fallo; no se publica una aprobación vacía. Descargar los artefactos antes de su vencimiento para conservar la entrega.
+Los artefactos `ci-frontend-<run>-<attempt>`, `ci-backend-<run>-<attempt>` y `ci-summary-<run>-<attempt>` se conservan **30 días**. La subida se ejecuta con `always()`, incluyendo las ejecuciones fallidas. Si una preparación impide producir un reporte, su ausencia queda como fallo; no se publica una aprobación vacía. Descargar los artefactos antes de su vencimiento para conservar la entrega. Para reintentar, ejecutar el workflow completo: se rechazan mezclas de artefactos de intentos distintos.
 
 ## Seguridad y límites del alcance
 
@@ -64,4 +64,4 @@ gh run view <RUN_ID> --repo ImaDecara/Tesis-EQUITAS
 gh run download <RUN_ID> --repo ImaDecara/Tesis-EQUITAS --dir .quality/descarga-<RUN_ID>
 ```
 
-Cada artefacto contiene logs y resultados propios. Las URLs/SHA y comprobaciones reales de E02 se conservarán en la ficha de cierre y su evidencia versionada.
+Cada artefacto contiene logs y resultados propios. Las URLs/SHA y comprobaciones reales de E02 están conservadas en la ficha de cierre y su evidencia versionada. Se descargaron y verificaron los seis ZIP de las dos ejecuciones, incluidos JSON, XML, LCOV y HTML con sus recursos.

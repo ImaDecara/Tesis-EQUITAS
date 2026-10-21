@@ -1,0 +1,232 @@
+{
+  "stage": "E02",
+  "status": "completed",
+  "owner": "Axel Azcune",
+  "observed_at_utc": "2026-10-21T20:24:11.516315+00:00",
+  "input_head": "eac6fe647037dc1268540621fb7228c589d3fcc1",
+  "pipeline_commit": "5cfcc773a39fdaa7d5859744c430fd6b790c34d7",
+  "workflow": ".github/workflows/quality-ci.yml",
+  "runner": "ubuntu-24.04",
+  "actions": {
+    "checkout": {
+      "version": "v7.0.1",
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    },
+    "setup-node": {
+      "version": "v7.1.0",
+      "sha": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+    },
+    "setup-python": {
+      "version": "v7.0.0",
+      "sha": "5fda3b95a4ea91299a34e894583c3862153e4b97"
+    },
+    "upload-artifact": {
+      "version": "v7.0.2",
+      "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+    },
+    "download-artifact": {
+      "version": "v8.0.2",
+      "sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+    }
+  },
+  "source_git_blob_sha256": {
+    ".github/workflows/quality-ci.yml": "2361ae545ba79a7491d742862d6acc5ff61ec57a71065212879cc7e907efdaa3",
+    "quality/ci.py": "17edb28eec22b2f5838e9abe35ea54df9bd44eb2926e2496c3e2f0f434cb45c2",
+    "quality/audit_policy.py": "08c09c5f95e9410c99d896cc0cc6a96a3a5390f59c72bb2f1280ba2bbd39ca4c",
+    "quality/npm-audit-policy.json": "8ada39ce3eb6a5a86b07af48f1340adbba245d1573ea227f3d7e84e5e91c5a6b",
+    "quality/tests/test_ci.py": "00a6541c6f6ca644bf7fb047287d78a8522f801829c47a025a163165ed346b4f",
+    "front/vitest.config.ts": "0e06992b85e7cc30d5b82469a3fb56b7189a7345a9849728fe449ce82f7a362e"
+  },
+  "local_validation": {
+    "actionlint": "1.7.12",
+    "actionlint_exit_code": 0,
+    "ruff_quality_exit_code": 0,
+    "product_tests_passed": 94,
+    "product_tests_skipped": 1,
+    "infrastructure_tests_passed": 14
+  },
+  "linux_installation_verified": true,
+  "conditional_uvloop_verified": "0.23.0",
+  "runs": [
+    {
+      "purpose": "normal push",
+      "id": 39669312471,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471",
+      "sha": "5cfcc773a39fdaa7d5859744c430fd6b790c34d7",
+      "event": "push",
+      "conclusion": "success",
+      "created_at_utc": "2026-10-21T20:19:33Z",
+      "completed_at_utc": "2026-10-21T20:21:02Z",
+      "product_tests": {
+        "passed": 94,
+        "failed": 0,
+        "skipped": 1
+      },
+      "infrastructure_tests": {
+        "passed": 14,
+        "failed": 0
+      },
+      "jobs": [
+        {
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/job/119462635238"
+        },
+        {
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/job/119462635537"
+        },
+        {
+          "name": "Resumen y estado del CI base",
+          "conclusion": "success",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/job/119463217632"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 12379410912,
+          "name": "ci-frontend-39669312471-1",
+          "zip_sha256": "e2f9ad1c06a3a1a68002d59d7f0abc517a5de1d9fc257edcc3f745ab80a7abbf",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/artifacts/12379410912",
+          "expires_at_utc": "2026-11-20T20:20:37Z"
+        },
+        {
+          "id": 12378997110,
+          "name": "ci-summary-39669312471-1",
+          "zip_sha256": "f6d611b6ebb5a1a69e252535f0913561ca88d6b9721947061efed5842ab24792",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/artifacts/12378997110",
+          "expires_at_utc": "2026-11-20T20:20:57Z"
+        },
+        {
+          "id": 12378348548,
+          "name": "ci-backend-39669312471-1",
+          "zip_sha256": "9f9fb4e0086c63937ecb6c7ab439c6b821261953c3cde30f603ac1a3e98551c1",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669312471/artifacts/12378348548",
+          "expires_at_utc": "2026-11-20T20:20:15Z"
+        }
+      ],
+      "checks": [
+        {
+          "component": "frontend",
+          "tests_xml_parsed": true,
+          "coverage_html_readable": true,
+          "html_assets_verified": 5,
+          "missing_html_assets": []
+        },
+        {
+          "component": "backend",
+          "tests_xml_parsed": true,
+          "coverage_html_readable": true,
+          "html_assets_verified": 2,
+          "missing_html_assets": []
+        }
+      ]
+    },
+    {
+      "purpose": "controlled CI failure propagation; not E03 product defect",
+      "id": 39669377493,
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493",
+      "sha": "5cfcc773a39fdaa7d5859744c430fd6b790c34d7",
+      "event": "workflow_dispatch",
+      "conclusion": "failure",
+      "created_at_utc": "2026-10-21T20:20:00Z",
+      "completed_at_utc": "2026-10-21T20:21:20Z",
+      "product_tests": {
+        "passed": 94,
+        "failed": 1,
+        "skipped": 1
+      },
+      "infrastructure_tests": {
+        "passed": 14,
+        "failed": 0
+      },
+      "jobs": [
+        {
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "failure",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/job/119462869830"
+        },
+        {
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/job/119462870391"
+        },
+        {
+          "name": "Resumen y estado del CI base",
+          "conclusion": "failure",
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/job/119463397693"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 12379271012,
+          "name": "ci-summary-39669377493-1",
+          "zip_sha256": "7fa608599ac1e44728c766e02e2ff5bc229f2fa03ca2fbf928f68e6e7148a7f9",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/artifacts/12379271012",
+          "expires_at_utc": "2026-11-20T20:21:16Z"
+        },
+        {
+          "id": 12378553170,
+          "name": "ci-frontend-39669377493-1",
+          "zip_sha256": "c66ed6800057a43095b448282a3acd4a7199a39fa4d05ed29c07a78274ed0610",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/artifacts/12378553170",
+          "expires_at_utc": "2026-11-20T20:20:58Z"
+        },
+        {
+          "id": 12378493356,
+          "name": "ci-backend-39669377493-1",
+          "zip_sha256": "7fcba36f1fdfbbfbfc3bfcabb16bc6d3fdc2e50214e5bceb05f66712e0387191",
+          "downloaded_and_verified": true,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39669377493/artifacts/12378493356",
+          "expires_at_utc": "2026-11-20T20:20:39Z"
+        }
+      ],
+      "checks": [
+        {
+          "component": "frontend",
+          "tests_xml_parsed": true,
+          "coverage_html_readable": true,
+          "html_assets_verified": 5,
+          "missing_html_assets": []
+        },
+        {
+          "component": "backend",
+          "tests_xml_parsed": true,
+          "coverage_html_readable": true,
+          "html_assets_verified": 2,
+          "missing_html_assets": []
+        }
+      ]
+    }
+  ],
+  "reporters": {
+    "frontend": [
+      "JSON",
+      "JUnit XML",
+      "LCOV",
+      "coverage JSON",
+      "coverage HTML"
+    ],
+    "backend": [
+      "JUnit XML",
+      "coverage XML",
+      "coverage JSON",
+      "coverage HTML"
+    ]
+  },
+  "retention_days": 30,
+  "release_approved": false,
+  "limitations": [
+    "E04 gates incomplete; frontend coverage remains 45.96%, below 60%.",
+    "OBS-DEP-001 remains open; reviewed exception expires 2026-10-26.",
+    "External Auth test remains skipped; E06.",
+    "Controlled failure is not the E03 functional red/green requirement.",
+    "Deployment, smoke, stress and soak tests remain pending."
+  ]
+}
