@@ -1,0 +1,127 @@
+{
+  "technical_completed": 27,
+  "human_pending": 3,
+  "fully_closed": false,
+  "items": [
+    {
+      "description": "Preparar un checkout o entorno limpio de la versión candidata, respetando cambios existentes del usuario.",
+      "done": true
+    },
+    {
+      "description": "Instalar usando las versiones y configuración documentadas.",
+      "done": true
+    },
+    {
+      "description": "Ejecutar el ciclo completo: build, suites, análisis, cobertura, gates, integración real, despliegue/smoke y cargas que correspondan.",
+      "done": true
+    },
+    {
+      "description": "Conservar una ejecución integral verde sobre el SHA candidato. Los jobs obligatorios no pueden estar omitidos para esa ejecución final.",
+      "done": true
+    },
+    {
+      "description": "Vincular la ejecución roja de E03 y explicar el defecto que detectó. Ambas evidencias pueden ser de commits distintos, cuya relación debe quedar clara.",
+      "done": true
+    },
+    {
+      "description": "Verificar que el despliegue nuevo y su smoke corresponden al mismo SHA declarado para esa validación.",
+      "done": true
+    },
+    {
+      "description": "Comprobar que los reportes de carga fueron generados por el pipeline y que su componente/entorno se declara.",
+      "done": true
+    },
+    {
+      "description": "Reconciliar las métricas del PDF con la ejecución final; actualizar el PDF si hubo cambios posteriores de código/pruebas.",
+      "done": true
+    },
+    {
+      "description": "Revisar que scripts, workflows, casos, configuraciones no secretas, plantillas, documentación y PDF están efectivamente versionados/publicados según la entrega elegida.",
+      "done": true
+    },
+    {
+      "description": "Revisar permanencia/accesibilidad de URLs y artefactos; guardar un manifiesto portable con identificadores y resultados para que no dependan solo de capturas.",
+      "done": true
+    },
+    {
+      "description": "Preparar un guion de demostración: presentación del MVP, pipeline, defecto rojo/verde, integración, despliegue/smoke, cargas y conclusiones.",
+      "done": true
+    },
+    {
+      "description": "Ensayar el recorrido sobre datos de testing y conservar los comandos para repetirlo.",
+      "done": true
+    },
+    {
+      "description": "Cada integrante debe poder explicar qué hace una prueba, cómo se calcula la cobertura, qué bloquea el gate, qué demuestra el rojo/verde y qué límites tienen las cargas y la revisión RLS.",
+      "done": false
+    },
+    {
+      "description": "Registrar aportes individuales reales y confirmar datos de la entrega.",
+      "done": false
+    },
+    {
+      "description": "Nivel y alcance declarados; objetivos medibles y plan versionado.",
+      "done": true
+    },
+    {
+      "description": "ISO de ocho características, top 3, riesgos y contingencia.",
+      "done": true
+    },
+    {
+      "description": "Unitarias AAA, API/integración, técnicas dinámicas y cobertura de decisiones explicadas.",
+      "done": true
+    },
+    {
+      "description": "60 % existente y 80 % nuevo verificados con su alcance/base.",
+      "done": true
+    },
+    {
+      "description": "Análisis, duplicación y bugs críticos controlados por gate automático.",
+      "done": true
+    },
+    {
+      "description": "Pipeline versionado con ejecución completa verde y roja por problema real.",
+      "done": true
+    },
+    {
+      "description": "Reportes automáticos de pruebas, cobertura, análisis y estrés accesibles.",
+      "done": true
+    },
+    {
+      "description": "Integración externa real de aplicación aprobada y no omitida.",
+      "done": true
+    },
+    {
+      "description": "Smoke desde pipeline después de un despliegue nuevo.",
+      "done": true
+    },
+    {
+      "description": "Estrés y esfuerzo sostenido ejecutados con parámetros y criterios previos.",
+      "done": true
+    },
+    {
+      "description": "Casos/defectos en soporte identificado y regresión de cada corrección.",
+      "done": true
+    },
+    {
+      "description": "Herramienta incorporada con cinco pasos y matriz de decisión.",
+      "done": true
+    },
+    {
+      "description": "Métricas de producto/proceso/proyecto y mejora antes/después interpretadas.",
+      "done": true
+    },
+    {
+      "description": "Un comando comprobado para cada clase de prueba.",
+      "done": true
+    },
+    {
+      "description": "PDF revisado, metas cumplidas/no cumplidas, análisis crítico y conclusiones.",
+      "done": true
+    },
+    {
+      "description": "Demostración ensayada, enlaces disponibles y aporte individual trazable.",
+      "done": false
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "stage": "E11",
+  "technical_validation_passed": true,
+  "stage_fully_closed": false,
+  "checks_passed": 45,
+  "checks": [
+    {
+      "check": "CI/external/gate match candidate and are required",
+      "passed": true
+    },
+    {
+      "check": "All ten gate criteria passed without moving base",
+      "passed": true
+    },
+    {
+      "check": "180 product tests, no failures/skips",
+      "passed": true
+    },
+    {
+      "check": "Mandatory four jobs success on both main and testing",
+      "passed": true
+    },
+    {
+      "check": "Preserve production approval limitation",
+      "passed": true
+    },
+    {
+      "check": "New deployment/smoke same SHA and exact CI binding",
+      "passed": true
+    },
+    {
+      "check": "Five browser checks, synthetic amount and no browser errors",
+      "passed": true
+    },
+    {
+      "check": "Actual clean audits without extending exception",
+      "passed": true
+    },
+    {
+      "check": "Advisory officially withdrawn",
+      "passed": true
+    },
+    {
+      "check": "Only original RLS issue open, withdrawn advisory issue closed",
+      "passed": true
+    },
+    {
+      "check": "Testing catalog inspection is separate from HTTP",
+      "passed": true
+    },
+    {
+      "check": "No inflated test inventory",
+      "passed": true
+    },
+    {
+      "check": "Frontend and backend JUnit instance counts",
+      "passed": true
+    },
+    {
+      "check": "66 harness controls, separate from product",
+      "passed": true
+    },
+    {
+      "check": "Coverage numerators and denominators preserved",
+      "passed": true
+    },
+    {
+      "check": "Duplication is lines without rounding",
+      "passed": true
+    },
+    {
+      "check": "stress campaign exact source, complete, clean process",
+      "passed": true
+    },
+    {
+      "check": "stress fixed policy and dataset",
+      "passed": true
+    },
+    {
+      "check": "stress dataset independently hashed",
+      "passed": true
+    },
+    {
+      "check": "stress warmup raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress stress_1 raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress stress_5 raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress stress_10 raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress stress_20 raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress stress_40 raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "stress required per-operation SLOs passed",
+      "passed": true
+    },
+    {
+      "check": "soak campaign exact source, complete, clean process",
+      "passed": true
+    },
+    {
+      "check": "soak fixed policy and dataset",
+      "passed": true
+    },
+    {
+      "check": "soak dataset independently hashed",
+      "passed": true
+    },
+    {
+      "check": "soak warmup raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "soak soak raw count/percentile/content independently reproduced",
+      "passed": true
+    },
+    {
+      "check": "soak required per-operation SLOs passed",
+      "passed": true
+    },
+    {
+      "check": "Exploratory 40 VU failure retained",
+      "passed": true
+    },
+    {
+      "check": "Soak is complete 10 VU / 600 seconds",
+      "passed": true
+    },
+    {
+      "check": "No product/harness/workflow changes relative to candidate",
+      "passed": true
+    },
+    {
+      "check": "Eight official ZIP SHA-256 digests verified",
+      "passed": true
+    },
+    {
+      "check": "27 technical controls checked, three human controls pending",
+      "passed": true
+    },
+    {
+      "check": "Report has 29 pages and no contents index",
+      "passed": true
+    },
+    {
+      "check": "Report reconciles E11 sources and truthful pending",
+      "passed": true
+    },
+    {
+      "check": "All local delivery links resolve",
+      "passed": true
+    },
+    {
+      "check": "PDF links are portable HTTPS",
+      "passed": true
+    },
+    {
+      "check": "Final PDF/source/generator hashes match",
+      "passed": true
+    },
+    {
+      "check": "All figure source hashes match",
+      "passed": true
+    },
+    {
+      "check": "No private config values in public evidence or report",
+      "passed": true
+    },
+    {
+      "check": "No attribution forbidden by user",
+      "passed": true
+    }
+  ],
+  "local_links_checked": 263,
+  "pdf_https_links": 121,
+  "portable_main_operation_samples": {
+    "stress": 5312,
+    "soak": 15149
+  },
+  "remaining_human_controls": 3,
+  "user_confirmation": "Team review still pending.",
+  "scope": "Independent consistency/provenance/report checks, not additional product test cases."
+}

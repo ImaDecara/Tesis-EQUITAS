@@ -1,0 +1,1 @@
+{"ghsa_id":"GHSA-vfj7-8cjw-p6xm","html_url":"https://github.com/advisories/GHSA-vfj7-8cjw-p6xm","published_at":"2026-09-18T18:31:41Z","summary":"Withdrawn Advisory: braces vulnerable to stack-exhaustion denial of service through deeply nested patterns","updated_at":"2026-10-23T12:53:05Z","withdrawn_at":"2026-10-23T12:53:02Z"}

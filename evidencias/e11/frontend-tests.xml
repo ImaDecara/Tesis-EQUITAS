@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="107" failures="0" errors="0" time="1.489208149">
+    <testsuite name="tests/integration/auth-service.integration.test.ts" timestamp="2026-10-23T22:15:52.610Z" hostname="runnervm8k3b6" tests="4" failures="0" errors="0" skipped="0" time="0.015060062">
+        <testcase classname="tests/integration/auth-service.integration.test.ts" name="integracion simulada de autorizacion con Supabase &gt; valida la relacion auth.users, public.user y tenant_user activa" time="0.007343735">
+        </testcase>
+        <testcase classname="tests/integration/auth-service.integration.test.ts" name="integracion simulada de autorizacion con Supabase &gt; rechaza una cuenta Auth sin registro asociado en public.user" time="0.001400348">
+        </testcase>
+        <testcase classname="tests/integration/auth-service.integration.test.ts" name="integracion simulada de autorizacion con Supabase &gt; informa un error de permisos de la consulta sin autorizar acceso" time="0.000617594">
+        </testcase>
+        <testcase classname="tests/integration/auth-service.integration.test.ts" name="integracion simulada de autorizacion con Supabase &gt; valida que el identificador de public.user sea numerico antes de consultar tenant_user" time="0.003068912">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/integration/complete-data.integration.test.ts" timestamp="2026-10-23T22:15:52.612Z" hostname="runnervm8k3b6" tests="22" failures="0" errors="0" skipped="0" time="1.073817424">
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz &gt; FIXTURE-01: el SDK aplica limite de servidor, orden y cursor sobre HTTP simulado" time="0.063633235">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz &gt; DAT-06 / objetos: recupera 3507 filas con limite efectivo 1000" time="0.029218856">
+            <system-out>
+E03_DAT_06 {&quot;route&quot;:&quot;objetos&quot;,&quot;serverMaxRows&quot;:1000,&quot;expected&quot;:3507,&quot;received&quot;:3507,&quot;missing&quot;:0,&quot;duplicates&quot;:0}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz &gt; DAT-06 / objetos: recupera 3507 filas con limite efectivo 3000" time="0.029268448">
+            <system-out>
+E03_DAT_06 {&quot;route&quot;:&quot;objetos&quot;,&quot;serverMaxRows&quot;:3000,&quot;expected&quot;:3507,&quot;received&quot;:3507,&quot;missing&quot;:0,&quot;duplicates&quot;:0}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz &gt; DAT-06 / personas: recupera 3507 filas con limite efectivo 1000" time="0.150727182">
+            <system-out>
+E03_DAT_06 {&quot;route&quot;:&quot;personas&quot;,&quot;serverMaxRows&quot;:1000,&quot;expected&quot;:3507,&quot;received&quot;:3507,&quot;missing&quot;:0,&quot;duplicates&quot;:0}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01 / DEF-DAT-001: recuperacion completa antes de paginar la interfaz &gt; DAT-06 / personas: recupera 3507 filas con limite efectivo 3000" time="0.091419386">
+            <system-out>
+E03_DAT_06 {&quot;route&quot;:&quot;personas&quot;,&quot;serverMaxRows&quot;:3000,&quot;expected&quot;:3507,&quot;received&quot;:3507,&quot;missing&quot;:0,&quot;duplicates&quot;:0}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-01 / objetos: 0 filas, con pagina efectiva de 1000" time="0.011249353">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-02 / objetos: 7 filas, con pagina efectiva de 1000" time="0.004567826">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-03 / objetos: 1000 filas, con pagina efectiva de 1000" time="0.007835842">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-04 / objetos: 1001 filas, con pagina efectiva de 1000" time="0.008188626">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-05 / objetos: 2000 filas, con pagina efectiva de 1000" time="0.011979488">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-06-L / objetos: continua si el servidor devuelve solo 137 filas por consulta" time="0.039684207">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-01 / personas: 0 filas, con pagina efectiva de 1000" time="0.003527266">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-02 / personas: 7 filas, con pagina efectiva de 1000" time="0.004204842">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-03 / personas: 1000 filas, con pagina efectiva de 1000" time="0.022974333">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-04 / personas: 1001 filas, con pagina efectiva de 1000" time="0.022964083">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-05 / personas: 2000 filas, con pagina efectiva de 1000" time="0.035378741">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-06-L / personas: continua si el servidor devuelve solo 137 filas por consulta" time="0.105857406">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-07 / objetos: descarta la tabla parcial ante un error RLS en la segunda pagina" time="0.008651749">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-07 / personas: alerta y descarta detalles parciales sin perder personas completas" time="0.005755523">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-07-T: un fallo de transporte posterior no expone el prefijo como tabla completa" time="0.027334186">
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-08 / objetos: el dashboard y las relaciones incluyen deudas/personas de paginas posteriores" time="0.20331764">
+            <system-out>
+[EQUITAS contact debug] {
+  debtorPersonRows: [33m3507[39m,
+  debtorContactRows: [33m3507[39m,
+  mappedDebtorsWithContacts: [33m1[39m
+}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/integration/complete-data.integration.test.ts" name="R-DAT-01: limites, fallos y relaciones de la lectura completa &gt; DAT-08 / personas: materializa riesgo, contacto y deuda de la persona de la ultima pagina" time="0.179132741">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/integration/raw-debtor-loader.integration.test.ts" timestamp="2026-10-23T22:15:52.619Z" hostname="runnervm8k3b6" tests="4" failures="0" errors="0" skipped="0" time="0.079406672">
+        <testcase classname="tests/integration/raw-debtor-loader.integration.test.ts" name="integracion simulada de lectura de objetos de deuda &gt; integra filas validas de todas las consultas requeridas" time="0.057200372">
+        </testcase>
+        <testcase classname="tests/integration/raw-debtor-loader.integration.test.ts" name="integracion simulada de lectura de objetos de deuda &gt; acepta respuestas vacias como listados validos sin alerta" time="0.005529367">
+        </testcase>
+        <testcase classname="tests/integration/raw-debtor-loader.integration.test.ts" name="integracion simulada de lectura de objetos de deuda &gt; convierte un error de conexion informado por Supabase en una alerta" time="0.005158523">
+        </testcase>
+        <testcase classname="tests/integration/raw-debtor-loader.integration.test.ts" name="integracion simulada de lectura de objetos de deuda &gt; identifica una denegacion por RLS para solicitar policy SELECT" time="0.003224785">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/pages/data-pages.test.ts" timestamp="2026-10-23T22:15:52.620Z" hostname="runnervm8k3b6" tests="9" failures="0" errors="0" skipped="0" time="0.115689124">
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; calcula y presenta el resumen ejecutivo del dashboard" time="0.038360947">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; presenta deuda, mora y paginacion con parametros validos" time="0.004967789">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; filtra y muestra casos sin contacto" time="0.004681169">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; aplica filtros operativos para casos prioritarios" time="0.010351762">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; procesa filtros y estadisticas del listado de objetos" time="0.015051877">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; procesa filtros y resumen de personas" time="0.007836363">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; presenta analisis de riesgo individual y del objeto" time="0.00636963">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; agrupa las acciones recomendadas existentes" time="0.005896935">
+        </testcase>
+        <testcase classname="tests/pages/data-pages.test.ts" name="pantallas con datos de gestion simulados &gt; muestra el detalle completo de un objeto y deriva a notFound cuando falta" time="0.01718751">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/pages/static-pages.test.ts" timestamp="2026-10-23T22:15:52.622Z" hostname="runnervm8k3b6" tests="2" failures="0" errors="0" skipped="0" time="0.007822868">
+        <testcase classname="tests/pages/static-pages.test.ts" name="pantallas estaticas &gt; presenta la pagina de login y limita el destino a rutas internas" time="0.004860547">
+        </testcase>
+        <testcase classname="tests/pages/static-pages.test.ts" name="pantallas estaticas &gt; presenta los estados globales de carga y recurso inexistente" time="0.001057612">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/auth-service.test.ts" timestamp="2026-10-23T22:15:52.623Z" hostname="runnervm8k3b6" tests="20" failures="0" errors="0" skipped="0" time="0.037755589">
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-01: sin configuracion no autoriza, no inicia sesion y permite salir sin error" time="0.009496691">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-02: transmite credenciales y conserva el error null" time="0.002336221">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-02: transmite credenciales y conserva el error {&quot;message&quot;:&quot;Invalid login credentials&quot;}" time="0.000513357">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-03: solicita cerrar la sesion exactamente una vez" time="0.000472891">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-04: mensaje de usuario para null" time="0.000481948">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-04: mensaje de usuario para {&quot;message&quot;:&quot;INVALID LOGIN CREDENTIALS&quot;}" time="0.000208163">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-04: mensaje de usuario para {&quot;message&quot;:&quot;invalid_credentials&quot;}" time="0.000179017">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-04: mensaje de usuario para {&quot;message&quot;:&quot;Email not confirmed&quot;}" time="0.000161163">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-04: mensaje de usuario para {&quot;message&quot;:&quot;Service unavailable&quot;}" time="0.000323599">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-05: sesion ausente o invalida requiere login, sin consultar tablas" time="0.000678578">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-05: sesion ausente o invalida requiere login, sin consultar tablas" time="0.000480034">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-06: usa el usuario validado por Auth y la pertenencia activa" time="0.005678048">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-06 / E06: conserva el cliente y su sesion al validar pertenencia" time="0.000942255">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-07: sin pertenencia activa consulta estados y rechaza { data: [], error: null }" time="0.000799216">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-07: sin pertenencia activa consulta estados y rechaza { data: [ { status: false } ], error: null }" time="0.000710789">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-07: sin pertenencia activa consulta estados y rechaza { data: null, error: { message: &apos;membership read failed&apos;, code: &apos;42501&apos; } }" time="0.002671423">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-08: error leyendo pertenencia no autoriza ni consulta estados adicionales" time="0.001485709">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-09: identificador de aplicacion vacio {} no consulta pertenencias" time="0.001784191">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-09: identificador de aplicacion vacio {&quot;id&quot;:null} no consulta pertenencias" time="0.001207034">
+        </testcase>
+        <testcase classname="tests/unit/auth-service.test.ts" name="R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia &gt; AUTH-09: identificador de aplicacion vacio {&quot;id&quot;:&quot;&quot;} no consulta pertenencias" time="0.003714759">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/build-info.test.ts" timestamp="2026-10-23T22:15:52.626Z" hostname="runnervm8k3b6" tests="5" failures="0" errors="0" skipped="0" time="0.051540617">
+        <testcase classname="tests/unit/build-info.test.ts" name="E07: procedencia del despliegue sin secretos &gt; prioriza el SHA provisto por Vercel y revela solo la referencia publica" time="0.047089521">
+        </testcase>
+        <testcase classname="tests/unit/build-info.test.ts" name="E07: procedencia del despliegue sin secretos &gt; rechaza destino Supabase ausente o ajeno: " time="0.000517695">
+        </testcase>
+        <testcase classname="tests/unit/build-info.test.ts" name="E07: procedencia del despliegue sin secretos &gt; rechaza destino Supabase ausente o ajeno: invalid-url" time="0.000343006">
+        </testcase>
+        <testcase classname="tests/unit/build-info.test.ts" name="E07: procedencia del despliegue sin secretos &gt; rechaza destino Supabase ausente o ajeno: https://example.test" time="0.000412036">
+        </testcase>
+        <testcase classname="tests/unit/build-info.test.ts" name="E07: procedencia del despliegue sin secretos &gt; permite identificar la version en una comprobacion local declarada" time="0.000379244">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/debtor-mapper-and-selectors.test.ts" timestamp="2026-10-23T22:15:52.628Z" hostname="runnervm8k3b6" tests="3" failures="0" errors="0" skipped="0" time="0.013198816">
+        <testcase classname="tests/unit/debtor-mapper-and-selectors.test.ts" name="mapeador de objetos de deuda &gt; materializa relaciones, mora, riesgo y prioridad desde filas crudas" time="0.009758244">
+            <system-out>
+[EQUITAS contact debug] {
+  debtorPersonRows: [33m1[39m,
+  debtorContactRows: [33m1[39m,
+  mappedDebtorsWithContacts: [33m1[39m
+}
+
+            </system-out>
+        </testcase>
+        <testcase classname="tests/unit/debtor-mapper-and-selectors.test.ts" name="selectores operativos &gt; ordena casos por prioridad y conserva los casos sin contacto" time="0.000860541">
+        </testcase>
+        <testcase classname="tests/unit/debtor-mapper-and-selectors.test.ts" name="selectores operativos &gt; resume deuda y distribuye atrasos en sus bandas" time="0.000566758">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/paginated-table-reader.test.ts" timestamp="2026-10-23T22:15:52.629Z" hostname="runnervm8k3b6" tests="20" failures="0" errors="0" skipped="0" time="0.072859021">
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-09: no consulta sin cliente configurado" time="0.005218662">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-09-C: no consulta con credenciales deshabilitadas" time="0.037866047">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-10: preserva cursores bigint representados como texto sin perder precision" time="0.009059387">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida undefined sin publicar filas parciales" time="0.001943441">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida null sin publicar filas parciales" time="0.000805247">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida true sin publicar filas parciales" time="0.000839361">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida invalid sin publicar filas parciales" time="0.000725707">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida 1.5 sin publicar filas parciales" time="0.000706742">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-11: rechaza clave id invalida 9007199254740992 sin publicar filas parciales" time="0.000898743">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas" time="0.001048746">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas" time="0.00065863">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-12: detiene un cursor repetido, filas desordenadas o duplicadas" time="0.000703255">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-13: rechaza una pagina que no sea un array" time="0.000656847">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-14: conserva el contrato de advertencia {&quot;message&quot;:&quot;denied&quot;,&quot;code&quot;:&quot;42501&quot;}" time="0.001551022">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-14: conserva el contrato de advertencia {&quot;message&quot;:&quot;permission denied&quot;}" time="0.000744903">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-14: conserva el contrato de advertencia {&quot;message&quot;:&quot;row-level security rejected&quot;}" time="0.000605861">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-14: conserva el contrato de advertencia {&quot;message&quot;:&quot;RLS rejected&quot;}" time="0.003803476">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-14: conserva el contrato de advertencia {&quot;message&quot;:&quot;&quot;,&quot;code&quot;:null}" time="0.000963876">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-07-C: convierte una excepcion del cliente en alerta" time="0.000437354">
+        </testcase>
+        <testcase classname="tests/unit/paginated-table-reader.test.ts" name="R-DAT-01 / lector paginado: validacion y fallos seguros &gt; DAT-07-C: convierte una excepcion del cliente en alerta" time="0.000336714">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/pagination.test.ts" timestamp="2026-10-23T22:15:52.633Z" hostname="runnervm8k3b6" tests="5" failures="0" errors="0" skipped="0" time="0.007315572">
+        <testcase classname="tests/unit/pagination.test.ts" name="paginacion &gt; usa diez elementos y la primera pagina por defecto" time="0.002982429">
+        </testcase>
+        <testcase classname="tests/unit/pagination.test.ts" name="paginacion &gt; respeta el tamano de veinte y calcula la ultima pagina parcial" time="0.00040348">
+        </testcase>
+        <testcase classname="tests/unit/pagination.test.ts" name="paginacion &gt; normaliza valores invalidos de pagina y tamano" time="0.001060558">
+        </testcase>
+        <testcase classname="tests/unit/pagination.test.ts" name="paginacion &gt; limita una pagina fuera de rango a la ultima disponible" time="0.000316837">
+        </testcase>
+        <testcase classname="tests/unit/pagination.test.ts" name="paginacion &gt; maneja listados vacios sin rangos invalidos" time="0.000248929">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/recommendation-decisions.test.ts" timestamp="2026-10-23T22:15:52.635Z" hostname="runnervm8k3b6" tests="7" failures="0" errors="0" skipped="0" time="0.006445203">
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: alto con contacto prevalece sobre mora" time="0.003208975">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: alto sin contacto requiere revision" time="0.000239902">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: mora de 60 dias" time="0.000275309">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: mora de 59 dias" time="0.000165141">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: sin mora, saldo justo en limite" time="0.000150043">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: sin mora, saldo debajo del limite" time="0.000139673">
+        </testcase>
+        <testcase classname="tests/unit/recommendation-decisions.test.ts" name="R-FUN-01 / E04: tabla de decision de recomendaciones &gt; REC-01: sin deuda" time="0.000146306">
+        </testcase>
+    </testsuite>
+    <testsuite name="tests/unit/risk-and-aging.test.ts" timestamp="2026-10-23T22:15:52.637Z" hostname="runnervm8k3b6" tests="6" failures="0" errors="0" skipped="0" time="0.008297181">
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="clasificacion de riesgo &gt; clasifica los limites de la escala oficial de riesgo" time="0.003693859">
+        </testcase>
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="clasificacion de riesgo &gt; limita valores no validos y fuera de escala" time="0.000365798">
+        </testcase>
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="clasificacion de riesgo &gt; prioriza un puntaje informado por el perfil" time="0.000365258">
+        </testcase>
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="clasificacion de riesgo &gt; estima riesgo medio cuando no hay perfil y faltan contactos" time="0.000288644">
+        </testcase>
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="calculo de mora &gt; identifica vencimientos pasados y futuros" time="0.00036596">
+        </testcase>
+        <testcase classname="tests/unit/risk-and-aging.test.ts" name="calculo de mora &gt; maneja fechas invalidas y evita antiguedad negativa" time="0.000310505">
+        </testcase>
+    </testsuite>
+</testsuites>

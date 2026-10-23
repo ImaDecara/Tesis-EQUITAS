@@ -43,7 +43,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / 'INFORME_ACADEMICO_CALIDAD.md'
 FIGURES = HERE / 'figuras'
-EVIDENCE = ROOT / 'evidencias/e10'
+EVIDENCE = ROOT / 'evidencias/e11'
 WIDTH = 504
 BLUE = colors.HexColor('#1e456a')
 GRAY = colors.HexColor('#747f89')
@@ -155,7 +155,7 @@ def figures():
         renderSVG.drawToFile(drawing, str(FIGURES / name))
         svg = FIGURES / name
         svg.write_bytes(svg.read_bytes().replace(b'\r\n', b'\n'))
-    inputs = ['evidencias/e10/ci-summary.json', 'evidencias/e03/comparacion-dat-06.json', 'evidencias/e08/resultados.json', 'evidencias/e07/personas.png', 'tp-Calidad.md']
+    inputs = ['evidencias/e11/ci-summary.json', 'evidencias/e03/comparacion-dat-06.json', 'evidencias/e08/resultados.json', 'evidencias/e07/personas.png', 'tp-Calidad.md']
     return result, {name: digest(ROOT / name) for name in inputs}
 
 

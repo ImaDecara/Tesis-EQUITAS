@@ -1,9 +1,9 @@
 {
-  "version": 4,
+  "version": 5,
   "formalizado_en": "E05, 21/10/2026",
   "responsable": "Axel Azcune",
-  "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
-  "source_run": 39960952039,
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "source_run": 40032393112,
   "alcance": "56 IDs/familias seleccionados. Corte acumulado de 183 pruebas/campañas de producto: 168 aisladas, 12 externas, un smoke y dos cargas. 66 controles de infraestructura aparte. Cada evidencia conserva su versión y entorno.",
   "campos_heredados": "Cada ficha combina contexto y campos propios; un campo propio tiene precedencia. Los IDs de caso agrupan variantes y no son un contador de tests.",
   "contextos": {
@@ -2184,6 +2184,12 @@
         "number": 8,
         "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
         "state_at_E05": "closed"
+      },
+      "revalidacion_e11": {
+        "obtenido": "Auditorias completa/productiva 0/0; exception null; aviso retirado; resultados previos preservados.",
+        "version": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+        "run_id": 40032393112,
+        "evidencia": "evidencias/e11/audit-decision.json"
       }
     },
     {
@@ -2213,6 +2219,12 @@
         "number": 8,
         "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
         "state_at_E05": "closed"
+      },
+      "revalidacion_e11": {
+        "obtenido": "Auditorias completa/productiva 0/0; exception null; aviso retirado; resultados previos preservados.",
+        "version": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+        "run_id": 40032393112,
+        "evidencia": "evidencias/e11/audit-decision.json"
       }
     },
     {
@@ -3716,7 +3728,13 @@
       }
     }
   ],
-  "actualizado_en": "E08, 23/10/2026",
-  "smoke_run": 39955572523,
-  "performance_run": 39960952025
+  "actualizado_en": "E11, 23/10/2026",
+  "smoke_run": 40032558356,
+  "performance_run": 40032355979,
+  "revalidacion_integral": {
+    "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+    "run_id": 40032393112,
+    "manifest": "evidencias/e11/validacion-integral.json",
+    "note": "Repetition of the same 183 cases/campaigns. Original per-case first execution retained. Current audit is clean after advisory withdrawal."
+  }
 }

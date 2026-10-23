@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-23",
+  "total": 12,
+  "closed": 11,
+  "open": 1,
+  "issues": [
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 12,
+      "state": "CLOSED",
+      "title": "CAS-PERF: ejecutar estres y esfuerzo sostenido de la API aislada",
+      "updatedAt": "2026-10-23T13:44:34Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/12"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 11,
+      "state": "CLOSED",
+      "title": "DEF-UI-001: limpiar filtros conserva el texto de busqueda anterior",
+      "updatedAt": "2026-10-23T12:48:41Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/11"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 10,
+      "state": "CLOSED",
+      "title": "CAS-SMOKE: verificar preview y recorrido autenticado de testing",
+      "updatedAt": "2026-10-23T12:48:40Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/10"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 9,
+      "state": "CLOSED",
+      "title": "[CAS-EXT] Integración real y autorización de testing pendiente E06",
+      "updatedAt": "2026-10-21T22:30:18Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 8,
+      "state": "CLOSED",
+      "title": "[CAS-GATE] Cobertura, gates y auditoría con bloqueo verificado",
+      "updatedAt": "2026-10-21T22:30:17Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 7,
+      "state": "CLOSED",
+      "title": "[CAS-REC] Tabla de decisión y límites de recomendaciones REC-01",
+      "updatedAt": "2026-10-21T21:45:13Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/7"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 6,
+      "state": "CLOSED",
+      "title": "[CAS-AUTH] Contrato aislado de sesión y pertenencia AUTH-01–09",
+      "updatedAt": "2026-10-21T22:30:16Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 5,
+      "state": "CLOSED",
+      "title": "[CAS-DAT] Regresión de lectura completa DAT-01–14 y FIXTURE-01",
+      "updatedAt": "2026-10-21T21:45:10Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 4,
+      "state": "CLOSED",
+      "title": "[OBS-COB-001] Alcanzar el mínimo frontend y protegerlo con gates",
+      "updatedAt": "2026-10-21T21:44:11Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/4"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 3,
+      "state": "CLOSED",
+      "title": "[OBS-DEP-001] Resolver la cadena vulnerable de desarrollo antes del vencimiento de la excepción",
+      "updatedAt": "2026-10-23T22:20:03Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/3"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 2,
+      "state": "CLOSED",
+      "title": "[DEF-DAT-001] Recuperar la cartera completa en objetos y personas",
+      "updatedAt": "2026-10-21T21:44:08Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/2"
+    },
+    {
+      "assignees": [
+        {
+          "id": "MDQ6VXNlcjUyNzMxMjA=",
+          "login": "AxAzc",
+          "name": "Axel",
+          "databaseId": 5273120
+        }
+      ],
+      "number": 1,
+      "state": "OPEN",
+      "title": "[DEF-SUP-001] Restringir cartera a usuarios con pertenencia activa al tenant",
+      "updatedAt": "2026-10-21T22:30:15Z",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/1"
+    }
+  ]
+}

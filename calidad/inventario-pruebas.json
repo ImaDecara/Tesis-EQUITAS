@@ -1,6 +1,6 @@
 {
-  "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
-  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039",
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112",
   "counts": {
     "product_passed": 183,
     "product_failed": 0,
@@ -11,7 +11,7 @@
     "infrastructure_passed": 66,
     "performance_campaigns_passed": 2
   },
-  "previous_inventory": "evidencias/e08/inventario-anterior-e07.json",
+  "previous_inventory": "evidencias/e11/inventario-anterior.json",
   "producto": [
     {
       "module": "frontend",
@@ -1638,7 +1638,7 @@
       "status": "passed"
     }
   ],
-  "smoke_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
-  "performance_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025",
-  "scope": "Corte acumulado: aisladas actuales, integración/smoke históricos de código productivo sin cambios y dos campañas nuevas E08; los reportes tienen sus SHA propios. PoC y requests no aumentan el contador de tests."
+  "smoke_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032558356",
+  "performance_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032355979",
+  "scope": "E11 revalidation of 183 product cases/campaigns on the same source SHA across CI, real integration, Preview smoke and two performance campaigns. Infrastructure 66 separate. Repetitions and requests do not increase the inventory."
 }

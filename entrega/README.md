@@ -2,7 +2,7 @@
 
 El entregable es [INFORME_ACADEMICO_CALIDAD.pdf](INFORME_ACADEMICO_CALIDAD.pdf). Su fuente editable es [INFORME_ACADEMICO_CALIDAD.md](INFORME_ACADEMICO_CALIDAD.md). Conserva carátula, integrantes, introducción y contenido aprovechable del avance recibido, y desarrolla los resultados actuales, metas, análisis crítico y conclusiones. No incluye índice.
 
-El corte técnico es `1472eea8bbd87857a38a6fd0b05283ff9287eb44`, CI `39968499139`, 23/10/2026. Smoke y cargas conservan sus propias versiones/fechas. La fuente académica no modifica datos de cartera ni las pruebas del producto. La demostración final sigue en E11 y los dos tickets abiertos conservan su alcance y fecha de seguimiento.
+El corte técnico E11 es `5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198`: [CI completo](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112), [smoke](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032558356) y [cargas](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032355979). [Manifiesto](../evidencias/e11/validacion-integral.json), [guion de defensa](GUION_DEMOSTRACION.md) y [controlador de repetición](validacion-integral.ps1). La validación técnica está aprobada; la preparación individual y oral sigue pendiente de confirmación. OBS-DEP-001 cerrado por retiro oficial del aviso y auditoría nueva 0/0; DEF-SUP-001 original abierto.
 
 ## Regeneración
 
@@ -26,7 +26,7 @@ Para actualizar el contenido se edita el Markdown y se regenera. Si cambian prod
 - Captura de Personas del smoke E07 aceptado. El PDF muestra un detalle mediante recorte de visualización; el PNG original permanece intacto y el rectángulo se registra en el manifiesto.
 - Estrés calculado desde las cinco fases de la campaña E08 aceptada. La línea objetivo se limita a los diez usuarios fijados previamente.
 
-Los gráficos son vectoriales en el PDF y se exportan también como SVG para la fuente Markdown. [generacion.json](../evidencias/e10/generacion.json) registra versiones, hashes, fuentes y región mostrada de la captura. No se usan imágenes que simulen ejecuciones de terminal o de pipeline.
+Los gráficos son vectoriales en el PDF y se exportan también como SVG para la fuente Markdown. [generacion.json](../evidencias/e11/generacion.json) registra versiones, hashes, fuentes y región mostrada de la captura. No se usan imágenes que simulen ejecuciones de terminal o de pipeline.
 
 El manifiesto usa rutas portables y normaliza UTF-8/LF al calcular hashes de insumos textuales. PDF, PNG y fuentes tipográficas se verifican por bytes; `.gitattributes` preserva la entrega al clonar en Windows o Linux.
 
@@ -39,4 +39,4 @@ New-Item -ItemType Directory -Force .quality/informe-qa
 pdftoppm -r 110 -png entrega/INFORME_ACADEMICO_CALIDAD.pdf .quality/informe-qa/page
 ```
 
-Revisar todas las páginas: tablas y encabezados completos, legibilidad, cortes, caracteres, pies de figura, enlaces y coherencia de cifras. Las imágenes de revisión son auxiliares; el PDF publicado es la entrega. [Registro de E10](../REGISTRO_EJECUCION_E10.md) y [validación](../evidencias/e10/validacion-registros.json).
+Revisar todas las páginas: tablas y encabezados completos, legibilidad, cortes, caracteres, pies de figura, enlaces y coherencia de cifras. Las imágenes de revisión son auxiliares; el PDF publicado es la entrega. [Registro de E11](../REGISTRO_EJECUCION_E11.md) y [validación](../evidencias/e11/validacion-registros.json).

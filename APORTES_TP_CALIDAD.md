@@ -29,3 +29,7 @@ Axel: `09f040b` fija criterios antes de ejecutar; `f52c5ac` implementa entorno s
 ## Continuidad E09 y E10, 23/10/2026
 
 Axel: `1472eea` consolida métricas, matriz ISO, plan, riesgos, contingencia y técnicas de E09. E10 conserva los tres integrantes del informe recibido y agrega la fuente académica, generación del PDF, gráficos y revisión de las páginas; el commit de esta etapa se identifica en el historial de `REGISTRO_EJECUCION_E10.md`. No se infieren porcentajes de esfuerzo ni se registra como realizada la defensa final.
+
+## Continuidad E11, 23/10/2026
+
+Axel Azcune: alinea el Preview con 5b62c14, ejecuta/verifica CI, Supabase, smoke y campañas nuevas del mismo SHA; revisa el aviso retirado y registra cierre de OBS-DEP-001; prepara controlador de repetición, manifiesto, guion y actualización del informe. La evidencia es Git/Actions y la ficha E11; no se atribuyen tareas nuevas a Ignacio o Imanol sin respaldo. Sus aportes previos permanecen documentados. La preparación individual y el ensayo oral de los tres integrantes están pendientes de confirmación; no se registran como realizados.

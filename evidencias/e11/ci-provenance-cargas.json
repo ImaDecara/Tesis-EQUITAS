@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "branch": "main",
+  "started_at_utc": "2026-10-23T22:15:09.491993+00:00",
+  "errors": [],
+  "quality_run_id": 39976881137,
+  "quality_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39976881137",
+  "conclusion": "success",
+  "finished_at_utc": "2026-10-23T22:15:09.877962+00:00"
+}

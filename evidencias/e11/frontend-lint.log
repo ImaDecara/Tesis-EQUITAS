@@ -1,0 +1,4 @@
+
+> front@0.1.0 lint
+> eslint --format json --output-file ../.quality/ci/frontend/eslint.json
+

@@ -1,0 +1,43 @@
+{
+  "source": "entrega/INFORME_ACADEMICO_CALIDAD.md",
+  "source_sha256_normalized_LF": "85725d116e66cb6a9d4bf395c3618704ac4774241bb0c44e07fae8907e766b30",
+  "pdf": "entrega/INFORME_ACADEMICO_CALIDAD.pdf",
+  "pdf_sha256": "c065e6a30626200ecd12ab150febf9d9bacdaad74706664ea7e8a57e2fa2da6d",
+  "packages": {
+    "reportlab": "4.4.9",
+    "pillow": "12.3.0",
+    "pypdf": "6.10.0"
+  },
+  "fonts_sha256": {
+    "arial.ttf": "c9b76220a5be42ead4733611e417cd65c5fd8aeaa33eb56576ac378a37d130a1",
+    "arialbd.ttf": "766f06ac8761f82f25d032a220e89438f6064591af9915061f20b949efdedf69",
+    "ariali.ttf": "79a5742b865cf06891d4ae43e42cac0e5169c7b7b06b5b3c24ef8e0966d27b62",
+    "consola.ttf": "c6e6ce8119fdd47ec6a5449a08e2d2ad7f41ea03143aae193068ed9fa58eaebc"
+  },
+  "figure_inputs_sha256": {
+    "evidencias/e11/ci-summary.json": "4f5b95d9cab8d11c34a64d6ebb1f7ddee4d7bf80b37c6d7b35387e6c76de4244",
+    "evidencias/e03/comparacion-dat-06.json": "ac24fe4a9ef9b4340718c9ee1c44f0866e9f2300bd39b6a57db1128ed1984f1b",
+    "evidencias/e08/resultados.json": "2cf4976ccacabef63267ca1b530f2227a2f3631444924f93567b94c61dacf80e",
+    "evidencias/e07/personas.png": "ceddd13402a88f74c8942fe8a7d2f7f57f75fd11240165c27bc6ed21591eb915",
+    "tp-Calidad.md": "0940a349d00c1a9ea42b20072339c06ca052c7b294a2a560ef84e4ddf8803c89"
+  },
+  "figures_sha256": {
+    "entrega/figuras/cobertura-actual.svg": "6aa55ae25d67b84fa9e4961dc53f5fa8f95758c232f92a1b193390da8f337c46",
+    "entrega/figuras/completitud-dat.svg": "96c7a081517588d07394663e700ea8f7ae18fd41eb586a0a57609be1a2643497",
+    "entrega/figuras/estres-p95.svg": "925ed9b6bb6e0570874bbd0f1cf6dd9b535b151b9fe086d82b3b300aad5f395a"
+  },
+  "screenshot_detail": {
+    "source": "evidencias/e07/personas.png",
+    "box_pixels_left_top_right_bottom": [
+      312,
+      775,
+      1420,
+      1057
+    ],
+    "method": "PDF clipping only; original PNG unchanged"
+  },
+  "scope": "Report generated from measured project evidence; screenshots retain original run and date.",
+  "generator_sha256": "8e75f7aab107bbcbef5dfcddc6ecc4132f6d227d24070fc2fad88ab317bddfc0",
+  "document_date": "2026-10-23",
+  "text_hash_normalization": "UTF-8 with LF line endings for Markdown, Python, JSON, SVG, text and logs; binary PDF, PNG and fonts use raw bytes."
+}

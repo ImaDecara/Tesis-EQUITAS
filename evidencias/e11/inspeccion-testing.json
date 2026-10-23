@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-23",
+  "project_ref": "iylwghgvtydpmwidojdo",
+  "method": "Read-only catalog query through connected database service; separate from real HTTP integration tests.",
+  "public_tables": 23,
+  "rls_enabled": 23,
+  "permissive_true_select": 0,
+  "original_project_modified": false
+}

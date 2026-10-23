@@ -5,5 +5,16 @@ entrega/figuras/*.svg text eol=lf
 entrega/*.py text eol=lf
 entrega/*.md text eol=lf
 entrega/*.txt text eol=lf
+entrega/*.ps1 text eol=lf
 evidencias/e10/*.json text eol=lf
 evidencias/e10/*.log text eol=lf
+evidencias/e11/**/*.json text eol=lf
+evidencias/e11/*.json text eol=lf
+evidencias/e11/**/*.md text eol=lf
+evidencias/e11/*.log text eol=lf
+evidencias/e11/**/*.xml text eol=lf
+evidencias/e11/*.xml text eol=lf
+evidencias/e11/**/*.csv text eol=lf
+evidencias/e11/**/*.html text eol=lf
+evidencias/e11/*.png binary
+evidencias/e11/**/*.gz binary

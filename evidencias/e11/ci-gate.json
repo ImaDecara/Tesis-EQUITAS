@@ -1,0 +1,411 @@
+{
+  "stage": "E04",
+  "passed": true,
+  "checks": [
+    {
+      "id": "fixed_base",
+      "passed": true,
+      "observed": {
+        "base": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+        "head": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198"
+      },
+      "criterion": "Fixed base exists and is an ancestor of HEAD"
+    },
+    {
+      "id": "build_and_tests",
+      "passed": true,
+      "observed": {
+        "backend": true,
+        "frontend": true
+      },
+      "criterion": "All required isolated controls and suites pass; mandatory real integration is verified separately by CI summary"
+    },
+    {
+      "id": "frontend_statements",
+      "passed": true,
+      "observed": {
+        "covered": 794,
+        "total": 1283,
+        "pct": 61.886204208885424,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Statements >= 60%, declared full scope"
+    },
+    {
+      "id": "backend_statements",
+      "passed": true,
+      "observed": {
+        "covered": 1254,
+        "total": 1471,
+        "pct": 85.24813052345343,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Statements >= 60%, declared full scope"
+    },
+    {
+      "id": "frontend_new_lines",
+      "passed": true,
+      "observed": {
+        "covered": 36,
+        "total": 36,
+        "pct": 100.0,
+        "applicable": true,
+        "passed": true,
+        "files": [
+          {
+            "path": "front/app/api/build-info/route.ts",
+            "executable_new_lines": [
+              2,
+              5,
+              6,
+              7,
+              8,
+              11
+            ],
+            "covered_new_lines": [
+              2,
+              5,
+              6,
+              7,
+              8,
+              11
+            ],
+            "covered": 6,
+            "total": 6,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/app/debtors/page.tsx",
+            "executable_new_lines": [],
+            "covered_new_lines": [],
+            "covered": 0,
+            "total": 0,
+            "pct": null,
+            "applicable": false
+          },
+          {
+            "path": "front/lib/data/paginated-table-reader.ts",
+            "executable_new_lines": [
+              6,
+              11,
+              12,
+              13,
+              24,
+              31,
+              32,
+              42,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              51,
+              52,
+              53,
+              56,
+              58,
+              59,
+              60,
+              61,
+              66,
+              68,
+              71
+            ],
+            "covered_new_lines": [
+              6,
+              11,
+              12,
+              13,
+              24,
+              31,
+              32,
+              42,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              51,
+              52,
+              53,
+              56,
+              58,
+              59,
+              60,
+              61,
+              66,
+              68,
+              71
+            ],
+            "covered": 26,
+            "total": 26,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/lib/data/raw-debtor-loader.ts",
+            "executable_new_lines": [
+              10
+            ],
+            "covered_new_lines": [
+              10
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/lib/services/auth-service.ts",
+            "executable_new_lines": [
+              225,
+              262
+            ],
+            "covered_new_lines": [
+              225,
+              262
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "front/lib/services/person-data-service.ts",
+            "executable_new_lines": [
+              32
+            ],
+            "covered_new_lines": [
+              32
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          }
+        ]
+      },
+      "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+    },
+    {
+      "id": "backend_new_lines",
+      "passed": true,
+      "observed": {
+        "covered": 15,
+        "total": 17,
+        "pct": 88.23529411764706,
+        "applicable": true,
+        "passed": true,
+        "files": [
+          {
+            "path": "back/ETL/config.py",
+            "executable_new_lines": [
+              1
+            ],
+            "covered_new_lines": [
+              1
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/export_preview.py",
+            "executable_new_lines": [
+              1,
+              314
+            ],
+            "covered_new_lines": [
+              1,
+              314
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/inspect_tsv.py",
+            "executable_new_lines": [
+              2,
+              4
+            ],
+            "covered_new_lines": [
+              2,
+              4
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/load.py",
+            "executable_new_lines": [
+              2,
+              3,
+              105,
+              233,
+              314
+            ],
+            "covered_new_lines": [
+              2,
+              3,
+              105
+            ],
+            "covered": 3,
+            "total": 5,
+            "pct": 60.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/run_etl.py",
+            "executable_new_lines": [
+              1,
+              8
+            ],
+            "covered_new_lines": [
+              1,
+              8
+            ],
+            "covered": 2,
+            "total": 2,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/ETL/transform.py",
+            "executable_new_lines": [
+              1,
+              2,
+              4,
+              625
+            ],
+            "covered_new_lines": [
+              1,
+              2,
+              4,
+              625
+            ],
+            "covered": 4,
+            "total": 4,
+            "pct": 100.0,
+            "applicable": true
+          },
+          {
+            "path": "back/api/main.py",
+            "executable_new_lines": [],
+            "covered_new_lines": [],
+            "covered": 0,
+            "total": 0,
+            "pct": null,
+            "applicable": false
+          },
+          {
+            "path": "back/services/scoring_service.py",
+            "executable_new_lines": [
+              2
+            ],
+            "covered_new_lines": [
+              2
+            ],
+            "covered": 1,
+            "total": 1,
+            "pct": 100.0,
+            "applicable": true
+          }
+        ]
+      },
+      "criterion": "New executable lines >= 80%; no new executable lines = not applicable"
+    },
+    {
+      "id": "duplication",
+      "passed": true,
+      "observed": {
+        "covered": 427,
+        "total": 11159,
+        "pct": 3.8265077515906443,
+        "applicable": true,
+        "passed": true
+      },
+      "criterion": "Duplicated lines <= 5% (not rounded percentage or tokens)"
+    },
+    {
+      "id": "critical_bugs",
+      "passed": true,
+      "observed": [],
+      "criterion": "Zero project-classified critical findings"
+    },
+    {
+      "id": "static_analysis",
+      "passed": true,
+      "observed": [],
+      "criterion": "Zero ESLint errors/warnings and unaccepted Ruff findings"
+    },
+    {
+      "id": "dependencies",
+      "passed": true,
+      "observed": {
+        "accepted": true,
+        "errors": [],
+        "accepted_packages": [],
+        "exception": null,
+        "expires_on": "2026-10-26",
+        "raw_exit_codes": {
+          "all": 0,
+          "production": 0
+        },
+        "evaluated_at_utc": "2026-10-23T22:16:13.443286+00:00",
+        "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+      },
+      "criterion": "Separate reviewed audit policy; no critical or production vulnerabilities"
+    }
+  ],
+  "errors": [],
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+  "release_approved": false,
+  "policy_sha256": "243fc42a17fba79ffd48734885bbecf095d5bc146833b744a3da777cfd773e52",
+  "criteria": {
+    "version": 1,
+    "base_sha": "531996f51243dc3d4c5a607338e2f35e32313f6b",
+    "minimum_statements_pct": 60,
+    "minimum_new_lines_pct": 80,
+    "maximum_duplicated_lines_pct": 5,
+    "critical_rules": {
+      "eslint": [
+        "constructor-super",
+        "no-unreachable",
+        "no-unsafe-finally"
+      ],
+      "ruff": [
+        "F821",
+        "F822",
+        "F823",
+        "invalid-syntax"
+      ]
+    },
+    "scope": {
+      "frontend": [
+        "front/app/",
+        "front/components/",
+        "front/lib/"
+      ],
+      "backend": [
+        "back/ETL/",
+        "back/api/",
+        "back/services/"
+      ]
+    },
+    "meaning": "Critical is a project classification of selected analyzer rules, not a native Ruff severity or a proof that all functional/security bugs are absent. Dependencies use npm-audit-policy.json separately."
+  },
+  "diff_sha256": "387a032b1df4acca609730930751da066b0e2706ec21a718d88d4a0b8e3b2b7b"
+}

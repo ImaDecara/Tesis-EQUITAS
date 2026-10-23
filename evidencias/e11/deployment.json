@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "quality_run_id": "40032393112",
+  "started_at_utc": "2026-10-23T22:17:00.028700+00:00",
+  "errors": [],
+  "deployment_id": 7281790664,
+  "url": "https://tesis-equitas-lilpc7spm-equitas.vercel.app",
+  "environment": "Preview",
+  "deployment_created_at": "2026-10-23T15:14:43Z",
+  "ready_at": "2026-10-23T22:15:33Z",
+  "provider": "Vercel",
+  "build_info": {
+    "sourceSha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "finished_at_utc": "2026-10-23T22:17:01.878740+00:00"
+}

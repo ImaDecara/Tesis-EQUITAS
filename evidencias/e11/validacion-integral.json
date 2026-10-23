@@ -1,0 +1,156 @@
+{
+  "stage": "E11",
+  "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+  "date": "2026-10-23",
+  "technical_validation_passed": true,
+  "stage_fully_closed": false,
+  "product_results": {
+    "isolated": 168,
+    "real_http": 12,
+    "browser_campaigns": 1,
+    "performance_campaigns": 2,
+    "total": 183,
+    "failed": 0,
+    "skipped": 0
+  },
+  "infrastructure_separate": 66,
+  "runs": {
+    "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+    "started_at_utc": "2026-10-23T22:18:17.8487541+00:00",
+    "passed": true,
+    "main": {
+      "id": 39976881137,
+      "sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+      "branch": "main",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39976881137",
+      "event": "push",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "Supabase - integracion real Auth y RLS",
+          "conclusion": "success",
+          "started_at": "2026-10-23T15:16:42Z",
+          "completed_at": "2026-10-23T15:17:35Z"
+        },
+        {
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "started_at": "2026-10-23T15:16:42Z",
+          "completed_at": "2026-10-23T15:17:26Z"
+        },
+        {
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "started_at": "2026-10-23T15:16:42Z",
+          "completed_at": "2026-10-23T15:17:43Z"
+        },
+        {
+          "name": "Quality gates y resumen",
+          "conclusion": "success",
+          "started_at": "2026-10-23T15:17:45Z",
+          "completed_at": "2026-10-23T15:18:00Z"
+        }
+      ]
+    },
+    "preview": {
+      "id": 40032393112,
+      "sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+      "branch": "quality/tp-testing",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112",
+      "event": "push",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "Backend - pruebas, cobertura y Ruff",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:15:15Z",
+          "completed_at": "2026-10-23T22:15:52Z"
+        },
+        {
+          "name": "Supabase - integracion real Auth y RLS",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:15:15Z",
+          "completed_at": "2026-10-23T22:16:05Z"
+        },
+        {
+          "name": "Frontend - pruebas, build y analisis",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:15:16Z",
+          "completed_at": "2026-10-23T22:16:17Z"
+        },
+        {
+          "name": "Quality gates y resumen",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:16:20Z",
+          "completed_at": "2026-10-23T22:16:38Z"
+        }
+      ]
+    },
+    "smoke": {
+      "id": 40032558356,
+      "sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+      "branch": "main",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032558356",
+      "event": "workflow_run",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "Preview Vercel - navegador y datos de testing",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:16:46Z",
+          "completed_at": "2026-10-23T22:18:02Z"
+        }
+      ]
+    },
+    "load": {
+      "id": 40032355979,
+      "sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
+      "branch": "main",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032355979",
+      "event": "workflow_dispatch",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "Exigir calidad del mismo commit",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:14:58Z",
+          "completed_at": "2026-10-23T22:15:14Z"
+        },
+        {
+          "name": "API aislada - stress",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:15:16Z",
+          "completed_at": "2026-10-23T22:22:20Z"
+        },
+        {
+          "name": "API aislada - soak",
+          "conclusion": "success",
+          "started_at": "2026-10-23T22:15:16Z",
+          "completed_at": "2026-10-23T22:26:34Z"
+        }
+      ]
+    },
+    "deployment_url": "https://tesis-equitas-lilpc7spm-equitas.vercel.app",
+    "scope": "CI completo e instalaciones nuevas, Supabase real de testing, Preview/smoke y cargas de FastAPI con fuente sintetica local. La defensa humana se confirma aparte.",
+    "finished_at_utc": "2026-10-23T22:27:02.1677674+00:00"
+  },
+  "product_and_harness_git_trees": {
+    "front": "504db92c3934f292380efcf19199fc48178bff12",
+    "back": "9176c89382b25537fe2d329981f07a6b03d53422",
+    "quality": "b9f1e7146d88fc090b5274eb5c8554c724da7b2c",
+    ".github/workflows": "686acb9bb543e6b5870ecdd0c175176ca9094ded"
+  },
+  "audit": {
+    "all": 0,
+    "production": 0,
+    "exception_used": false,
+    "issue3_resolution": "Official advisory withdrawal, not a package/code correction."
+  },
+  "oral_rehearsal_and_individual_confirmation": "Pending team confirmation; technical browser rehearsal is not an oral defense.",
+  "academic_submission": "Not performed by automated validation.",
+  "unchanged_original_risk": "DEF-SUP-001 remains open for the original project; testing verified separately.",
+  "red_real_run": 39672114249,
+  "green_after_fix_run": 39673351642,
+  "red_green_comparison": "evidencias/e03/comparacion-dat-06.json",
+  "portable_evidence": "JSON/JUnit/HTML/series/resources and compressed operation samples committed alongside official artifact IDs/digests. Full Actions ZIPs retained 30 days."
+}

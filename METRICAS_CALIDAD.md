@@ -1,6 +1,8 @@
 # Métricas y evolución verificable — EQUITAS
 
-Versión 1.0 — E09, 23/10/2026. Responsable: Axel Azcune. Requisitos R06, R07–R11 y R24 del [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
+**Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
+
+Versión 1.1 — E11, 23/10/2026. Responsable: Axel Azcune. Requisitos R06, R07–R11 y R24 del [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
 
 ## 1. Corte, fuentes y reglas de interpretación
 
@@ -30,7 +32,7 @@ Todas las filas de esta tabla corresponden al corte y fecha de la sección 1, sa
 | Duplicación por tokens | 100 × 2.533 / 53.287 = **4,7535 %**. | Otra medida: no usarla como duplicación por líneas. |
 | ESLint | Conteo de hallazgos: **0 errores / 0 advertencias**, 81 archivos revisados. | Cumple el criterio estático; no certifica ausencia de fallos funcionales. |
 | Ruff | Conteo de hallazgos no aceptados: **0** en alcance productivo. | Mantiene tres excepciones locales TRY004 documentadas en E01. |
-| Dependencias frontend | Conteo npm audit completo: **5 altas / 0 críticas**; auditoría productiva **0**. | Excepción OBS-DEP-001, solo desarrollo, vence **26/10/2026**. Salida cruda completa 1 y productiva 0; avisos pendientes, no resueltos. |
+| Dependencias frontend | Conteo npm audit E11 completo/productivo: **0/0**, códigos crudos **0/0**. | Aviso retirado oficialmente; OBS-DEP-001 cerrado sin cambio de paquete. Los cinco altos de E01-E10 siguen registrados como historia; excepción no utilizada ni prorrogada. |
 
 [Cobertura frontend original](evidencias/e09/frontend-coverage.json), [auditoría productiva](evidencias/e09/audit-production.json), [decisión de excepción](evidencias/e09/audit-decision.json) y [Ruff](evidencias/e09/ruff.json). Las ramas son salidas instrumentadas por herramientas diferentes; no se suman porcentajes frontend/backend. `branchesTrue` frontend tiene denominador cero y no aporta una medida útil de decisiones: su 100 % convencional no se utiliza.
 
@@ -66,7 +68,7 @@ Esta es evidencia comparable de DEF-DAT-001 con un servicio simulado. E06 verifi
 
 E01, 21/10: Ruff 0.17.1, mismas **407 reglas habilitadas**. Antes **19** hallazgos; **16 corregidos** y **3 excepciones locales TRY004** justificadas por contrato ValueError. Después **0 no aceptados**; ignorar los `noqa` vuelve a mostrar las tres excepciones. Corrección efectiva = 16/19 = **84,21 %** de hallazgos iniciales; el restante 15,79 % se acepta localmente, no desaparece por una corrección. No se deshabilitó globalmente la regla ni se redujo el alcance. [Antes](evidencias/e01/ruff-antes.json), [después](evidencias/e01/ruff-despues.json), [excepciones](evidencias/e01/ruff-excepciones.json) y [ficha](REGISTRO_EJECUCION_E01.md). El corte actual mantiene cero no aceptados; los imports de infraestructura E08 se corrigieron tras un bloqueo posterior de CI.
 
-El audit completo pasó de **19 paquetes afectados** (4 críticos/12 altos/2 moderados/1 bajo) a **5 altos de desarrollo**, con actualización de dependencias en E01. Reducción descriptiva: (19−5)/19 = **73,68 %**; críticos 4→0. No equivale a eliminar 14 CVE independientes ni a una reducción de riesgo del 73,68 %. La auditoría de producción se informa por separado: filtrar desarrollo no justifica afirmar cero en el audit completo. [Antes](evidencias/e01/npm-audit-antes.json), [después](evidencias/e01/npm-audit-despues.json), [excepción abierta #3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3).
+El audit completo pasó de **19 paquetes afectados** (4 críticos/12 altos/2 moderados/1 bajo) a **5 altos de desarrollo**, con actualización de dependencias en E01. Reducción descriptiva: (19−5)/19 = **73,68 %**; críticos 4→0. No equivale a eliminar 14 CVE independientes ni a una reducción de riesgo del 73,68 %. La auditoría de producción se informa por separado: filtrar desarrollo no justifica afirmar cero en el audit completo. [Antes](evidencias/e01/npm-audit-antes.json), [después](evidencias/e01/npm-audit-despues.json), [excepción histórica #3, cerrada por retiro en E11](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3).
 
 Duplicación: línea base **474/11.188 = 4,2367 % por líneas**, frente a **2.742/53.179 = 5,1562 % por tokens**. Corte actual **427/11.159 = 3,8265 % por líneas**. La extracción del lector común E03 acompaña la disminución de clones; también cambiaron tamaño y versión jscpd desde la base, por lo que no se atribuye toda variación porcentual a una única intervención aislada.
 
@@ -78,7 +80,7 @@ Duplicación: línea base **474/11.188 = 4,2367 % por líneas**, frente a **2.74
 | Proceso, CI actual 23/10 `2f9e48f…` | (107 frontend + 61 backend + 12 externas) / 180 ejecutadas. | **180/180 = 100 %**, cero omitidas/fallidas. El campo `summary.tests` agrupa solo las 168 aisladas; las 12 externas están en `external_integration.tests`. |
 | Proceso, corte acumulado E07–E09 | (168 aisladas + 12 externas + 1 smoke + 2 campañas) / 183. | **183/183 = 100 %**, en fuentes distintas. No es una ejecución única ni una medida de completitud de requisitos. |
 | Proceso de infraestructura, CI actual | 66 controles aprobados / 66 ejecutados. | **100 %**, aparte del producto: [log original](evidencias/e09/infrastructure-tests.log). |
-| Proceso de seguimiento, 23/10 | Tickets cerrados / registrados = 10/12. | **83,33 %**, dos abiertos; mezcla campañas, observaciones y defectos. No es tasa de resolución de bugs: [snapshot](evidencias/e09/seguimiento.json). |
+| Proceso de seguimiento, 23/10 | Tickets cerrados / registrados = 11/12. | **91,67 %**, uno abierto; mezcla campañas, observaciones y defectos. No es tasa de resolución de bugs: [snapshot E11](evidencias/e11/seguimiento.json). |
 | Proyecto, base 21/10 `531996f…` | Conteo jscpd del alcance productivo. | **62 archivos / 11.188 líneas**; no tamaño total del repositorio ni horas de trabajo. |
 | Proyecto, actual 23/10 `2f9e48f…` | Mismo tipo de conteo del alcance declarado. | **64 archivos / 11.159 líneas**. Diferencia +2 archivos/−29 líneas respecto a la base; no demuestra por sí sola mayor productividad o menor complejidad. |
 
@@ -101,3 +103,7 @@ Percentil: ordenar n muestras y usar interpolación lineal en índice `(n−1)×
 ## 8. Cómo actualizar para el informe final
 
 Conservar estos snapshots. Si cambia producto, pruebas, dependencias o configuración, ejecutar el workflow correspondiente y agregar un corte nuevo con SHA/fecha/entorno/denominadores. Si solo cambia el documento, verificar el CI de publicación sin atribuirle nuevas cargas o smoke. E10 debe usar este corte y sus fuentes diferenciadas, conservar el antecedente recibido y declarar las limitaciones. La base fija de cobertura nueva no se mueve al último commit.
+
+## Repetición final E11
+
+Misma política/dataset, fuente 5b62c14, pipeline 40032355979. Estrés: 5312 solicitudes principales; p95 a 10 VU 501,80 ms. Sostenido: 15149 solicitudes principales, p95 360,06 ms y 600 s. Cero errores inesperados/diferencias de contenido. A 40 VU exploratorios p95 2216,71 ms supera 2000; primer escalón observado fuera del objetivo, conservado explícitamente. El objetivo obligatorio hasta 10 VU aprobó. No se atribuye la diferencia con E08 a una optimización: el producto no cambió y los runners tienen CPU distintas. [Reportes, fases y recursos](evidencias/e11/resultados-cargas.json). La repetición no aumenta el inventario de 183 pruebas/campañas.

@@ -1,5 +1,7 @@
 # Evaluación de calidad del MVP — matriz ISO/IEC 25010
 
+**Actualización E11, 23/10/2026:** mismos objetivos/umbrales; revalidación en 5b62c14. p95 estrés 10 VU **501,80 ms**, sostenido **360,06 ms**; 40 VU exploratorio **2216,71 ms**, supera 2000. Audit completo/productivo **0/0** por retiro oficial del aviso; OBS-DEP-001 cerrado sin cambio de paquete. RLS testing aprobado; original sigue abierto. [Resultados nuevos](evidencias/e11/resultados-cargas.json), [manifiesto](evidencias/e11/validacion-integral.json). Las cifras E09 de la matriz siguiente se conservan como corte histórico y esta nota prevalece para resultados actuales.
+
 Versión 1.0 — E09, 23/10/2026. Responsable: Axel Azcune. Requisitos R02/R04; [plan vigente](PLAN_PRUEBAS_CALIDAD.md), [métricas y fórmulas](METRICAS_CALIDAD.md).
 
 ## Modelo y alcance de la evaluación

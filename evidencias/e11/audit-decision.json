@@ -1,0 +1,13 @@
+{
+  "accepted": true,
+  "errors": [],
+  "accepted_packages": [],
+  "exception": null,
+  "expires_on": "2026-10-26",
+  "raw_exit_codes": {
+    "all": 0,
+    "production": 0
+  },
+  "evaluated_at_utc": "2026-10-23T22:16:13.443286+00:00",
+  "meaning": "Reviewed temporary exception; findings remain open. No production findings allowed."
+}

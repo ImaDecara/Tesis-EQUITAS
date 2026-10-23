@@ -1,5 +1,7 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
+**Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
+
 **Actualización E10, 23/10/2026:** informe académico y PDF completados, **29/29 controles**. [PDF de 27 páginas](entrega/INFORME_ACADEMICO_CALIDAD.pdf), [fuente editable sin índice](entrega/INFORME_ACADEMICO_CALIDAD.md), [generador e instrucciones](entrega/README.md), [ficha E10](REGISTRO_EJECUCION_E10.md) y [validación](evidencias/e10/validacion-registros.json). Las 27 páginas finales se renderizaron e inspeccionaron; la regeneración del PDF y los tres gráficos conserva hashes idénticos en el entorno verificado. Corte técnico 1472eea, CI 39968499139 aprobado. **E00-E10 completas en sus alcances; sigue E11, demostración y entrega integral.** DEF-SUP-001 original y OBS-DEP-001 continúan abiertos; la excepción dev vence 26/10/2026. Esta actualización prevalece sobre las notas históricas.
 
 **Actualización E09, 23/10/2026:** documentación transversal completada, **31/31 controles**. [Métricas con fórmulas/evolución](METRICAS_CALIDAD.md), [matriz ISO de ocho características](MATRIZ_ISO25010_CALIDAD.md), [plan vigente 2.0](PLAN_PRUEBAS_CALIDAD.md), [niveles/QA-QC/principios/técnicas](PROCESO_Y_TECNICAS_CALIDAD.md), [ficha E09](REGISTRO_EJECUCION_E09.md) y [validación](evidencias/e09/validacion-registros.json). Último corte de análisis: main 2f9e48f…, CI 39964341314 aprobado, 180 de producto y 66 controles separados; el corte acumulado conserva 183 con smoke/cargas de sus fuentes. DEF-SUP-001 original y OBS-DEP-001 siguen abiertos; excepción dev vence 26/10/2026. **Sigue E10, informe/PDF; E11, demostración.** Las notas E00–E08 son históricas y esta actualización prevalece para el estado actual.
@@ -10,11 +12,11 @@
 
 **Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
 
-**Versión:** 2.1, cierre de la etapa E10 el 23 de octubre de 2026.
+**Versión:** 2.2, validación técnica E11 el 23 de octubre de 2026; cierre humano pendiente.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00-E10 completadas en sus alcances; siguiente E11. Informe/PDF revisado disponible; demostración final pendiente, con riesgos abiertos explícitos.
+**Estado del roadmap:** E00-E10 completas; E11 validada técnicamente, **27/30 controles**, con tres confirmaciones humanas pendientes. Informe actualizado, guion y evidencias disponibles.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -734,41 +736,41 @@ Decisión ejecutada: pesos previos **20/20/20/20/10/10 %**, suma 100 %. Matriz c
 
 ### Tareas
 
-- [ ] Preparar un checkout o entorno limpio de la versión candidata, respetando cambios existentes del usuario.
-- [ ] Instalar usando las versiones y configuración documentadas.
-- [ ] Ejecutar el ciclo completo: build, suites, análisis, cobertura, gates, integración real, despliegue/smoke y cargas que correspondan.
-- [ ] Conservar una ejecución integral verde sobre el SHA candidato. Los jobs obligatorios no pueden estar omitidos para esa ejecución final.
-- [ ] Vincular la ejecución roja de E03 y explicar el defecto que detectó. Ambas evidencias pueden ser de commits distintos, cuya relación debe quedar clara.
-- [ ] Verificar que el despliegue nuevo y su smoke corresponden al mismo SHA declarado para esa validación.
-- [ ] Comprobar que los reportes de carga fueron generados por el pipeline y que su componente/entorno se declara.
-- [ ] Reconciliar las métricas del PDF con la ejecución final; actualizar el PDF si hubo cambios posteriores de código/pruebas.
-- [ ] Revisar que scripts, workflows, casos, configuraciones no secretas, plantillas, documentación y PDF están efectivamente versionados/publicados según la entrega elegida.
-- [ ] Revisar permanencia/accesibilidad de URLs y artefactos; guardar un manifiesto portable con identificadores y resultados para que no dependan solo de capturas.
-- [ ] Preparar un guion de demostración: presentación del MVP, pipeline, defecto rojo/verde, integración, despliegue/smoke, cargas y conclusiones.
-- [ ] Ensayar el recorrido sobre datos de testing y conservar los comandos para repetirlo.
+- [x] Preparar un checkout o entorno limpio de la versión candidata, respetando cambios existentes del usuario.
+- [x] Instalar usando las versiones y configuración documentadas.
+- [x] Ejecutar el ciclo completo: build, suites, análisis, cobertura, gates, integración real, despliegue/smoke y cargas que correspondan.
+- [x] Conservar una ejecución integral verde sobre el SHA candidato. Los jobs obligatorios no pueden estar omitidos para esa ejecución final.
+- [x] Vincular la ejecución roja de E03 y explicar el defecto que detectó. Ambas evidencias pueden ser de commits distintos, cuya relación debe quedar clara.
+- [x] Verificar que el despliegue nuevo y su smoke corresponden al mismo SHA declarado para esa validación.
+- [x] Comprobar que los reportes de carga fueron generados por el pipeline y que su componente/entorno se declara.
+- [x] Reconciliar las métricas del PDF con la ejecución final; actualizar el PDF si hubo cambios posteriores de código/pruebas.
+- [x] Revisar que scripts, workflows, casos, configuraciones no secretas, plantillas, documentación y PDF están efectivamente versionados/publicados según la entrega elegida.
+- [x] Revisar permanencia/accesibilidad de URLs y artefactos; guardar un manifiesto portable con identificadores y resultados para que no dependan solo de capturas.
+- [x] Preparar un guion de demostración: presentación del MVP, pipeline, defecto rojo/verde, integración, despliegue/smoke, cargas y conclusiones.
+- [x] Ensayar el recorrido sobre datos de testing y conservar los comandos para repetirlo.
 - [ ] Cada integrante debe poder explicar qué hace una prueba, cómo se calcula la cobertura, qué bloquea el gate, qué demuestra el rojo/verde y qué límites tienen las cargas y la revisión RLS.
 - [ ] Registrar aportes individuales reales y confirmar datos de la entrega.
 
 ### Checklist final de entrega
 
-- [ ] Nivel y alcance declarados; objetivos medibles y plan versionado.
-- [ ] ISO de ocho características, top 3, riesgos y contingencia.
-- [ ] Unitarias AAA, API/integración, técnicas dinámicas y cobertura de decisiones explicadas.
-- [ ] 60 % existente y 80 % nuevo verificados con su alcance/base.
-- [ ] Análisis, duplicación y bugs críticos controlados por gate automático.
-- [ ] Pipeline versionado con ejecución completa verde y roja por problema real.
-- [ ] Reportes automáticos de pruebas, cobertura, análisis y estrés accesibles.
-- [ ] Integración externa real de aplicación aprobada y no omitida.
-- [ ] Smoke desde pipeline después de un despliegue nuevo.
-- [ ] Estrés y esfuerzo sostenido ejecutados con parámetros y criterios previos.
-- [ ] Casos/defectos en soporte identificado y regresión de cada corrección.
-- [ ] Herramienta incorporada con cinco pasos y matriz de decisión.
-- [ ] Métricas de producto/proceso/proyecto y mejora antes/después interpretadas.
-- [ ] Un comando comprobado para cada clase de prueba.
-- [ ] PDF revisado, metas cumplidas/no cumplidas, análisis crítico y conclusiones.
+- [x] Nivel y alcance declarados; objetivos medibles y plan versionado.
+- [x] ISO de ocho características, top 3, riesgos y contingencia.
+- [x] Unitarias AAA, API/integración, técnicas dinámicas y cobertura de decisiones explicadas.
+- [x] 60 % existente y 80 % nuevo verificados con su alcance/base.
+- [x] Análisis, duplicación y bugs críticos controlados por gate automático.
+- [x] Pipeline versionado con ejecución completa verde y roja por problema real.
+- [x] Reportes automáticos de pruebas, cobertura, análisis y estrés accesibles.
+- [x] Integración externa real de aplicación aprobada y no omitida.
+- [x] Smoke desde pipeline después de un despliegue nuevo.
+- [x] Estrés y esfuerzo sostenido ejecutados con parámetros y criterios previos.
+- [x] Casos/defectos en soporte identificado y regresión de cada corrección.
+- [x] Herramienta incorporada con cinco pasos y matriz de decisión.
+- [x] Métricas de producto/proceso/proyecto y mejora antes/después interpretadas.
+- [x] Un comando comprobado para cada clase de prueba.
+- [x] PDF revisado, metas cumplidas/no cumplidas, análisis crítico y conclusiones.
 - [ ] Demostración ensayada, enlaces disponibles y aporte individual trazable.
 
-**Salida:** versión entregable identificada, repositorio, PDF, evidencias y demostración.  
+**Salida técnica disponible:** versión candidata 5b62c14, repositorio, PDF revisado, evidencia integral y guion. [Ficha E11](REGISTRO_EJECUCION_E11.md). **27/30**: las tres casillas pendientes requieren repaso/confirmación del equipo; no se infieren del smoke automático. La entrega a la cátedra sigue a cargo del equipo.  
 **No cerrar si:** alguna obligación está pendiente, faltan pruebas de ejecución o el informe corresponde a otra versión. Si llega la fecha con incumplimientos, registrarlos explícitamente; no declarar que la entrega satisface todo.
 
 ## 18. Gestión de evidencias y ficha para cerrar cada etapa
@@ -852,7 +854,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Smoke desplegado | `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion` | Manifiesto nuevo, Chromium y secretos externos; ver CONFIGURACION_VERCEL_E07.md. | JSON/JUnit/capturas con URL y SHA; E07 aprobado. |
 | Estrés | `python quality/load/run.py stress --output .quality/e08/stress-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Cinco escalones nuevos; JSON/JUnit/serie/HTML y criterio previo. |
 | Esfuerzo sostenido | `python quality/load/run.py soak --output .quality/e08/soak-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Diez usuarios, diez minutos, serie/recursos y reporte por pipeline. |
-| Ciclo integral de entrega | **Pendiente de integrar al finalizar.** | Workflow/comando documentado. | Todos los jobs obligatorios y evidencia consolidada. |
+| Ciclo integral de entrega | `powershell -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` | Raíz; GH CLI autenticado, main/testing alineados; ver guion. | [Ejecución comprobada](evidencias/e11/ejecucion-controlador.json), cuatro jobs obligatorios, smoke/cargas y manifiesto. |
 
 Configurar secretos es una precondición de los comandos externos, no una serie de operaciones manuales ocultas en cada ensayo. La documentación debe permitir a otra persona preparar el entorno y luego ejecutar cada suite con un comando.
 

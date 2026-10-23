@@ -1,5 +1,7 @@
 # E07 — Configuración manual de Vercel
 
+**Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
+
 **Estado 23/10/2026:** configuración aplicada y verificada mediante la conexión administrativa de Vercel. Las dos variables están limitadas a Preview/`quality/tp-testing`, el secreto de automatización está guardado en GitHub y el nuevo smoke automático aprobó. Esta guía queda como procedimiento de reproducción; no hay configuración manual pendiente de E07. [Evidencia](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523).
 
 Proyecto existente: **tesis-equitas**, equipo/namespace **equitas**. La rama de testing es **`quality/tp-testing`**. Su preview debe usar el Supabase aislado `iylwghgvtydpmwidojdo`.

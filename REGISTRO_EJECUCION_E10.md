@@ -1,5 +1,7 @@
 # Registro de ejecución — E10
 
+**Nota de conservación E11:** esta ficha, sus hashes y evidencias describen el snapshot E10 publicado en [5b62c14](https://github.com/ImaDecara/Tesis-EQUITAS/tree/5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198). El PDF/fuente actual se actualizan en E11 con revisión y manifiesto propios; no se sobrescriben los resultados históricos de E10.
+
 **Etapa:** informe académico completo y PDF revisado. **Fecha:** 23/10/2026. **Responsable:** Axel Azcune (`AxAzc`). **Estado:** completada, 29/29 controles del roadmap. Nivel declarado: 2, prototipo parcial. La demostración integral continúa en E11.
 
 ## Entregables

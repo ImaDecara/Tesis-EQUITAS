@@ -1,5 +1,7 @@
 # Ejecutar y revisar las cargas de E08
 
+**Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
+
 El [plan previo](PLAN_RENDIMIENTO_E08.md) y `quality/load/policy.json` fijan carga, datos, SLO y parada. La [evaluación de herramienta](HERRAMIENTA_INCORPORADA_CALIDAD.md) conserva requisitos, alternativas, PoC, matriz y adopción. Se ensaya la API FastAPI con procesamiento real y fuente sintética, sin enviar carga a cloud ni leer credenciales de la cartera original.
 
 ## Preparación
@@ -52,3 +54,7 @@ Los artefactos `load-stress-ID-INTENTO`, `load-soak-ID-INTENTO` y `load-ci-ID-IN
 Leer primero completitud, códigos de salida, errores y SLO por operación; luego percentiles, throughput, mezcla efectiva y recursos. El agregado puede ocultar una operación lenta, por eso el objetivo hasta diez usuarios se evalúa también en listado, filtro y resumen. El estrés por encima del objetivo informa degradación o límite no alcanzado; una parada/incompletitud nunca se transforma en verde.
 
 Si falla: conservar artefacto y causa, distinguir código/contenido, SLO, recursos o preparación del entorno; corregir de forma identificada y repetir con política/dataset comparables. No elevar el umbral después de medir para aprobar. Los diez minutos permiten observar comportamiento sostenido del ensayo, no demostrar ausencia de fugas durante días. Servidor y generador comparten runner; los dos jobs pueden tener hardware diferente. No se extrapola capacidad a Supabase, al dashboard desplegado o a otro número de workers.
+
+## Repetición final E11
+
+Misma política/dataset, fuente 5b62c14, pipeline 40032355979. Estrés: 5312 solicitudes principales; p95 a 10 VU 501,80 ms. Sostenido: 15149 solicitudes principales, p95 360,06 ms y 600 s. Cero errores inesperados/diferencias de contenido. A 40 VU exploratorios p95 2216,71 ms supera 2000; primer escalón observado fuera del objetivo, conservado explícitamente. El objetivo obligatorio hasta 10 VU aprobó. No se atribuye la diferencia con E08 a una optimización: el producto no cambió y los runners tienen CPU distintas. [Reportes, fases y recursos](evidencias/e11/resultados-cargas.json). La repetición no aumenta el inventario de 183 pruebas/campañas.

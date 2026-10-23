@@ -1,6 +1,8 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-**Versión 2.1 — E10, 23/10/2026. Responsable: Axel Azcune.** E00-E10 completadas en sus alcances; sigue demostración E11. [Informe PDF revisado](entrega/INFORME_ACADEMICO_CALIDAD.pdf) y [fuente editable](entrega/INFORME_ACADEMICO_CALIDAD.md) disponibles. Nivel declarado: **2, prototipo parcial**. Presentación: **26/10/2026**. [Consigna](consigna_pdf.md) y [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
+**Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
+
+**Versión 2.2 — E11, 23/10/2026. Responsable: Axel Azcune.** E00-E10 completas; E11 técnica aprobada y repaso individual pendiente. [Informe PDF revisado](entrega/INFORME_ACADEMICO_CALIDAD.pdf) y [fuente editable](entrega/INFORME_ACADEMICO_CALIDAD.md) disponibles. Nivel declarado: **2, prototipo parcial**. Presentación: **26/10/2026**. [Consigna](consigna_pdf.md) y [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
 
 Esta versión consolida el plan vigente y reemplaza las notas de actividades futuras ya ejecutadas. Las versiones anteriores siguen en Git y en las fichas [E00](REGISTRO_EJECUCION_E00.md), [E01](REGISTRO_EJECUCION_E01.md), [E02](REGISTRO_EJECUCION_E02.md), [E03](REGISTRO_EJECUCION_E03.md), [E04](REGISTRO_EJECUCION_E04.md), [E05](REGISTRO_EJECUCION_E05.md), [E06](REGISTRO_EJECUCION_E06.md), [E07](REGISTRO_EJECUCION_E07.md), [E08](REGISTRO_EJECUCION_E08.md) y [E09](REGISTRO_EJECUCION_E09.md). No se sobrescriben sus resultados históricos.
 
@@ -30,7 +32,7 @@ Límites: sin UAT municipal, pentest integral, revisión completa de accesibilid
 | Configuración administrativa de hosting | Cuenta administradora de Imanol Decara; configuración de testing E07 ya verificada. Recuperaciones futuras se coordinan con el administrador. |
 | Seguimiento | [GitHub Issues](https://github.com/ImaDecara/Tesis-EQUITAS/issues), [registro](REGISTRO_DEFECTOS_CALIDAD.md), [plantillas y flujo](GESTION_CALIDAD.md). Jira no se utilizó. |
 
-Son 12 tickets, 10 cerrados en su alcance y **2 abiertos**: [DEF-SUP-001 #1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), original; [OBS-DEP-001 #3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3), cinco avisos altos dev con excepción hasta **26/10/2026**. [Snapshot E09](evidencias/e09/seguimiento.json). Cerrar una campaña no resuelve todos los riesgos asociados.
+Son 12 tickets, 11 cerrados y **1 abierto**: [DEF-SUP-001 #1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1), original. [OBS-DEP-001 #3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3) cerrado E11 por retiro oficial del aviso y auditorías actuales 0/0; la excepción histórica no se utilizó ni prorrogó. [Snapshot E11](evidencias/e11/seguimiento.json). Cerrar una campaña no resuelve todos los riesgos asociados.
 
 ## 3. Metas medibles y evaluación actual
 
@@ -43,11 +45,11 @@ Las metas se originan en E00 y se concretan en E03/E04/E06/E07/E08. Esta tabla a
 | M-U3, usuario | Tras desplegar testing: disponibilidad, login, datos conocidos, navegación/filtro y logout con SHA correcto. | **Cumple en Preview E07**, 5/5 comprobaciones de una campaña. Usabilidad municipal no medida. | [Smoke](evidencias/e07/smoke.json), [filtro rojo/verde](evidencias/e07/filtro-rojo-verde.json). |
 | M-E1, equipo | Cero fallos/omisiones en controles obligatorios y regresión por defecto declarado corregido. | **Cumple en alcance**: CI 180/180, DAT, RLS testing y filtro; 66/66 de infraestructura aparte. | [CI](evidencias/e09/ci-summary.json), [trazabilidad](TRAZABILIDAD_CALIDAD.md). |
 | M-E2, equipo | Sentencias≥60 % por módulo; líneas nuevas≥80 % contra base fija; duplicación por líneas≤5 %. | **Cumple**: 61,8862/85,2481 %, nuevo 36/36 y 15/17, duplicación 3,8265 %. | [Gate](evidencias/e09/ci-gate.json). |
-| M-E3, equipo | Cero críticos clasificados por política de gate y cero estáticos no aceptados; audit productivo sin avisos. | **Cumple política con excepción vigente**. No es cero defectos de negocio ni cero avisos dev; OBS-DEP-001 abierto. | [Política/gate](evidencias/e09/ci-gate.json), [audit](evidencias/e09/audit-decision.json). |
+| M-E3, equipo | Cero críticos clasificados por política de gate y cero estáticos no aceptados; audit productivo sin avisos. | **Cumple política sin excepción utilizada**, audit completo/productivo 0/0 en E11; no equivale a cero defectos de negocio. | [Política/gate](evidencias/e09/ci-gate.json), [audit](evidencias/e09/audit-decision.json). |
 | M-E4, equipo | Rendimiento E08 previo: p95≤2 s, error≤1 % hasta 10 usuarios, cero contenido incorrecto, sostenido 600 s. | **Cumple** en fuente sintética local de CI; no es SLA municipal/cloud. | [Cargas](evidencias/e08/resultados.json), [plan previo](PLAN_RENDIMIENTO_E08.md). |
 | M-O1, organización | Sin duplicados/huérfanos en controles elegidos y repetición de carga sin duplicación según contrato. | **Parcial**: SQL seleccionado y ETL simulado aprobados; no recarga ETL completa de cartera real. | [Inspección inicial](evidencias/supabase-2026-10-21.json), 8 integraciones ETL simuladas. |
 | M-O2, organización | Recuperación controlada: error identificable, reintentos acotados, parada, revisión de lote y verificación. | **Parcial**: negativos/reintentos simulados y recreación de fixtures testing verificados. Protocolo documentado; caída cloud/backup restore no ensayados. | Sección 9; [ciclo de fixtures](evidencias/e06/fixtures-lifecycle.json). |
-| M-O3, organización | Comandos/versiones/reportes disponibles; PDF coherente y demostración final. | **Parcial**: repositorio, reportes y PDF E10 disponibles; demostración E11 pendiente. | [Reproducción](REPRODUCIBILIDAD_CALIDAD.md), roadmap E10/E11. |
+| M-O3, organización | Comandos/versiones/reportes disponibles; PDF coherente y demostración final. | **Parcial**: repositorio, reportes, PDF y ensayo técnico E11 disponibles; repaso individual y ensayo oral pendientes de confirmación. | [Reproducción](REPRODUCIBILIDAD_CALIDAD.md), roadmap E10/E11. |
 
 La [matriz ISO](MATRIZ_ISO25010_CALIDAD.md) evalúa las ocho características y conserva el top 3 explícito: **1 adecuación funcional, 2 seguridad, 3 fiabilidad**. Cada fila tiene objetivo, métrica/aceptación, evidencia, estado y límite. Una meta parcial no se aprueba por cerrar E09.
 
@@ -74,9 +76,9 @@ Cadenas conservadas: R-DAT-01→DAT-06→[caso #5](https://github.com/ImaDecara/
 
 [quality-ci.yml](.github/workflows/quality-ci.yml): push, PR a main y dispatch; instala dependencias fijadas, prueba/build/analiza y genera JSON/JUnit/HTML. Supabase obligatorio en push/dispatch de **main y quality/tp-testing**, sin secretos en cualquier PR/rama. El resumen exige presencia/éxito donde corresponde. Un verde de otra rama no acredita integración real.
 
-Gate E04: sentencias≥60 % por módulo, nuevas líneas ejecutables≥80 % por módulo contra base fija, duplicación por líneas≤5 % sin redondeo, cero críticos según clasificador de reglas y cero estáticos no aceptados. Base/reportes ausentes o procedencia incorrecta bloquean. Audit: cero críticas/productivas y solo excepción exacta de cinco altos dev hasta 26/10. [Criterios actuales](evidencias/e09/ci-gate.json). `release_approved=false` no pasa a aprobación productiva por gate verde.
+Gate E04: sentencias≥60 % por módulo, nuevas líneas ejecutables≥80 % por módulo contra base fija, duplicación por líneas≤5 % sin redondeo, cero críticos según clasificador de reglas y cero estáticos no aceptados. Base/reportes ausentes o procedencia incorrecta bloquean. Audit E11: cero avisos completos/productivos y excepción no utilizada. La política conserva su vencimiento histórico 26/10 y rechaza avisos nuevos. [Criterios actuales](evidencias/e09/ci-gate.json). `release_approved=false` no pasa a aprobación productiva por gate verde.
 
-[preview-smoke.yml](.github/workflows/preview-smoke.yml): tras CI de **quality/tp-testing**, espera deployment de ese SHA y verifica build-info/URL/proyecto antes de navegar. Ese es el alcance automático de despliegue del TP; no se configura para todos los previews ni producción. E11 debe usar esa rama y conservar un nuevo recorrido.
+[preview-smoke.yml](.github/workflows/preview-smoke.yml): tras CI de **quality/tp-testing**, espera deployment de ese SHA y verifica build-info/URL/proyecto antes de navegar. Ese es el alcance automático de despliegue del TP; no se configura para todos los previews ni producción. E11 usó esa rama alineada y conservó un nuevo deployment/smoke 5b62c14.
 
 [load-tests.yml](.github/workflows/load-tests.yml): manual o cambios del harness en rama E08; exige CI del mismo SHA y ejecuta estrés/sostenido en runners separados. No corre cargas largas en cada PR/push. El rojo funcional real es E03, separado de la inyección sintética E04 y del fallo de imports E08. Se conservan artefactos también al fallar.
 
@@ -84,7 +86,7 @@ Gate E04: sentencias≥60 % por módulo, nuevas líneas ejecutables≥80 % por m
 
 Entrada: SHA/configuración conocidos; dependencias preparadas; caso/esperado/datos/entorno identificados; externos solo en testing con cuentas configuradas; cargas con política/duración/usuarios/stop anteriores al ensayo. Salida de etapa: criterio satisfecho o incumplimiento explícito, métricas/casos/tickets coherentes, reportes propios y límites registrados. Una omisión no es aprobación.
 
-Salida integral: R01–R25 respaldados; controles/build/gates obligatorios aprobados; rojo real y verde posterior; integración real, nuevo despliegue con smoke y dos cargas; registro/herramienta completos; **PDF y demostración final**: PDF E10 revisado y disponible; demostración E11 pendiente. Riesgos del original/excepción dev se informan como metas pendientes; no presentar el MVP como listo para producción.
+Salida integral: R01–R25 respaldados; controles/build/gates obligatorios aprobados; rojo real y verde posterior; integración real, nuevo despliegue con smoke y dos cargas; registro/herramienta completos; **PDF y demostración final**: PDF E10 revisado y disponible; ensayo técnico E11 aprobado y preparación oral pendiente de confirmación. El riesgo original se informa como meta pendiente; no presentar el MVP como listo para producción.
 
 ## 8. Riesgos priorizados
 
@@ -138,4 +140,4 @@ Con entorno preparado según [reproducibilidad](REPRODUCIBILIDAD_CALIDAD.md), ej
 | Sostenido | Python del venv: `python quality/load/run.py soak --output .quality/e09/soak-repeticion` | 600 s de fase más warmup/drenajes y reportes nuevos. |
 | Ambas cargas CI | `gh workflow run load-tests.yml --ref main --repo ImaDecara/Tesis-EQUITAS` | Preflight CI del mismo SHA y dos jobs con nueva evidencia. |
 
-No sobrescribir snapshots aceptados. Un cambio de producto/configuración exige reevaluar niveles afectados; editar documentos no agrega pruebas ni ejecuta nuevamente cargas/smoke. E10 completó el PDF revisado. E11 debe completar la demo y revisar dependencias con su vencimiento vigente.
+No sobrescribir snapshots aceptados. Un cambio de producto/configuración exige reevaluar niveles afectados; editar documentos no agrega pruebas ni ejecuta nuevamente cargas/smoke. E10 completó el PDF revisado. E11 completó la validación técnica y revisó dependencias; falta la confirmación humana de preparación y entrega.

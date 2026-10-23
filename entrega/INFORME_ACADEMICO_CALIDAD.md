@@ -40,13 +40,13 @@ Para este trabajo se seleccionó el **Nivel 2, prototipo parcial**. Aplicamos pr
 
 El avance recibido contenía 94 pruebas aprobadas y una integración omitida. La continuidad agregó un defecto funcional con contraste rojo/verde, gates verificables, integración real en Supabase de testing, un recorrido de navegador desplegado y cargas con criterios previos. El corte acumulado es de **183 pruebas o campañas de producto aprobadas**, con **66 controles de infraestructura separados**. Esas cifras reúnen ejecuciones identificadas; no corresponden a un único workflow.
 
-Los resultados aportan confianza sobre los casos y entornos ensayados. Persisten dos pendientes concretos: la autorización permisiva del Supabase original y cinco avisos altos de dependencias de desarrollo bajo excepción temporal hasta el 26/10/2026. Tampoco se realizaron aceptación municipal, auditoría integral de seguridad o restauración de backups. El informe diferencia esos límites de los requisitos técnicos cumplidos y de la demostración final aún pendiente.
+Los resultados aportan confianza sobre los casos y entornos ensayados. Persiste la autorización permisiva del Supabase original. OBS-DEP-001 se cerró en E11 por retiro oficial del aviso y auditoría nueva sin hallazgos, sin atribuirlo a una actualización de paquetes. No se realizaron aceptación municipal, auditoría integral de seguridad o restauración de backups. La validación técnica de demostración está ejecutada; la preparación oral individual y la entrega académica requieren confirmación del equipo.
 
 ### Versiones y evidencia utilizada
 
-El corte técnico es el commit **1472eea8bbd87857a38a6fd0b05283ff9287eb44**, del 23/10/2026, con [CI main 39968499139 aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39968499139). Los ZIP de sus cuatro jobs fueron descargados y contrastados con el SHA-256 informado por GitHub. El resumen, gate e integración real se conservan en [evidencias E10](../evidencias/e10/ci-summary.json).
+El corte técnico es el commit **5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198**, del 23/10/2026, con [CI testing 40032393112 aprobado](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112). Los ZIP de sus cuatro jobs fueron descargados y contrastados con el SHA-256 informado por GitHub. El resumen, gate e integración real se conservan en [evidencias E11](../evidencias/e11/ci-summary.json).
 
-El smoke aceptado pertenece a [a6497a7](https://github.com/ImaDecara/Tesis-EQUITAS/commit/a6497a73b226f9d27abb4e9080d5540503d95539), [run 39955572523](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523). Las cargas pertenecen a [f6f83f9](https://github.com/ImaDecara/Tesis-EQUITAS/commit/f6f83f9a3172fc2e42912305a181057130d9577b), [run 39960952025](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025). El producto no cambió entre el cierre E07 y el corte técnico: E08 incorporó infraestructura de carga y E09 consolidó documentación. Cada evidencia conserva su fecha, alcance y versión; no se presenta como una ejecución nueva al incluirla en el PDF.
+CI, integración real, nuevo Preview/smoke y cargas E11 corresponden al mismo **5b62c14**. El [CI 40032393112](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112) parte de checkouts nuevos en Ubuntu e instala dependencias fijadas; los cuatro jobs obligatorios aprobaron. El [smoke 40032558356](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032558356) y las [cargas 40032355979](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032355979) conservan la procedencia. El [manifiesto integral](../evidencias/e11/validacion-integral.json) permite revisar IDs, resultados y límites. Las versiones E03/E07/E08 se conservan como historia identificada. Los commits posteriores de cierre agregan informe, guion, controlador y evidencia; el árbol de producto probado permanece sin cambios.
 
 ## 2 Arquitectura del sistema
 
@@ -80,7 +80,7 @@ La consigna exige, para ese nivel, cobertura de sentencias existente de al menos
 | Equipo | Cero fallos u omisiones en suites obligatorias y regresión por defecto declarado corregido. | CI actual 180/180 de producto; regresiones DAT, RLS testing y filtro. Infraestructura 66/66 aparte. |
 | Equipo | Sentencias existentes ≥60 %, líneas nuevas ≥80 % por módulo y duplicación por líneas ≤5 %. | Cumple con numeradores, denominadores y base fija identificados. |
 | Organización | Evitar datos inconsistentes y reanudar cargas con controles verificables. | ETL simulado e inspección SQL seleccionada aprobados; recarga real completa y recuperación cloud no ensayadas. |
-| Organización | Entrega reproducible con versión, comandos, evidencias e informe. | Repositorio, reportes y este informe disponibles; demostración final pendiente de E11. |
+| Organización | Entrega reproducible con versión, comandos, evidencias e informe. | Repositorio, reportes, informe y ensayo técnico E11 disponibles; repaso individual y entrega oral pendientes de confirmación. |
 
 La [matriz de metas del plan](../PLAN_PRUEBAS_CALIDAD.md) conserva objetivos adicionales, criterios y evidencias. Los objetivos operativos no se presentan como acuerdos de servicio firmados por el municipio.
 
@@ -188,15 +188,15 @@ Se utiliza el modelo de ocho características de **ISO/IEC 25010:2011**, corresp
 | Característica y objetivo | Métrica y aceptación | Resultado y evidencia | Estado al corte |
 | --- | --- | --- | --- |
 | Adecuación funcional: cartera completa y reglas correctas. | 100 % de IDs conocidos sin ausencias/duplicados; REC-01 7/7. | 3.507/3.507 por ruta/variante y siete decisiones exactas. DAT-06 y REC-01. | Cumple en el alcance técnico seleccionado; reglas municipales completas no validadas. |
-| Eficiencia: respuestas correctas bajo carga declarada. | Hasta 10 usuarios: p95≤2 s, error≤1 %, cero contenido incorrecto; sostenido 600 s. | p95 de 389,46 ms a 10 usuarios y 532,58 ms sostenido; dos campañas de CI. | Cumple en el componente/fuente sintética del ensayo; no capacidad cloud o web. |
+| Eficiencia: respuestas correctas bajo carga declarada. | Hasta 10 usuarios: p95≤2 s, error≤1 %, cero contenido incorrecto; sostenido 600 s. | E11: p95 501,80 ms a 10 usuarios y 360,06 ms sostenido; dos campañas de CI. | Cumple en el componente/fuente sintética del ensayo; no capacidad cloud o web. |
 | Compatibilidad: interoperar con Auth/Data API. | 12/12 HTTP sin omisiones y metadata de despliegue concordante. | Cliente normal y funciones productivas en Supabase testing; smoke con destino correcto. | Parcial: sin coexistencia ni matriz de proveedores/navegadores. |
-| Usabilidad: recorrido básico y limpieza de filtros. | Cinco comprobaciones del smoke; input, URL y listado restaurados. | Smoke E07 y rojo/verde DEF-UI-001. No se midió satisfacción o aprendizaje municipal. | Parcial técnico; aceptación municipal y accesibilidad completa no verificadas. |
+| Usabilidad: recorrido básico y limpieza de filtros. | Cinco comprobaciones del smoke; input, URL y listado restaurados. | Smoke E11 y rojo/verde E07 de DEF-UI-001. No se midió satisfacción o aprendizaje municipal. | Parcial técnico; aceptación municipal y accesibilidad completa no verificadas. |
 | Fiabilidad: evitar éxito parcial e inconsistencias. | Negativos DAT seguros; 8/8 ETL simuladas y cero fallos obligatorios. | Suites y sostenido aprobados; contingencia documentada y fixtures recreadas. | Parcial: sin disponibilidad anual, failover, RTO/RPO ni backup restore medidos. |
-| Seguridad: aislar tenants y conservar acceso positivo. | Cero negocio ajeno para A/B/none/inactive; cliente normal sin DML; cero avisos críticos/productivos. | 12/12 HTTP; cinco altos dev con excepción; DEF-SUP-001 original abierto. | Testing cumple aislamiento ensayado; original incumple restricción equivalente. |
+| Seguridad: aislar tenants y conservar acceso positivo. | Cero negocio ajeno para A/B/none/inactive; cliente normal sin DML; cero avisos críticos/productivos. | 12/12 HTTP; audit E11 completo/productivo 0/0; DEF-SUP-001 original abierto. | Testing cumple aislamiento ensayado; original incumple restricción equivalente. |
 | Mantenibilidad: proteger regresión y análisis. | Sentencias≥60 %, líneas nuevas≥80 %, duplicación≤5 %, cero estáticos no aceptados. | Front 61,8862 %, back 85,2481 %; nuevo 36/36 y 15/17; duplicación 3,8265 %. | Cumple criterios seleccionados; persisten ramas sin cubrir y tres excepciones Ruff. |
 | Portabilidad: preparación local y runner reproducibles. | Instalación Windows E01 y Linux E02; CI actual completo aprobado. | Dependencias fijadas, 180/180 de producto y 66 controles de CI; PoC Windows/cargas Ubuntu. | Parcial: no toda la versión actual en Windows, macOS u otro proveedor. |
 
-Fuentes: [matriz desarrollada](../MATRIZ_ISO25010_CALIDAD.md), [gate actual](../evidencias/e10/ci-gate.json), [HTTP real](../evidencias/e10/supabase.json), [smoke](../evidencias/e07/smoke.json) y [cargas](../evidencias/e08/resultados.json). Los criterios de gates y carga tienen versiones previas; la matriz consolidada el 23/10 no simula una aceptación municipal anterior.
+Fuentes: [matriz desarrollada](../MATRIZ_ISO25010_CALIDAD.md), [gate actual](../evidencias/e11/ci-gate.json), [HTTP real](../evidencias/e11/supabase.json), [smoke](../evidencias/e07/smoke.json) y [cargas](../evidencias/e08/resultados.json). Los criterios de gates y carga tienen versiones previas; la matriz consolidada el 23/10 no simula una aceptación municipal anterior.
 
 El orden de prioridad es **1 adecuación funcional, 2 seguridad, 3 fiabilidad**. La cartera incompleta puede distorsionar decisiones de recupero incluso con una interfaz disponible. La seguridad impide exposición de información fuera de la organización y mantiene un pendiente crítico en el original. La fiabilidad sostiene consultas/importaciones consistentes y controladas ante fallos. La prioridad de una característica no sustituye la urgencia de un defecto concreto: DEF-SUP-001 original exige atención aunque ocupe el segundo eje del modelo.
 
@@ -210,12 +210,12 @@ El análisis estático detecta problemas sin ejecutar el comportamiento funciona
 | Ruff 0.17.1 | 19 hallazgos en 8 archivos. | 16 corregidos y tres excepciones locales TRY004 justificadas; cero no aceptados con las mismas 407 reglas habilitadas. |
 | Duplicación por líneas | 474/11.188=4,2367 %,38 clones. | 427/11.159=3,8265 %,36 clones; cumple≤5 %. |
 | Duplicación por tokens | 2.742/53.179=5,1562 %. | 2.533/53.287=4,7535 %; medida distinta del gate por líneas. |
-| Audit completo frontend | 19 paquetes afectados: 4 críticos, 12 altos, 2 moderados, 1 bajo. | Cinco altos de desarrollo, cero críticos. Audit completo conserva salida 1. |
-| Audit productivo frontend | Se informa por separado. | Cero avisos, salida 0; no transforma en cero el audit completo. |
+| Audit completo frontend | 19 paquetes afectados: 4 críticos, 12 altos, 2 moderados, 1 bajo. | E11: cero avisos y salida 0, sin modificar el lockfile. E01-E10: cinco altos dev, salida 1. |
+| Audit productivo frontend | Se informa por separado. | Cero avisos, salida 0. E11 verifica también audit completo en cero. |
 
 En Ruff se corrigieron imports, variables/importaciones sin uso y otras observaciones, manteniendo tres `noqa` TRY004 locales por contrato ValueError. Ignorar los `noqa` vuelve a mostrar esas tres excepciones. **16/19=84,21 %** de hallazgos iniciales fueron corregidos; los tres restantes no se presentan como arreglos. La severidad media/baja del informe recibido era un triage del equipo, no una clasificación nativa de Ruff. [Antes, después y excepciones E01](../REGISTRO_EJECUCION_E01.md).
 
-Las actualizaciones de dependencias redujeron el audit completo de 19 a 5 paquetes afectados, una disminución descriptiva de 73,68 %. No equivale a 14 CVE independientes eliminadas ni a una reducción porcentual del riesgo. Los cinco avisos permanecen bajo **OBS-DEP-001**, con paquetes/versiones exactos, solo desarrollo y vencimiento **26/10/2026**. Una nueva crítica, un aviso productivo o una excepción vencida bloquean. [Decisión actual](../evidencias/e09/audit-decision.json), [ticket abierto](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3).
+Las actualizaciones E01 redujeron el audit completo de 19 a 5 paquetes afectados, una disminución descriptiva de 73,68 %. En E11 el resultado pasó de cinco altos dev a cero porque [GitHub retiró GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) el 23/10/2026 a las 12:53:02 UTC, por no considerarlo prácticamente explotable. El lockfile no cambió: esta segunda reducción no es una corrección de código ni una actualización de dependencias. Los reportes históricos conservan sus hallazgos. [Auditoría actual](../evidencias/e11/audit-all.json), [decisión](../evidencias/e11/audit-decision.json) y [ticket cerrado](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3). La excepción no se prorrogó, no se utilizó en esta ejecución y conserva su vencimiento histórico 26/10; hallazgos nuevos siguen requiriendo revisión.
 
 La extracción del lector común en E03 acompaña la reducción de clones y evita repetir el contrato de paginación. También cambiaron tamaño y versión de jscpd desde la base; por eso no atribuimos toda variación porcentual a una intervención aislada. La complejidad orientativa sigue señalando transformación, mapper de objetos, scoring y carga ETL; no se tomó como certificación independiente ni se fijó un umbral retrospectivo para aprobarla.
 
@@ -244,7 +244,7 @@ La base fija de código nuevo es **531996f51243dc3d4c5a607338e2f35e32313f6b**. E
 
 ![Cobertura de sentencias y ramas del corte técnico](figuras/cobertura-actual.svg)
 
-Figura 1. Sentencias y ramas por módulo, 23/10/2026, SHA 1472eea. Fuente: resumen y gate del CI 39968499139. Barras calculadas con los cocientes exactos; el texto conserva además la presentación de cada herramienta.
+Figura 1. Sentencias y ramas por módulo, 23/10/2026, SHA 5b62c14. Fuente: resumen y gate del CI 40032393112. Barras calculadas con los cocientes exactos; el texto conserva además la presentación de cada herramienta.
 
 ### Evolución y comparabilidad
 
@@ -256,7 +256,7 @@ Figura 1. Sentencias y ramas por módulo, 23/10/2026, SHA 1472eea. Fuente: resum
 | E03,3bfe156 | 742/1.280=57,9688 % | 1.254/1.471=85,2481 % | Lector común/regresiones; todavía bajo 60 %. |
 | E04, c95a9ab | 791/1.280=61,7969 % | 1.254/1.471=85,2481 % | Mismo método/denominador E03, más 49 sentencias cubiertas; cierra insuficiencia. |
 | E06,4bb783f | 788/1.277=61,7071 % | 1.254/1.471=85,2481 % | Ajuste Auth productivo, cambia denominador. |
-| E07, a6497a7 y corte 1472eea | 794/1.283=61,8862 % | 1.254/1.471=85,2481 % | Build-info y regresión del filtro; sin cambio posterior del producto. |
+| E07, a6497a7 y corte 5b62c14 | 794/1.283=61,8862 % | 1.254/1.471=85,2481 % | Build-info y regresión del filtro; sin cambio posterior del producto. |
 
 Fuente histórica: [informe recibido](../tp-Calidad.md), [diagnóstico inicial](../evidencias/validacion-2026-10-21.json) y fichas de ejecución. La mejora histórica reportada es de 48,40 y 58,43 puntos porcentuales, sin atribuirle una reproducción experimental nueva. La caída frontend 60,43→45,96 % se debe al cambio de remapeo AST de V8 con iguales archivos, y **no demuestra una regresión funcional**. E03→E04 sí conserva método/denominador y suma 49/1.280, equivalente a **3,8281 puntos porcentuales** por nuevas verificaciones.
 
@@ -265,10 +265,10 @@ Fuente histórica: [informe recibido](../tp-Calidad.md), [diagnóstico inicial](
 | Tipo y corte | Fórmula | Resultado y límite |
 | --- | --- | --- |
 | Proceso, base 531996f | Aprobadas/ejecutadas=94/(94+0). | 100 %; una externa omitida aparte. Ejecutadas/inventariadas=94/95=98,95 %; omitidas 1/95=1,05 %. No 95 aprobadas. |
-| Proceso, CI actual 1472eea | (107 frontend+61 backend+12 reales)/180. | **180/180=100 %**, cero fallidas/omitidas. `summary.tests` suma 168 aisladas; 12 reales están en su campo/job. |
+| Proceso, CI actual 5b62c14 | (107 frontend+61 backend+12 reales)/180. | **180/180=100 %**, cero fallidas/omitidas. `summary.tests` suma 168 aisladas; 12 reales están en su campo/job. |
 | Proceso, corte acumulado | (168 aisladas+12 reales+1 smoke+2 cargas)/183. | **183/183=100 %**, de distintas fuentes/versiones. No mide completitud de requisitos. |
 | Proceso de infraestructura | 66 aprobadas/66 ejecutadas. | 100 %, aparte del producto. |
-| Seguimiento 23/10 | Tickets cerrados/registrados=10/12. | 83,33 %, dos abiertos. Mezcla campañas, observaciones y defectos; no es tasa de resolución de bugs. |
+| Seguimiento 23/10 | Tickets cerrados/registrados=11/12. | 91,67 %, uno abierto. Mezcla campañas, observaciones y defectos; no es tasa de resolución de bugs. |
 | Proyecto, base 531996f | Conteo del alcance productivo jscpd. | 62 archivos/11.188 líneas; no tamaño total del repositorio. |
 | Proyecto, corte actual | Mismo tipo de conteo del alcance declarado. | 64 archivos/11.159 líneas; +2 archivos/−29 líneas. No mide productividad ni esfuerzo. |
 
@@ -302,7 +302,7 @@ Probabilidad e impacto se estiman de 1 a 5. Prioridad=P×I: **15-25 crítica, 10
 | R-05 Truncamiento | 4×4=16 crítica | 2×4=8 media | Cursor/regresión DAT-06; gran volumen real no ensayado. |
 | R-06 Variables/despliegue | 2×4=8 media | 1×4=4 baja en Preview verificado | SHA/URL/proyecto y smoke; no califica producción ni prueba rollback. |
 | R-07 Regresión | 3×4=12 alta | 2×4=8 media | Suites/gates/regresiones; siguen ramas sin cubrir. |
-| R-08 Dependencias dev | Sin puntuación previa; seguimiento E01. | 3×3=9 media | Cinco altos, excepción vence 26/10; no se extiende automáticamente. |
+| R-08 Dependencias dev | Sin puntuación previa; seguimiento E01. | 2×3=6 media | Auditoría actual 0/0 por retiro del aviso; observar novedades, sin prorrogar excepción. |
 | R-09 Pérdida de evidencia | Formalizado E09. | 1×3=3 baja | Artefactos 30 días, resúmenes/series/muestras versionados; algunos logs completos expiran. |
 
 El responsable de seguimiento es Axel Azcune. La reducción estimada en testing no se extrapola al original; el CI verde tampoco reduce por sí solo su riesgo crítico. Si un agregado no concuerda, se advierte incompletitud y se evitan decisiones basadas en totales no conciliados. Si un lote ETL queda incierto, se detiene y se concilian claves, conteos e importes antes de repetirlo. [Plan y riesgos vigentes](../PLAN_PRUEBAS_CALIDAD.md#8-riesgos-priorizados).
@@ -356,7 +356,7 @@ Las pruebas usan Auth HTTP y Data API con clave publicable y JWT de usuario norm
 | SUP-AUTH-03 | Logout elimina sesión del cliente; la siguiente lectura es anónima. Aprobó. |
 | SUP-WRITE-01 | Cliente normal no inserta, actualiza ni elimina negocio. Aprobó. |
 
-Son **12 variantes aprobadas**, cero fallidas/omitidas, exigidas en el job real de main. [Reporte del corte técnico](../evidencias/e10/supabase.json). La suite falla si falta configuración; la antigua prueba externa opcional/omitida no se mantiene como si hubiese aprobado.
+Son **12 variantes aprobadas**, cero fallidas/omitidas, exigidas en el job real de main/testing. [Reporte del corte técnico](../evidencias/e11/supabase.json). La suite falla si falta configuración; la antigua prueba externa opcional/omitida no se mantiene como si hubiese aprobado.
 
 Se conserva un contraste real de SUP-RLS-02 en testing: con política heredada permisiva, el usuario none obtuvo los IDs 910001 y 910002 cuando esperaba ninguno; después de aplicar pertenencia activa obtuvo cero y la campaña completa 12/12 aprobó. El hash del test fue idéntico antes/después. [Evidencia rojo/verde E06](../evidencias/e06/red-green.json).
 
@@ -368,11 +368,11 @@ Se conserva un contraste real de SUP-RLS-02 en testing: con política heredada p
 
 [quality-ci.yml](../.github/workflows/quality-ci.yml) se ejecuta por push, PR hacia main y dispatch. Prepara entornos fijados, instala dependencias, ejecuta frontend/backend, build/TypeScript, ESLint/Ruff, cobertura, duplicación y auditoría; publica JSON, JUnit y HTML. Los reportes se conservan también al fallar y el resumen propaga un estado no exitoso. Los artefactos se retienen 30 días; los snapshots portables evitan depender solo de esa ventana.
 
-La integración real es obligatoria en push/dispatch de **main y quality/tp-testing**. No se entregan secretos a cualquier PR o rama. El resumen exige su éxito donde corresponde; un verde de una rama sin ese job no acredita integración real. El [CI del corte 1472eea](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39968499139) aprobó los cuatro jobs, con 168 aisladas, 12 HTTP y 66 controles de infraestructura.
+La integración real es obligatoria en push/dispatch de **main y quality/tp-testing**. No se entregan secretos a cualquier PR o rama. El resumen exige su éxito donde corresponde; un verde de una rama sin ese job no acredita integración real. El [CI del corte 5b62c14](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112) aprobó los cuatro jobs, con 168 aisladas, 12 HTTP y 66 controles de infraestructura.
 
 Los criterios exactos del gate son: sentencias existentes≥60 % por módulo; líneas ejecutables nuevas≥80 % por módulo contra base fija 531996f; duplicación por líneas≤5 % sin redondear; cero hallazgos críticos según clasificador del proyecto y cero estáticos no aceptados. Evidencia ausente, inválida o de otra procedencia bloquea. La auditoría tiene política separada: cero críticas/productivas y solo la excepción dev exacta vigente.
 
-El clasificador crítico incluye las reglas ESLint `constructor-super`, `no-unreachable`, `no-unsafe-finally` y Ruff `F821`, `F822`, `F823`, `invalid-syntax`. Es una decisión del proyecto, no severidad nativa de Ruff ni garantía de detectar todo bug crítico funcional o de seguridad. [Política y gate del corte](../evidencias/e10/ci-gate.json). El campo `release_approved=false` se conserva: aprobar controles técnicos no equivale a habilitar producción.
+El clasificador crítico incluye las reglas ESLint `constructor-super`, `no-unreachable`, `no-unsafe-finally` y Ruff `F821`, `F822`, `F823`, `invalid-syntax`. Es una decisión del proyecto, no severidad nativa de Ruff ni garantía de detectar todo bug crítico funcional o de seguridad. [Política y gate del corte](../evidencias/e11/ci-gate.json). El campo `release_approved=false` se conserva: aprobar controles técnicos no equivale a habilitar producción.
 
 ### Pipeline rojo por un defecto real y verde posterior
 
@@ -380,7 +380,7 @@ El clasificador crítico incluye las reglas ESLint `constructor-super`, `no-unre
 | --- | --- | --- |
 | [Rojo 39672114249](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39672114249) | [f155cfc](https://github.com/ImaDecara/Tesis-EQUITAS/commit/f155cfc1616c8edeacd533241c5dc2858745734a); consultas únicas truncaban las 3.507 filas esperadas en objetos/personas. |95 aprobadas, 4 fallidas y 1 omitida; frontend/resumen fallaron. No fue una inyección sintética. |
 | [Verde 39673351642](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39673351642) |3bfe15688a72360b336b7d8732867c6991a1d42e; lector común por cursor. |136 aprobadas, 0 fallidas y 1 omitida; 14 controles de infraestructura aparte. |
-| [CI integral actual 39968499139](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39968499139) |1472eea; suites/gates e integración real ya obligatorios en main. |180/180 de producto, 0 omitidas/fallidas; 66 controles de infraestructura aparte. |
+| [CI integral actual 40032393112](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032393112) |5b62c14; suites/gates e integración real obligatorios en main/testing. |180/180 de producto, 0 omitidas/fallidas; 66 controles de infraestructura aparte. |
 
 Se conservó el bloque original de cuatro aserciones de DAT-06; la suite verde agregó casos, por lo que no se afirma que todos los denominadores rojo/verde sean iguales. La evidencia comparable está en esas cuatro variantes y en el mismo dataset. [Manifiesto E03](../evidencias/e03/ejecuciones-2026-10-21.json).
 
@@ -390,7 +390,7 @@ Además, E04 verificó un [bloqueo crítico controlado](https://github.com/ImaDe
 
 [preview-smoke.yml](../.github/workflows/preview-smoke.yml) se dispara después del CI de la rama persistente **quality/tp-testing**. Exige CI correcto del mismo SHA, identifica el deployment de Vercel y comprueba metadata `/api/build-info`, URL, rama y proyecto Supabase antes de navegar. El flujo usa las fixtures de testing y conserva la protección del deployment; no publica el secreto de automatización.
 
-El despliegue aceptado es [tesis-equitas-dvj0xf5e3-equitas.vercel.app](https://tesis-equitas-dvj0xf5e3-equitas.vercel.app), SHA a6497a7,23/10/2026. El [smoke automático 39955572523](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobó sus cinco comprobaciones: disponibilidad/metadata, login real A, dashboard con 1250 y sin B, navegación/filtro/listado operativo de Personas, y logout seguido de acceso protegido denegado. Son cinco comprobaciones de **una campaña**, con cero errores de página/consola.
+El despliegue aceptado es [tesis-equitas-lilpc7spm-equitas.vercel.app](https://tesis-equitas-lilpc7spm-equitas.vercel.app), SHA 5b62c14,23/10/2026. El [smoke automático 40032558356](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032558356) aprobó sus cinco comprobaciones: disponibilidad/metadata, login real A, dashboard con 1250 y sin B, navegación/filtro/listado operativo de Personas, y logout seguido de acceso protegido denegado. Son cinco comprobaciones de **una campaña**, con cero errores de página/consola.
 
 El primer selector de Personas no comprobaba realmente esa ruta. Se agregó URL/título y se acotó la aserción a la tabla operativa. Esa revisión descubrió **DEF-UI-001**: Limpiar restauraba URL y listado, pero conservaba el input anterior. La misma aserción de campo vacío falló en 0e4e84a y aprobó en a6497a7 tras restablecer el formulario al cambiar filtros. [Rojo/verde del filtro](../evidencias/e07/filtro-rojo-verde.json), [defecto#11](https://github.com/ImaDecara/Tesis-EQUITAS/issues/11). Las capturas de ensayos previos quedan como diagnóstico y no como prueba de cierre.
 
@@ -398,7 +398,7 @@ El primer selector de Personas no comprobaba realmente esa ruta. Se agregó URL/
 
 Figura 3. Detalle del listado operativo, recortado de la captura real de E07 del 23/10/2026, a6497a7: Personas muestra la fixture A, riesgo 20 e importe 1250. Procede del smoke 39955572523, no de una nueva ejecución al elaborar este informe. Los nombres y valores son sintéticos; la captura original de 1440×1072 se conserva en el repositorio.
 
-El alcance automático es el Preview de esa rama del TP, no todos los previews ni producción. E11 debe alinear la rama con la versión de demostración y conservar un nuevo despliegue/smoke. El recorrido básico no constituye aceptación de todas las pantallas, accesibilidad o seguridad integral. [Configuración y reproducción](../CONFIGURACION_VERCEL_E07.md).
+El alcance automático es el Preview de esa rama del TP, no todos los previews ni producción. E11 alineó la rama con la versión candidata y verificó un nuevo deployment/smoke del mismo SHA. El recorrido básico no constituye aceptación de todas las pantallas, accesibilidad o seguridad integral. [Configuración y reproducción](../CONFIGURACION_VERCEL_E07.md).
 
 ## 13 Estrés y esfuerzo sostenido
 
@@ -412,7 +412,7 @@ La aceptación objetivo hasta 10 usuarios es **p95≤2000 ms, errores inesperado
 
 Las paradas previas incluyen error acumulado>20 % después de 30 s, contenido incorrecto, RSS de servidor/generador>1024 MiB, muestras crudas>512 MiB y tiempo límite con margen 120 s. Un ensayo incompleto falla. El orquestador verifica proceso propio, SHA, dataset y política y cierra sus procesos al terminar. [Implementación y límites](../RENDIMIENTO_CALIDAD.md).
 
-### Resultados de pipeline
+### Resultados históricos del pipeline E08
 
 El [pipeline 39960952025](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025), fuente f6f83f9, ejecutó ambas campañas después del [CI 39960952039 del mismo SHA](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039). Cada job usó un runner nuevo Ubuntu 24.04, Python 3.12.14, cuatro CPUs lógicas, un worker Uvicorn asyncio/h11 y límite de threadpool observado 40. Servidor y generador compartieron host.
 
@@ -443,7 +443,7 @@ El sostenido aprobó además por operación: listado 6080 requests, p95 530,64 m
 | RSS máximo del generador |95,02 MiB |70,41 MiB |
 | CPU máxima del generador |7,00 % de un núcleo |6,50 % de un núcleo |
 
-No se alcanzó incumplimiento del SLO hasta 40 usuarios ensayados. El throughput se estanca de 20 a 40 usuarios mientras p95 aumenta de 794,16 a 1647,00 ms y la CPU del servidor se aproxima a un núcleo ocupado. Esto **sugiere saturación de procesamiento/colas**, sin demostrar un límite exacto o capacidad cloud. El generador consumió una fracción menor de CPU.
+En E08 no se alcanzó incumplimiento hasta 40 usuarios ensayados. El throughput se estanca de 20 a 40 usuarios mientras p95 aumenta de 794,16 a 1647,00 ms y la CPU del servidor se aproxima a un núcleo ocupado. Esto **sugiere saturación de procesamiento/colas**, sin demostrar un límite exacto o capacidad cloud. El generador consumió una fracción menor de CPU.
 
 En sostenido, la mediana RSS pasó de 105,69 MiB en el primer minuto a 110,78 MiB en el último: aumento observado 5,09 MiB, bajo el presupuesto. Diez minutos y máximos muestreados no demuestran ausencia de fugas, ni ese aumento identifica por sí solo una fuga. Los modelos de CPU difieren entre campañas: 389 ms y 533 ms no prueban degradación causada por la duración.
 
@@ -451,17 +451,36 @@ Las series de 10 s, recursos, datos de entrada, JUnit, HTML autónomo y muestras
 
 [load-tests.yml](../.github/workflows/load-tests.yml) integra preflight y dos jobs con reportes nuevos y publicación aun con fallos; las cargas largas se ejecutan manualmente o ante cambios del harness en su rama, no en cada PR. El primer CI de preparación bloqueó por imports I001 y omitió las cargas por dependencia; se corrigió sin relajar SLO. El resultado aceptado corresponde a la ejecución posterior completa.
 
+### Repetición integral E11 sobre la versión candidata
+
+El pipeline [40032355979](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/40032355979) generó reportes nuevos de ambas campañas sobre **5b62c14**, después de comprobar el CI del mismo commit. Se mantuvieron política, dataset, duraciones y criterios E08, sin relajarlos. Cada campaña volvió a usar un checkout/venv nuevos en Ubuntu. [Reportes E11](../evidencias/e11/resultados-cargas.json).
+
+| Campaña | VU / duración | Requests principales | p95 ms | Req/s | Resultado |
+| --- | --- | ---: | ---: | ---: | --- |
+| Estrés | 1 / 60 s | 419 | 55,44 | 6,98 | Objetivo aprobado |
+| Estrés | 5 / 60 s | 1075 | 220,42 | 17,92 | Objetivo aprobado |
+| Estrés | 10 / 60 s | 1262 | 501,80 | 21,03 | Objetivo aprobado |
+| Estrés | 20 / 60 s | 1292 | 1041,74 | 21,53 | Exploración; dentro de umbral |
+| Estrés | 40 / 60 s | 1264 | 2216,71 | 21,07 | Exploración; supera umbral |
+| Sostenido | 10 / 600 s | 15149 | 360,06 | 25,25 | Objetivo aprobado |
+
+Estrés: **5312** requests principales. Sostenido: **15149**. Ambas campañas tienen cero errores inesperados y cero diferencias de contenido. Se mantiene el cómputo de dos campañas; las repeticiones no aumentan los 183 casos/campañas de producto. Los números E08 anteriores y su gráfico se conservan como historia, no como resultados de la repetición E11.
+
+En E11, el escalón de **40 VU alcanzó p95 2216,71 ms**, superior a 2000 ms; es el primer escalón exploratorio observado fuera del objetivo. El tramo obligatorio hasta 10 VU y el sostenido aprobaron. El throughput se estancó alrededor de 21 requests/s de 10 a 40 VU mientras creció la latencia. Se conserva este límite observado, sin relajar la política ni extrapolar una capacidad máxima universal.
+
+Los modelos CPU de los runners y máximos de recursos constan en cada run.json. No se atribuye una mejora o degradación entre E08/E11 a un cambio de producto: el árbol productivo permanece igual y el hardware/ejecución pueden variar. El presupuesto de recursos y las condiciones de parada siguieron activos; esto no constituye una prueba de capacidad cloud.
+
 ## 14 Gestión de defectos y trazabilidad
 
 Elegimos **GitHub Issues**, alternativa admitida a Jira, con fichas versionadas y responsables reales. Las [plantillas de caso](../.github/ISSUE_TEMPLATE/caso_prueba.md) y [defecto](../.github/ISSUE_TEMPLATE/defecto_calidad.md) incluyen ID/requisito, precondiciones, entrada, pasos, esperado/obtenido, fecha/SHA/entorno, evidencia, responsable, estado, causa, corrección y regresión. Un cierre siempre identifica el alcance validado.
 
-Hay **12 tickets, 10 cerrados y 2 abiertos**, asignados a AxAzc. Ese conjunto mezcla campañas, defectos y observaciones; 10/12 no es una tasa de resolución de bugs. El [catálogo](../calidad/casos-prueba.json) contiene 56 IDs/familias y el [inventario](../calidad/inventario-pruebas.json) conserva las 183 instancias/campañas de producto y 66 controles de infraestructura. [Seguimiento](../evidencias/e09/seguimiento.json).
+Hay **12 tickets, 11 cerrados y 1 abierto**, asignados a AxAzc. Ese conjunto mezcla campañas, defectos y observaciones; 11/12 no es una tasa de resolución de bugs. El [catálogo](../calidad/casos-prueba.json) contiene 56 IDs/familias y el [inventario](../calidad/inventario-pruebas.json) conserva las 183 instancias/campañas de producto y 66 controles de infraestructura. [Seguimiento E11](../evidencias/e11/seguimiento.json).
 
 | Registro | Esperado y fallo observado | Corrección o tratamiento y estado |
 | --- | --- | --- |
 | [DEF-DAT-001#2](https://github.com/ImaDecara/Tesis-EQUITAS/issues/2) |3.507 filas esperadas por ruta; se obtenían 1000/3000 según máximo del doble. | Cursor común 3bfe156; mismas aserciones verdes y regresión mantenida. Cerrado en alcance documentado. |
 | [DEF-SUP-001#1](https://github.com/ImaDecara/Tesis-EQUITAS/issues/1) | Cero cartera sin pertenencia; políticas originales permitían lectura a autenticados. | Corregido/regresado en testing; **abierto en original**. No se atribuye la migración a ambos entornos. |
-| [OBS-DEP-001#3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3) | Dependencias sin avisos no tratados; quedan cinco altos dev. | Excepción exacta revisada, cero críticas/productivas; **abierto**, vence 26/10/2026. |
+| [OBS-DEP-001#3](https://github.com/ImaDecara/Tesis-EQUITAS/issues/3) | Auditorías completas/productivas actuales sin hallazgos. | **Cerrado E11 por retiro oficial del aviso**, sin cambio de paquete; excepción no utilizada ni prorrogada. |
 | [OBS-COB-001#4](https://github.com/ImaDecara/Tesis-EQUITAS/issues/4) | Mínimo 60 % existente; frontend 45,96 % tras nuevo método. | Nuevas pruebas, 61,79 % en E04 y gate efectivo. Cerrado. |
 | [DEF-UI-001#11](https://github.com/ImaDecara/Tesis-EQUITAS/issues/11) | Limpiar debía vaciar búsqueda; el input retenía E07-NO-EXISTE. | Restablecer formulario con filtros, a6497a7; misma aserción y smoke automático verdes. Cerrado. |
 
@@ -501,7 +520,7 @@ k6 obtuvo 4,70 por la PoC funcional, reportes/series y binario fijado con hash. 
 | pytest 8.4.2, pytest-cov 6.3.0, coverage.py 7.16.2 | Backend, ETL, API en proceso y cobertura de sentencias/ramas. |
 | ESLint 9.39.5, Ruff 0.17.1 | Análisis estático y hallazgos clasificados según política. |
 | jscpd 5.4.2 | Duplicación por líneas/tokens y complejidad orientativa. |
-| npm 11.21.1 y audit | Auditoría completa/productiva con excepción explícita. |
+| npm 11.21.1 y audit | Auditoría completa/productiva con política explícita. |
 | Git, GitHub Actions e Issues | Versiones, automatización, reportes, casos, defectos y regresión. |
 | Supabase y Vercel | Dependencia externa real y Preview de testing. |
 | Playwright 1.64.1 y Chromium | Recorrido autenticado posterior al despliegue. |
@@ -515,14 +534,14 @@ La tabla distingue cumplimiento documental/técnico del alcance demostrado y ent
 | Requisito | Estado al corte | Evidencia principal |
 | --- | --- | --- |
 | R01 Nivel y alcance | Cumplido: Nivel 2 declarado y límites identificados. | Secciones 1-4. |
-| R02 Objetivos y contingencia | Documentado; metas operativas con parciales explícitos. | Secciones 3 y 9, plan 2.0. |
-| R03 Plan versionado | Cumplido, criterios de entrada/salida aplicados. | Plan y fichas E00-E09. |
+| R02 Objetivos y contingencia | Documentado; metas operativas con parciales explícitos. | Secciones 3 y 9, plan 2.2. |
+| R03 Plan versionado | Cumplido, criterios de entrada/salida aplicados. | Plan y fichas E00-E11. |
 | R04 ISO y top 3 | Cumplida la evaluación de ocho características; no todas aprobadas globalmente. | Sección 6 y matriz ISO. |
 | R05 AAA, aceptación y principios | Cumplido en casos identificados. | Sección 5, DAT-06 y política E08 previa. |
 | R06 Técnicas y cobertura de decisiones | Cumplido en selección ejecutada; sin MC/DC/exhaustividad. | REC-01, DAT/AUTH/GATE y coberturas. |
 | R07 Existente≥60 % | Cumplido por módulo. | Front 794/1283 y back 1254/1471. |
 | R08 Nuevo≥80 % | Cumplido por módulo, base fija. | Front 36/36, back 15/17; gate. |
-| R09 Análisis y críticos | Cumple política técnica con excepción dev vigente; no prueba ausencia de bugs. | Secciones 7 y 12, ensayo crítico E04. |
+| R09 Análisis y críticos | Cumple política técnica sin excepción utilizada; no prueba ausencia de bugs. | Secciones 7 y 12, ensayo crítico E04. |
 | R10 Duplicación≤5 % | Cumplido por líneas. |427/11159=3,8265 %, gate/bordes. |
 | R11 Métricas y mejora | Cumplido: producto/proceso/proyecto y antes/después comparable. | Sección 8, DAT-06 y Ruff. |
 | R12 Riesgos y QA/QC | Cumplido como gestión documentada/aplicada. | Secciones 9-10 y plantillas. |
@@ -530,17 +549,17 @@ La tabla distingue cumplimiento documental/técnico del alcance demostrado y ent
 | R14 Defecto real rojo/verde | Cumplido. | DAT-06 E03 y RLS testing E06. |
 | R15 Niveles, API y dobles | Cumplido con cantidades disjuntas. | Secciones 4-5. |
 | R16 Externa real | Cumplido en Supabase testing, 12/12. | Sección 11, reporte HTTP. |
-| R17 Pipeline y reportes | Cumplido en workflows y alcances descritos. | Sección 12, CI 39968499139. |
-| R18 Rojo real y verde | Cumplido con causa/SHA/reportes; corte actual integral verde. | Runs 39672114249, 39673351642, 39968499139. |
-| R19 Smoke por pipeline | Cumplido en Preview de quality/tp-testing. | Run 39955572523, versión a6497a7. |
-| R20 Estrés | Cumplido en componente/entorno declarado. | Política previa y pipeline 39960952025. |
-| R21 Sostenido | Cumplido: 10 usuarios, 600 s de fase. | Mismo pipeline, 12160 requests principales. |
+| R17 Pipeline y reportes | Cumplido en workflows y alcances descritos. | Sección 12, CI 40032393112. |
+| R18 Rojo real y verde | Cumplido con causa/SHA/reportes; corte actual integral verde. | Runs 39672114249, 39673351642, 40032393112. |
+| R19 Smoke por pipeline | Cumplido en Preview de quality/tp-testing. | Run 40032558356, versión 5b62c14. |
+| R20 Estrés | Cumplido en componente/entorno declarado. | Política previa E08 y repetición E11 40032355979. |
+| R21 Sostenido | Cumplido: 10 usuarios, 600 s de fase. | Pipeline E11, 15149 requests principales. |
 | R22 Herramienta nueva | Cumplido: cinco pasos y matriz justificada. | Sección 15 y PoC/adopción k6. |
-| R23 Informe PDF | Entregado con fuente editable y revisión visual. | Este informe y validación E10. |
-| R24 Demo y aporte individual | Aportes trazables; **demostración final pendiente E11**. | Historial Git, despliegue previo E07 y guion final por verificar. |
-| R25 Un comando por clase | Comandos disponibles desde entorno preparado; repetición final integrada en E11. | Anexo A y procedimientos versionados. |
+| R23 Informe PDF | Entregado con fuente editable y revisión visual. | Informe actualizado y revisión visual E11; snapshot E10 conservado en Git. |
+| R24 Demo y aporte individual | **Parcial**: ensayo técnico y guion realizados; repaso oral de los tres integrantes pendiente de confirmación. | Historial Git, manifiesto E11 y guion de demostración. |
+| R25 Un comando por clase | Cumplido en su alcance técnico: comandos individuales y controlador integral comprobado. | Anexo A, guion y ejecución del controlador E11. |
 
-Además del requisito documental cumplido, las metas de producto no alcanzadas o parcialmente verificadas deben conservarse: **RLS del original sin corregir; cinco altos dev pendientes antes del vencimiento; validación municipal/accesibilidad completa no realizadas; recuperación cloud/backup restore no ensayada; capacidad web/cloud no medida por las cargas**. No son cinco fallos nuevos inventados: son límites/pendientes concretos de la evidencia disponible.
+Además del requisito documental cumplido, las metas de producto no alcanzadas o parcialmente verificadas deben conservarse: **RLS del original sin corregir; validación municipal/accesibilidad completa no realizadas; recuperación cloud/backup restore no ensayada; capacidad web/cloud no medida por las cargas**. Son límites y pendientes concretos de la evidencia disponible.
 
 ## 17 Análisis crítico
 
@@ -550,9 +569,13 @@ La separación de niveles evitó atribuir a mocks lo que solo podía demostrar u
 
 Las métricas requieren interpretación. La caída de cobertura frontend en E01 fue un cambio de instrumento y no una regresión de comportamiento. Las ramas actuales de 52,99 % frontend y 68,07 % backend muestran recorridos no cubiertos pese a superar 60 % de sentencias. El gate de críticos cubre reglas seleccionadas, mientras el riesgo crítico de autorización original permanece abierto fuera de la corrección de testing.
 
-Las cargas demostraron ejecución correcta del componente bajo una configuración repetible. El throughput estabilizado y la CPU sugieren un límite de procesamiento/colas, aunque el SLO no falló hasta 40 usuarios. Los datos uniformes, un worker y runners con CPUs diferentes impiden extrapolar a cartera real, a días de operación o a toda la plataforma. Recursos muestreados cada 2 s pueden omitir picos breves.
+Las cargas demostraron ejecución correcta del componente bajo una configuración repetible. El throughput estabilizado y la CPU sugieren un límite de procesamiento/colas, E08 se mantuvo bajo 2000 ms hasta 40 usuarios; E11 superó ese umbral exploratorio a 40 VU. Los datos uniformes, un worker y runners con CPUs diferentes impiden extrapolar a cartera real, a días de operación o a toda la plataforma. Recursos muestreados cada 2 s pueden omitir picos breves.
 
-El proceso todavía tiene tareas de cierre y evolución: revisar OBS-DEP-001 antes del 26/10, tratar RLS original mediante un cambio validado por su responsable y completar la demostración final. UAT municipal, accesibilidad, recuperación integral y medición del recorrido cloud requieren campañas propias si se pretende ampliar esas afirmaciones. El plan no las transforma en pruebas ya ejecutadas ni en una aprobación global del MVP.
+El proceso todavía tiene tareas de cierre y evolución: vigilar nuevos avisos de dependencias, tratar RLS original mediante un cambio validado por su responsable y completar la demostración final. UAT municipal, accesibilidad, recuperación integral y medición del recorrido cloud requieren campañas propias si se pretende ampliar esas afirmaciones. El plan no las transforma en pruebas ya ejecutadas ni en una aprobación global del MVP.
+
+### Validación integral y preparación de la defensa E11
+
+Se ensayó técnicamente el recorrido de testing mediante el smoke nuevo, se repitieron integración real y cargas desde pipeline y se verificó el conjunto con el [controlador integral](validacion-integral.ps1). El [guion](GUION_DEMOSTRACION.md) propone un recorrido de 15 minutos, respuestas sobre AAA, coberturas, gates, rojo/verde y límites, comandos y contingencias. Los aportes se respaldan en Git; no se inventan horas o porcentajes. La confirmación de que los tres integrantes pueden explicarlo y el ensayo oral quedan pendientes. E11 se considera técnicamente validada, con cierre académico pendiente de esas acciones humanas.
 
 ## 18 Conclusiones
 
@@ -560,7 +583,7 @@ El trabajo convirtió el avance recibido en un proceso de calidad trazable: plan
 
 Se superaron los mínimos de cobertura de sentencias y líneas nuevas por módulo y se mantuvo la duplicación por debajo del 5 % por líneas. La completitud de lectura alcanzó 100 % en el dataset grande controlado, la integración real verificó aislamiento en testing y el smoke confirmó el recorrido desplegado con regresión del filtro. La adopción de k6 completó los cinco pasos solicitados y produjo estrés/sostenido de CI con criterios previos y contenido validado.
 
-Los resultados respaldan los casos y condiciones seleccionados, pero no certifican ausencia total de defectos ni preparación productiva. La seguridad del Supabase original y los avisos dev conservan seguimiento abierto; otros atributos tienen evidencia parcial. El Nivel 2 sigue siendo el avance declarado de la tesis. La entrega integral se completa con la demostración E11 y la revisión de pendientes antes de presentar, manteniendo coherencia entre repositorio, PDF y ejecución.
+Los resultados respaldan los casos y condiciones seleccionados, pero no certifican ausencia total de defectos ni preparación productiva. La seguridad del Supabase original conserva seguimiento abierto; OBS-DEP-001 se cerró por retiro del aviso y audit limpio. Otros atributos tienen evidencia parcial. El Nivel 2 sigue siendo el avance declarado de la tesis. E11 comprobó la repetición técnica sobre una versión identificada. El equipo todavía debe confirmar su preparación individual, ensayar la exposición oral y presentar por el canal de la cátedra. Esa parte humana no se declara realizada a partir de los reportes automáticos.
 
 ## Anexo A Comandos y reproducción
 
@@ -577,8 +600,9 @@ Los comandos suponen dependencias y entorno preparados según [REPRODUCIBILIDAD_
 | Estrés, Python del venv preparado, raíz | `python quality/load/run.py stress --output .quality/entrega/stress` |
 | Sostenido, Python del venv preparado, raíz | `python quality/load/run.py soak --output .quality/entrega/soak` |
 | Ambas cargas por pipeline | `gh workflow run load-tests.yml --ref main --repo ImaDecara/Tesis-EQUITAS` |
+| Ciclo integral, raíz; refs alineadas | `powershell -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` |
 
-Antes de las cargas locales se instala el binario fijado con `python quality/load/install.py`. En Linux se usa el Python del venv preparado en lugar de la ruta Windows. El comando de Preview ejecuta la versión actualmente presente en esa rama, con CI y smoke posterior; E11 debe alinear la versión de demostración. Ejecutar CI de main no produce por sí solo un smoke de main ni cargas largas.
+Antes de las cargas locales se instala el binario fijado con `python quality/load/install.py`. En Linux se usa el Python del venv preparado en lugar de la ruta Windows. El comando de Preview ejecuta la versión actualmente presente en esa rama, con CI y smoke posterior; E11 alineó la versión de demostración. Ejecutar CI de main no produce por sí solo un smoke de main ni cargas largas.
 
 Los [procedimientos Supabase](../SUPABASE_TESTING_CALIDAD.md), [Vercel](../CONFIGURACION_VERCEL_E07.md) y [cargas](../RENDIMIENTO_CALIDAD.md) detallan configuración y salidas. En Windows local puede utilizarse el archivo ignorado de configuración testing mediante `--config-file`, sin publicar sus valores. Si falta la configuración obligatoria, la integración falla en vez de quedar omitida.
 
@@ -600,7 +624,7 @@ El repositorio es [ImaDecara/Tesis-EQUITAS](https://github.com/ImaDecara/Tesis-E
 | [E07](../evidencias/e07/smoke.json) | Deployment/SHA/destino, recorrido, capturas y resultados. |
 | [E08](../evidencias/e08/resultados.json) | Campañas, política/dataset, percentiles, recursos y fuentes. |
 | [E09](../evidencias/e09/metricas.json) | Recálculos y grupos del inventario usados en la consolidación. |
-| [Corte E10](../evidencias/e10/ci-summary.json) | Artefactos del CI 39968499139, fuente 1472eea. |
+| [Validación E11](../evidencias/e11/validacion-integral.json) | CI, Supabase, Preview/smoke y cargas del mismo SHA 5b62c14; guion y pendientes humanos. |
 | [Herramienta incorporada](../HERRAMIENTA_INCORPORADA_CALIDAD.md) | Referencias primarias, PoC, matriz y adopción incremental. |
 | [Aportes](../APORTES_TP_CALIDAD.md) | Autores, commits y cambios observables del equipo. |
 
