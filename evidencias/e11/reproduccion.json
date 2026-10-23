@@ -1,6 +1,6 @@
 {
-  "pdf_sha256": "c065e6a30626200ecd12ab150febf9d9bacdaad74706664ea7e8a57e2fa2da6d",
-  "replica_pdf_sha256": "c065e6a30626200ecd12ab150febf9d9bacdaad74706664ea7e8a57e2fa2da6d",
+  "pdf_sha256": "31dc2161f1d311825e05eff96627131b61f3c65c905809d07604aee495999a43",
+  "replica_pdf_sha256": "31dc2161f1d311825e05eff96627131b61f3c65c905809d07604aee495999a43",
   "binary_identical": true,
   "svg_hashes_identical": true,
   "scope": "Same Python/packages/fonts/source and normalized textual inputs. Other fonts/runtime require a new render and visual review."

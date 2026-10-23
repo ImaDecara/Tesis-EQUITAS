@@ -58,9 +58,13 @@ function Wait-Run([long]$Id, [string]$Workflow, [string]$Branch, [string[]]$Jobs
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $record = [ordered]@{ source_sha = $CandidateSha; started_at_utc = $started.ToString('o'); passed = $false }
 try {
-    foreach ($branch in @('main', 'quality/tp-testing')) {
-        $ref = Read-Gh -Arguments @('api', "repos/$repo/git/ref/heads/$branch")
-        if ($ref.object.sha -ne $CandidateSha) { throw "Alinear $branch con el candidato antes de ejecutar." }
+    $resuming = $MainRunId -and $PreviewRunId -and $LoadRunId -and $SmokeRunId
+    $record.mode = $(if ($resuming) { 'inspect_completed_runs' } else { 'dispatch_current_candidate' })
+    if (-not $resuming) {
+        foreach ($branch in @('main', 'quality/tp-testing')) {
+            $ref = Read-Gh -Arguments @('api', "repos/$repo/git/ref/heads/$branch")
+            if ($ref.object.sha -ne $CandidateSha) { throw "Alinear $branch con el candidato antes de ejecutar." }
+        }
     }
     if (-not $MainRunId) { $MainRunId = Start-Run 'quality-ci.yml' 'main' }
     if (-not $PreviewRunId) { $PreviewRunId = Start-Run 'quality-ci.yml' 'quality/tp-testing' }

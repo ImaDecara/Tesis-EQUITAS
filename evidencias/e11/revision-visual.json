@@ -1,5 +1,5 @@
 {
-  "pdf_sha256": "c065e6a30626200ecd12ab150febf9d9bacdaad74706664ea7e8a57e2fa2da6d",
+  "pdf_sha256": "31dc2161f1d311825e05eff96627131b61f3c65c905809d07604aee495999a43",
   "pages": 29,
   "dpi": 110,
   "all_pages_inspected": true,
@@ -32,7 +32,7 @@
     "page-25.png": "f5b408eef4e0baaab9f6562f19dca63cb8d9e9fbfd06e1defde97f6d7eef5bd7",
     "page-26.png": "3f71bb89bf518410fbbc37474c5e9ddec83296b433433d90b003a22380577746",
     "page-27.png": "48b34180e94f3abe4335f09bf31b6bae28e5f52e3b71a31a0dafcaabc190a129",
-    "page-28.png": "0323b5844dd5dac4ddcbe4173909e73823a711dd584115f56058fcbb4ecbb99b",
+    "page-28.png": "f13045a2f0fea76c80896f86b15b3f536cd92c370b7c2cddc03a8db44351e13f",
     "page-29.png": "451cebcaeb00cb5259cd33e154b5f1b3b7ebb1acaccc1d35b24f7307fd17c4b3"
   },
   "findings": "No clipping, overlapping text, broken tables, unreadable characters or orphaned headings. Historical E07 screenshot/E08 graph are explicitly labelled; current E11 findings reconciled."

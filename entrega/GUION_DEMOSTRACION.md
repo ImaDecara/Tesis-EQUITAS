@@ -41,17 +41,17 @@ Versión de aplicación candidata: **5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198**,
 
 ## 4. Repetir la validación técnica con un comando
 
-Prerequisitos: PowerShell 5.1+ o 7, GitHub CLI autenticado con acceso al repositorio/Actions, workflows habilitados y secretos de testing/bypass previamente configurados. El comando no muestra ni requiere copiar esos secretos al terminal. `main` y `quality/tp-testing` remotos deben apuntar al **mismo candidato** antes de iniciar; el controlador rechaza desalineaciones. Ver [configuración del Preview](../CONFIGURACION_VERCEL_E07.md) y [Supabase testing](../SUPABASE_TESTING_CALIDAD.md).
+Prerequisitos: PowerShell 7, GitHub CLI autenticado con acceso al repositorio/Actions, workflows habilitados y secretos de testing/bypass previamente configurados. El comando no muestra ni requiere copiar esos secretos al terminal. `main` y `quality/tp-testing` remotos deben apuntar al **mismo candidato** antes de iniciar; el controlador rechaza desalineaciones. Ver [configuración del Preview](../CONFIGURACION_VERCEL_E07.md) y [Supabase testing](../SUPABASE_TESTING_CALIDAD.md).
 
 Desde la raíz del repositorio, para el candidato actualmente publicado en ambas referencias:
 
 ```powershell
-powershell -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo
+pwsh -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo
 ```
 
 El controlador inicia CI en main y testing, espera los cuatro jobs, conserva el smoke automático posterior al CI de testing y ejecuta las cargas en main. Verifica procedencia, descarga reportes y comprueba el SHA/CI/proyecto del smoke. La salida debe ser nueva para conservar los resultados anteriores. La creación de un Preview nuevo requiere un push nuevo a la rama persistente; volver a despachar CI sobre un SHA ya desplegado prueba ese deployment existente. Para una versión distinta, alinear las ramas mediante fast-forward revisado y seguir el nuevo deployment hasta READY.
 
-La repetición E11 usó el mismo comando con `-MainRunId 39976881137 -PreviewRunId 40032393112 -LoadRunId 40032355979 -SmokeRunId 40032558356`, retomando ejecuciones ya iniciadas sobre el SHA completo del encabezado. Esos parámetros no omiten verificaciones; evitan duplicar campañas costosas. Los comandos individuales permanecen en [el roadmap](../ROADMAP_TP_CALIDAD_SOFTWARE.md#19-tabla-de-comandos-que-debe-quedar-completa-al-entregar).
+La repetición E11 usó el mismo comando con `-MainRunId 39976881137 -PreviewRunId 40032393112 -LoadRunId 40032355979 -SmokeRunId 40032558356`, retomando ejecuciones ya iniciadas sobre el SHA completo del encabezado. Cuando se proporcionan los cuatro IDs, el controlador inspecciona esas ejecuciones inmutables, aunque las ramas actuales hayan avanzado; sigue exigiendo SHA, workflow, rama y jobs, y vincula el smoke al CI exacto. No despacha campañas nuevas en ese modo. Esto permite revisar el candidato histórico desde el repositorio documental actualizado. Los comandos individuales permanecen en [el roadmap](../ROADMAP_TP_CALIDAD_SOFTWARE.md#19-tabla-de-comandos-que-debe-quedar-completa-al-entregar).
 
 ## 5. Contingencia durante la demostración
 
@@ -73,3 +73,5 @@ Los nombres y aportes observables se conservan en [APORTES_TP_CALIDAD.md](../APO
 Esta lista registra acciones humanas, no resultados automatizados. La validación técnica y el guion no acreditan por sí solos la preparación de los tres integrantes ni una defensa ya realizada.
 
 Confirmación del responsable durante E11: todavía falta el repaso del equipo. Las casillas anteriores permanecen abiertas hasta realizarlo.
+
+El comando de repetición se comprobó expresamente con PowerShell 7 (`pwsh`). Windows PowerShell 5 puede tener scripts deshabilitados por política local; no es el runtime elegido para este controlador. No se modificó la política global del equipo.

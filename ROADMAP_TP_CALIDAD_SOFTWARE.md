@@ -854,7 +854,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Smoke desplegado | `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion` | Manifiesto nuevo, Chromium y secretos externos; ver CONFIGURACION_VERCEL_E07.md. | JSON/JUnit/capturas con URL y SHA; E07 aprobado. |
 | Estrés | `python quality/load/run.py stress --output .quality/e08/stress-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Cinco escalones nuevos; JSON/JUnit/serie/HTML y criterio previo. |
 | Esfuerzo sostenido | `python quality/load/run.py soak --output .quality/e08/soak-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Diez usuarios, diez minutos, serie/recursos y reporte por pipeline. |
-| Ciclo integral de entrega | `powershell -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` | Raíz; GH CLI autenticado, main/testing alineados; ver guion. | [Ejecución comprobada](evidencias/e11/ejecucion-controlador.json), cuatro jobs obligatorios, smoke/cargas y manifiesto. |
+| Ciclo integral de entrega | `pwsh -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` | Raíz; GH CLI autenticado, main/testing alineados; ver guion. | [Ejecución comprobada](evidencias/e11/ejecucion-controlador.json), cuatro jobs obligatorios, smoke/cargas y manifiesto. |
 
 Configurar secretos es una precondición de los comandos externos, no una serie de operaciones manuales ocultas en cada ensayo. La documentación debe permitir a otra persona preparar el entorno y luego ejecutar cada suite con un comando.
 

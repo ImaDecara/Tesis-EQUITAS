@@ -600,7 +600,7 @@ Los comandos suponen dependencias y entorno preparados según [REPRODUCIBILIDAD_
 | Estrés, Python del venv preparado, raíz | `python quality/load/run.py stress --output .quality/entrega/stress` |
 | Sostenido, Python del venv preparado, raíz | `python quality/load/run.py soak --output .quality/entrega/soak` |
 | Ambas cargas por pipeline | `gh workflow run load-tests.yml --ref main --repo ImaDecara/Tesis-EQUITAS` |
-| Ciclo integral, raíz; refs alineadas | `powershell -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` |
+| Ciclo integral, raíz; refs alineadas | `pwsh -NoProfile -File entrega/validacion-integral.ps1 -CandidateSha <SHA_COMPLETO> -OutputDirectory .quality/ensayo-nuevo` |
 
 Antes de las cargas locales se instala el binario fijado con `python quality/load/install.py`. En Linux se usa el Python del venv preparado en lugar de la ruta Windows. El comando de Preview ejecuta la versión actualmente presente en esa rama, con CI y smoke posterior; E11 alineó la versión de demostración. Ejecutar CI de main no produce por sí solo un smoke de main ni cargas largas.
 

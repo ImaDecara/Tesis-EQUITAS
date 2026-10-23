@@ -16,8 +16,9 @@
   "infrastructure_separate": 66,
   "runs": {
     "source_sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
-    "started_at_utc": "2026-10-23T22:18:17.8487541+00:00",
+    "started_at_utc": "2026-10-23T22:38:41.7806792+00:00",
     "passed": true,
+    "mode": "inspect_completed_runs",
     "main": {
       "id": 39976881137,
       "sha": "5b62c14c8186b1ea79c4d4c2aa7dfb8acbb26198",
@@ -132,7 +133,7 @@
     },
     "deployment_url": "https://tesis-equitas-lilpc7spm-equitas.vercel.app",
     "scope": "CI completo e instalaciones nuevas, Supabase real de testing, Preview/smoke y cargas de FastAPI con fuente sintetica local. La defensa humana se confirma aparte.",
-    "finished_at_utc": "2026-10-23T22:27:02.1677674+00:00"
+    "finished_at_utc": "2026-10-23T22:39:06.6258757+00:00"
   },
   "product_and_harness_git_trees": {
     "front": "504db92c3934f292380efcf19199fc48178bff12",
@@ -152,5 +153,7 @@
   "red_real_run": 39672114249,
   "green_after_fix_run": 39673351642,
   "red_green_comparison": "evidencias/e03/comparacion-dat-06.json",
-  "portable_evidence": "JSON/JUnit/HTML/series/resources and compressed operation samples committed alongside official artifact IDs/digests. Full Actions ZIPs retained 30 days."
+  "portable_evidence": "JSON/JUnit/HTML/series/resources and compressed operation samples committed alongside official artifact IDs/digests. Full Actions ZIPs retained 30 days.",
+  "controller_runtime": "PowerShell 7; complete command verified with pwsh",
+  "user_confirmation": "Team review still pending, confirmed by responsible person during E11."
 }

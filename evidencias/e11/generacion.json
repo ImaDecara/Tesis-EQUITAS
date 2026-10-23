@@ -1,8 +1,8 @@
 {
   "source": "entrega/INFORME_ACADEMICO_CALIDAD.md",
-  "source_sha256_normalized_LF": "85725d116e66cb6a9d4bf395c3618704ac4774241bb0c44e07fae8907e766b30",
+  "source_sha256_normalized_LF": "8d3c13b362782d100e2b1611caf9d0de77f13d9c3a3d3fe484e9ea7ffc98fedc",
   "pdf": "entrega/INFORME_ACADEMICO_CALIDAD.pdf",
-  "pdf_sha256": "c065e6a30626200ecd12ab150febf9d9bacdaad74706664ea7e8a57e2fa2da6d",
+  "pdf_sha256": "31dc2161f1d311825e05eff96627131b61f3c65c905809d07604aee495999a43",
   "packages": {
     "reportlab": "4.4.9",
     "pillow": "12.3.0",
