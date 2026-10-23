@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-23",
+  "project_ref": "folyslqzqvnpolexcxjo",
+  "method": "Read-only pg_policies catalog query through connected database service; no business rows queried or modified.",
+  "public_select_policies": 23,
+  "select_using_true": 23,
+  "project_modified": false,
+  "interpretation": "DEF-SUP-001 remains open for the original project. Current catalog inspection is not a new HTTP exploit test and does not replace the separate 12 real HTTP tests against isolated testing."
+}
