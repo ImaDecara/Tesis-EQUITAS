@@ -1,0 +1,234 @@
+{
+  "stage": "E09",
+  "date": "2026-10-23",
+  "source_sha": "2f9e48fe11bf246d6fc73bc0308bda4692d0d866",
+  "run_id": "39964341314",
+  "scope": "Current main CI snapshot plus separately identified E07 smoke and E08 load campaigns; not one run of 183 tests.",
+  "product": {
+    "frontend_coverage": {
+      "lines": {
+        "covered": 746,
+        "total": 1209,
+        "percent_exact": 61.70388751033912,
+        "tool_percent": 61.7
+      },
+      "statements": {
+        "covered": 794,
+        "total": 1283,
+        "percent_exact": 61.886204208885424,
+        "tool_percent": 61.88
+      },
+      "functions": {
+        "covered": 200,
+        "total": 326,
+        "percent_exact": 61.34969325153374,
+        "tool_percent": 61.34
+      },
+      "branches": {
+        "covered": 566,
+        "total": 1068,
+        "percent_exact": 52.99625468164794,
+        "tool_percent": 52.99
+      }
+    },
+    "backend_statements": {
+      "covered": 1254,
+      "total": 1471,
+      "percent_exact": 85.24813052345343
+    },
+    "backend_branches": {
+      "covered": 339,
+      "total": 498,
+      "percent_exact": 68.07228915662651
+    },
+    "backend_combined": {
+      "covered": 1593,
+      "total": 1969,
+      "percent_exact": 80.90401218892839
+    },
+    "backend_functions": null,
+    "duplication_lines": {
+      "covered": 427,
+      "total": 11159,
+      "percent_exact": 3.8265077515906443
+    },
+    "duplication_tokens": {
+      "covered": 2533,
+      "total": 53287,
+      "percent_exact": 4.753504607127442
+    },
+    "eslint": {
+      "errors": 0,
+      "warnings": 0,
+      "files": 81
+    },
+    "ruff_unaccepted": 0,
+    "audit": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 5,
+      "critical": 0,
+      "total": 5
+    },
+    "coverage_scope": {
+      "frontend": [
+        "front/app",
+        "front/components",
+        "front/lib"
+      ],
+      "backend": [
+        "back/ETL",
+        "back/api",
+        "back/services"
+      ]
+    }
+  },
+  "process": {
+    "baseline_pass_rate": {
+      "covered": 94,
+      "total": 94,
+      "percent_exact": 100.0
+    },
+    "baseline_execution_rate": {
+      "covered": 94,
+      "total": 95,
+      "percent_exact": 98.94736842105263
+    },
+    "baseline_skip_rate": {
+      "covered": 1,
+      "total": 95,
+      "percent_exact": 1.0526315789473684
+    },
+    "current_ci_pass_rate": {
+      "covered": 180,
+      "total": 180,
+      "percent_exact": 100.0
+    },
+    "current_ci_skipped": 0,
+    "composite_product_pass_rate": {
+      "covered": 183,
+      "total": 183,
+      "percent_exact": 100.0
+    },
+    "infrastructure_pass_rate": {
+      "covered": 66,
+      "total": 66,
+      "percent_exact": 100.0
+    },
+    "composite_sources": {
+      "ci": "39964341314",
+      "smoke": "39955572523",
+      "load": "39960952025"
+    },
+    "issues": {
+      "total": 12,
+      "closed": 10,
+      "open": 2,
+      "note": "Includes campaigns and observations; not a defect resolution rate."
+    }
+  },
+  "project": {
+    "analyzed_product_files": 64,
+    "analyzed_product_lines": 11159,
+    "baseline_files": 62,
+    "baseline_lines": 11188,
+    "clones": 36
+  },
+  "test_map": {
+    "frontend_integration_simulated": 30,
+    "frontend_presentation_isolated": 11,
+    "frontend_unit_component": 66,
+    "backend_etl_integration_simulated": 8,
+    "backend_api_testclient": 5,
+    "backend_unit_component": 48,
+    "supabase_real_http": 12,
+    "browser_smoke": 1,
+    "performance_campaign": 2
+  },
+  "same_dataset_before_after": {
+    "dataset": {
+      "rows": 3507,
+      "id": "3 * (index + 1)",
+      "physical_order": "descending"
+    },
+    "red": [
+      {
+        "route": "objetos",
+        "serverMaxRows": 1000,
+        "expected": 3507,
+        "received": 1000,
+        "missing": 2507,
+        "duplicates": 0
+      },
+      {
+        "route": "objetos",
+        "serverMaxRows": 3000,
+        "expected": 3507,
+        "received": 3000,
+        "missing": 507,
+        "duplicates": 0
+      },
+      {
+        "route": "personas",
+        "serverMaxRows": 1000,
+        "expected": 3507,
+        "received": 1000,
+        "missing": 2507,
+        "duplicates": 0
+      },
+      {
+        "route": "personas",
+        "serverMaxRows": 3000,
+        "expected": 3507,
+        "received": 3000,
+        "missing": 507,
+        "duplicates": 0
+      }
+    ],
+    "green": [
+      {
+        "route": "objetos",
+        "serverMaxRows": 1000,
+        "expected": 3507,
+        "received": 3507,
+        "missing": 0,
+        "duplicates": 0
+      },
+      {
+        "route": "objetos",
+        "serverMaxRows": 3000,
+        "expected": 3507,
+        "received": 3507,
+        "missing": 0,
+        "duplicates": 0
+      },
+      {
+        "route": "personas",
+        "serverMaxRows": 1000,
+        "expected": 3507,
+        "received": 3507,
+        "missing": 0,
+        "duplicates": 0
+      },
+      {
+        "route": "personas",
+        "serverMaxRows": 3000,
+        "expected": 3507,
+        "received": 3507,
+        "missing": 0,
+        "duplicates": 0
+      }
+    ],
+    "original_describe_block_unchanged": true,
+    "original_describe_sha256": "90a42c73c1deb3a6928434d30ed6f4ecc58d7a24636164eff268c9e7491a378d",
+    "product_code_unchanged_in_red": true
+  },
+  "limits": [
+    "Snapshot, not release approval",
+    "Historical coverage instrumentation changed at E01",
+    "No municipal UAT or backup restore trial",
+    "Original Supabase RLS defect remains open",
+    "Dependency exception expires 2026-10-26"
+  ]
+}

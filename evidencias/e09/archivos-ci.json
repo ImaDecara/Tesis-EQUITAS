@@ -1,0 +1,16 @@
+{
+  "run_id": "39964341314",
+  "files_sha256": {
+    "ci-summary.json": "e834931345898c4642027c33de1e889078060eff7745e738c08c2c76b6cfe687",
+    "ci-gate.json": "7c18415976f9758919599c0614e121eab410daaa7be109bb7c2f77cb3269d814",
+    "supabase.json": "62f8d267bf6941b199921cba4f8b199efb5b4260e8000d847481d55f84a09f7c",
+    "frontend-coverage.json": "463deea60b289ae16147937f879d6b2e42758d9791d8ee4f5d5dbcd8434fc964",
+    "frontend-tests.xml": "f124e5e5ee907efba5d21046b0d162d9b7f30f3fa6769315e2bfc5965f521397",
+    "backend-tests.xml": "cda3ff6128e7c9a7c038f430b4fa52705c156dff98a719c8a66c7d61e9ce771c",
+    "infrastructure-tests.log": "2fd26d7afef7b2f94893cdc38e363a7c13167c98274c588f20905c270ae548cc",
+    "ruff.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "audit-decision.json": "25d1968905c30ff589b184ad4d7b87e0020040a17a85f6f886a00235a30c1f35",
+    "audit-production.json": "8ebf964febc0eabaa3b6440f3ef715167db5909e046df14d8de72546977e50df"
+  },
+  "archive_manifests": "artefactos-ci.json"
+}

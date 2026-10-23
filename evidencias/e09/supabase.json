@@ -1,0 +1,85 @@
+{
+  "source_sha": "2f9e48fe11bf246d6fc73bc0308bda4692d0d866",
+  "run_id": "39964341314",
+  "run_attempt": "1",
+  "started_at_utc": "2026-10-23T13:49:33.466076+00:00",
+  "project_ref": "iylwghgvtydpmwidojdo",
+  "fixture_version": "e06-v1",
+  "transport": "Supabase Auth HTTP + Data API; publishable key and normal user JWT",
+  "application_code": [
+    "validateAuthUserTenantAccess",
+    "loadAllTableRows"
+  ],
+  "test_source_sha256": "9f49b4981ca5a156ca8741c0d1e9c463d9ecfceadd6844b9a14e6fc93d67336e",
+  "passed": true,
+  "report_errors": [],
+  "tests": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0
+  },
+  "cases": [
+    {
+      "name": "SUP-AUTH-01: contexto productivo esperado del usuario a",
+      "status": "passed",
+      "duration_ms": 816.54868
+    },
+    {
+      "name": "SUP-AUTH-01: contexto productivo esperado del usuario b",
+      "status": "passed",
+      "duration_ms": 526.149735
+    },
+    {
+      "name": "SUP-AUTH-02: password incorrecto no crea sesion ni permite leer negocio",
+      "status": "passed",
+      "duration_ms": 1201.536977
+    },
+    {
+      "name": "SUP-DATA-02: filas, montos y riesgos conocidos de a mediante lector productivo",
+      "status": "passed",
+      "duration_ms": 1614.1324830000003
+    },
+    {
+      "name": "SUP-DATA-02: filas, montos y riesgos conocidos de b mediante lector productivo",
+      "status": "passed",
+      "duration_ms": 1685.61204
+    },
+    {
+      "name": "SUP-RLS-01: anonimo recibe cero filas de todas las tablas",
+      "status": "passed",
+      "duration_ms": 964.4993590000004
+    },
+    {
+      "name": "SUP-RLS-02: identidad normal sin membresia recibe cero filas de negocio",
+      "status": "passed",
+      "duration_ms": 1486.3400309999988
+    },
+    {
+      "name": "SUP-RLS-03: usuario a no puede consultar IDs del tenant b",
+      "status": "passed",
+      "duration_ms": 745.7730980000015
+    },
+    {
+      "name": "SUP-RLS-04: usuario b no puede consultar IDs del tenant a",
+      "status": "passed",
+      "duration_ms": 807.0666069999988
+    },
+    {
+      "name": "SUP-RLS-05: membresia inactiva permite diagnostico propio y niega negocio",
+      "status": "passed",
+      "duration_ms": 1253.893892
+    },
+    {
+      "name": "SUP-AUTH-03: logout elimina sesion del cliente y la siguiente lectura queda anonima",
+      "status": "passed",
+      "duration_ms": 1362.2395770000003
+    },
+    {
+      "name": "SUP-WRITE-01: cliente normal no puede insertar, actualizar ni borrar negocio",
+      "status": "passed",
+      "duration_ms": 707.4921670000003
+    }
+  ],
+  "exit_code": 0,
+  "finished_at_utc": "2026-10-23T13:49:47.477280+00:00"
+}

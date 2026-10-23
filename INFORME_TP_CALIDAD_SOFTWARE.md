@@ -1,5 +1,7 @@
 # Trabajo Práctico Integrador de Calidad de Software
 
+**Actualización E09, 23/10/2026:** documentación transversal completada, **31/31 controles**. [Métricas con fórmulas/evolución](METRICAS_CALIDAD.md), [matriz ISO de ocho características](MATRIZ_ISO25010_CALIDAD.md), [plan vigente 2.0](PLAN_PRUEBAS_CALIDAD.md), [niveles/QA-QC/principios/técnicas](PROCESO_Y_TECNICAS_CALIDAD.md), [ficha E09](REGISTRO_EJECUCION_E09.md) y [validación](evidencias/e09/validacion-registros.json). Último corte de análisis: main 2f9e48f…, CI 39964341314 aprobado, 180 de producto y 66 controles separados; el corte acumulado conserva 183 con smoke/cargas de sus fuentes. DEF-SUP-001 original y OBS-DEP-001 siguen abiertos; excepción dev vence 26/10/2026. **Sigue E10, informe/PDF; E11, demostración.** Las notas E00–E08 son históricas y esta actualización prevalece para el estado actual.
+
 **Actualización E08, 23/10/2026:** estrés progresivo y sostenido completados en [pipeline](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025), SHA `f6f83f9a3172fc2e42912305a181057130d9577b`, después del [CI del mismo commit](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039). Se midió la API FastAPI con lógica productiva y conector sintético local: 3.600 perfiles/objetos y 72.000 deudas representadas. Ambas campañas aprobaron sus criterios previos; E08 tiene 24/24 controles. Corte acumulado: **168 aisladas + 12 externas + un smoke + dos cargas = 183 pruebas/campañas de producto**, con **66 controles de infraestructura aparte**, cero fallidas/omitidas en ese corte. Los requests no se cuentan como tests. [Ficha E08](REGISTRO_EJECUCION_E08.md), [comandos/alcance](RENDIMIENTO_CALIDAD.md), [resultados](evidencias/e08/resultados.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). La capacidad de Vercel/Supabase/web no fue ensayada por estas cargas. E09 tiene la herramienta documentada y conserva sus demás pendientes; siguen abiertos DEF-SUP-001 original y OBS-DEP-001. Esta nota prevalece sobre estados históricos de cargas pendientes.
 
 **Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
@@ -18,7 +20,7 @@
 | Integrantes | Ignacio Magoia, Axel Azcune e Imanol Decara. Legajos pendientes. |
 | Docente | **PENDIENTE:** completar. |
 | Fecha de presentación | 26 de octubre de 2026 |
-| Versión del documento | 1.9 — Cargas y adopción de herramienta verificadas E08, 23/10/2026 |
+| Versión del documento | 2.0 — Métricas y documentación transversal verificadas E09, 23/10/2026 |
 
 > **Nota de integridad académica.** Este informe contiene solamente resultados obtenidos durante las ejecuciones documentadas en el repositorio. Las actividades no realizadas se identifican explícitamente como **PENDIENTE**; no se simulan capturas, métricas ni validaciones externas.
 
@@ -291,6 +293,8 @@ Estas técnicas permiten verificar comportamiento de manera aislada. No sustituy
 3. **Fiabilidad.** La carga ETL y el acceso a datos deben tolerar errores transitorios y evitar duplicaciones o estados inconsistentes.
 
 <a id="analisis-estatico"></a>
+Los valores de las secciones 9–12 siguientes conservan el corte inicial como antecedente. La evaluación vigente es la [matriz E09](MATRIZ_ISO25010_CALIDAD.md), las [métricas E09](METRICAS_CALIDAD.md) y los [riesgos/contingencia del plan 2.0](PLAN_PRUEBAS_CALIDAD.md#8-riesgos-priorizados). E10 consolidará este respaldo con el informe académico sin atribuir vigencia actual a los números históricos.
+
 ## 10. Análisis estático y métricas de mantenibilidad
 
 ### 10.1. Herramientas y resultados

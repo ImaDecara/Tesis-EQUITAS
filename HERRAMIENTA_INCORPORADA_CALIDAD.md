@@ -1,6 +1,6 @@
 # Herramienta de cargas — proceso de cinco pasos
 
-**Inicio de evaluación:** 23/10/2026, antes de la PoC de E08. Responsable: Axel Azcune. **Estado:** cinco pasos completados; PoC local y adopción con dos campañas nuevas de CI comprobadas. Este documento inicia R22 en E09 durante E08; no cierra el resto de E09.
+**Inicio de evaluación:** 23/10/2026, antes de la PoC de E08. Responsable: Axel Azcune. **Estado:** cinco pasos completados; PoC local y adopción con dos campañas nuevas de CI comprobadas. La adopción cubre R22 desde E08; E09 completó los demás ejes en su [ficha de ejecución](REGISTRO_EJECUCION_E09.md).
 
 ## 1. Requisitos
 
@@ -46,8 +46,8 @@ Se adopta k6. Su PoC confirmó validación de las tres operaciones, JSON crudo, 
 
 Las puntuaciones de Locust y JMeter son una evaluación documental, no una PoC comparativa. Locust encaja directamente con Python (5), pero habría que resolver/pinar otro conjunto de dependencias (3 en reproducibilidad relativa a este repositorio); ofrece estadísticas y control de salida, con más construcción del informe elegido (4). JMeter ofrece reportes completos (5), pero requiere JVM/JMX y un proceso distinto al stack actual (3 en encaje y 2 en simplicidad). Las tres opciones reciben 5 en costo para ejecución local sin contratar cloud. Los valores son juicio del equipo con los pesos previamente versionados, no medidas de superioridad absoluta ni estimaciones de licencia/esfuerzo verificadas.
 
-La adopción continúa con `.github/workflows/load-tests.yml`: primero CI del mismo SHA y luego dos campañas en runners nuevos con reportes propios. El comando local separa `stress` y `soak`. La conclusión final de adopción CI se añadirá cuando esas campañas terminen; los resultados de la PoC no se presentarán como campañas completas.
+La adopción prevista se realizó con `.github/workflows/load-tests.yml`: primero CI del mismo SHA y luego dos campañas en runners nuevos con reportes propios. El comando local separa `stress` y `soak`. La PoC conserva su alcance local y no se presenta como una campaña completa.
 
 ### Adopción CI comprobada
 
-[Ejecución 39960952025](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025) completó estrés y sostenido después del CI correcto `f6f83f9a3172fc2e42912305a181057130d9577b`. Ambos jobs produjeron muestras nuevas, JSON/JUnit/serie/recursos y HTML. Se completa la adopción incremental prevista; no se ejecutó PoC de las alternativas. Esto cubre R22 y la sección de herramienta de E09, no sus demás pendientes.
+[Ejecución 39960952025](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025) completó estrés y sostenido después del CI correcto `f6f83f9a3172fc2e42912305a181057130d9577b`. Ambos jobs produjeron muestras nuevas, JSON/JUnit/serie/recursos y HTML. Se completa la adopción incremental prevista; no se ejecutó PoC de las alternativas. Esto cubre R22 y la sección de herramienta de E09; sus demás controles se verifican en la [ficha E09](REGISTRO_EJECUCION_E09.md).

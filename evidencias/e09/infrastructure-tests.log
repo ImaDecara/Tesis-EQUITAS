@@ -1,0 +1,413 @@
+test_changed_dependency_version_blocks (test_ci.AuditPolicyTests.test_changed_dependency_version_blocks) ... ok
+test_clean_audits_need_no_exception (test_ci.AuditPolicyTests.test_clean_audits_need_no_exception) ... ok
+test_expired_exception_blocks (test_ci.AuditPolicyTests.test_expired_exception_blocks) ... ok
+test_known_exception_keeps_raw_failure_visible (test_ci.AuditPolicyTests.test_known_exception_keeps_raw_failure_visible) ... ok
+test_network_or_invalid_report_blocks (test_ci.AuditPolicyTests.test_network_or_invalid_report_blocks) ... ok
+test_new_advisory_in_known_package_blocks (test_ci.AuditPolicyTests.test_new_advisory_in_known_package_blocks) ... ok
+test_new_critical_finding_blocks (test_ci.AuditPolicyTests.test_new_critical_finding_blocks) ... ok
+test_production_finding_blocks (test_ci.AuditPolicyTests.test_production_finding_blocks) ... ok
+test_child_failure_is_recorded_without_rewriting_exit (test_ci.ExecutionContractTests.test_child_failure_is_recorded_without_rewriting_exit) ... 
+[failed-test] ['/opt/hostedtoolcache/Python/3.12.14/x64/bin/python', '-c', 'print("assertion failed"); raise SystemExit(7)']
+assertion failed
+ok
+test_gate_failure_reaches_summary_exit_and_report (test_ci.ExecutionContractTests.test_gate_failure_reaches_summary_exit_and_report) ... ok
+test_github_failure_cannot_be_hidden_by_successful_report (test_ci.ExecutionContractTests.test_github_failure_cannot_be_hidden_by_successful_report) ... ok
+test_invalid_manifest_preserves_failure_report (test_ci.ExecutionContractTests.test_invalid_manifest_preserves_failure_report) ... ok
+test_missing_component_reports_fail_summary_and_preserve_it (test_ci.ExecutionContractTests.test_missing_component_reports_fail_summary_and_preserve_it) ... ok
+test_missing_test_or_coverage_report_is_not_success (test_ci.ExecutionContractTests.test_missing_test_or_coverage_report_is_not_success) ... ok
+test_reports_from_another_sha_are_rejected (test_ci.ExecutionContractTests.test_reports_from_another_sha_are_rejected) ... ok
+test_required_external_job_cannot_be_skipped_or_missing (test_ci.ExecutionContractTests.test_required_external_job_cannot_be_skipped_or_missing) ... ok
+test_valid_reports_keep_skips_and_do_not_approve_release (test_ci.ExecutionContractTests.test_valid_reports_keep_skips_and_do_not_approve_release) ... # EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+E04 quality gates failed; see gate.json
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+frontend: GitHub job result failure
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **1 aprobadas, 0 fallidas, 1 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+Invalid component report component.json: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+Missing component report: frontend
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **0 aprobadas, 0 fallidas, 0 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+
+## Metricas y versiones
+
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+Missing component report: frontend
+Missing component report: backend
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `other`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+frontend: wrong source SHA
+backend: wrong source SHA
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06: integracion real obligatoria, verificada aparte: sin reporte valido
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+E06: El job real obligatorio no termino con success.
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06: integracion real obligatoria, verificada aparte: sin reporte valido
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+E06: El job real obligatorio no termino con success.
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06: integracion real obligatoria, verificada aparte: sin reporte valido
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **fallido**.
+E06: Debe existir exactamente un reporte real de Supabase.
+
+# EQUITAS - Calidad con gates E04
+
+SHA: `local`
+
+Pruebas de producto: **2 aprobadas, 0 fallidas, 2 omitidas**.
+
+| Componente | Control | Salida |
+| --- | --- | --- |
+| backend | tests | 0 |
+| frontend | tests | 0 |
+
+## Metricas y versiones
+
+backend: `{}`.
+
+Backend: sentencias **80.00 %**; ramas 70.00 %.
+frontend: `{}`.
+
+Frontend: sentencias **60 %**; ramas 50 %; duplicacion 0.00 %.
+Auditoria completa: {'high': 5}; salida cruda {'all': 1, 'production': 0}. Excepcion temporal OBS-DEP-001, no corregida.
+
+## Quality gates E04
+
+Base fija: `fixed-test-base`.
+
+| Gate | Resultado | Criterio |
+| --- | --- | --- |
+
+Numeradores, denominadores, archivos y lineas nuevas en `gate.json`.
+
+## Alcance y pendientes
+
+Los gates E04 no acreditan despliegue, smoke o cargas.
+E06 no se ejecuta en este contexto; se exige en main y en la validacion de entrega.
+La prueba controlada de fallo manual verifica CI; no sustituye el defecto real rojo/verde de E03.
+
+Resultado CI: **aprobado**.
+ok
+test_absent_base_cannot_silently_become_head (test_gates.GateReportTests.test_absent_base_cannot_silently_become_head) ... ok
+test_backend_coverage_cannot_hide_a_missing_line (test_gates.GateReportTests.test_backend_coverage_cannot_hide_a_missing_line) ... ok
+test_controlled_probe_retains_original_and_blocks_critical_gate (test_gates.GateReportTests.test_controlled_probe_retains_original_and_blocks_critical_gate) ... ok
+test_dependency_policy_rejection_is_separate_from_functional_criticals (test_gates.GateReportTests.test_dependency_policy_rejection_is_separate_from_functional_criticals) ... ok
+test_failed_build_and_missing_control_block (test_gates.GateReportTests.test_failed_build_and_missing_control_block) ... ok
+test_json_and_counts_corruption_preserve_a_failure_explanation (test_gates.GateReportTests.test_json_and_counts_corruption_preserve_a_failure_explanation) ... ok
+test_lint_diagnostic_count_disagreement_is_invalid (test_gates.GateReportTests.test_lint_diagnostic_count_disagreement_is_invalid) ... ok
+test_missing_file_and_partial_lcov_are_rejected (test_gates.GateReportTests.test_missing_file_and_partial_lcov_are_rejected) ... ok
+test_missing_required_reports_never_pass (test_gates.GateReportTests.test_missing_required_reports_never_pass) ... ok
+test_new_lines_below_80_block_whole_evaluation (test_gates.GateReportTests.test_new_lines_below_80_block_whole_evaluation) ... ok
+test_no_diff_does_not_hide_missing_reports (test_gates.GateReportTests.test_no_diff_does_not_hide_missing_reports) ... ok
+test_probe_is_restricted_to_manual_opt_in (test_gates.GateReportTests.test_probe_is_restricted_to_manual_opt_in) ... ok
+test_test_reports_are_required_and_must_agree (test_gates.GateReportTests.test_test_reports_are_required_and_must_agree) ... ok
+test_valid_reports_pass_with_fixed_base_and_explicit_external_skip (test_gates.GateReportTests.test_valid_reports_pass_with_fixed_base_and_explicit_external_skip) ... ok
+test_wrong_sha_run_attempt_and_duplicate_manifest_are_rejected (test_gates.GateReportTests.test_wrong_sha_run_attempt_and_duplicate_manifest_are_rejected) ... ok
+test_critical_and_noncritical_rules_remain_separate (test_gates.ThresholdTests.test_critical_and_noncritical_rules_remain_separate) ... ok
+test_deleted_lines_do_not_enter_new_denominator (test_gates.ThresholdTests.test_deleted_lines_do_not_enter_new_denominator) ... ok
+test_duplication_5_passes_501_fails_without_rounding (test_gates.ThresholdTests.test_duplication_5_passes_501_fails_without_rounding) ... ok
+test_eslint_selected_rule_and_parse_error_are_critical (test_gates.ThresholdTests.test_eslint_selected_rule_and_parse_error_are_critical) ... ok
+test_existing_coverage_5999_fails_and_60_passes (test_gates.ThresholdTests.test_existing_coverage_5999_fails_and_60_passes) ... ok
+test_invalid_counts_cannot_approve (test_gates.ThresholdTests.test_invalid_counts_cannot_approve) ... ok
+test_new_coverage_7999_fails_and_80_passes (test_gates.ThresholdTests.test_new_coverage_7999_fails_and_80_passes) ... ok
+test_no_new_lines_has_null_percentage_not_invented_100 (test_gates.ThresholdTests.test_no_new_lines_has_null_percentage_not_invented_100) ... ok
+test_real_git_rename_is_a_complete_new_file_with_no_renames (test_gates.ThresholdTests.test_real_git_rename_is_a_complete_new_file_with_no_renames) ... ok
+test_windows_linux_and_relative_paths_are_equivalent (test_gates.ThresholdTests.test_windows_linux_and_relative_paths_are_equivalent) ... ok
+test_above_target_degradation_is_observed_without_changing_target (test_load.LoadEvidenceTests.test_above_target_degradation_is_observed_without_changing_target) ... ok
+test_connector_is_read_only_strict_and_returns_independent_rows (test_load.LoadEvidenceTests.test_connector_is_read_only_strict_and_returns_independent_rows) ... ok
+test_fixed_schedule_has_target_and_ten_minute_sustained_phase (test_load.LoadEvidenceTests.test_fixed_schedule_has_target_and_ten_minute_sustained_phase) ... ok
+test_fixture_is_deterministic_complete_and_covers_six_groups (test_load.LoadEvidenceTests.test_fixture_is_deterministic_complete_and_covers_six_groups) ... ok
+test_http_error_or_incorrect_content_cannot_pass (test_load.LoadEvidenceTests.test_http_error_or_incorrect_content_cannot_pass) ... ok
+test_load_requires_exact_quality_source_workflow_and_repository (test_load.LoadEvidenceTests.test_load_requires_exact_quality_source_workflow_and_repository) ... ok
+test_missing_phase_and_short_execution_cannot_pass (test_load.LoadEvidenceTests.test_missing_phase_and_short_execution_cannot_pass) ... ok
+test_nonzero_exit_resource_stop_and_corrupt_output_cannot_pass (test_load.LoadEvidenceTests.test_nonzero_exit_resource_stop_and_corrupt_output_cannot_pass) ... ok
+test_percentile_does_not_hide_threshold_excess_by_rounding (test_load.LoadEvidenceTests.test_percentile_does_not_hide_threshold_excess_by_rounding) ... ok
+test_profiles_are_complete_in_source_without_cloud_response_caps (test_load.LoadEvidenceTests.test_profiles_are_complete_in_source_without_cloud_response_caps) ... ok
+test_valid_report_excludes_warmup_and_preserves_operation_breakdown (test_load.LoadEvidenceTests.test_valid_report_excludes_warmup_and_preserves_operation_breakdown) ... ok
+test_build_probe_requires_testing_branch_and_project (test_preview.PreviewSelectionTests.test_build_probe_requires_testing_branch_and_project) ... ok
+test_exact_ready_preview_returns_immutable_url (test_preview.PreviewSelectionTests.test_exact_ready_preview_returns_immutable_url) ... ok
+test_failed_deployment_blocks (test_preview.PreviewSelectionTests.test_failed_deployment_blocks) ... ok
+test_foreign_host_query_or_insecure_url_blocks_credentials (test_preview.PreviewSelectionTests.test_foreign_host_query_or_insecure_url_blocks_credentials) ... ok
+test_pending_and_skipped_deployments_are_not_ready (test_preview.PreviewSelectionTests.test_pending_and_skipped_deployments_are_not_ready) ... ok
+test_previous_sha_production_and_foreign_creator_are_not_selected (test_preview.PreviewSelectionTests.test_previous_sha_production_and_foreign_creator_are_not_selected) ... ok
+test_quality_gate_requires_same_sha_trusted_branch_and_success (test_preview.PreviewSelectionTests.test_quality_gate_requires_same_sha_trusted_branch_and_success) ... ok
+test_complete_real_report_is_accepted (test_supabase_integration.SupabaseContractTests.test_complete_real_report_is_accepted) ... ok
+test_missing_required_case_id_blocks (test_supabase_integration.SupabaseContractTests.test_missing_required_case_id_blocks) ... ok
+test_missing_secret_fails_without_echoing_values (test_supabase_integration.SupabaseContractTests.test_missing_secret_fails_without_echoing_values) ... ok
+test_omitted_or_failed_cases_block (test_supabase_integration.SupabaseContractTests.test_omitted_or_failed_cases_block) ... ok
+test_real_portfolio_and_admin_keys_are_rejected (test_supabase_integration.SupabaseContractTests.test_real_portfolio_and_admin_keys_are_rejected) ... ok
+test_wrong_provenance_or_duplicate_cases_block (test_supabase_integration.SupabaseContractTests.test_wrong_provenance_or_duplicate_cases_block) ... ok
+
+----------------------------------------------------------------------
+Ran 66 tests in 0.265s
+
+OK
+

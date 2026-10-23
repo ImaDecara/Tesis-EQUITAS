@@ -1,0 +1,168 @@
+{
+  "stage": "E09",
+  "controls": [
+    {
+      "id": "E09-01",
+      "completed": true,
+      "requirement": "**Requisitos:** problema a resolver, stack, ejecución local/CI, formatos, esfuerzo y limitaciones."
+    },
+    {
+      "id": "E09-02",
+      "completed": true,
+      "requirement": "**Alternativas:** investigar opciones y conservar referencias primarias vigentes y criterios relevantes."
+    },
+    {
+      "id": "E09-03",
+      "completed": true,
+      "requirement": "**PoC:** ejecutar un caso pequeño del propio EQUITAS y conservar comando, configuración, resultado y dificultad encontrada."
+    },
+    {
+      "id": "E09-04",
+      "completed": true,
+      "requirement": "**Matriz de decisión:** fijar criterios/pesos antes de puntuar; puntuaciones justificadas con la PoC o documentación."
+    },
+    {
+      "id": "E09-05",
+      "completed": true,
+      "requirement": "**Adopción incremental:** describir incorporación inicial, extensión al caso representativo, integración CI y mantenimiento de configuración."
+    },
+    {
+      "id": "E09-06",
+      "completed": true,
+      "requirement": "Guardar herramienta/versión elegida y razones. No agregar herramientas solo para aumentar la lista."
+    },
+    {
+      "id": "E09-07",
+      "completed": true,
+      "requirement": "Separar métricas de producto, proceso y proyecto, con fórmula, alcance, fecha y versión."
+    },
+    {
+      "id": "E09-08",
+      "completed": true,
+      "requirement": "Reportar sentencias, ramas y funciones cuando existan; distinguir la cobertura combinada backend."
+    },
+    {
+      "id": "E09-09",
+      "completed": true,
+      "requirement": "Conservar el antecedente histórico 12,03 % → 60,43 % frontend y 26,83 % → 85,26 % backend, con su fuente y límites de reproducción."
+    },
+    {
+      "id": "E09-10",
+      "completed": true,
+      "requirement": "Incorporar la mejora de completitud de lectura de E03 sobre el mismo dataset sintético."
+    },
+    {
+      "id": "E09-11",
+      "completed": true,
+      "requirement": "Registrar análisis estático antes/después cuando se hayan aplicado correcciones, sin afirmar una mejora que solo cambió reglas o alcance."
+    },
+    {
+      "id": "E09-12",
+      "completed": true,
+      "requirement": "Incluir como métrica de proceso, por ejemplo aprobadas/ejecutadas, separando omitidas. En la base: 94/94 = 100 % y una prueba adicional omitida."
+    },
+    {
+      "id": "E09-13",
+      "completed": true,
+      "requirement": "Incluir como métrica de proyecto, por ejemplo tamaño analizado. En la base: 62 archivos y 11.188 líneas productivas del análisis de duplicación."
+    },
+    {
+      "id": "E09-14",
+      "completed": true,
+      "requirement": "Explicar la duplicación por líneas; el 5,16 % de tokens duplicados de la base es otra medida distinta del 4,24 % por líneas."
+    },
+    {
+      "id": "E09-15",
+      "completed": true,
+      "requirement": "Usar los nuevos valores finales cuando cambie el producto, conservando la evolución histórica."
+    },
+    {
+      "id": "E09-16",
+      "completed": true,
+      "requirement": "Completar la matriz del modelo de ocho características solicitado: adecuación funcional, eficiencia de desempeño, compatibilidad, usabilidad, fiabilidad, seguridad, mantenibilidad y portabilidad."
+    },
+    {
+      "id": "E09-17",
+      "completed": true,
+      "requirement": "Para cada característica: objetivo concreto, métrica, aceptación, evidencia y estado. «Aplicación en EQUITAS» por sí sola no es una evaluación completa."
+    },
+    {
+      "id": "E09-18",
+      "completed": true,
+      "requirement": "Mantener y justificar el top 3 del MVP: adecuación funcional, seguridad y fiabilidad, con el orden que se adopte explícitamente."
+    },
+    {
+      "id": "E09-19",
+      "completed": true,
+      "requirement": "No declarar usabilidad municipal, accesibilidad completa o seguridad total verificadas sin ensayos que lo respalden. Estas limitaciones se informan; no convierten por sí mismas toda mejora futura de la tesis en requisito nuevo del TP."
+    },
+    {
+      "id": "E09-20",
+      "completed": true,
+      "requirement": "Unificar la escala de riesgos. Propuesta coherente con el técnico: 15–25 crítica, 10–14 alta, 5–9 media y 1–4 baja; conservar P/I como estimaciones del equipo."
+    },
+    {
+      "id": "E09-21",
+      "completed": true,
+      "requirement": "Actualizar riesgos de Supabase, autorización, truncamiento, datos ETL, despliegue y regresión después de las correcciones."
+    },
+    {
+      "id": "E09-22",
+      "completed": true,
+      "requirement": "Diferenciar QA preventivo —plan, criterios, revisión— de QC detectivo —pruebas, análisis, mediciones— con ejemplos del trabajo."
+    },
+    {
+      "id": "E09-23",
+      "completed": true,
+      "requirement": "Completar contingencia Supabase: detección, contención, comunicación, recuperación y verificación, sin afirmar restauraciones o backups ensayados si no se hicieron."
+    },
+    {
+      "id": "E09-24",
+      "completed": true,
+      "requirement": "Mostrar la pirámide/mapa de pruebas con cantidades actuales y límites: unitarias/componentes, API/integración, smoke y externas."
+    },
+    {
+      "id": "E09-25",
+      "completed": true,
+      "requirement": "Aplicar los siete principios con evidencia: presencia de defectos, imposibilidad de exhaustividad, pruebas tempranas, agrupamiento, renovación de casos, contexto y falacia de ausencia de errores."
+    },
+    {
+      "id": "E09-26",
+      "completed": true,
+      "requirement": "Incluir un ejemplo AAA real, particiones/límites reales y una tabla de decisión ejecutada. Vincularlos a E05."
+    },
+    {
+      "id": "E09-27",
+      "completed": true,
+      "requirement": "La herramienta tiene los cinco pasos y una matriz justificada, no solo una enumeración de nombres."
+    },
+    {
+      "id": "E09-28",
+      "completed": true,
+      "requirement": "Hay una métrica de proceso, una de proyecto y una mejora antes/después con evidencia comparable."
+    },
+    {
+      "id": "E09-29",
+      "completed": true,
+      "requirement": "ISO incluye las ocho características y el top 3 con justificación."
+    },
+    {
+      "id": "E09-30",
+      "completed": true,
+      "requirement": "Riesgos, QA/QC, principios y niveles corresponden al proyecto actual."
+    },
+    {
+      "id": "E09-31",
+      "completed": true,
+      "requirement": "Los pendientes no se presentan como características aprobadas."
+    }
+  ],
+  "evidence": [
+    "METRICAS_CALIDAD.md",
+    "MATRIZ_ISO25010_CALIDAD.md",
+    "PROCESO_Y_TECNICAS_CALIDAD.md",
+    "PLAN_PRUEBAS_CALIDAD.md",
+    "REGISTRO_EJECUCION_E09.md",
+    "HERRAMIENTA_INCORPORADA_CALIDAD.md"
+  ]
+}
