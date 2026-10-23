@@ -1,0 +1,36 @@
+{
+  "version": "e08-v1",
+  "fixed_before_execution": "2026-10-23",
+  "component": "FastAPI /case-groups and /case-groups/summary with production scoring",
+  "dataset": {"version": "e08-fixture-v1", "profiles": 3600, "debtors": 3600, "groups": 6, "profiles_per_group": 600, "debts_per_profile": 20, "represented_debts": 72000, "seed": "six-patterns-in-id-order"},
+  "server": {"host": "127.0.0.1", "workers": 1, "loop": "asyncio", "http": "h11", "log_level": "warning", "access_log": false},
+  "tool": {
+    "name": "k6", "version": "2.3.0",
+    "release": "https://github.com/grafana/k6/releases/tag/v2.3.0",
+    "assets": {
+      "linux-amd64": {"file": "k6-v2.3.0-linux-amd64.tar.gz", "sha256": "39c3117b6af817592dcd0ce4242105c0a7af10948c2a425306f0be8f7a8a8ab1"},
+      "windows-amd64": {"file": "k6-v2.3.0-windows-amd64.zip", "sha256": "112276d495e5741c968e2bc09ea6196099c1275bd6db9ee0875d173c7148ce43"}
+    }
+  },
+  "request_mix": {"list": 50, "filtered": 20, "summary": 30},
+  "warmup_seconds": 30,
+  "drain_seconds": 10,
+  "think_seconds": 0.1,
+  "request_timeout_seconds": 5,
+  "stress": {"users": [1, 5, 10, 20, 40], "plateau_seconds": 60},
+  "soak": {"users": 10, "duration_seconds": 600},
+  "poc": {"users": 1, "duration_seconds": 20},
+  "acceptance": {
+    "target_users": 10,
+    "p95_ms_max": 2000,
+    "unexpected_error_rate_max": 0.01,
+    "content_mismatches_max": 0,
+    "requests_per_phase_min": 50,
+    "requests_per_operation_min": 10,
+    "percentiles": [50, 95, 99],
+    "series_bucket_seconds": 10,
+    "resource_sample_seconds": 2
+  },
+  "stop": {"cumulative_error_rate_max": 0.2, "error_evaluation_delay_seconds": 30, "process_rss_mib_max": 1024, "raw_output_mib_max": 512, "deadline_extra_seconds": 120},
+  "scope": "No cloud load, no real credentials, no Supabase Auth/Data API latency or RLS, no deployed web capacity; only isolated API processing with synthetic connector."
+}
