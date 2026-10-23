@@ -147,11 +147,16 @@ try {
   await page.getByRole('link', { name: 'Personas / Deudores', exact: true }).first().click()
   await expect(page).toHaveURL(base.origin + '/people')
   await expect(page.getByRole('heading', { name: 'Personas / Deudores', exact: true })).toBeVisible()
-  await expect(page.getByRole('table').getByRole('row').filter({ hasText: policy.expected.person_name })).toBeVisible()
+  const peopleTable = page.getByRole('table').filter({
+    has: page.getByRole('columnheader', { name: 'Deuda total asociada', exact: true }),
+  })
+  const ownPerson = peopleTable.getByRole('row').filter({ hasText: policy.expected.person_name })
+  await expect(ownPerson).toBeVisible()
+  await expect(ownPerson).toContainText(expectedAmount)
   await expect(page.locator('body')).not.toContainText(policy.expected.other_person_name)
   await noVisibleError()
   await capture('personas')
-  report.checks.push({ id: 'navigation_filter', passed: true, observed: 'Objeto A, filtro sin resultados, limpieza y persona A comprobados; B ausente.' })
+  report.checks.push({ id: 'navigation_filter', passed: true, observed: 'Objeto A, filtro sin resultados, limpieza y listado /people con persona A y ARS 1250 comprobados; B ausente.' })
 
   await page.getByRole('button', { name: 'Cerrar sesion', exact: true }).first().click()
   await expect.poll(() => new URL(page.url()).pathname).toBe('/login')
