@@ -31,7 +31,7 @@ Se generaron versiones de revisión y se corrigieron el ancho de columnas, encab
 
 Se generó una segunda copia desde la misma fuente/datos y se obtuvo el **mismo SHA-256 del PDF y de los tres SVG**. La reproducibilidad binaria verificada corresponde a ese runtime, paquetes y fuentes tipográficas; otra fuente o versión puede cambiar maquetación/hash y requiere nueva revisión. El análisis de errores Python del generador aprobó. No se cambió código de producto, suites, dependencias de aplicación ni workflows.
 
-La revisión documental aprobó **33 comprobaciones**, **333 enlaces locales** y **115 enlaces HTTPS del PDF**, con los 29 controles de E10 completos. Las cifras, versiones, reglas y commits se contrastaron con las fuentes; los dos tickets abiertos mantienen su estado real y la fecha de vencimiento de la excepción.
+La revisión documental aprobó **34 comprobaciones**, **333 enlaces locales** y **115 enlaces HTTPS del PDF**, con los 29 controles de E10 completos. Las cifras, versiones, reglas y commits se contrastaron con las fuentes; los dos tickets abiertos mantienen su estado real y la fecha de vencimiento de la excepción. `.gitattributes` preserva el PDF como binario y fija LF para los insumos textuales de generación/evidencia de E10, evitando cambios de bytes por conversión de fin de línea entre plataformas.
 
 ## Metas y pendientes conservados
 

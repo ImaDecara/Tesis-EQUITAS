@@ -1,0 +1,9 @@
+# Preserve published document bytes and reproducible text inputs on all platforms.
+entrega/*.pdf binary
+entrega/figuras/*.png binary
+entrega/figuras/*.svg text eol=lf
+entrega/*.py text eol=lf
+entrega/*.md text eol=lf
+entrega/*.txt text eol=lf
+evidencias/e10/*.json text eol=lf
+evidencias/e10/*.log text eol=lf
