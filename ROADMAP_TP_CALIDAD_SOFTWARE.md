@@ -1,14 +1,16 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
+**Actualización E08, 23/10/2026:** estrés progresivo y sostenido completados en [pipeline](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025), SHA `f6f83f9a3172fc2e42912305a181057130d9577b`, después del [CI del mismo commit](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039). Se midió la API FastAPI con lógica productiva y conector sintético local: 3.600 perfiles/objetos y 72.000 deudas representadas. Ambas campañas aprobaron sus criterios previos; E08 tiene 24/24 controles. Corte acumulado: **168 aisladas + 12 externas + un smoke + dos cargas = 183 pruebas/campañas de producto**, con **66 controles de infraestructura aparte**, cero fallidas/omitidas en ese corte. Los requests no se cuentan como tests. [Ficha E08](REGISTRO_EJECUCION_E08.md), [comandos/alcance](RENDIMIENTO_CALIDAD.md), [resultados](evidencias/e08/resultados.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). La capacidad de Vercel/Supabase/web no fue ensayada por estas cargas. E09 tiene la herramienta documentada y conserva sus demás pendientes; siguen abiertos DEF-SUP-001 original y OBS-DEP-001. Esta nota prevalece sobre estados históricos de cargas pendientes.
+
 **Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
 
 **Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
 
-**Versión:** 1.8, cierre de la etapa E07 el 23 de octubre de 2026.
+**Versión:** 1.9, cierre de la etapa E08 el 23 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E07 completadas en sus alcances. E08 es la siguiente etapa; once issues, nueve cerrados y dos abiertos; cargas y cierre académico pendientes.
+**Estado del roadmap:** E00–E08 completadas en sus alcances; siguiente E09. Herramienta nueva documentada; faltan los demás ejes de E09 y el cierre E10/E11.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -142,14 +144,14 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | **Completada**; 15 controles, nueve issues y catálogo/matriz verificados. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Completada en testing: 12/12 variantes reales en CI, cero omisiones; original pendiente. | E00–E02; entorno aislado disponible. |
 | **E07** | Despliegue nuevo y smoke automático posterior. | Completada en Preview aislado; 17/17 controles. | E04, E06. |
-| **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Pendiente. | E02 y escenario aislado; E03/E06 según componente elegido. |
-| **E09** | Herramienta de cinco pasos y documentación transversal. | Parcial en los informes; cierre pendiente. | Puede avanzar junto con E01–E08. |
+| **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Completada; 24/24 controles y dos campañas aprobadas. | E02 y escenario aislado; E03/E06 según componente elegido. |
+| **E09** | Herramienta de cinco pasos y documentación transversal. | Herramienta completada durante E08; documentación transversal pendiente. | Puede avanzar junto con E01–E08. |
 | **E10** | Informe académico consolidado y PDF revisado. | Base recibida hasta QA/QC. | Evidencias finales de E03–E09. |
 | **E11** | Validación integral, entrega y ensayo de defensa. | Pendiente. | E00–E10. |
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E07 están completas en sus alcances; el siguiente objetivo ejecutable es E08. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
+E00–E08 están completas en sus alcances; el siguiente objetivo ejecutable es E09. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -567,14 +569,14 @@ Definir el timeout y los datos exactos antes de ejecutar. Esto es un recorrido s
 
 ### 14.1. Definir qué se está midiendo
 
-- [ ] Elegir un componente y operación reales, por ejemplo agrupación/scoring o consultas de cartera de la web.
-- [ ] Evitar una respuesta HTTP fija que no ejecute lógica productiva. Si se usa una fuente sintética local, conservar el procesamiento real y describir esa sustitución.
-- [ ] No usar únicamente `/health` para concluir que el procesamiento de cartera soporta carga.
-- [ ] Registrar qué dependencia es real y cuál está sustituida. La API FastAPI no aparece consumida por la web actual; medirla no equivale a medir el dashboard desplegado.
-- [ ] Fijar dataset reproducible, cantidad de objetos/deudas, filtros y mezcla de solicitudes.
-- [ ] Registrar hardware/runner, sistema, runtime, configuración del servidor, número de workers y versión del producto.
-- [ ] Limitar el ensayo al entorno de pruebas elegido. No lanzar las cargas sobre la cartera conectada por el plugin.
-- [ ] Definir calentamiento, concurrencias, duración, política de parada y criterios de aceptación antes de ejecutar.
+- [x] Elegir un componente y operación reales, por ejemplo agrupación/scoring o consultas de cartera de la web.
+- [x] Evitar una respuesta HTTP fija que no ejecute lógica productiva. Si se usa una fuente sintética local, conservar el procesamiento real y describir esa sustitución.
+- [x] No usar únicamente `/health` para concluir que el procesamiento de cartera soporta carga.
+- [x] Registrar qué dependencia es real y cuál está sustituida. La API FastAPI no aparece consumida por la web actual; medirla no equivale a medir el dashboard desplegado.
+- [x] Fijar dataset reproducible, cantidad de objetos/deudas, filtros y mezcla de solicitudes.
+- [x] Registrar hardware/runner, sistema, runtime, configuración del servidor, número de workers y versión del producto.
+- [x] Limitar el ensayo al entorno de pruebas elegido. No lanzar las cargas sobre la cartera conectada por el plugin.
+- [x] Definir calentamiento, concurrencias, duración, política de parada y criterios de aceptación antes de ejecutar.
 
 ### 14.2. Escenarios y umbrales propuestos para preparar
 
@@ -592,25 +594,25 @@ En estrés, exceder el SLO por encima de la carga objetivo puede ser el límite 
 
 ### 14.3. Implementar y ejecutar
 
-- [ ] Elegir herramienta apropiada y registrar su versión. Si se utiliza como herramienta nueva de R22, iniciar la evaluación de E09 antes de incorporarla.
-- [ ] Crear escenarios o comandos diferenciados para estrés y esfuerzo sostenido.
-- [ ] Validar contenido funcional y status de las respuestas, no solo latencia.
-- [ ] Generar resumen y serie temporal con muestras, p50/p95/p99 cuando corresponda, errores, throughput y duración real.
-- [ ] Registrar consumo de recursos si el entorno permite medirlo; declarar explícitamente lo no medido. No afirmar ausencia de fugas de memoria sin evidencia.
-- [ ] Ejecutar ambos escenarios y conservar configuración, datos, logs y reportes.
-- [ ] Analizar el resultado frente al criterio previo; describir incumplimientos y limitaciones del entorno.
-- [ ] Si se realiza una mejora, repetir con condiciones comparables para demostrar antes/después.
-- [ ] Integrar la ejecución y generación de reportes en el pipeline. Puede existir una ejecución integral/manual de release para cargas más largas; no presentarla como ejecutada en cada PR si no lo está.
-- [ ] Publicar reportes aun cuando un umbral no se cumpla o se interrumpa el ensayo.
+- [x] Elegir herramienta apropiada y registrar su versión. Si se utiliza como herramienta nueva de R22, iniciar la evaluación de E09 antes de incorporarla.
+- [x] Crear escenarios o comandos diferenciados para estrés y esfuerzo sostenido.
+- [x] Validar contenido funcional y status de las respuestas, no solo latencia.
+- [x] Generar resumen y serie temporal con muestras, p50/p95/p99 cuando corresponda, errores, throughput y duración real.
+- [x] Registrar consumo de recursos si el entorno permite medirlo; declarar explícitamente lo no medido. No afirmar ausencia de fugas de memoria sin evidencia.
+- [x] Ejecutar ambos escenarios y conservar configuración, datos, logs y reportes.
+- [x] Analizar el resultado frente al criterio previo; describir incumplimientos y limitaciones del entorno.
+- [x] Si se realiza una mejora, repetir con condiciones comparables para demostrar antes/después.
+- [x] Integrar la ejecución y generación de reportes en el pipeline. Puede existir una ejecución integral/manual de release para cargas más largas; no presentarla como ejecutada en cada PR si no lo está.
+- [x] Publicar reportes aun cuando un umbral no se cumpla o se interrumpa el ensayo.
 
 ### Verificar y cumplir
 
-- [ ] Hay dos escenarios ejecutados: progresivo y sostenido, con duraciones reales registradas.
-- [ ] Los umbrales tienen una versión anterior a la ejecución y los resultados se interpretan contra ella.
-- [ ] Se mide lógica representativa del componente declarado.
-- [ ] El pipeline genera los reportes de carga exigidos; no solo sube un reporte local antiguo.
-- [ ] Se puede repetir cada escenario con un comando y el mismo dataset.
-- [ ] Se distingue capacidad observada del componente, comportamiento de Supabase externo y experiencia de la web.
+- [x] Hay dos escenarios ejecutados: progresivo y sostenido, con duraciones reales registradas.
+- [x] Los umbrales tienen una versión anterior a la ejecución y los resultados se interpretan contra ella.
+- [x] Se mide lógica representativa del componente declarado.
+- [x] El pipeline genera los reportes de carga exigidos; no solo sube un reporte local antiguo.
+- [x] Se puede repetir cada escenario con un comando y el mismo dataset.
+- [x] Se distingue capacidad observada del componente, comportamiento de Supabase externo y experiencia de la web.
 
 **Salida y evidencia:** scripts, parámetros previos, dataset/seed, reportes automáticos, ejecución de pipeline y análisis.  
 **No cerrar si:** existe solo un plan sin ejecución, falta el escenario sostenido, se inventaron umbrales después de ver resultados o se generaliza una prueba de health a todo EQUITAS.
@@ -625,12 +627,12 @@ En estrés, exceder el SLO por encima de la carga objetivo puede ser el límite 
 
 Elegir una herramienta realmente incorporada al trabajo. Una herramienta de carga de E08 permite documentar el proceso durante su adopción. Si se utiliza Vitest u otra incorporada en el avance recibido, identificar como retrospectiva cualquier reconstrucción de la decisión, sin inventar fechas o evaluaciones anteriores.
 
-- [ ] **Requisitos:** problema a resolver, stack, ejecución local/CI, formatos, esfuerzo y limitaciones.
-- [ ] **Alternativas:** investigar opciones y conservar referencias primarias vigentes y criterios relevantes.
-- [ ] **PoC:** ejecutar un caso pequeño del propio EQUITAS y conservar comando, configuración, resultado y dificultad encontrada.
-- [ ] **Matriz de decisión:** fijar criterios/pesos antes de puntuar; puntuaciones justificadas con la PoC o documentación.
-- [ ] **Adopción incremental:** describir incorporación inicial, extensión al caso representativo, integración CI y mantenimiento de configuración.
-- [ ] Guardar herramienta/versión elegida y razones. No agregar herramientas solo para aumentar la lista.
+- [x] **Requisitos:** problema a resolver, stack, ejecución local/CI, formatos, esfuerzo y limitaciones.
+- [x] **Alternativas:** investigar opciones y conservar referencias primarias vigentes y criterios relevantes.
+- [x] **PoC:** ejecutar un caso pequeño del propio EQUITAS y conservar comando, configuración, resultado y dificultad encontrada.
+- [x] **Matriz de decisión:** fijar criterios/pesos antes de puntuar; puntuaciones justificadas con la PoC o documentación.
+- [x] **Adopción incremental:** describir incorporación inicial, extensión al caso representativo, integración CI y mantenimiento de configuración.
+- [x] Guardar herramienta/versión elegida y razones. No agregar herramientas solo para aumentar la lista.
 
 Ejemplo de criterios/pesos para adaptar: compatibilidad 25 %, automatización CI 20 %, reportes 20 %, facilidad de uso 15 %, reproducibilidad 10 %, costo/licencia 10 %. Suman 100 %. Son una propuesta de valoración, no resultados ya obtenidos. Las puntuaciones quedan pendientes hasta evaluarlas.
 
@@ -844,8 +846,8 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Gate completo / código nuevo | `python quality/gates.py --artifacts .quality/local-ci --output .quality/local-gates`; integrado en `ci.py summary`. | Raíz, reportes del HEAD actual. | [Ficha E04](REGISTRO_EJECUCION_E04.md), base/diff/conteos y bloqueo crítico comprobado. |
 | Integración externa obligatoria | `python quality/supabase_integration.py --config-file .quality/e06/credentials.json --output .quality/e06/nueva-ejecucion` | Raíz; secreto local ignorado. | Auth/lectura/RLS reales, 12/12 en E06; falla por configuración ausente. |
 | Smoke desplegado | `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion` | Manifiesto nuevo, Chromium y secretos externos; ver CONFIGURACION_VERCEL_E07.md. | JSON/JUnit/capturas con URL y SHA; E07 aprobado. |
-| Estrés | **Pendiente de implementar en E08.** | Según implementación final. | Parámetros previos y reporte por pipeline. |
-| Esfuerzo sostenido | **Pendiente de implementar en E08.** | Según implementación final. | Duración/serie temporal y reporte. |
+| Estrés | `python quality/load/run.py stress --output .quality/e08/stress-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Cinco escalones nuevos; JSON/JUnit/serie/HTML y criterio previo. |
+| Esfuerzo sostenido | `python quality/load/run.py soak --output .quality/e08/soak-repeticion` | Venv Python preparado y k6 fijado; ver RENDIMIENTO_CALIDAD.md. | Diez usuarios, diez minutos, serie/recursos y reporte por pipeline. |
 | Ciclo integral de entrega | **Pendiente de integrar al finalizar.** | Workflow/comando documentado. | Todos los jobs obligatorios y evidencia consolidada. |
 
 Configurar secretos es una precondición de los comandos externos, no una serie de operaciones manuales ocultas en cada ensayo. La documentación debe permitir a otra persona preparar el entorno y luego ejecutar cada suite con un comando.
@@ -863,4 +865,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** E08: definir y ejecutar estrés progresivo y esfuerzo sostenido sobre un componente real con dataset aislado, umbrales previos y reportes generados por pipeline. Conservar los alcances de testing y los pendientes originales.
+**Siguiente paso concreto:** E09: consolidar métricas, ISO 25010, riesgos/contingencia, principios y mapa de pruebas; la herramienta ya tiene cinco pasos y adopción comprobada. Después E10/E11.

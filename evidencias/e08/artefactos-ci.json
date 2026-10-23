@@ -1,0 +1,119 @@
+{
+  "verified_sha256": true,
+  "artifacts": [
+    {
+      "id": 12505420013,
+      "name": "ci-frontend-39960952039-1",
+      "size_in_bytes": 676743,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505420013",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505420013/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:25:26Z",
+      "expires_at": "2026-11-22T13:25:25Z",
+      "updated_at": "2026-10-23T13:25:26Z",
+      "digest": "sha256:74bb481e8b212ac50e0fc87c16ff894f6aa4dab43c400528a9e217b50fda8706",
+      "workflow_run": {
+        "id": 39960952039,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    },
+    {
+      "id": 12505201338,
+      "name": "ci-summary-39960952039-1",
+      "size_in_bytes": 7407,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505201338",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505201338/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:25:53Z",
+      "expires_at": "2026-11-22T13:25:52Z",
+      "updated_at": "2026-10-23T13:25:53Z",
+      "digest": "sha256:6c4f19c7d92295f2baa4485fcd2d3d54f12e5889fc2f4604f6f3336db04a401b",
+      "workflow_run": {
+        "id": 39960952039,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    },
+    {
+      "id": 12504009353,
+      "name": "ci-backend-39960952039-1",
+      "size_in_bytes": 174740,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12504009353",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12504009353/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:25:17Z",
+      "expires_at": "2026-11-22T13:25:16Z",
+      "updated_at": "2026-10-23T13:25:17Z",
+      "digest": "sha256:64db371f3145f1444157897adcc58427e0ab16134c34c4118715f2c8c9dd259f",
+      "workflow_run": {
+        "id": 39960952039,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    },
+    {
+      "id": 12505182391,
+      "name": "load-stress-39960952025-1",
+      "size_in_bytes": 1020056,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505182391",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505182391/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:33:03Z",
+      "expires_at": "2026-11-22T13:33:03Z",
+      "updated_at": "2026-10-23T13:33:03Z",
+      "digest": "sha256:188b7d3433025f693dd41bcda43bda0fee2663f58292fd729381b384c675cb6a",
+      "workflow_run": {
+        "id": 39960952025,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    },
+    {
+      "id": 12505142932,
+      "name": "load-soak-39960952025-1",
+      "size_in_bytes": 1831519,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505142932",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12505142932/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:37:26Z",
+      "expires_at": "2026-11-22T13:37:25Z",
+      "updated_at": "2026-10-23T13:37:26Z",
+      "digest": "sha256:c2dc97ee6af6731b66aa090cebfdccbd6d1a2feb6580a790505a891c437e7f99",
+      "workflow_run": {
+        "id": 39960952025,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    },
+    {
+      "id": 12504981346,
+      "name": "load-ci-39960952025-1",
+      "size_in_bytes": 391,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12504981346",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12504981346/zip",
+      "expired": false,
+      "created_at": "2026-10-23T13:26:03Z",
+      "expires_at": "2026-11-22T13:26:02Z",
+      "updated_at": "2026-10-23T13:26:03Z",
+      "digest": "sha256:31d53d07435c6d516f3faffd23d4585ede9aeb1de2254ea6a701bf8ccd4b5bc5",
+      "workflow_run": {
+        "id": 39960952025,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/e08-rendimiento",
+        "head_sha": "f6f83f9a3172fc2e42912305a181057130d9577b"
+      }
+    }
+  ]
+}

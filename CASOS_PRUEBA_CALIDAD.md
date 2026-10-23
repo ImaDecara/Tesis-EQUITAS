@@ -1,10 +1,12 @@
 # Casos de prueba, técnicas y resultados — EQUITAS
 
+**Actualización E08, 23/10/2026:** estrés progresivo y sostenido completados en [pipeline](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025), SHA `f6f83f9a3172fc2e42912305a181057130d9577b`, después del [CI del mismo commit](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039). Se midió la API FastAPI con lógica productiva y conector sintético local: 3.600 perfiles/objetos y 72.000 deudas representadas. Ambas campañas aprobaron sus criterios previos; E08 tiene 24/24 controles. Corte acumulado: **168 aisladas + 12 externas + un smoke + dos cargas = 183 pruebas/campañas de producto**, con **66 controles de infraestructura aparte**, cero fallidas/omitidas en ese corte. Los requests no se cuentan como tests. [Ficha E08](REGISTRO_EJECUCION_E08.md), [comandos/alcance](RENDIMIENTO_CALIDAD.md), [resultados](evidencias/e08/resultados.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). La capacidad de Vercel/Supabase/web no fue ensayada por estas cargas. E09 tiene la herramienta documentada y conserva sus demás pendientes; siguen abiertos DEF-SUP-001 original y OBS-DEP-001. Esta nota prevalece sobre estados históricos de cargas pendientes.
+
 **Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
 
 **Formalización E05, 21/10/2026. Responsable:** Axel Azcune (`AxAzc`). Los criterios y resultados de E03/E04 conservan sus versiones originales; documentarlos aquí no crea nuevas ejecuciones.
 
-El catálogo contiene **53 IDs de caso/familia seleccionados**, con variantes parametrizadas. No equivale a 50 pruebas nuevas. El [inventario completo](calidad/inventario-pruebas.json) conserva **181 aprobadas, 0 fallidas y 0 omitidas** de producto: 168 aisladas, 12 HTTP reales y un recorrido de navegador; **55 de infraestructura por separado**, verificadas en E07. El inventario E06 se conserva como histórico. Los casos DAT/FIXTURE, AUTH y REC representan 69 variantes aisladas aprobadas de esas suites; el resto de la línea base permanece en el inventario y sus fuentes.
+El catálogo contiene **56 IDs de caso/familia seleccionados**, con variantes parametrizadas. No equivale a 50 pruebas nuevas. El [inventario completo](calidad/inventario-pruebas.json) conserva **183 aprobadas, 0 fallidas y 0 omitidas** en el corte de producto: 168 aisladas, 12 HTTP reales, un recorrido de navegador y dos campañas de carga; **66 de infraestructura por separado**. Cada clase conserva sus reportes y versiones. El inventario E06 se conserva como histórico. Los casos DAT/FIXTURE, AUTH y REC representan 69 variantes aisladas aprobadas de esas suites; el resto de la línea base permanece en el inventario y sus fuentes.
 
 Las fichas utilizan los campos de la [plantilla](.github/ISSUE_TEMPLATE/caso_prueba.md). En el [JSON](calidad/casos-prueba.json), cada ficha hereda el contexto de su grupo; los campos propios tienen precedencia. [Seguimiento y estados](GESTION_CALIDAD.md) y [matriz de trazabilidad](TRAZABILIDAD_CALIDAD.md).
 
@@ -1188,3 +1190,27 @@ La [matriz](TRAZABILIDAD_CALIDAD.md) enlaza los resultados con Issues. DEF-SUP-0
 **Obtenido:** 1/1 variantes aprobadas; SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [Ejecución](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523), [evidencia](evidencias/e07/smoke.json). DEP-02 cuenta como infraestructura; SMOKE-01 es un recorrido con cinco comprobaciones.
 
 **Comando:** `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion`. Campos y variantes exactas en el catálogo JSON.
+
+### PERF-01
+
+**Objetivo:** Estrés progresivo de la API de scoring. **Entrada:** 1/5/10/20/40 usuarios, 60 s por escalón; warmup 30 s y drenajes 10 s.
+
+**Esperado:** Hasta diez usuarios: p95 <=2000 ms, errores <=1 %, cero contenido incorrecto, mínimos de muestras. Por encima del objetivo se informa degradación sin alterar el SLO.
+
+**Obtenido:** 1/1 aprobadas en su alcance; [reporte](evidencias/e08/stress/run.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). SHA `f6f83f9a3172fc2e42912305a181057130d9577b`. Detalles, pasos y comandos en el catálogo estructurado y la ficha E08. PERF-INFRA cuenta por separado; las solicitudes de carga no son tests individuales.
+
+### PERF-02
+
+**Objetivo:** Esfuerzo sostenido de la API de scoring. **Entrada:** Diez usuarios durante 600 s tras 30 s de warmup.
+
+**Esperado:** Mismos SLO por operación y agregado; fase completa y serie temporal/recursos conservados.
+
+**Obtenido:** 1/1 aprobadas en su alcance; [reporte](evidencias/e08/soak/run.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). SHA `f6f83f9a3172fc2e42912305a181057130d9577b`. Detalles, pasos y comandos en el catálogo estructurado y la ficha E08. PERF-INFRA cuenta por separado; las solicitudes de carga no son tests individuales.
+
+### PERF-INFRA
+
+**Objetivo:** Evitar cargas con CI/evidencia incoherentes. **Entrada:** Fixture/protocolo, CI ajeno, tiempos cortos, contenido/errores, percentiles y salida corrupta o interrumpida.
+
+**Esperado:** La evidencia inválida/incompleta o de CI ajeno se rechaza; solo la campaña completa que satisface criterios pasa.
+
+**Obtenido:** 11/11 aprobadas en su alcance; [reporte](evidencias/e08/ci-summary.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). SHA `f6f83f9a3172fc2e42912305a181057130d9577b`. Detalles, pasos y comandos en el catálogo estructurado y la ficha E08. PERF-INFRA cuenta por separado; las solicitudes de carga no son tests individuales.

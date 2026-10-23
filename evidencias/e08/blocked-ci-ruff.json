@@ -1,0 +1,37 @@
+[
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 63,
+      "row": 10
+    },
+    "filename": "/home/runner/work/Tesis-EQUITAS/Tesis-EQUITAS/quality/load/server.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\nimport sys\nfrom pathlib import Path\nfrom types import ModuleType\n\nfrom anyio.to_thread import current_default_thread_limiter\nfrom quality.load.fixture import FixtureConnector, make_oracle\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  }
+]

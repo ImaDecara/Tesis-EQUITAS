@@ -21,3 +21,7 @@ La [evidencia de historial](evidencias/e05/aportes-historial.json) guarda SHA co
 Axel: `c7256da` implementa el smoke y workflow; `4906c9b` verifica rama/destino; `348f446` exige URL/título de personas; `0e4e84a` acota la validación a la tabla operativa e importe. Configuración del Preview aislado, ejecución automática y evidencias en la ficha E07. Son cambios comprobables en Git y Actions; no una estimación de porcentajes de aporte.
 
 `a6497a7` (Axel): corrige DEF-UI-001, restableciendo el formulario al cambiar filtros y agregando la aserción de campo vacío al smoke.
+
+## Continuidad E08, 23/10/2026
+
+Axel: `09f040b` fija criterios antes de ejecutar; `f52c5ac` implementa entorno sintético y generador; `de29fd0` corrige arranque del proceso Windows; `fee7a71` agrega workflow/adopción y `f6f83f9` ajusta el análisis previo de imports. Campañas y reportes nuevos vinculados al SHA en la ficha E08.

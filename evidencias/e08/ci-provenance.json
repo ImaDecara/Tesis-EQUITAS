@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+  "branch": "quality/e08-rendimiento",
+  "started_at_utc": "2026-10-23T13:24:49.097065+00:00",
+  "errors": [],
+  "quality_run_id": 39960952039,
+  "quality_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039",
+  "conclusion": "success",
+  "finished_at_utc": "2026-10-23T13:26:02.507965+00:00"
+}

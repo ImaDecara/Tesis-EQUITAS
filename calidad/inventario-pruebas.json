@@ -1,16 +1,17 @@
 {
-  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
-  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596",
+  "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039",
   "counts": {
-    "product_passed": 181,
+    "product_passed": 183,
     "product_failed": 0,
     "product_skipped": 0,
     "isolated_product_passed": 168,
     "real_external_passed": 12,
     "browser_smoke_passed": 1,
-    "infrastructure_passed": 55
+    "infrastructure_passed": 66,
+    "performance_campaigns_passed": 2
   },
-  "previous_inventory": "evidencias/e07/inventario-anterior-e06.json",
+  "previous_inventory": "evidencias/e08/inventario-anterior-e07.json",
   "producto": [
     {
       "module": "frontend",
@@ -1219,6 +1220,24 @@
       "status": "passed",
       "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
       "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+    },
+    {
+      "module": "performance",
+      "file": "quality/load/scenarios.js",
+      "name": "stress",
+      "title": "PERF-01",
+      "status": "passed",
+      "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025"
+    },
+    {
+      "module": "performance",
+      "file": "quality/load/scenarios.js",
+      "name": "soak",
+      "title": "PERF-02",
+      "status": "passed",
+      "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025"
     }
   ],
   "infraestructura": [
@@ -1476,6 +1495,72 @@
     },
     {
       "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_above_target_degradation_is_observed_without_changing_target",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_connector_is_read_only_strict_and_returns_independent_rows",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_fixed_schedule_has_target_and_ten_minute_sustained_phase",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_fixture_is_deterministic_complete_and_covers_six_groups",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_http_error_or_incorrect_content_cannot_pass",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_load_requires_exact_quality_source_workflow_and_repository",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_missing_phase_and_short_execution_cannot_pass",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_nonzero_exit_resource_stop_and_corrupt_output_cannot_pass",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_percentile_does_not_hide_threshold_excess_by_rounding",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_profiles_are_complete_in_source_without_cloud_response_caps",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_load.py",
+      "name": "test_load.LoadEvidenceTests.test_valid_report_excludes_warmup_and_preserves_operation_breakdown",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
       "file": "quality/tests/test_preview.py",
       "name": "test_preview.PreviewSelectionTests.test_build_probe_requires_testing_branch_and_project",
       "status": "passed"
@@ -1553,5 +1638,7 @@
       "status": "passed"
     }
   ],
-  "smoke_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523"
+  "smoke_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
+  "performance_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025",
+  "scope": "Corte acumulado: aisladas actuales, integración/smoke históricos de código productivo sin cambios y dos campañas nuevas E08; los reportes tienen sus SHA propios. PoC y requests no aumentan el contador de tests."
 }

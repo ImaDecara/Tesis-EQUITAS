@@ -1,10 +1,10 @@
 {
-  "version": 3,
+  "version": 4,
   "formalizado_en": "E05, 21/10/2026",
   "responsable": "Axel Azcune",
-  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
-  "source_run": 39955381596,
-  "alcance": "53 IDs/familias seleccionados; 181 pruebas de producto aprobadas: 168 aisladas, 12 HTTP reales y un recorrido de navegador con cinco comprobaciones. 55 controles de infraestructura aparte. Históricos E05/E06 conservados.",
+  "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+  "source_run": 39960952039,
+  "alcance": "56 IDs/familias seleccionados. Corte acumulado de 183 pruebas/campañas de producto: 168 aisladas, 12 externas, un smoke y dos cargas. 66 controles de infraestructura aparte. Cada evidencia conserva su versión y entorno.",
   "campos_heredados": "Cada ficha combina contexto y campos propios; un campo propio tiene precedencia. Los IDs de caso agrupan variantes y no son un contador de tests.",
   "contextos": {
     "DAT": {
@@ -243,6 +243,75 @@
       "defectos": [
         "DEF-UI-001"
       ]
+    },
+    "PERF-STRESS": {
+      "nivel": "Rendimiento / componente con HTTP real local",
+      "requisitos": [
+        "R11",
+        "R17",
+        "R20",
+        "R21",
+        "R25"
+      ],
+      "precondiciones": "Runtime y dependencias fijadas; política e08-v1 previa; fixture aislada; sin credenciales reales.",
+      "comando": "python quality/load/run.py stress --output .quality/e08/stress-repeticion",
+      "codigo": [
+        "quality/load/run.py",
+        "quality/load/scenarios.js",
+        "quality/load/report.py",
+        "quality/load/fixture.py"
+      ],
+      "evidencias": [
+        "evidencias/e08/stress/run.json"
+      ],
+      "grupo_issue": "CAS-PERF",
+      "defectos": []
+    },
+    "PERF-SOAK": {
+      "nivel": "Rendimiento / componente con HTTP real local",
+      "requisitos": [
+        "R11",
+        "R17",
+        "R20",
+        "R21",
+        "R25"
+      ],
+      "precondiciones": "Runtime y dependencias fijadas; política e08-v1 previa; fixture aislada; sin credenciales reales.",
+      "comando": "python quality/load/run.py soak --output .quality/e08/soak-repeticion",
+      "codigo": [
+        "quality/load/run.py",
+        "quality/load/scenarios.js",
+        "quality/load/report.py",
+        "quality/load/fixture.py"
+      ],
+      "evidencias": [
+        "evidencias/e08/soak/run.json"
+      ],
+      "grupo_issue": "CAS-PERF",
+      "defectos": []
+    },
+    "PERF-INFRA": {
+      "nivel": "Infraestructura de pruebas",
+      "requisitos": [
+        "R11",
+        "R17",
+        "R20",
+        "R21",
+        "R25"
+      ],
+      "precondiciones": "Runtime y dependencias fijadas; política e08-v1 previa; fixture aislada; sin credenciales reales.",
+      "comando": "python -m unittest discover -s quality/tests -p test_load.py -v",
+      "codigo": [
+        "quality/tests/test_load.py",
+        "quality/load/report.py",
+        "quality/load/fixture.py",
+        "quality/load/wait_ci.py"
+      ],
+      "evidencias": [
+        "evidencias/e08/ci-summary.json"
+      ],
+      "grupo_issue": "CAS-PERF",
+      "defectos": []
     }
   },
   "casos": [
@@ -3465,8 +3534,189 @@
           "state_at_E07": "closed"
         }
       ]
+    },
+    {
+      "id": "PERF-01",
+      "contexto": "PERF-STRESS",
+      "objetivo": "Estrés progresivo de la API de scoring",
+      "tecnicas": [
+        "carga no funcional"
+      ],
+      "entrada": "1/5/10/20/40 usuarios, 60 s por escalón; warmup 30 s y drenajes 10 s.",
+      "pasos": [
+        "Verificar SHA/política/dataset y preparar el entorno.",
+        "Ejecutar campaña o controles con el comando versionado.",
+        "Evaluar resultado, códigos de salida y reportes contra el criterio previo."
+      ],
+      "esperado": "Hasta diez usuarios: p95 <=2000 ms, errores <=1 %, cero contenido incorrecto, mínimos de muestras. Por encima del objetivo se informa degradación sin alterar el SLO.",
+      "obtenido": "1/1 aprobadas en el alcance declarado.",
+      "estado": "aprobado en pipeline",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "f6f83f9a3172fc2e42912305a181057130d9577b",
+      "entorno": "GitHub Actions Ubuntu 24.04; servidor/generador en el mismo runner, distinto runner para cada campaña.",
+      "selector": "PERF-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025",
+      "variantes_reportadas": [
+        {
+          "module": "performance",
+          "file": "quality/load/scenarios.js",
+          "name": "stress",
+          "title": "PERF-01",
+          "status": "passed",
+          "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+          "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-PERF",
+        "number": 12,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/12",
+        "state_at_E08": "closed"
+      }
+    },
+    {
+      "id": "PERF-02",
+      "contexto": "PERF-SOAK",
+      "objetivo": "Esfuerzo sostenido de la API de scoring",
+      "tecnicas": [
+        "carga no funcional"
+      ],
+      "entrada": "Diez usuarios durante 600 s tras 30 s de warmup.",
+      "pasos": [
+        "Verificar SHA/política/dataset y preparar el entorno.",
+        "Ejecutar campaña o controles con el comando versionado.",
+        "Evaluar resultado, códigos de salida y reportes contra el criterio previo."
+      ],
+      "esperado": "Mismos SLO por operación y agregado; fase completa y serie temporal/recursos conservados.",
+      "obtenido": "1/1 aprobadas en el alcance declarado.",
+      "estado": "aprobado en pipeline",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "f6f83f9a3172fc2e42912305a181057130d9577b",
+      "entorno": "GitHub Actions Ubuntu 24.04; servidor/generador en el mismo runner, distinto runner para cada campaña.",
+      "selector": "PERF-02",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025",
+      "variantes_reportadas": [
+        {
+          "module": "performance",
+          "file": "quality/load/scenarios.js",
+          "name": "soak",
+          "title": "PERF-02",
+          "status": "passed",
+          "source_sha": "f6f83f9a3172fc2e42912305a181057130d9577b",
+          "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-PERF",
+        "number": 12,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/12",
+        "state_at_E08": "closed"
+      }
+    },
+    {
+      "id": "PERF-INFRA",
+      "contexto": "PERF-INFRA",
+      "objetivo": "Evitar cargas con CI/evidencia incoherentes",
+      "tecnicas": [
+        "contrato negativo y límites"
+      ],
+      "entrada": "Fixture/protocolo, CI ajeno, tiempos cortos, contenido/errores, percentiles y salida corrupta o interrumpida.",
+      "pasos": [
+        "Verificar SHA/política/dataset y preparar el entorno.",
+        "Ejecutar campaña o controles con el comando versionado.",
+        "Evaluar resultado, códigos de salida y reportes contra el criterio previo."
+      ],
+      "esperado": "La evidencia inválida/incompleta o de CI ajeno se rechaza; solo la campaña completa que satisface criterios pasa.",
+      "obtenido": "11/11 aprobadas en el alcance declarado.",
+      "estado": "aprobado en pipeline",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "f6f83f9a3172fc2e42912305a181057130d9577b",
+      "entorno": "GitHub Actions Ubuntu 24.04; servidor/generador en el mismo runner, distinto runner para cada campaña.",
+      "selector": "PERF-INFRA",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039",
+      "variantes_reportadas": [
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_above_target_degradation_is_observed_without_changing_target",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_connector_is_read_only_strict_and_returns_independent_rows",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_fixed_schedule_has_target_and_ten_minute_sustained_phase",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_fixture_is_deterministic_complete_and_covers_six_groups",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_http_error_or_incorrect_content_cannot_pass",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_load_requires_exact_quality_source_workflow_and_repository",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_missing_phase_and_short_execution_cannot_pass",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_nonzero_exit_resource_stop_and_corrupt_output_cannot_pass",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_percentile_does_not_hide_threshold_excess_by_rounding",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_profiles_are_complete_in_source_without_cloud_response_caps",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_load.py",
+          "name": "test_load.LoadEvidenceTests.test_valid_report_excludes_warmup_and_preserves_operation_breakdown",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 11,
+      "issue": {
+        "id": "CAS-PERF",
+        "number": 12,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/12",
+        "state_at_E08": "closed"
+      }
     }
   ],
-  "actualizado_en": "E07, 23/10/2026",
-  "smoke_run": 39955572523
+  "actualizado_en": "E08, 23/10/2026",
+  "smoke_run": 39955572523,
+  "performance_run": 39960952025
 }

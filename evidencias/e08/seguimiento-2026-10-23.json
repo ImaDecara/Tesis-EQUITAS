@@ -1,0 +1,127 @@
+{
+  "total": 12,
+  "closed": 10,
+  "open": 2,
+  "issues": [
+    {
+      "number": 12,
+      "title": "CAS-PERF: ejecutar estres y esfuerzo sostenido de la API aislada",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/12",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "f350a95bea3d2e037fd6569e89cf95ade8a5035d69d80fd2da9bc250a5924a08"
+    },
+    {
+      "number": 11,
+      "title": "DEF-UI-001: limpiar filtros conserva el texto de busqueda anterior",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/11",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "2246b1824e1a722a8d186829fa4f3543e76800191ed1bf72b99641e365c99419"
+    },
+    {
+      "number": 10,
+      "title": "CAS-SMOKE: verificar preview y recorrido autenticado de testing",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/10",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "ab9c5d719732713c1278b3fa3a89e8729db1949cf86e33ae4de1a2adb8d0a7a2"
+    },
+    {
+      "number": 9,
+      "title": "[CAS-EXT] Integración real y autorización de testing pendiente E06",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/9",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "5e8c8bc1aae2f140afb66ad192f977833082461bbe4c43db03f2f8418c10dc60"
+    },
+    {
+      "number": 8,
+      "title": "[CAS-GATE] Cobertura, gates y auditoría con bloqueo verificado",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/8",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "28b60ccafa90e47dd39883503310d70c1e3bd41e7a40dfd145d0d9e876005386"
+    },
+    {
+      "number": 7,
+      "title": "[CAS-REC] Tabla de decisión y límites de recomendaciones REC-01",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/7",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "dee9a647c7db1a64513cbedeb1211ecc6071795ef7c1bb9604e87faca1df542f"
+    },
+    {
+      "number": 6,
+      "title": "[CAS-AUTH] Contrato aislado de sesión y pertenencia AUTH-01–09",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/6",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "8825deec39290f1ba43dba43fcaa8f6a52216a207e81bc71a307b0f2223d621f"
+    },
+    {
+      "number": 5,
+      "title": "[CAS-DAT] Regresión de lectura completa DAT-01–14 y FIXTURE-01",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/5",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "c150cef634a1841b1ebc155195182a7154a40eaa1cd67460cf33677ec9ce8b00"
+    },
+    {
+      "number": 4,
+      "title": "[OBS-COB-001] Alcanzar el mínimo frontend y protegerlo con gates",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/4",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "ec5910b4e315bec0083b76c779e5e8378ff8e3fc9a7d4fddc5230813e2bedd0f"
+    },
+    {
+      "number": 3,
+      "title": "[OBS-DEP-001] Resolver la cadena vulnerable de desarrollo antes del vencimiento de la excepción",
+      "state": "OPEN",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/3",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "a145d34974ec87dbb184ef0019575693abfa8e8db7f6b56f818302df666107cc"
+    },
+    {
+      "number": 2,
+      "title": "[DEF-DAT-001] Recuperar la cartera completa en objetos y personas",
+      "state": "CLOSED",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/2",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "8f87452bf78ae58594ed74843fd79c6c32d173bc1a26d93d5aebe174f2472434"
+    },
+    {
+      "number": 1,
+      "title": "[DEF-SUP-001] Restringir cartera a usuarios con pertenencia activa al tenant",
+      "state": "OPEN",
+      "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/1",
+      "assignees": [
+        "AxAzc"
+      ],
+      "body_sha256": "4872a8672837568127248f0ca80e1a39fc23f61ad2b123a9ddb3d397fd04fa92"
+    }
+  ]
+}

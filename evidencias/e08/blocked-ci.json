@@ -1,0 +1,10 @@
+{
+  "source_sha": "fee7a71a2ed0137d809ddd05d78fc91a6125f4fd",
+  "quality_run": 39960503024,
+  "load_run": 39960503057,
+  "quality_result": "failure",
+  "cause": "I001 import ordering in quality/load/server.py under back/ruff.toml",
+  "load_jobs": "skipped by CI prerequisite; no campaign executed",
+  "fixed_by": "f6f83f9a3172fc2e42912305a181057130d9577b",
+  "scope": "Infrastructure preparation, not a functional performance failure"
+}

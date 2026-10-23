@@ -95,3 +95,7 @@ Los reportes locales de partida son [evidencias/e01](evidencias/e01/resumen-2026
 ## E07 — Preview y smoke automático
 
 Ver [configuración por rama y secreto](CONFIGURACION_VERCEL_E07.md) y [ejecución aceptada](REGISTRO_EJECUCION_E07.md). Desde `front`: `npm exec --no -- playwright install chromium`; luego `npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion`. Usar un directorio nuevo y secretos externos; el manifiesto exige CI/SHA/URL correctos. El flujo de `quality/tp-testing` se ejecuta automáticamente después del CI obligatorio y disponibilidad del Preview. Un fallo devuelve salida 1 y conserva diagnóstico.
+
+## E08 — Cargas aisladas reproducibles
+
+[Preparación y comandos completos](RENDIMIENTO_CALIDAD.md). Con el entorno Python fijado activo: `python quality/load/install.py`; luego `python quality/load/run.py stress --output .quality/e08/stress-repeticion` o `python quality/load/run.py soak --output .quality/e08/soak-repeticion`. Sin credenciales cloud; salida nueva obligatoria. El workflow genera datos/reportes nuevos, requiere CI del mismo SHA y conserva evidencia incluso con fallo.

@@ -1,6 +1,6 @@
 # E08 — Plan previo de estrés y esfuerzo sostenido
 
-**Fecha:** 23/10/2026. **Responsable:** Axel Azcune (`AxAzc`). **Estado:** criterios fijados antes de ejecutar; resultados pendientes. Entrada: E07 cerrada en `909366f`. Requisitos R11, R17, R20, R21 y R25.
+**Fecha:** 23/10/2026. **Responsable:** Axel Azcune (`AxAzc`). **Estado:** criterios previos conservados; ambas campañas completadas y aprobadas. El primer commit de criterios es `09f040b`; [resultados y límites](REGISTRO_EJECUCION_E08.md). Entrada: E07 cerrada en `909366f`. Requisitos R11, R17, R20, R21 y R25.
 
 ## Componente y límites
 
