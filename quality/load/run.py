@@ -11,6 +11,7 @@ import signal
 import socket
 import subprocess
 import sys
+import sysconfig
 import time
 import urllib.error
 import urllib.request
@@ -91,7 +92,13 @@ def campaign(mode, output, binary):
             port = lease.getsockname()[1]
         env = environment()
         env['QUALITY_SOURCE_SHA'] = sha
-        server_command = [sys.executable, '-m', 'uvicorn', 'quality.load.server:app', '--host', '127.0.0.1',
+        # Windows venv redirectors spawn a different PID; use the base interpreter
+        # with this venv's package directory so ownership/cleanup stay exact.
+        server_python = sys.executable
+        if os.name == 'nt':
+            server_python = sys._base_executable
+            env['PYTHONPATH'] += os.pathsep + sysconfig.get_path('purelib')
+        server_command = [server_python, '-m', 'uvicorn', 'quality.load.server:app', '--host', '127.0.0.1',
                           '--port', str(port), '--workers', '1', '--loop', 'asyncio', '--http', 'h11',
                           '--log-level', 'warning', '--no-access-log']
         report['server_command'] = server_command
@@ -107,9 +114,9 @@ def campaign(mode, output, binary):
             try:
                 with urllib.request.urlopen(base + '/__quality', timeout=2) as response:
                     meta = json.load(response)
+                report['server_metadata'] = meta
                 if meta['pid'] != server.pid or meta['dataset_hash'] != oracle['dataset_hash'] or meta['source_sha'] != sha:
                     raise ValueError('Wrong process, dataset or source version on loopback')
-                report['server_metadata'] = meta
                 break
             except (urllib.error.URLError, TimeoutError):
                 if time.monotonic() > ready:
