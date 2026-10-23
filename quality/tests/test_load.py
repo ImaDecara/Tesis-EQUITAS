@@ -9,11 +9,22 @@ from pathlib import Path
 
 from quality.load.fixture import FixtureConnector, make_dataset, make_oracle
 from quality.load.report import evaluate, percentile, phases
+from quality.load.wait_ci import validate_run
 
 POLICY = json.loads((Path(__file__).resolve().parents[1] / 'load/policy.json').read_text(encoding='utf-8'))
 
 
 class LoadEvidenceTests(unittest.TestCase):
+    def test_load_requires_exact_quality_source_workflow_and_repository(self):
+        run = {'head_sha': 'a' * 40, 'head_branch': 'quality/e08-rendimiento',
+               'head_repository': {'full_name': 'ImaDecara/Tesis-EQUITAS'},
+               'event': 'push', 'path': '.github/workflows/quality-ci.yml'}
+        self.assertTrue(validate_run(run, 'a' * 40, 'quality/e08-rendimiento', 'ImaDecara/Tesis-EQUITAS'))
+        for field, value in [('head_sha', 'b' * 40), ('head_branch', 'main'), ('event', 'pull_request'),
+                             ('path', '.github/workflows/other.yml'), ('head_repository', {'full_name': 'foreign/repo'})]:
+            with self.subTest(field=field):
+                self.assertFalse(validate_run({**run, field: value}, 'a' * 40, 'quality/e08-rendimiento', 'ImaDecara/Tesis-EQUITAS'))
+
     def samples(self, directory, *, latency=100, error=False, content=False, missing=False, corrupt=False):
         policy = copy.deepcopy(POLICY)
         policy['stress']['users'] = [10]

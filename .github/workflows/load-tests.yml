@@ -1,0 +1,80 @@
+name: Rendimiento - estres y sostenido
+
+on:
+  push:
+    branches: [quality/e08-rendimiento]
+    paths: ['quality/load/**', 'quality/tests/test_load.py', '.github/workflows/load-tests.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: load-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Exigir calidad del mismo commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: back/.python-version
+      - name: Esperar CI obligatorio del SHA y rama evaluados
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python quality/load/wait_ci.py --output .quality/load-ci
+      - name: Conservar procedencia aun con fallos
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: load-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .quality/load-ci/
+          if-no-files-found: error
+          retention-days: 30
+
+  load:
+    name: API aislada - ${{ matrix.scenario }}
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [stress, soak]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: back/.python-version
+          cache: pip
+          cache-dependency-path: |
+            back/requirements.txt
+            back/requirements-dev.txt
+            back/constraints.txt
+      - name: Preparar dependencias fijadas en entorno nuevo
+        run: |
+          python -m venv .quality/load-venv
+          .quality/load-venv/bin/python -m pip install pip==25.0.1
+          .quality/load-venv/bin/python -m pip install -r back/requirements-dev.txt
+          .quality/load-venv/bin/python -m pip check
+      - name: Instalar k6 oficial con SHA-256 verificado
+        run: python quality/load/install.py
+      - name: Ejecutar campana y generar reportes nuevos
+        run: .quality/load-venv/bin/python quality/load/run.py ${{ matrix.scenario }} --output .quality/load-${{ matrix.scenario }}
+      - name: Conservar reportes incluso ante incumplimiento o parada
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: load-${{ matrix.scenario }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .quality/load-${{ matrix.scenario }}/
+          if-no-files-found: error
+          retention-days: 30

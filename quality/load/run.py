@@ -177,6 +177,8 @@ def campaign(mode, output, binary):
         result = evaluate(raw, policy, mode, code, elapsed, stop_reason)
         report.update(result, k6_exit_code=code, stop_reason=stop_reason,
                       resources=resources, finished_at_utc=datetime.now(UTC).isoformat())
+        if (output / 'k6-summary.json').exists():
+            report['k6_run_state'] = json.loads((output / 'k6-summary.json').read_text(encoding='utf-8')).get('state', {})
         if not report['resources_supported']:
             report['resource_limit'] = 'Linux /proc CPU/RSS collector unavailable on this OS; resources not measured'
         report['code_sha256'] = {str(p.relative_to(ROOT)).replace('\\', '/'): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()

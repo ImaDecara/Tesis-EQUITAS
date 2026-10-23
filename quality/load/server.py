@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from anyio.to_thread import current_default_thread_limiter
+
 from quality.load.fixture import FixtureConnector, make_oracle
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +22,8 @@ ORACLE = make_oracle()
 
 
 @app.get('/__quality')
-def quality_metadata():
+async def quality_metadata():
     return {'fixture_version': ORACLE['fixture_version'], 'dataset_hash': ORACLE['dataset_hash'],
             'profiles': ORACLE['profiles'], 'source_sha': os.environ['QUALITY_SOURCE_SHA'],
-            'pid': os.getpid(), 'connector': 'synthetic-local-read-only', 'workers': 1}
+            'pid': os.getpid(), 'connector': 'synthetic-local-read-only', 'workers': 1,
+            'threadpool_tokens': current_default_thread_limiter().total_tokens}

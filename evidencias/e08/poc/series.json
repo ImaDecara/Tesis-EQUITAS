@@ -1,0 +1,50 @@
+[
+  {
+    "phase": "poc",
+    "bucket_start_unix": 1792761330,
+    "edge_bucket_may_be_partial": true,
+    "requests": 70,
+    "unexpected_errors": 0,
+    "error_rate": 0.0,
+    "content_mismatches": 0,
+    "p50_ms": 32.033649999999994,
+    "p95_ms": 48.2987,
+    "p99_ms": 54.205276000000005,
+    "max_ms": 54.3982,
+    "requests_per_second": 7.0,
+    "planned_seconds": 10,
+    "observed_sample_span_seconds": 9.372963905334473
+  },
+  {
+    "phase": "poc",
+    "bucket_start_unix": 1792761340,
+    "edge_bucket_may_be_partial": false,
+    "requests": 74,
+    "unexpected_errors": 0,
+    "error_rate": 0.0,
+    "content_mismatches": 0,
+    "p50_ms": 32.23165,
+    "p95_ms": 47.919489999999996,
+    "p99_ms": 49.57148599999999,
+    "max_ms": 50.6532,
+    "requests_per_second": 7.4,
+    "planned_seconds": 10,
+    "observed_sample_span_seconds": 9.944437980651855
+  },
+  {
+    "phase": "poc",
+    "bucket_start_unix": 1792761350,
+    "edge_bucket_may_be_partial": true,
+    "requests": 4,
+    "unexpected_errors": 0,
+    "error_rate": 0.0,
+    "content_mismatches": 0,
+    "p50_ms": 36.68695,
+    "p95_ms": 50.2152,
+    "p99_ms": 51.990480000000005,
+    "max_ms": 52.4343,
+    "requests_per_second": 0.4,
+    "planned_seconds": 10,
+    "observed_sample_span_seconds": 0.42714500427246094
+  }
+]

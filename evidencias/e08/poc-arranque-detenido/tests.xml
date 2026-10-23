@@ -1,0 +1,8 @@
+<testsuite name="E08 isolated API load" tests="1" failures="1" skipped="0"><testcase name="poc"><failure message="Prior load criteria failed">k6 returned a nonzero exit status: -1
+ValueError: Wrong process, dataset or source version on loopback
+Campaign shorter than the configured schedule
+poc: insufficient samples
+poc: incomplete phase observation
+poc/list: insufficient samples
+poc/filtered: insufficient samples
+poc/summary: insufficient samples</failure></testcase></testsuite>
