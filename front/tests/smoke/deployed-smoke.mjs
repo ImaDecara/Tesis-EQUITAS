@@ -145,6 +145,8 @@ try {
   await noVisibleError()
   await capture('objetos-filtro-restaurado')
   await page.getByRole('link', { name: 'Personas / Deudores', exact: true }).first().click()
+  await expect(page).toHaveURL(base.origin + '/people')
+  await expect(page.getByRole('heading', { name: 'Personas / Deudores', exact: true })).toBeVisible()
   await expect(page.getByRole('table').getByRole('row').filter({ hasText: policy.expected.person_name })).toBeVisible()
   await expect(page.locator('body')).not.toContainText(policy.expected.other_person_name)
   await noVisibleError()
