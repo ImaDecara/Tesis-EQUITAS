@@ -1,5 +1,7 @@
 # E07 — Configuración manual de Vercel
 
+**Estado 23/10/2026:** configuración aplicada y verificada mediante la conexión administrativa de Vercel. Las dos variables están limitadas a Preview/`quality/tp-testing`, el secreto de automatización está guardado en GitHub y el nuevo smoke automático aprobó. Esta guía queda como procedimiento de reproducción; no hay configuración manual pendiente de E07. [Evidencia](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523).
+
 Proyecto existente: **tesis-equitas**, equipo/namespace **equitas**. La rama de testing es **`quality/tp-testing`**. Su preview debe usar el Supabase aislado `iylwghgvtydpmwidojdo`.
 
 ## 1. Variables del preview de testing

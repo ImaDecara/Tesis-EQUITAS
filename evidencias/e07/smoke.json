@@ -1,0 +1,69 @@
+{
+  "case_id": "SMOKE-01",
+  "passed": true,
+  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+  "run_id": "39955572523",
+  "run_attempt": "1",
+  "started_at_utc": "2026-10-23T12:45:30.455Z",
+  "context": "Vercel preview",
+  "fixture_version": "e06-v1",
+  "checks": [
+    {
+      "id": "availability",
+      "passed": true,
+      "observed": {
+        "sourceSha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+        "sourceBranch": "quality/tp-testing",
+        "environment": "preview",
+        "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+      }
+    },
+    {
+      "id": "login",
+      "passed": true,
+      "observed": "Dashboard autenticado disponible."
+    },
+    {
+      "id": "dashboard",
+      "passed": true,
+      "observed": {
+        "debt_amount": 1250,
+        "other_tenant_visible": false
+      }
+    },
+    {
+      "id": "navigation_filter",
+      "passed": true,
+      "observed": "Objeto A, filtro sin resultados, limpieza y listado /people con persona A y ARS 1250 comprobados; B ausente."
+    },
+    {
+      "id": "logout",
+      "passed": true,
+      "observed": "Nueva navegacion protegida redirige a login y no muestra cartera."
+    }
+  ],
+  "errors": [],
+  "screenshots": [
+    "dashboard.png",
+    "objetos-filtro-restaurado.png",
+    "personas.png",
+    "logout-protegido.png"
+  ],
+  "tests": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "url": "https://tesis-equitas-dvj0xf5e3-equitas.vercel.app",
+  "deployment_id": 7278474310,
+  "quality_run_id": "39955381596",
+  "build_info": {
+    "sourceSha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "console_errors": [],
+  "page_errors": [],
+  "finished_at_utc": "2026-10-23T12:45:41.182Z"
+}

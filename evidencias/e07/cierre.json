@@ -1,0 +1,27 @@
+{
+  "stage": "E07",
+  "date": "2026-10-23",
+  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+  "quality_run_id": "39955381596",
+  "smoke_run_id": "39955572523",
+  "url": "https://tesis-equitas-dvj0xf5e3-equitas.vercel.app",
+  "tests": {
+    "product_passed": 181,
+    "product_failed": 0,
+    "product_skipped": 0,
+    "isolated_product_passed": 168,
+    "real_external_passed": 12,
+    "browser_smoke_passed": 1,
+    "infrastructure_passed": 55
+  },
+  "roadmap_controls_completed": 17,
+  "cases": 53,
+  "checks": {
+    "same_sha": true,
+    "preview_branch_and_testing_project": true,
+    "five_browser_checks": true,
+    "visual_review": true,
+    "first_attempt_limitation_preserved": true,
+    "negative_runner_exit_preserved": true
+  }
+}

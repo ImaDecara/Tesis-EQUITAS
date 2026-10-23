@@ -1,0 +1,69 @@
+{
+  "case_id": "SMOKE-01",
+  "passed": true,
+  "source_sha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+  "run_id": "39953222752",
+  "run_attempt": "1",
+  "started_at_utc": "2026-10-23T12:26:32.737Z",
+  "context": "Vercel preview",
+  "fixture_version": "e06-v1",
+  "checks": [
+    {
+      "id": "availability",
+      "passed": true,
+      "observed": {
+        "sourceSha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+        "sourceBranch": "quality/tp-testing",
+        "environment": "preview",
+        "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+      }
+    },
+    {
+      "id": "login",
+      "passed": true,
+      "observed": "Dashboard autenticado disponible."
+    },
+    {
+      "id": "dashboard",
+      "passed": true,
+      "observed": {
+        "debt_amount": 1250,
+        "other_tenant_visible": false
+      }
+    },
+    {
+      "id": "navigation_filter",
+      "passed": true,
+      "observed": "Objeto A, filtro sin resultados, limpieza y persona A comprobados; B ausente."
+    },
+    {
+      "id": "logout",
+      "passed": true,
+      "observed": "Nueva navegacion protegida redirige a login y no muestra cartera."
+    }
+  ],
+  "errors": [],
+  "screenshots": [
+    "dashboard.png",
+    "objetos-filtro-restaurado.png",
+    "personas.png",
+    "logout-protegido.png"
+  ],
+  "tests": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "url": "https://tesis-equitas-p2z915b23-equitas.vercel.app",
+  "deployment_id": 7239287806,
+  "quality_run_id": "39953038356",
+  "build_info": {
+    "sourceSha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "console_errors": [],
+  "page_errors": [],
+  "finished_at_utc": "2026-10-23T12:26:42.548Z"
+}

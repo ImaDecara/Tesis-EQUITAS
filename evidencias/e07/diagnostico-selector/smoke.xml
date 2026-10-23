@@ -1,0 +1,12 @@
+<testsuite name="E07 browser smoke" tests="1" failures="1" skipped="0"><testcase name="SMOKE-01 login, datos, filtros y logout"><failure message="Smoke failed">expect(locator).toBeVisible() failed
+
+Locator: getByRole(&apos;table&apos;).getByRole(&apos;row&apos;).filter({ hasText: &apos;Persona sintetica A&apos; })
+Expected: visible
+Error: strict mode violation: getByRole(&apos;table&apos;).getByRole(&apos;row&apos;).filter({ hasText: &apos;Persona sintetica A&apos; }) resolved to 2 elements:
+    1) &lt;tr class=&quot;border-b transition-colors duration-150 data-[state=selected]:bg-[#e6eef8] hover:bg-[#eef3fa]&quot;&gt;…&lt;/tr&gt; aka getByRole(&apos;row&apos;, { name: &apos;Persona sintetica A Sin documento Bajo (20) 20.00 1&apos;, exact: true })
+    2) &lt;tr class=&quot;border-b transition-colors duration-150 data-[state=selected]:bg-[#e6eef8] hover:bg-[#eef3fa]&quot;&gt;…&lt;/tr&gt; aka getByRole(&apos;row&apos;, { name: &apos;Persona sintetica A Sin documento Bajo (20) 20.00 1 Disponible $ 1.250 Ver&apos; })
+
+Call log:
+  - Expect &quot;toBeVisible&quot; getByRole(&apos;table&apos;).getByRole(&apos;row&apos;).filter({ hasText: &apos;Persona sintetica A&apos; }) with timeout 30000ms
+  - waiting for getByRole(&apos;table&apos;).getByRole(&apos;row&apos;).filter({ hasText: &apos;Persona sintetica A&apos; })
+</failure></testcase></testsuite>

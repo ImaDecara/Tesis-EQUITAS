@@ -1,0 +1,24 @@
+{
+  "defect": "DEF-UI-001",
+  "case_id": "SMOKE-01",
+  "expected_search_value": "",
+  "input": "E07-NO-EXISTE",
+  "red": {
+    "application_sha": "0e4e84ad7d1668cd5149dfd097590395dbe2fca5",
+    "runner_assertion": "toHaveValue('')",
+    "execution": "manual Windows Chromium → Preview → Supabase testing",
+    "passed": false,
+    "exit_code": 1,
+    "observed_search_value": "E07-NO-EXISTE",
+    "report": "evidencias/e07/filtro-red/smoke.json"
+  },
+  "green": {
+    "application_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+    "execution": "automatic GitHub Actions Ubuntu Chromium → new Preview → same Supabase fixtures",
+    "passed": true,
+    "assertion": "toHaveValue('')",
+    "run_id": "39955572523",
+    "report": "evidencias/e07/smoke.json"
+  },
+  "limits": "Comparación funcional; no se comparan latencia ni capacidad de plataformas distintas. El pipeline rojo real de R18 sigue documentado en E03."
+}

@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "source_sha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+  "quality_run_id": "39953038356",
+  "started_at_utc": "2026-10-23T12:25:53.372301+00:00",
+  "errors": [],
+  "deployment_id": 7239287806,
+  "url": "https://tesis-equitas-p2z915b23-equitas.vercel.app",
+  "environment": "Preview",
+  "deployment_created_at": "2026-10-21T22:57:43Z",
+  "ready_at": "2026-10-23T12:24:33Z",
+  "provider": "Vercel",
+  "build_info": {
+    "sourceSha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "finished_at_utc": "2026-10-23T12:25:55.013232+00:00"
+}

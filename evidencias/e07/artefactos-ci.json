@@ -1,0 +1,101 @@
+{
+  "verified_sha256": true,
+  "artifacts": [
+    {
+      "id": 12502451500,
+      "name": "ci-backend-39955381596-1",
+      "size_in_bytes": 174393,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12502451500",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12502451500/zip",
+      "expired": false,
+      "created_at": "2026-10-23T12:43:26Z",
+      "expires_at": "2026-11-22T12:43:25Z",
+      "updated_at": "2026-10-23T12:43:26Z",
+      "digest": "sha256:43061a1fdfe6bced1253435a5b12ab6e78b9453461a9e5d7f4303cb24f1f0231",
+      "workflow_run": {
+        "id": 39955381596,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/tp-testing",
+        "head_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+      }
+    },
+    {
+      "id": 12501903002,
+      "name": "ci-frontend-39955381596-1",
+      "size_in_bytes": 676702,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501903002",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501903002/zip",
+      "expired": false,
+      "created_at": "2026-10-23T12:43:49Z",
+      "expires_at": "2026-11-22T12:43:48Z",
+      "updated_at": "2026-10-23T12:43:49Z",
+      "digest": "sha256:03dd761a46538a8bc012e5c6f8927d2ef346db393980d5c0ade37bfa1488c5f7",
+      "workflow_run": {
+        "id": 39955381596,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/tp-testing",
+        "head_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+      }
+    },
+    {
+      "id": 12501888026,
+      "name": "ci-supabase-39955381596-1",
+      "size_in_bytes": 4740,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501888026",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501888026/zip",
+      "expired": false,
+      "created_at": "2026-10-23T12:43:45Z",
+      "expires_at": "2026-11-22T12:43:44Z",
+      "updated_at": "2026-10-23T12:43:45Z",
+      "digest": "sha256:3157854a45a7b594fc82f4390a0e3a0c7b9be2411debc2fa36b2c56c0b946eb5",
+      "workflow_run": {
+        "id": 39955381596,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/tp-testing",
+        "head_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+      }
+    },
+    {
+      "id": 12501489933,
+      "name": "ci-summary-39955381596-1",
+      "size_in_bytes": 8203,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501489933",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12501489933/zip",
+      "expired": false,
+      "created_at": "2026-10-23T12:44:07Z",
+      "expires_at": "2026-11-22T12:44:07Z",
+      "updated_at": "2026-10-23T12:44:07Z",
+      "digest": "sha256:28b5b96c3f9096a9387e92df501b6ba537398847e1a628a7624e4ace6340fa68",
+      "workflow_run": {
+        "id": 39955381596,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "quality/tp-testing",
+        "head_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+      }
+    },
+    {
+      "id": 12502681097,
+      "name": "preview-smoke-39955572523-1",
+      "size_in_bytes": 832390,
+      "url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12502681097",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12502681097/zip",
+      "expired": false,
+      "created_at": "2026-10-23T12:45:42Z",
+      "expires_at": "2026-11-22T12:45:41Z",
+      "updated_at": "2026-10-23T12:45:42Z",
+      "digest": "sha256:1e70283f794a907814a17a0989e43722262d47edb81f48b38d76d98838429c8c",
+      "workflow_run": {
+        "id": 39955572523,
+        "repository_id": 1238132628,
+        "head_repository_id": 1238132628,
+        "head_branch": "main",
+        "head_sha": "4906c9b3019178131690f4c148d8d061e2c89eca"
+      }
+    }
+  ],
+  "workflow_definition_note": "workflow_run usa la definición de main; checkout y source_sha corresponden a a6497a73b226f9d27abb4e9080d5540503d95539 del evento de CI de testing."
+}

@@ -1,5 +1,7 @@
 # EQUITAS — Registro de defectos de calidad
 
+**Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
+
 Registro versionado iniciado el **21/10/2026** y vinculado a **tickets reales de GitHub Issues en E05**. No es una exportación de Jira. [Matriz completa](TRAZABILIDAD_CALIDAD.md), [casos](CASOS_PRUEBA_CALIDAD.md) y [snapshot de seguimiento](evidencias/e05/seguimiento-2026-10-21.json). E03 corrige y valida DEF-DAT-001 mediante regresión automatizada aislada. DEF-SUP-001 y OBS-DEP-001 permanecen abiertos. OBS-COB-001 queda cerrada en E04 con pruebas y gates verificados. E06 verificó integración real y corrigió RLS exclusivamente en testing; el despliegue sigue en E07. [Seguimiento E06](evidencias/e06/seguimiento-2026-10-21.json).
 
 ## DEF-SUP-001 — El rol autenticado lee cartera sin pertenencia al tenant
@@ -112,3 +114,11 @@ E05 formaliza los estados, tickets y enlaces recíprocos en [TRAZABILIDAD_CALIDA
 | R07 / cobertura existente frontend | Vitest 4.1.12, 55 archivos | **791/1.280, Vitest 61,79 %; cumple 60 %**. | OBS-COB-001 | Cerrada E04; gate automático contra regresiones. |
 
 Los IDs describen esta revisión; no aumentan el recuento de las suites Vitest/Pytest ni se atribuyen a Jira.
+
+## DEF-UI-001 — Limpiar conserva el texto de búsqueda
+
+**Ticket:** [#11](https://github.com/ImaDecara/Tesis-EQUITAS/issues/11), cerrado tras regresión E07. **Severidad:** baja; prioridad P2. Responsable: Axel Azcune. Caso SMOKE-01, requisitos R13/R14/R19.
+
+En `/debtors`, aplicar `E07-NO-EXISTE` y pulsar Limpiar. Esperado: URL sin filtros, TP-A restaurado y campo vacío. Obtenido en la aplicación `0e4e84a`: URL/listado correctos pero valor efectivo del input todavía `E07-NO-EXISTE`, incluso tras 30 s. [Rojo funcional](evidencias/e07/filtro-red/smoke.json), captura y JUnit conservados; ejecución manual, no workflow rojo.
+
+Causa: el formulario usa `defaultValue` y la navegación conserva la instancia editada. `a6497a7` asigna una key basada en los filtros normalizados para reconstruir el formulario cuando cambian; [patrón de reinicio de estado de React](https://react.dev/learn/preserving-and-resetting-state#resetting-a-form-with-a-key). La aserción `toHaveValue('')` se mantiene como regresión. [Verde automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) sobre el nuevo Preview con el mismo dataset y valor de búsqueda. [Comparación](evidencias/e07/filtro-rojo-verde.json). Se valida el flujo de objetos; no se declara una revisión de todos los formularios del producto.

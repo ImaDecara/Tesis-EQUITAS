@@ -1,12 +1,14 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
+**Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
+
 **Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
 
-**Versión:** 1.7, cierre de la etapa E06 el 21 de octubre de 2026.
+**Versión:** 1.8, cierre de la etapa E07 el 23 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E06 completadas en sus alcances; E07 es la siguiente etapa. GitHub Issues formalizado con nueve tickets, catálogo y trazabilidad verificados. Las etapas externas y de entrega conservan sus pendientes.
+**Estado del roadmap:** E00–E07 completadas en sus alcances. E08 es la siguiente etapa; once issues, nueve cerrados y dos abiertos; cargas y cierre académico pendientes.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -139,7 +141,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E04** | Quality gates completos y comprobados. | **Completada**; 16 controles, CI normal y bloqueo crítico comprobados. | E01–E03. |
 | **E05** | Formalizar gestión de casos, defectos y trazabilidad. | **Completada**; 15 controles, nueve issues y catálogo/matriz verificados. | Comienza en E00 y se actualiza en todas las etapas. |
 | **E06** | Supabase de testing, autorización y cliente real. | Completada en testing: 12/12 variantes reales en CI, cero omisiones; original pendiente. | E00–E02; entorno aislado disponible. |
-| **E07** | Despliegue nuevo y smoke automático posterior. | Pendiente. | E04, E06. |
+| **E07** | Despliegue nuevo y smoke automático posterior. | Completada en Preview aislado; 17/17 controles. | E04, E06. |
 | **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Pendiente. | E02 y escenario aislado; E03/E06 según componente elegido. |
 | **E09** | Herramienta de cinco pasos y documentación transversal. | Parcial en los informes; cierre pendiente. | Puede avanzar junto con E01–E08. |
 | **E10** | Informe académico consolidado y PDF revisado. | Base recibida hasta QA/QC. | Evidencias finales de E03–E09. |
@@ -147,7 +149,7 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E06 están completas; el siguiente objetivo ejecutable es E07. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
+E00–E07 están completas en sus alcances; el siguiente objetivo ejecutable es E08. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -513,7 +515,7 @@ Los nuevos casos se implementarán y ejecutarán; los IDs no indican por sí sol
 
 ## 13. E07 — Despliegue nuevo y smoke posterior automático
 
-**Avance E07:** proveedor Vercel identificado; implementación del smoke y workflow posterior en validación. Recorrido local con Supabase testing aprobado; configuración manual del preview y ejecución desplegada pendientes. [Guía de configuración](CONFIGURACION_VERCEL_E07.md), [ficha E07](REGISTRO_EJECUCION_E07.md). No se declara cerrada esta etapa.
+**Cierre E07:** nuevo Preview y smoke automático aprobados con el mismo SHA; 17/17 controles completos. Ver ficha, reportes y capturas enlazados en la actualización vigente.
 
 **Objetivo:** demostrar que una versión desplegada funciona en su recorrido básico y que esa comprobación ocurre después del despliegue.  
 **Entrada:** E04 y E06, configuración de despliegue y usuario/datos de testing.  
@@ -521,18 +523,18 @@ Los nuevos casos se implementarán y ejecutarán; los IDs no indican por sí sol
 
 ### Tareas
 
-- [ ] Identificar proveedor y proyecto de hosting reales; Vercel es el hosting descrito en el avance. Verificar configuración efectiva al implementar.
-- [ ] Definir entorno de preview/testing asociado a Supabase de testing y variables correspondientes.
-- [ ] Conectar pruebas/gates con el despliegue mediante jobs o workflows relacionados, sin perder la asociación al mismo commit.
-- [ ] Obtener la URL del despliegue recién generado y comprobar su disponibilidad con timeout acotado.
-- [ ] Evitar ejecutar el smoke contra una URL antigua mientras el nuevo despliegue todavía se está preparando.
-- [ ] Implementar un smoke automatizado ejecutable con un comando, usando navegador cuando el comportamiento dependa de JavaScript, Auth y navegación.
-- [ ] Comprobar login de testing, llegada al dashboard, datos conocidos y navegación a objetos o personas.
-- [ ] Comprobar una interacción básica relevante, como filtro o paginación, y cierre de sesión.
-- [ ] Detectar un error visible, una página vacía inesperada o un estado de validación que nunca termina; HTTP 200 por sí solo no basta.
-- [ ] Asociar capturas/trazas y resultado a la URL y SHA probados. Utilizar únicamente datos sintéticos en imágenes de evidencia.
-- [ ] Hacer fallar la verificación de despliegue si falla el smoke. Conservar diagnóstico y documentar recuperación/rollback del entorno.
-- [ ] Ejecutar el smoke automáticamente en cada despliegue del flujo declarado, no solo una vez manualmente.
+- [x] Identificar proveedor y proyecto de hosting reales; Vercel es el hosting descrito en el avance. Verificar configuración efectiva al implementar.
+- [x] Definir entorno de preview/testing asociado a Supabase de testing y variables correspondientes.
+- [x] Conectar pruebas/gates con el despliegue mediante jobs o workflows relacionados, sin perder la asociación al mismo commit.
+- [x] Obtener la URL del despliegue recién generado y comprobar su disponibilidad con timeout acotado.
+- [x] Evitar ejecutar el smoke contra una URL antigua mientras el nuevo despliegue todavía se está preparando.
+- [x] Implementar un smoke automatizado ejecutable con un comando, usando navegador cuando el comportamiento dependa de JavaScript, Auth y navegación.
+- [x] Comprobar login de testing, llegada al dashboard, datos conocidos y navegación a objetos o personas.
+- [x] Comprobar una interacción básica relevante, como filtro o paginación, y cierre de sesión.
+- [x] Detectar un error visible, una página vacía inesperada o un estado de validación que nunca termina; HTTP 200 por sí solo no basta.
+- [x] Asociar capturas/trazas y resultado a la URL y SHA probados. Utilizar únicamente datos sintéticos en imágenes de evidencia.
+- [x] Hacer fallar la verificación de despliegue si falla el smoke. Conservar diagnóstico y documentar recuperación/rollback del entorno.
+- [x] Ejecutar el smoke automáticamente en cada despliegue del flujo declarado, no solo una vez manualmente.
 
 ### Casos básicos y aceptación
 
@@ -548,11 +550,11 @@ Definir el timeout y los datos exactos antes de ejecutar. Esto es un recorrido s
 
 ### Verificar y cumplir
 
-- [ ] Existe un despliegue nuevo vinculado al commit evaluado.
-- [ ] El pipeline ejecuta el smoke después de que esa versión esté disponible.
-- [ ] El recorrido usa la configuración de testing real y datos conocidos.
-- [ ] Queda resultado procesable además de capturas opcionales.
-- [ ] El comando permite repetirlo especificando URL y configuración externa.
+- [x] Existe un despliegue nuevo vinculado al commit evaluado.
+- [x] El pipeline ejecuta el smoke después de que esa versión esté disponible.
+- [x] El recorrido usa la configuración de testing real y datos conocidos.
+- [x] Queda resultado procesable además de capturas opcionales.
+- [x] El comando permite repetirlo especificando URL y configuración externa.
 
 **Salida y evidencia:** despliegue, URL, SHA, comando, workflow y reporte de smoke.  
 **No cerrar si:** solo se hizo GET a `/health`, solo se probó localmente o se usó un despliegue distinto del declarado.
@@ -841,7 +843,7 @@ Esta tabla parte de los comandos existentes. Completar los futuros con los nombr
 | Análisis backend | `.\.venv\Scripts\python.exe -m ruff check ETL api services --output-format concise` | `back` | Reglas, versión y tratamiento de hallazgos. |
 | Gate completo / código nuevo | `python quality/gates.py --artifacts .quality/local-ci --output .quality/local-gates`; integrado en `ci.py summary`. | Raíz, reportes del HEAD actual. | [Ficha E04](REGISTRO_EJECUCION_E04.md), base/diff/conteos y bloqueo crítico comprobado. |
 | Integración externa obligatoria | `python quality/supabase_integration.py --config-file .quality/e06/credentials.json --output .quality/e06/nueva-ejecucion` | Raíz; secreto local ignorado. | Auth/lectura/RLS reales, 12/12 en E06; falla por configuración ausente. |
-| Smoke desplegado | **Pendiente de implementar en E07.** | Según implementación final. | URL/SHA/reportes post-deploy. |
+| Smoke desplegado | `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion` | Manifiesto nuevo, Chromium y secretos externos; ver CONFIGURACION_VERCEL_E07.md. | JSON/JUnit/capturas con URL y SHA; E07 aprobado. |
 | Estrés | **Pendiente de implementar en E08.** | Según implementación final. | Parámetros previos y reporte por pipeline. |
 | Esfuerzo sostenido | **Pendiente de implementar en E08.** | Según implementación final. | Duración/serie temporal y reporte. |
 | Ciclo integral de entrega | **Pendiente de integrar al finalizar.** | Workflow/comando documentado. | Todos los jobs obligatorios y evidencia consolidada. |
@@ -861,4 +863,4 @@ La siguiente distribución es una propuesta de organización, no un registro de 
 | Antes de presentar | E10 y E11, idealmente con margen el 25/10. | PDF revisado, ejecución integral y demostración ensayada. |
 | 26/10 | Presentación según consigna. | Versión/evidencias preparadas y explicación individual. |
 
-**Siguiente paso concreto:** E07: desplegar una versión nueva del frontend con el proyecto de testing preparado por E06 y ejecutar smoke automático posterior desde pipeline, vinculando URL, SHA y resultado. Mantener DEF-SUP-001 abierto para el proyecto original y revisar OBS-DEP-001 antes del 26/10/2026.
+**Siguiente paso concreto:** E08: definir y ejecutar estrés progresivo y esfuerzo sostenido sobre un componente real con dataset aislado, umbrales previos y reportes generados por pipeline. Conservar los alcances de testing y los pendientes originales.

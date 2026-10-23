@@ -1,0 +1,25 @@
+{
+  "project": "tesis-equitas",
+  "project_id": "prj_Z9BxPbzWbQ1hrJXS2IFMVyPo86ue",
+  "team": "Equitas",
+  "team_id": "team_WbWoj7VLCvkBPaseOnfknAeP",
+  "deployment_id": "dpl_DNtv65FQwvnaRgfpU7PLW85UpxRy",
+  "url": "https://tesis-equitas-dvj0xf5e3-equitas.vercel.app",
+  "state": "READY",
+  "created_at_utc": "2026-10-23T12:42:44.017Z",
+  "ready_at_utc": "2026-10-23T12:43:21.199Z",
+  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+  "branch": "quality/tp-testing",
+  "environment": "preview",
+  "protection_enabled": true,
+  "branch_variables": [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+  ],
+  "github_secret_names": [
+    "SUPABASE_TEST_CONFIG",
+    "VERCEL_AUTOMATION_BYPASS_SECRET"
+  ],
+  "supabase_project_ref": "iylwghgvtydpmwidojdo",
+  "values_omitted": true
+}

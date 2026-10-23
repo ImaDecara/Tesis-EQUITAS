@@ -1,0 +1,59 @@
+{
+  "case_id": "SMOKE-01",
+  "passed": false,
+  "source_sha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+  "run_id": null,
+  "run_attempt": null,
+  "started_at_utc": "2026-10-23T12:30:14.353Z",
+  "context": "Vercel preview",
+  "fixture_version": "e06-v1",
+  "checks": [
+    {
+      "id": "availability",
+      "passed": true,
+      "observed": {
+        "sourceSha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+        "sourceBranch": "quality/tp-testing",
+        "environment": "preview",
+        "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+      }
+    },
+    {
+      "id": "login",
+      "passed": true,
+      "observed": "Dashboard autenticado disponible."
+    },
+    {
+      "id": "dashboard",
+      "passed": true,
+      "observed": {
+        "debt_amount": 1250,
+        "other_tenant_visible": false
+      }
+    }
+  ],
+  "errors": [
+    "expect(locator).toBeVisible() failed\n\nLocator: getByRole('table').getByRole('row').filter({ hasText: 'Persona sintetica A' })\nExpected: visible\nError: strict mode violation: getByRole('table').getByRole('row').filter({ hasText: 'Persona sintetica A' }) resolved to 2 elements:\n    1) <tr class=\"border-b transition-colors duration-150 data-[state=selected]:bg-[#e6eef8] hover:bg-[#eef3fa]\">…</tr> aka getByRole('row', { name: 'Persona sintetica A Sin documento Bajo (20) 20.00 1', exact: true })\n    2) <tr class=\"border-b transition-colors duration-150 data-[state=selected]:bg-[#e6eef8] hover:bg-[#eef3fa]\">…</tr> aka getByRole('row', { name: 'Persona sintetica A Sin documento Bajo (20) 20.00 1 Disponible $ 1.250 Ver' })\n\nCall log:\n  - Expect \"toBeVisible\" getByRole('table').getByRole('row').filter({ hasText: 'Persona sintetica A' }) with timeout 30000ms\n  - waiting for getByRole('table').getByRole('row').filter({ hasText: 'Persona sintetica A' })\n"
+  ],
+  "screenshots": [
+    "dashboard.png",
+    "objetos-filtro-restaurado.png"
+  ],
+  "tests": {
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+  },
+  "url": "https://tesis-equitas-p2z915b23-equitas.vercel.app",
+  "deployment_id": 7239287806,
+  "quality_run_id": "39953038356",
+  "build_info": {
+    "sourceSha": "4906c9b3019178131690f4c148d8d061e2c89eca",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "console_errors": [],
+  "page_errors": [],
+  "finished_at_utc": "2026-10-23T12:30:34.338Z"
+}

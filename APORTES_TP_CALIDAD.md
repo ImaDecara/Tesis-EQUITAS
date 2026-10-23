@@ -15,3 +15,9 @@ Corte: `930f807e3d6c8d12c6e8a25f84e4d21a4c105755`, anterior a la formalización 
 Ignacio Magoia figura como autor de cambios de frontend y de las suites/documentación del checkpoint de producto recibido; Imanol Decara, de cambios ETL/backend; Axel, de los checkpoints y controles de calidad E00–E04 mostrados. El responsable nominal de continuidad es Axel Azcune (`AxAzc`), según el plan y la identidad de GitHub consultada. Los nombres de autor se conservan tal como figuran en Git.
 
 La [evidencia de historial](evidencias/e05/aportes-historial.json) guarda SHA completo, fecha de autor, mensaje y lista completa de archivos. Los merges y el número de commits no se usan para medir esfuerzo, calidad o reparto porcentual. Los datos académicos personales pendientes y la defensa individual se completan en E10/E11.
+
+## Continuidad E07, 23/10/2026
+
+Axel: `c7256da` implementa el smoke y workflow; `4906c9b` verifica rama/destino; `348f446` exige URL/título de personas; `0e4e84a` acota la validación a la tabla operativa e importe. Configuración del Preview aislado, ejecución automática y evidencias en la ficha E07. Son cambios comprobables en Git y Actions; no una estimación de porcentajes de aporte.
+
+`a6497a7` (Axel): corrige DEF-UI-001, restableciendo el formulario al cambiar filtros y agregando la aserción de campo vacío al smoke.

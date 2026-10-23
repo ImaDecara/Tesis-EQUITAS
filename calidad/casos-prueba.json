@@ -1,10 +1,10 @@
 {
-  "version": 2,
+  "version": 3,
   "formalizado_en": "E05, 21/10/2026",
   "responsable": "Axel Azcune",
-  "source_sha": "4bb783f1a34c25e9003ee6ece66825668b1c1106",
-  "source_run": 39686380481,
-  "alcance": "50 IDs/familias seleccionados; 175 variantes de producto aprobadas (163 aisladas y 12 HTTP reales), 48 controles de infraestructura aparte. Historia E05 conservada; SQL original no equivale a HTTP de testing.",
+  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+  "source_run": 39955381596,
+  "alcance": "53 IDs/familias seleccionados; 181 pruebas de producto aprobadas: 168 aisladas, 12 HTTP reales y un recorrido de navegador con cinco comprobaciones. 55 controles de infraestructura aparte. Históricos E05/E06 conservados.",
   "campos_heredados": "Cada ficha combina contexto y campos propios; un campo propio tiene precedencia. Los IDs de caso agrupan variantes y no son un contador de tests.",
   "contextos": {
     "DAT": {
@@ -179,6 +179,69 @@
       "grupo_issue": "CAS-EXT",
       "defectos": [
         "DEF-SUP-001"
+      ]
+    },
+    "DEP": {
+      "nivel": "Unidad",
+      "requisitos": [
+        "R17",
+        "R19",
+        "R24",
+        "R25"
+      ],
+      "precondiciones": "Dependencias fijadas; para navegador, manifiesto correcto y secretos externos de Supabase testing/bypass. No consultar la cartera original.",
+      "comando": "cd front; npm exec --no -- vitest run tests/unit/build-info.test.ts",
+      "codigo": [
+        "front/app/api/build-info/route.ts",
+        "front/tests/unit/build-info.test.ts"
+      ],
+      "evidencias": [
+        "evidencias/e07/resumen-ci.json"
+      ],
+      "grupo_issue": "CAS-SMOKE",
+      "defectos": []
+    },
+    "DEP-INFRA": {
+      "nivel": "Infraestructura",
+      "requisitos": [
+        "R17",
+        "R19",
+        "R24",
+        "R25"
+      ],
+      "precondiciones": "Dependencias fijadas; para navegador, manifiesto correcto y secretos externos de Supabase testing/bypass. No consultar la cartera original.",
+      "comando": "python -m unittest discover -s quality/tests -p test_preview.py -v",
+      "codigo": [
+        "quality/wait_preview.py",
+        "quality/tests/test_preview.py",
+        "quality/preview-policy.json"
+      ],
+      "evidencias": [
+        "evidencias/e07/resumen-ci.json"
+      ],
+      "grupo_issue": "CAS-SMOKE",
+      "defectos": []
+    },
+    "SMOKE": {
+      "nivel": "Sistema / navegador / integración real",
+      "requisitos": [
+        "R17",
+        "R19",
+        "R24",
+        "R25"
+      ],
+      "precondiciones": "Dependencias fijadas; para navegador, manifiesto correcto y secretos externos de Supabase testing/bypass. No consultar la cartera original.",
+      "comando": "cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion",
+      "codigo": [
+        "front/tests/smoke/deployed-smoke.mjs",
+        ".github/workflows/preview-smoke.yml"
+      ],
+      "evidencias": [
+        "evidencias/e07/smoke.json"
+      ],
+      "grupo_issue": "CAS-SMOKE",
+      "defectos": [
+        "DEF-UI-001"
       ]
     }
   },
@@ -3210,7 +3273,200 @@
         }
       ],
       "cantidad_tests_reportados": 1
+    },
+    {
+      "id": "DEP-01",
+      "contexto": "DEP",
+      "objetivo": "Metadata de despliegue pública, exacta y sin caché",
+      "tecnicas": [
+        "contrato y particiones"
+      ],
+      "entrada": "SHA/branch/entorno de Vercel; URL Supabase válida, vacía, inválida o ajena; fallback local.",
+      "pasos": [
+        "Preparar la entrada/configuración del contexto.",
+        "Ejecutar el comando o workflow del caso.",
+        "Comparar contra el esperado y conservar JSON/JUnit/capturas con SHA y URL."
+      ],
+      "esperado": "JSON contiene solo sourceSha/sourceBranch/environment/supabaseProjectRef; sin claves y Cache-Control no-store.",
+      "obtenido": "5/5 variantes aprobadas; sin omisiones.",
+      "estado": "aprobado en CI",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "a6497a73b226f9d27abb4e9080d5540503d95539",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DEP-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596",
+      "variantes_reportadas": [
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/build-info.test.ts",
+          "name": "E07: procedencia del despliegue sin secretos prioriza el SHA provisto por Vercel y revela solo la referencia publica",
+          "title": "prioriza el SHA provisto por Vercel y revela solo la referencia publica",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/build-info.test.ts",
+          "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: ",
+          "title": "rechaza destino Supabase ausente o ajeno: ",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/build-info.test.ts",
+          "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: invalid-url",
+          "title": "rechaza destino Supabase ausente o ajeno: invalid-url",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/build-info.test.ts",
+          "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: https://example.test",
+          "title": "rechaza destino Supabase ausente o ajeno: https://example.test",
+          "status": "passed"
+        },
+        {
+          "module": "frontend",
+          "file": "front/tests/unit/build-info.test.ts",
+          "name": "E07: procedencia del despliegue sin secretos permite identificar la version en una comprobacion local declarada",
+          "title": "permite identificar la version en una comprobacion local declarada",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 5,
+      "issue": {
+        "id": "CAS-SMOKE",
+        "number": 10,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/10",
+        "state_at_E07": "closed"
+      }
+    },
+    {
+      "id": "DEP-02",
+      "contexto": "DEP-INFRA",
+      "objetivo": "Seleccionar únicamente el preview confiable del mismo SHA y rama",
+      "tecnicas": [
+        "contrato y particiones"
+      ],
+      "entrada": "Deployments listos/pendientes/fallidos; origen propio/ajeno; CI y build-info válidos o incoherentes.",
+      "pasos": [
+        "Preparar la entrada/configuración del contexto.",
+        "Ejecutar el comando o workflow del caso.",
+        "Comparar contra el esperado y conservar JSON/JUnit/capturas con SHA y URL."
+      ],
+      "esperado": "Solo se acepta Preview de Vercel, rama quality/tp-testing, SHA/repositorio/evento/entorno y Supabase esperados; errores y URLs ajenas se rechazan.",
+      "obtenido": "7/7 variantes aprobadas; sin omisiones.",
+      "estado": "aprobado en CI",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "a6497a73b226f9d27abb4e9080d5540503d95539",
+      "entorno": "GitHub Actions Ubuntu 24.04, aislado",
+      "selector": "DEP-02",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596",
+      "variantes_reportadas": [
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_build_probe_requires_testing_branch_and_project",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_exact_ready_preview_returns_immutable_url",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_failed_deployment_blocks",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_foreign_host_query_or_insecure_url_blocks_credentials",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_pending_and_skipped_deployments_are_not_ready",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_previous_sha_production_and_foreign_creator_are_not_selected",
+          "status": "passed"
+        },
+        {
+          "module": "infrastructure",
+          "file": "quality/tests/test_preview.py",
+          "name": "test_preview.PreviewSelectionTests.test_quality_gate_requires_same_sha_trusted_branch_and_success",
+          "status": "passed"
+        }
+      ],
+      "cantidad_tests_reportados": 7,
+      "issue": {
+        "id": "CAS-SMOKE",
+        "number": 10,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/10",
+        "state_at_E07": "closed"
+      }
+    },
+    {
+      "id": "SMOKE-01",
+      "contexto": "SMOKE",
+      "objetivo": "Recorrido autenticado del preview con datos conocidos",
+      "tecnicas": [
+        "recorrido de aceptación de sistema"
+      ],
+      "entrada": "Preview nuevo; cuenta sintética A; TP-A; persona A; deuda ARS 1250; filtro E07-NO-EXISTE.",
+      "pasos": [
+        "Preparar la entrada/configuración del contexto.",
+        "Ejecutar el comando o workflow del caso.",
+        "Comparar contra el esperado y conservar JSON/JUnit/capturas con SHA y URL."
+      ],
+      "esperado": "Cinco comprobaciones: disponibilidad/procedencia; login; dashboard 1250 y B ausente; filtro vacío/limpieza y /people con título, persona e importe; logout y acceso protegido denegado. Limpiar deja también vacío el campo de búsqueda.",
+      "obtenido": "1/1 variantes aprobadas; sin omisiones.",
+      "estado": "aprobado en CI",
+      "responsable": "Axel Azcune",
+      "fecha": "2026-10-23",
+      "version_ejecutada": "a6497a73b226f9d27abb4e9080d5540503d95539",
+      "entorno": "GitHub Actions Ubuntu 24.04 → Vercel Preview → Supabase testing",
+      "selector": "SMOKE-01",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
+      "variantes_reportadas": [
+        {
+          "module": "browser-smoke",
+          "file": "front/tests/smoke/deployed-smoke.mjs",
+          "name": "SMOKE-01 login, datos, filtros y logout",
+          "title": "SMOKE-01",
+          "status": "passed",
+          "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
+          "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
+        }
+      ],
+      "cantidad_tests_reportados": 1,
+      "issue": {
+        "id": "CAS-SMOKE",
+        "number": 10,
+        "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/10",
+        "state_at_E07": "closed"
+      },
+      "defectos": [
+        "DEF-UI-001"
+      ],
+      "defectos_issues": [
+        {
+          "number": 11,
+          "url": "https://github.com/ImaDecara/Tesis-EQUITAS/issues/11",
+          "state_at_E07": "closed"
+        }
+      ]
     }
   ],
-  "actualizado_en": "E06, 21/10/2026"
+  "actualizado_en": "E07, 23/10/2026",
+  "smoke_run": 39955572523
 }

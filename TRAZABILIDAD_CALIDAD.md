@@ -1,5 +1,7 @@
 # Trazabilidad de requisitos, casos y defectos — EQUITAS
 
+**Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
+
 **Corte E06:** 21/10/2026. Responsable: Axel Azcune (`AxAzc`). GitHub Issues y registros versionados. La historia de E05 se conserva separada de los nuevos resultados.
 
 ## Seguimiento real por alcance
@@ -88,3 +90,15 @@
 4. Separar SQL histórico, pruebas aisladas, HTTP real y tareas futuras E07/E08.
 
 El [inventario actual](calidad/inventario-pruebas.json) conserva 175 resultados de producto aprobados (163 aislados y 12 reales) y 48 de infraestructura. El [corte E05](evidencias/e05/inventario-pruebas-corte-e05.json) conserva 162 aprobados/1 omitido y 41 controles; los paths de ese corte se interpretan en su SHA histórico. Los 50 IDs del catálogo agrupan variantes y no son 50 pruebas nuevas.
+
+## Trazabilidad E07
+
+| Requisitos | Caso | Evidencia | Alcance |
+| --- | --- | --- | --- |
+| R17, R19, R24, R25 | [DEP-01](CASOS_PRUEBA_CALIDAD.md#dep-01) / [#10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10) | [Reporte](evidencias/e07/resumen-ci.json), [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) | Unidad; 5 variante(s) |
+| R17, R19, R24, R25 | [DEP-02](CASOS_PRUEBA_CALIDAD.md#dep-02) / [#10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10) | [Reporte](evidencias/e07/resumen-ci.json), [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) | Infraestructura; 7 variante(s) |
+| R17, R19, R24, R25 | [SMOKE-01](CASOS_PRUEBA_CALIDAD.md#smoke-01) / [#10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10) | [Reporte](evidencias/e07/smoke.json), [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) | Sistema / navegador / integración real; 1 variante(s) |
+
+El smoke valida fixtures mínimas A/B y navegación desplegada; la regresión de gran volumen de DEF-DAT-001 permanece en E03. No demuestra carga ni autorización del proyecto original.
+
+R19 / interacción de filtro → SMOKE-01 / CAS-SMOKE #10 → DEF-UI-001 #11 → rojo manual en `0e4e84a` → corrección `a6497a7` → verde automático 39955572523 y regresión conservada.

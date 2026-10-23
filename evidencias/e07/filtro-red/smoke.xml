@@ -1,0 +1,13 @@
+<testsuite name="E07 browser smoke" tests="1" failures="1" skipped="0"><testcase name="SMOKE-01 login, datos, filtros y logout"><failure message="Smoke failed">expect(locator).toHaveValue(expected) failed
+
+Locator:  getByLabel(&apos;Buscar por objeto o persona&apos;)
+Expected: &quot;&quot;
+Received: &quot;E07-NO-EXISTE&quot;
+Timeout:  30000ms
+
+Call log:
+  - Expect &quot;toHaveValue&quot; getByLabel(&apos;Buscar por objeto o persona&apos;) with timeout 30000ms
+  - waiting for getByLabel(&apos;Buscar por objeto o persona&apos;)
+    62 × locator resolved to &lt;input id=&quot;q&quot; value=&quot;&quot; name=&quot;q&quot; placeholder=&quot;Ej: OBJ-001 o Perez&quot; class=&quot;h-9 w-full rounded-md border border-slate-300 bg-white pr-3 pl-8 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition focus:ring-4&quot;/&gt;
+       - unexpected value &quot;E07-NO-EXISTE&quot;
+</failure></testcase></testsuite>

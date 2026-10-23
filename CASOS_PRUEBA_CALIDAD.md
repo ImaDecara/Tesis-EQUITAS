@@ -1,8 +1,10 @@
 # Casos de prueba, técnicas y resultados — EQUITAS
 
+**Actualización E07, 23/10/2026:** etapa cerrada en Preview de `quality/tp-testing`, SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [CI](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596) aprobado y [smoke automático](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) aprobado sobre el mismo commit y Supabase testing: **168 pruebas aisladas + 12 HTTP reales + 1 recorrido de navegador = 181 de producto**, cero fallidas/omitidas; **55 controles de infraestructura aparte**. El recorrido contiene cinco comprobaciones y valida realmente `/people`, su título y el listado operativo. [Ficha y límites](REGISTRO_EJECUCION_E07.md), [deployment](evidencias/e07/deployment.json), [reporte](evidencias/e07/smoke.json) y [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10). E00–E07 completadas en sus alcances; sigue E08. DEF-SUP-001 permanece abierto en el original y OBS-DEP-001 conserva su vencimiento 26/10/2026. Esta actualización prevalece sobre los estados históricos de despliegue pendiente.
+
 **Formalización E05, 21/10/2026. Responsable:** Axel Azcune (`AxAzc`). Los criterios y resultados de E03/E04 conservan sus versiones originales; documentarlos aquí no crea nuevas ejecuciones.
 
-El catálogo contiene **50 IDs de caso/familia seleccionados**, con variantes parametrizadas. No equivale a 50 pruebas nuevas. El [inventario completo](calidad/inventario-pruebas.json) conserva **175 aprobadas, 0 fallidas y 0 omitidas** de producto: 163 aisladas y 12 HTTP reales; **48 de infraestructura por separado**, extraídas del CI E06. Los casos DAT/FIXTURE, AUTH y REC representan 69 variantes aisladas aprobadas de esas suites; el resto de la línea base permanece en el inventario y sus fuentes.
+El catálogo contiene **53 IDs de caso/familia seleccionados**, con variantes parametrizadas. No equivale a 50 pruebas nuevas. El [inventario completo](calidad/inventario-pruebas.json) conserva **181 aprobadas, 0 fallidas y 0 omitidas** de producto: 168 aisladas, 12 HTTP reales y un recorrido de navegador; **55 de infraestructura por separado**, verificadas en E07. El inventario E06 se conserva como histórico. Los casos DAT/FIXTURE, AUTH y REC representan 69 variantes aisladas aprobadas de esas suites; el resto de la línea base permanece en el inventario y sus fuentes.
 
 Las fichas utilizan los campos de la [plantilla](.github/ISSUE_TEMPLATE/caso_prueba.md). En el [JSON](calidad/casos-prueba.json), cada ficha hereda el contexto de su grupo; los campos propios tienen precedencia. [Seguimiento y estados](GESTION_CALIDAD.md) y [matriz de trazabilidad](TRAZABILIDAD_CALIDAD.md).
 
@@ -1148,3 +1150,41 @@ Esta tabla está ejecutada con dobles. No demuestra políticas de la base real. 
 **Variantes reportadas:** 1; nombres completos y estados en el JSON.
 
 La [matriz](TRAZABILIDAD_CALIDAD.md) enlaza los resultados con Issues. DEF-SUP-001 permanece abierto para el proyecto original; está corregido en testing.
+
+## Casos incorporados en E07
+
+### DEP-01
+
+**Objetivo:** Metadata de despliegue pública, exacta y sin caché. **Nivel:** Unidad. **Issue:** [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10).
+
+**Entrada:** SHA/branch/entorno de Vercel; URL Supabase válida, vacía, inválida o ajena; fallback local.
+
+**Esperado:** JSON contiene solo sourceSha/sourceBranch/environment/supabaseProjectRef; sin claves y Cache-Control no-store.
+
+**Obtenido:** 5/5 variantes aprobadas; SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [Ejecución](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596), [evidencia](evidencias/e07/resumen-ci.json). DEP-02 cuenta como infraestructura; SMOKE-01 es un recorrido con cinco comprobaciones.
+
+**Comando:** `cd front; npm exec --no -- vitest run tests/unit/build-info.test.ts`. Campos y variantes exactas en el catálogo JSON.
+
+### DEP-02
+
+**Objetivo:** Seleccionar únicamente el preview confiable del mismo SHA y rama. **Nivel:** Infraestructura. **Issue:** [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10).
+
+**Entrada:** Deployments listos/pendientes/fallidos; origen propio/ajeno; CI y build-info válidos o incoherentes.
+
+**Esperado:** Solo se acepta Preview de Vercel, rama quality/tp-testing, SHA/repositorio/evento/entorno y Supabase esperados; errores y URLs ajenas se rechazan.
+
+**Obtenido:** 7/7 variantes aprobadas; SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [Ejecución](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596), [evidencia](evidencias/e07/resumen-ci.json). DEP-02 cuenta como infraestructura; SMOKE-01 es un recorrido con cinco comprobaciones.
+
+**Comando:** `python -m unittest discover -s quality/tests -p test_preview.py -v`. Campos y variantes exactas en el catálogo JSON.
+
+### SMOKE-01
+
+**Objetivo:** Recorrido autenticado del preview con datos conocidos. **Nivel:** Sistema / navegador / integración real. **Issue:** [CAS-SMOKE #10](https://github.com/ImaDecara/Tesis-EQUITAS/issues/10).
+
+**Entrada:** Preview nuevo; cuenta sintética A; TP-A; persona A; deuda ARS 1250; filtro E07-NO-EXISTE.
+
+**Esperado:** Cinco comprobaciones: disponibilidad/procedencia; login; dashboard 1250 y B ausente; filtro vacío/limpieza y /people con título, persona e importe; logout y acceso protegido denegado.
+
+**Obtenido:** 1/1 variantes aprobadas; SHA `a6497a73b226f9d27abb4e9080d5540503d95539`. [Ejecución](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523), [evidencia](evidencias/e07/smoke.json). DEP-02 cuenta como infraestructura; SMOKE-01 es un recorrido con cinco comprobaciones.
+
+**Comando:** `cd front; npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion`. Campos y variantes exactas en el catálogo JSON.

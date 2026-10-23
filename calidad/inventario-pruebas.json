@@ -1,15 +1,16 @@
 {
-  "source_sha": "4bb783f1a34c25e9003ee6ece66825668b1c1106",
-  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481",
+  "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539",
+  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955381596",
   "counts": {
-    "product_passed": 175,
+    "product_passed": 181,
     "product_failed": 0,
     "product_skipped": 0,
-    "isolated_product_passed": 163,
+    "isolated_product_passed": 168,
     "real_external_passed": 12,
-    "infrastructure_passed": 48
+    "browser_smoke_passed": 1,
+    "infrastructure_passed": 55
   },
-  "previous_inventory": "evidencias/e05/inventario-pruebas-corte-e05.json",
+  "previous_inventory": "evidencias/e07/inventario-anterior-e06.json",
   "producto": [
     {
       "module": "frontend",
@@ -1174,6 +1175,50 @@
       "name": "E06: Supabase Auth y Data API reales con clave publicable y JWT ordinario SUP-WRITE-01: cliente normal no puede insertar, actualizar ni borrar negocio",
       "title": "SUP-WRITE-01: cliente normal no puede insertar, actualizar ni borrar negocio",
       "status": "passed"
+    },
+    {
+      "module": "frontend",
+      "file": "front/tests/unit/build-info.test.ts",
+      "name": "E07: procedencia del despliegue sin secretos prioriza el SHA provisto por Vercel y revela solo la referencia publica",
+      "title": "prioriza el SHA provisto por Vercel y revela solo la referencia publica",
+      "status": "passed"
+    },
+    {
+      "module": "frontend",
+      "file": "front/tests/unit/build-info.test.ts",
+      "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: ",
+      "title": "rechaza destino Supabase ausente o ajeno: ",
+      "status": "passed"
+    },
+    {
+      "module": "frontend",
+      "file": "front/tests/unit/build-info.test.ts",
+      "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: invalid-url",
+      "title": "rechaza destino Supabase ausente o ajeno: invalid-url",
+      "status": "passed"
+    },
+    {
+      "module": "frontend",
+      "file": "front/tests/unit/build-info.test.ts",
+      "name": "E07: procedencia del despliegue sin secretos rechaza destino Supabase ausente o ajeno: https://example.test",
+      "title": "rechaza destino Supabase ausente o ajeno: https://example.test",
+      "status": "passed"
+    },
+    {
+      "module": "frontend",
+      "file": "front/tests/unit/build-info.test.ts",
+      "name": "E07: procedencia del despliegue sin secretos permite identificar la version en una comprobacion local declarada",
+      "title": "permite identificar la version en una comprobacion local declarada",
+      "status": "passed"
+    },
+    {
+      "module": "browser-smoke",
+      "file": "front/tests/smoke/deployed-smoke.mjs",
+      "name": "SMOKE-01 login, datos, filtros y logout",
+      "title": "SMOKE-01",
+      "status": "passed",
+      "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523",
+      "source_sha": "a6497a73b226f9d27abb4e9080d5540503d95539"
     }
   ],
   "infraestructura": [
@@ -1431,6 +1476,48 @@
     },
     {
       "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_build_probe_requires_testing_branch_and_project",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_exact_ready_preview_returns_immutable_url",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_failed_deployment_blocks",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_foreign_host_query_or_insecure_url_blocks_credentials",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_pending_and_skipped_deployments_are_not_ready",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_previous_sha_production_and_foreign_creator_are_not_selected",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
+      "file": "quality/tests/test_preview.py",
+      "name": "test_preview.PreviewSelectionTests.test_quality_gate_requires_same_sha_trusted_branch_and_success",
+      "status": "passed"
+    },
+    {
+      "module": "infrastructure",
       "file": "quality/tests/test_supabase_integration.py",
       "name": "test_supabase_integration.SupabaseContractTests.test_complete_real_report_is_accepted",
       "status": "passed"
@@ -1465,5 +1552,6 @@
       "name": "test_supabase_integration.SupabaseContractTests.test_wrong_provenance_or_duplicate_cases_block",
       "status": "passed"
     }
-  ]
+  ],
+  "smoke_run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523"
 }

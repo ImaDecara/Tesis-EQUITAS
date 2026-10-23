@@ -91,3 +91,7 @@ La cobertura frontend incluye `app/`, `components/`, `lib/` y excluye `.d.ts`; `
 Una actualización deliberada requiere revisar avisos y compatibilidad, cambiar pins/locks, instalar desde cero y ejecutar los controles afectados. No adoptar un `pip freeze` ajeno sin revisar paquetes condicionales ni asumir compatibilidad Linux porque funciona en Windows. No borrar avisos mediante filtros globales o códigos de salida ignorados.
 
 Los reportes locales de partida son [evidencias/e01](evidencias/e01/resumen-2026-10-21.json). Los resultados remotos, SHA, artefactos y comprobaciones Linux están en [evidencias/e02](evidencias/e02/ejecuciones-2026-10-21.json). El commit de cierre documental de cada etapa se consulta en el historial de su ficha.
+
+## E07 — Preview y smoke automático
+
+Ver [configuración por rama y secreto](CONFIGURACION_VERCEL_E07.md) y [ejecución aceptada](REGISTRO_EJECUCION_E07.md). Desde `front`: `npm exec --no -- playwright install chromium`; luego `npm run test:smoke -- --deployment ../.quality/preview/deployment.json --output ../.quality/smoke-repeticion`. Usar un directorio nuevo y secretos externos; el manifiesto exige CI/SHA/URL correctos. El flujo de `quality/tp-testing` se ejecuta automáticamente después del CI obligatorio y disponibilidad del Preview. Un fallo devuelve salida 1 y conserva diagnóstico.

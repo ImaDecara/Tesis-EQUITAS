@@ -1,0 +1,58 @@
+{
+  "case_id": "SMOKE-01",
+  "passed": false,
+  "source_sha": "0e4e84ad7d1668cd5149dfd097590395dbe2fca5",
+  "run_id": null,
+  "run_attempt": null,
+  "started_at_utc": "2026-10-23T12:41:51.460Z",
+  "context": "Vercel preview",
+  "fixture_version": "e06-v1",
+  "checks": [
+    {
+      "id": "availability",
+      "passed": true,
+      "observed": {
+        "sourceSha": "0e4e84ad7d1668cd5149dfd097590395dbe2fca5",
+        "sourceBranch": "quality/tp-testing",
+        "environment": "preview",
+        "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+      }
+    },
+    {
+      "id": "login",
+      "passed": true,
+      "observed": "Dashboard autenticado disponible."
+    },
+    {
+      "id": "dashboard",
+      "passed": true,
+      "observed": {
+        "debt_amount": 1250,
+        "other_tenant_visible": false
+      }
+    }
+  ],
+  "errors": [
+    "expect(locator).toHaveValue(expected) failed\n\nLocator:  getByLabel('Buscar por objeto o persona')\nExpected: \"\"\nReceived: \"E07-NO-EXISTE\"\nTimeout:  30000ms\n\nCall log:\n  - Expect \"toHaveValue\" getByLabel('Buscar por objeto o persona') with timeout 30000ms\n  - waiting for getByLabel('Buscar por objeto o persona')\n    62 × locator resolved to <input id=\"q\" value=\"\" name=\"q\" placeholder=\"Ej: OBJ-001 o Perez\" class=\"h-9 w-full rounded-md border border-slate-300 bg-white pr-3 pl-8 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition focus:ring-4\"/>\n       - unexpected value \"E07-NO-EXISTE\"\n"
+  ],
+  "screenshots": [
+    "dashboard.png"
+  ],
+  "tests": {
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+  },
+  "url": "https://tesis-equitas-5p7k3nwht-equitas.vercel.app",
+  "deployment_id": 7278269619,
+  "quality_run_id": "39954104317",
+  "build_info": {
+    "sourceSha": "0e4e84ad7d1668cd5149dfd097590395dbe2fca5",
+    "sourceBranch": "quality/tp-testing",
+    "environment": "preview",
+    "supabaseProjectRef": "iylwghgvtydpmwidojdo"
+  },
+  "console_errors": [],
+  "page_errors": [],
+  "finished_at_utc": "2026-10-23T12:42:34.878Z"
+}
