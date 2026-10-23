@@ -57,6 +57,8 @@ def read_json(path: Path):
 
 
 def digest(path: Path):
+    if path.suffix.lower() in {'.md', '.py', '.json', '.svg', '.txt', '.log'}:
+        return hashlib.sha256(path.read_text(encoding='utf-8-sig').encode('utf-8')).hexdigest()
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -151,6 +153,8 @@ def figures():
     FIGURES.mkdir(exist_ok=True)
     for name, drawing in result.items():
         renderSVG.drawToFile(drawing, str(FIGURES / name))
+        svg = FIGURES / name
+        svg.write_bytes(svg.read_bytes().replace(b'\r\n', b'\n'))
     inputs = ['evidencias/e10/ci-summary.json', 'evidencias/e03/comparacion-dat-06.json', 'evidencias/e08/resultados.json', 'evidencias/e07/personas.png', 'tp-Calidad.md']
     return result, {name: digest(ROOT / name) for name in inputs}
 
@@ -378,9 +382,10 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(str(args.output), pagesize=letter, leftMargin=54, rightMargin=54, topMargin=46, bottomMargin=49, pageCompression=1, title='Calidad de Software en EQUITAS', author='Ignacio Magoia, Axel Azcune e Imanol Decara', creator='Equipo EQUITAS', subject='Trabajo Practico Integrador de Calidad de Software', keywords='EQUITAS, Calidad de Software, Nivel 2, 2026')
     doc.build(parse_source(s, charts), onFirstPage=footer, onLaterPages=footer, canvasmaker=ReportCanvas)
-    manifest = {'source': str(SOURCE.relative_to(ROOT)), 'source_sha256_normalized_LF': hashlib.sha256(SOURCE.read_text(encoding='utf-8').encode()).hexdigest(), 'pdf': str(args.output.resolve().relative_to(ROOT)), 'pdf_sha256': digest(args.output), 'packages': {n: version(n) for n in ['reportlab', 'pillow', 'pypdf']}, 'fonts_sha256': font_hashes, 'figure_inputs_sha256': inputs, 'figures_sha256': {str((FIGURES / n).relative_to(ROOT)): digest(FIGURES / n) for n in charts}, 'screenshot_detail': {'source': 'evidencias/e07/personas.png', 'box_pixels_left_top_right_bottom': [312, 775, 1420, 1057], 'method': 'PDF clipping only; original PNG unchanged'}, 'scope': 'Report generated from measured project evidence; screenshots retain original run and date.'}
+    manifest = {'source': SOURCE.relative_to(ROOT).as_posix(), 'source_sha256_normalized_LF': hashlib.sha256(SOURCE.read_text(encoding='utf-8').encode()).hexdigest(), 'pdf': args.output.resolve().relative_to(ROOT).as_posix(), 'pdf_sha256': digest(args.output), 'packages': {n: version(n) for n in ['reportlab', 'pillow', 'pypdf']}, 'fonts_sha256': font_hashes, 'figure_inputs_sha256': inputs, 'figures_sha256': {(FIGURES / n).relative_to(ROOT).as_posix(): digest(FIGURES / n) for n in charts}, 'screenshot_detail': {'source': 'evidencias/e07/personas.png', 'box_pixels_left_top_right_bottom': [312, 775, 1420, 1057], 'method': 'PDF clipping only; original PNG unchanged'}, 'scope': 'Report generated from measured project evidence; screenshots retain original run and date.'}
     manifest['generator_sha256'] = digest(Path(__file__))
     manifest['document_date'] = '2026-10-23'
+    manifest['text_hash_normalization'] = 'UTF-8 with LF line endings for Markdown, Python, JSON, SVG, text and logs; binary PDF, PNG and fonts use raw bytes.'
     args.manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'pdf': str(args.output), 'sha256': manifest['pdf_sha256'], 'packages': manifest['packages']}, ensure_ascii=False))
 

@@ -28,6 +28,8 @@ Para actualizar el contenido se edita el Markdown y se regenera. Si cambian prod
 
 Los gráficos son vectoriales en el PDF y se exportan también como SVG para la fuente Markdown. [generacion.json](../evidencias/e10/generacion.json) registra versiones, hashes, fuentes y región mostrada de la captura. No se usan imágenes que simulen ejecuciones de terminal o de pipeline.
 
+El manifiesto usa rutas portables y normaliza UTF-8/LF al calcular hashes de insumos textuales. PDF, PNG y fuentes tipográficas se verifican por bytes; `.gitattributes` preserva la entrega al clonar en Windows o Linux.
+
 ## Revisión de la exportación
 
 Con Poppler disponible, desde la raíz:

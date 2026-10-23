@@ -1,7 +1,7 @@
 {
   "stage": "E10",
   "date": "2026-10-23",
-  "validated_at_utc": "2026-10-23T15:10:53.328784+00:00",
+  "validated_at_utc": "2026-10-23T15:13:36.648665+00:00",
   "passed": true,
   "analysis_source_sha": "1472eea8bbd87857a38a6fd0b05283ff9287eb44",
   "analysis_ci_run": "39968499139",
@@ -51,7 +51,7 @@
   },
   "content_sha256_normalized_LF": {
     "entrega/INFORME_ACADEMICO_CALIDAD.md": "17c3a99c231165043384f38c0ac75ba3218155536b16f5949eae4fd8f1e19348",
-    "entrega/README.md": "1a3316c2b37ad256d5100ffecbcba3fe6dada4b26c37c5efff3606f80eaf813f",
+    "entrega/README.md": "7e87ea3c7f98eaef9d2457d0630f3774cbc31457e03404a3639774e63017e74c",
     "REGISTRO_EJECUCION_E10.md": "9e90b76be173326ae9add3b17d0d4951b4e8f93672c7459b6dcf90321354580e",
     "ROADMAP_TP_CALIDAD_SOFTWARE.md": "fc58b88020f40c094795b411cb1b17d6ba31ba026f5801534a17645dcf406725",
     "INFORME_TP_CALIDAD_SOFTWARE.md": "d420b9d59f5aa95a46345e4a860220e29599a7817d98a58eb2ae17db9a105464",
