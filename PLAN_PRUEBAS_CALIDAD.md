@@ -1,6 +1,6 @@
 # Plan de pruebas y criterios de cierre — EQUITAS
 
-**Versión 2.0 — E09, 23/10/2026. Responsable: Axel Azcune.** E00–E09 completadas en sus alcances; siguen informe/PDF E10 y demostración E11. Nivel declarado: **2, prototipo parcial**. Presentación: **26/10/2026**. [Consigna](consigna_pdf.md) y [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
+**Versión 2.1 — E10, 23/10/2026. Responsable: Axel Azcune.** E00-E10 completadas en sus alcances; sigue demostración E11. [Informe PDF revisado](entrega/INFORME_ACADEMICO_CALIDAD.pdf) y [fuente editable](entrega/INFORME_ACADEMICO_CALIDAD.md) disponibles. Nivel declarado: **2, prototipo parcial**. Presentación: **26/10/2026**. [Consigna](consigna_pdf.md) y [roadmap](ROADMAP_TP_CALIDAD_SOFTWARE.md).
 
 Esta versión consolida el plan vigente y reemplaza las notas de actividades futuras ya ejecutadas. Las versiones anteriores siguen en Git y en las fichas [E00](REGISTRO_EJECUCION_E00.md), [E01](REGISTRO_EJECUCION_E01.md), [E02](REGISTRO_EJECUCION_E02.md), [E03](REGISTRO_EJECUCION_E03.md), [E04](REGISTRO_EJECUCION_E04.md), [E05](REGISTRO_EJECUCION_E05.md), [E06](REGISTRO_EJECUCION_E06.md), [E07](REGISTRO_EJECUCION_E07.md), [E08](REGISTRO_EJECUCION_E08.md) y [E09](REGISTRO_EJECUCION_E09.md). No se sobrescriben sus resultados históricos.
 
@@ -9,7 +9,7 @@ Esta versión consolida el plan vigente y reemplaza las notas de actividades fut
 | Referencia | Versión / evidencia | Uso |
 | --- | --- | --- |
 | Base fija de cobertura nueva | `531996f51243dc3d4c5a607338e2f35e32313f6b` | No se mueve al último commit para facilitar el gate. |
-| Corte actual de análisis | `2f9e48fe11bf246d6fc73bc0308bda4692d0d866`, [CI main 39964341314](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39964341314) | 168 aisladas + 12 HTTP reales = 180 de producto; 66 controles de infraestructura aparte. |
+| Corte actual de análisis | `1472eea8bbd87857a38a6fd0b05283ff9287eb44`, [CI main 39968499139](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39968499139) | 168 aisladas + 12 HTTP reales = 180 de producto; 66 controles de infraestructura aparte. |
 | Despliegue/smoke aceptado | `a6497a73b226f9d27abb4e9080d5540503d95539`, [smoke 39955572523](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39955572523) | Un recorrido de navegador con cinco comprobaciones en Preview de testing. |
 | Cargas aceptadas | `f6f83f9a3172fc2e42912305a181057130d9577b`, [pipeline 39960952025](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025) | Estrés y sostenido, datos nuevos de CI contra política previa. |
 
@@ -47,7 +47,7 @@ Las metas se originan en E00 y se concretan en E03/E04/E06/E07/E08. Esta tabla a
 | M-E4, equipo | Rendimiento E08 previo: p95≤2 s, error≤1 % hasta 10 usuarios, cero contenido incorrecto, sostenido 600 s. | **Cumple** en fuente sintética local de CI; no es SLA municipal/cloud. | [Cargas](evidencias/e08/resultados.json), [plan previo](PLAN_RENDIMIENTO_E08.md). |
 | M-O1, organización | Sin duplicados/huérfanos en controles elegidos y repetición de carga sin duplicación según contrato. | **Parcial**: SQL seleccionado y ETL simulado aprobados; no recarga ETL completa de cartera real. | [Inspección inicial](evidencias/supabase-2026-10-21.json), 8 integraciones ETL simuladas. |
 | M-O2, organización | Recuperación controlada: error identificable, reintentos acotados, parada, revisión de lote y verificación. | **Parcial**: negativos/reintentos simulados y recreación de fixtures testing verificados. Protocolo documentado; caída cloud/backup restore no ensayados. | Sección 9; [ciclo de fixtures](evidencias/e06/fixtures-lifecycle.json). |
-| M-O3, organización | Comandos/versiones/reportes disponibles; PDF coherente y demostración final. | **Parcial**: repositorio y reportes disponibles; E10/PDF y E11/demo pendientes. | [Reproducción](REPRODUCIBILIDAD_CALIDAD.md), roadmap E10/E11. |
+| M-O3, organización | Comandos/versiones/reportes disponibles; PDF coherente y demostración final. | **Parcial**: repositorio, reportes y PDF E10 disponibles; demostración E11 pendiente. | [Reproducción](REPRODUCIBILIDAD_CALIDAD.md), roadmap E10/E11. |
 
 La [matriz ISO](MATRIZ_ISO25010_CALIDAD.md) evalúa las ocho características y conserva el top 3 explícito: **1 adecuación funcional, 2 seguridad, 3 fiabilidad**. Cada fila tiene objetivo, métrica/aceptación, evidencia, estado y límite. Una meta parcial no se aprueba por cerrar E09.
 
@@ -84,7 +84,7 @@ Gate E04: sentencias≥60 % por módulo, nuevas líneas ejecutables≥80 % por m
 
 Entrada: SHA/configuración conocidos; dependencias preparadas; caso/esperado/datos/entorno identificados; externos solo en testing con cuentas configuradas; cargas con política/duración/usuarios/stop anteriores al ensayo. Salida de etapa: criterio satisfecho o incumplimiento explícito, métricas/casos/tickets coherentes, reportes propios y límites registrados. Una omisión no es aprobación.
 
-Salida integral: R01–R25 respaldados; controles/build/gates obligatorios aprobados; rojo real y verde posterior; integración real, nuevo despliegue con smoke y dos cargas; registro/herramienta completos; **PDF y demostración final**, aún pendientes en E10/E11. Riesgos del original/excepción dev se informan como metas pendientes; no presentar el MVP como listo para producción.
+Salida integral: R01–R25 respaldados; controles/build/gates obligatorios aprobados; rojo real y verde posterior; integración real, nuevo despliegue con smoke y dos cargas; registro/herramienta completos; **PDF y demostración final**: PDF E10 revisado y disponible; demostración E11 pendiente. Riesgos del original/excepción dev se informan como metas pendientes; no presentar el MVP como listo para producción.
 
 ## 8. Riesgos priorizados
 
@@ -138,4 +138,4 @@ Con entorno preparado según [reproducibilidad](REPRODUCIBILIDAD_CALIDAD.md), ej
 | Sostenido | Python del venv: `python quality/load/run.py soak --output .quality/e09/soak-repeticion` | 600 s de fase más warmup/drenajes y reportes nuevos. |
 | Ambas cargas CI | `gh workflow run load-tests.yml --ref main --repo ImaDecara/Tesis-EQUITAS` | Preflight CI del mismo SHA y dos jobs con nueva evidencia. |
 
-No sobrescribir snapshots aceptados. Un cambio de producto/configuración exige reevaluar niveles afectados; editar documentos no agrega pruebas ni ejecuta nuevamente cargas/smoke. E10/E11 deben completar PDF/demo y revisar dependencias con su vencimiento vigente.
+No sobrescribir snapshots aceptados. Un cambio de producto/configuración exige reevaluar niveles afectados; editar documentos no agrega pruebas ni ejecuta nuevamente cargas/smoke. E10 completó el PDF revisado. E11 debe completar la demo y revisar dependencias con su vencimiento vigente.

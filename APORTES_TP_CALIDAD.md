@@ -25,3 +25,7 @@ Axel: `c7256da` implementa el smoke y workflow; `4906c9b` verifica rama/destino;
 ## Continuidad E08, 23/10/2026
 
 Axel: `09f040b` fija criterios antes de ejecutar; `f52c5ac` implementa entorno sintético y generador; `de29fd0` corrige arranque del proceso Windows; `fee7a71` agrega workflow/adopción y `f6f83f9` ajusta el análisis previo de imports. Campañas y reportes nuevos vinculados al SHA en la ficha E08.
+
+## Continuidad E09 y E10, 23/10/2026
+
+Axel: `1472eea` consolida métricas, matriz ISO, plan, riesgos, contingencia y técnicas de E09. E10 conserva los tres integrantes del informe recibido y agrega la fuente académica, generación del PDF, gráficos y revisión de las páginas; el commit de esta etapa se identifica en el historial de `REGISTRO_EJECUCION_E10.md`. No se infieren porcentajes de esfuerzo ni se registra como realizada la defensa final.

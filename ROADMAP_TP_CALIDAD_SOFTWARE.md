@@ -1,5 +1,7 @@
 # Roadmap para terminar el TP Integrador de Calidad de Software — EQUITAS
 
+**Actualización E10, 23/10/2026:** informe académico y PDF completados, **29/29 controles**. [PDF de 27 páginas](entrega/INFORME_ACADEMICO_CALIDAD.pdf), [fuente editable sin índice](entrega/INFORME_ACADEMICO_CALIDAD.md), [generador e instrucciones](entrega/README.md), [ficha E10](REGISTRO_EJECUCION_E10.md) y [validación](evidencias/e10/validacion-registros.json). Las 27 páginas finales se renderizaron e inspeccionaron; la regeneración del PDF y los tres gráficos conserva hashes idénticos en el entorno verificado. Corte técnico 1472eea, CI 39968499139 aprobado. **E00-E10 completas en sus alcances; sigue E11, demostración y entrega integral.** DEF-SUP-001 original y OBS-DEP-001 continúan abiertos; la excepción dev vence 26/10/2026. Esta actualización prevalece sobre las notas históricas.
+
 **Actualización E09, 23/10/2026:** documentación transversal completada, **31/31 controles**. [Métricas con fórmulas/evolución](METRICAS_CALIDAD.md), [matriz ISO de ocho características](MATRIZ_ISO25010_CALIDAD.md), [plan vigente 2.0](PLAN_PRUEBAS_CALIDAD.md), [niveles/QA-QC/principios/técnicas](PROCESO_Y_TECNICAS_CALIDAD.md), [ficha E09](REGISTRO_EJECUCION_E09.md) y [validación](evidencias/e09/validacion-registros.json). Último corte de análisis: main 2f9e48f…, CI 39964341314 aprobado, 180 de producto y 66 controles separados; el corte acumulado conserva 183 con smoke/cargas de sus fuentes. DEF-SUP-001 original y OBS-DEP-001 siguen abiertos; excepción dev vence 26/10/2026. **Sigue E10, informe/PDF; E11, demostración.** Las notas E00–E08 son históricas y esta actualización prevalece para el estado actual.
 
 **Actualización E08, 23/10/2026:** estrés progresivo y sostenido completados en [pipeline](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952025), SHA `f6f83f9a3172fc2e42912305a181057130d9577b`, después del [CI del mismo commit](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39960952039). Se midió la API FastAPI con lógica productiva y conector sintético local: 3.600 perfiles/objetos y 72.000 deudas representadas. Ambas campañas aprobaron sus criterios previos; E08 tiene 24/24 controles. Corte acumulado: **168 aisladas + 12 externas + un smoke + dos cargas = 183 pruebas/campañas de producto**, con **66 controles de infraestructura aparte**, cero fallidas/omitidas en ese corte. Los requests no se cuentan como tests. [Ficha E08](REGISTRO_EJECUCION_E08.md), [comandos/alcance](RENDIMIENTO_CALIDAD.md), [resultados](evidencias/e08/resultados.json), [CAS-PERF #12](https://github.com/ImaDecara/Tesis-EQUITAS/issues/12). La capacidad de Vercel/Supabase/web no fue ensayada por estas cargas. E09 tiene la herramienta documentada y conserva sus demás pendientes; siguen abiertos DEF-SUP-001 original y OBS-DEP-001. Esta nota prevalece sobre estados históricos de cargas pendientes.
@@ -8,11 +10,11 @@
 
 **Actualización E06, 21/10/2026:** Supabase aislado **EQUITAS-TP-TESTING**, `iylwghgvtydpmwidojdo`, creado en Ignacio Magoia con cotización USD 0 mensuales. Auth/Data API reales y funciones productivas verificadas en [CI main](https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39686380481), SHA `4bb783f1a34c25e9003ee6ece66825668b1c1106`: **163 pruebas aisladas + 12 reales = 175 de producto aprobadas, cero fallidas/omitidas**, y **48 controles de infraestructura** aparte. Se conserva rojo/verde HTTP de SUP-RLS-02. **DEF-SUP-001 corregido en testing; sigue abierto para el proyecto original**, que mantiene sus políticas permisivas. CAS-EXT #9 cerrado; nueve issues, siete cerrados y dos abiertos (#1 y #3). [Ficha E06](REGISTRO_EJECUCION_E06.md), [preparación/comandos](SUPABASE_TESTING_CALIDAD.md) y [evidencias](evidencias/e06/resumen-ci.json). Frontend 788/1.277 sentencias (61,7071 %; Vitest informa 61,70 %); backend 1.254/1.471 (85,25 %); nuevo frontend 30/30 y backend 15/17 contra base fija `531996f…`; duplicación 427/11.141 (3,83 %). No cambiaron los filtros de cobertura. E07 es la siguiente etapa; despliegue/smoke, cargas y cierre académico permanecen pendientes. Esta actualización prevalece sobre los estados históricos de integración omitida o pendiente.
 
-**Versión:** 2.0, cierre de la etapa E09 el 23 de octubre de 2026.
+**Versión:** 2.1, cierre de la etapa E10 el 23 de octubre de 2026.
 **Presentación indicada en la consigna:** 26 de octubre de 2026.  
 **Nivel declarado:** Nivel 2 — prototipo parcial.  
 **Responsable de continuidad:** Axel Azcune (`AxAzc`), a cargo del cierre del TP.  
-**Estado del roadmap:** E00–E09 completadas en sus alcances; siguiente E10. Informe académico/PDF y demostración final pendientes, con riesgos abiertos explícitos.
+**Estado del roadmap:** E00-E10 completadas en sus alcances; siguiente E11. Informe/PDF revisado disponible; demostración final pendiente, con riesgos abiertos explícitos.
 
 ## 1. Objetivo y forma de usar este archivo
 
@@ -148,12 +150,12 @@ Los nuevos nombres de scripts y documentos que se proponen más adelante son **e
 | **E07** | Despliegue nuevo y smoke automático posterior. | Completada en Preview aislado; 17/17 controles. | E04, E06. |
 | **E08** | Estrés y esfuerzo sostenido, ejecutados por pipeline. | Completada; 24/24 controles y dos campañas aprobadas. | E02 y escenario aislado; E03/E06 según componente elegido. |
 | **E09** | Herramienta de cinco pasos y documentación transversal. | Completada; 31/31 controles y evaluación con parciales explícitos. | Evidencias E01–E08 y corte CI main verificado. |
-| **E10** | Informe académico consolidado y PDF revisado. | Base recibida hasta QA/QC. | Evidencias finales de E03–E09. |
+| **E10** | Informe académico consolidado y PDF revisado. | Completada; 29/29 controles, PDF de 27 páginas inspeccionado y fuente editable. | Evidencias finales de E03-E09 y corte CI técnico verificado. |
 | **E11** | Validación integral, entrega y ensayo de defensa. | Pendiente. | E00–E10. |
 
 Ruta técnica principal: **E00 → E01/E02 → E03 → E04 → E06 → E07 → E08 → E10 → E11**. E05 y E09 acompañan el desarrollo. La preparación del entorno E06 puede comenzar mientras se construye CI, sin declarar completa la integración antes de ejecutar sus pruebas.
 
-E00–E09 están completas en sus alcances; el siguiente objetivo ejecutable es E10. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
+E00-E10 están completas en sus alcances; el siguiente objetivo ejecutable es E11. E03 conserva el rojo/verde de un defecto real y E04 verifica los gates con CI normal y un ensayo crítico controlado. Una ejecución verde de estos controles no equivale todavía al ciclo integral de entrega.
 
 ## 5. Matriz completa de requisitos de la consigna
 
@@ -685,43 +687,43 @@ Decisión ejecutada: pesos previos **20/20/20/20/10/10 %**, suma 100 %. Matriz c
 
 ### 16.1. Conservar y corregir la base recibida
 
-- [ ] Mantener carátula, introducción y contenido aprovechable de `tp-Calidad.md`.
-- [ ] Completar nombres/datos académicos que falten. No inventar legajos, docente u otros datos.
-- [ ] Conservar la preferencia de informe sin índice.
-- [ ] Aclarar arquitectura: la web consulta Supabase; no dibujar consumo de FastAPI desde la web como flujo implementado si sigue sin existir.
-- [ ] Mantener Nivel 2 como avance declarado, no como afirmación de que ya están aprobados todos sus requisitos.
-- [ ] Reemplazar CP-01 a CP-04 ilustrativos por casos implementados con resultados verificables.
-- [ ] Corregir la distinción 85,26 % de sentencias / 80,91 % combinada backend.
-- [ ] Unificar riesgos, nombres de casos, defectos y denominadores con la documentación técnica actualizada.
+- [x] Mantener carátula, introducción y contenido aprovechable de `tp-Calidad.md`.
+- [x] Completar nombres/datos académicos que falten. No inventar legajos, docente u otros datos.
+- [x] Conservar la preferencia de informe sin índice.
+- [x] Aclarar arquitectura: la web consulta Supabase; no dibujar consumo de FastAPI desde la web como flujo implementado si sigue sin existir.
+- [x] Mantener Nivel 2 como avance declarado, no como afirmación de que ya están aprobados todos sus requisitos.
+- [x] Reemplazar CP-01 a CP-04 ilustrativos por casos implementados con resultados verificables.
+- [x] Corregir la distinción 85,26 % de sentencias / 80,91 % combinada backend.
+- [x] Unificar riesgos, nombres de casos, defectos y denominadores con la documentación técnica actualizada.
 
 ### 16.2. Completar desde QA/QC
 
-- [ ] Agregar automatización, workflow y criterios exactos de gate.
-- [ ] Agregar pipeline rojo y verde con SHA, causa y enlaces.
-- [ ] Describir integración real de aplicación y distinguirla de mocks e investigación por plugin.
-- [ ] Describir smoke posterior al despliegue con URL, versión y resultado.
-- [ ] Incorporar estrés y esfuerzo sostenido: entorno, dataset, parámetros previos, umbrales, resultados y límites.
-- [ ] Incluir gestión de defectos y trazabilidad de los casos seleccionados.
-- [ ] Desarrollar la herramienta de cinco pasos y matriz de decisión.
-- [ ] Presentar evolución de métricas con fecha y alcance; las nuevas pruebas pueden cambiar el total y porcentajes.
-- [ ] Añadir tabla final de metas cumplidas/no cumplidas y evidencia por cada una.
-- [ ] Redactar análisis crítico: qué confianza aportan las pruebas, qué no cubren y qué riesgos quedan.
-- [ ] Redactar conclusiones sobre los resultados finales, sin asegurar ausencia total de defectos o preparación productiva completa.
-- [ ] Agregar mapa breve de herramientas y anexos/enlaces útiles del repositorio.
+- [x] Agregar automatización, workflow y criterios exactos de gate.
+- [x] Agregar pipeline rojo y verde con SHA, causa y enlaces.
+- [x] Describir integración real de aplicación y distinguirla de mocks e investigación por plugin.
+- [x] Describir smoke posterior al despliegue con URL, versión y resultado.
+- [x] Incorporar estrés y esfuerzo sostenido: entorno, dataset, parámetros previos, umbrales, resultados y límites.
+- [x] Incluir gestión de defectos y trazabilidad de los casos seleccionados.
+- [x] Desarrollar la herramienta de cinco pasos y matriz de decisión.
+- [x] Presentar evolución de métricas con fecha y alcance; las nuevas pruebas pueden cambiar el total y porcentajes.
+- [x] Añadir tabla final de metas cumplidas/no cumplidas y evidencia por cada una.
+- [x] Redactar análisis crítico: qué confianza aportan las pruebas, qué no cubren y qué riesgos quedan.
+- [x] Redactar conclusiones sobre los resultados finales, sin asegurar ausencia total de defectos o preparación productiva completa.
+- [x] Agregar mapa breve de herramientas y anexos/enlaces útiles del repositorio.
 
 ### 16.3. Evidencia visual y exportación
 
-- [ ] Usar capturas de ejecuciones del propio proyecto, no imágenes inventadas de terminal/pipeline.
-- [ ] Generar gráficos únicamente a partir de datos reales identificados. Etiquetar eje, unidad, fechas y alcance.
-- [ ] Diferenciar capturas históricas de capturas de la versión final. No etiquetar una imagen de 94 pruebas como resultado actual si la suite ya cambió.
-- [ ] Elegir capturas legibles; varias recibidas tienen unos 600 píxeles de ancho y pueden necesitar reemplazo por exportaciones nuevas.
-- [ ] Evitar incluir credenciales, tokens o datos personales reales en capturas.
-- [ ] Conservar fuente editable, documento de generación si se usa y PDF final dentro de la estructura de entrega elegida.
-- [ ] Al crear documentos/PDF usar las skills correspondientes y su flujo de renderizado/revisión visual.
-- [ ] Revisar todas las páginas exportadas: tablas completas, títulos, cortes, pies de figura, caracteres y enlaces.
-- [ ] Comprobar que los números coincidan con los artefactos de CI y que las conclusiones respondan a esos números.
+- [x] Usar capturas de ejecuciones del propio proyecto, no imágenes inventadas de terminal/pipeline.
+- [x] Generar gráficos únicamente a partir de datos reales identificados. Etiquetar eje, unidad, fechas y alcance.
+- [x] Diferenciar capturas históricas de capturas de la versión final. No etiquetar una imagen de 94 pruebas como resultado actual si la suite ya cambió.
+- [x] Elegir capturas legibles; varias recibidas tienen unos 600 píxeles de ancho y pueden necesitar reemplazo por exportaciones nuevas.
+- [x] Evitar incluir credenciales, tokens o datos personales reales en capturas.
+- [x] Conservar fuente editable, documento de generación si se usa y PDF final dentro de la estructura de entrega elegida.
+- [x] Al crear documentos/PDF usar las skills correspondientes y su flujo de renderizado/revisión visual.
+- [x] Revisar todas las páginas exportadas: tablas completas, títulos, cortes, pies de figura, caracteres y enlaces.
+- [x] Comprobar que los números coincidan con los artefactos de CI y que las conclusiones respondan a esos números.
 
-**Salida y evidencia:** fuente académica consolidada, PDF revisado y tabla de cumplimiento con referencias reales.  
+**Salida y evidencia:** [fuente académica](entrega/INFORME_ACADEMICO_CALIDAD.md), [PDF revisado de 27 páginas](entrega/INFORME_ACADEMICO_CALIDAD.pdf), [generación](entrega/README.md), [ficha](REGISTRO_EJECUCION_E10.md) y [validación](evidencias/e10/validacion-registros.json). **29/29 controles completados**; tabla R01-R25 con demostración final pendiente y riesgos abiertos explícitos.  
 **No cerrar si:** faltan secciones obligatorias, un «pendiente» está presentado como aprobado, las capturas contradicen las cifras o el PDF todavía no se abrió/renderizó para revisarlo.
 
 ## 17. E11 — Validación integral, entrega y defensa

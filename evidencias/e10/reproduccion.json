@@ -1,0 +1,8 @@
+{
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "pdf_sha256": "cbd65c5b296353eac845561c7074233b7c5beb0939b01516dceb9e467126a495",
+  "second_copy_sha256": "cbd65c5b296353eac845561c7074233b7c5beb0939b01516dceb9e467126a495",
+  "binary_identical": true,
+  "svg_identical": true,
+  "runtime_scope": "Same Python, packages, fonts and versioned input evidence; other typography/runtime requires fresh render review."
+}

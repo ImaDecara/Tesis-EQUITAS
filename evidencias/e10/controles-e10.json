@@ -1,0 +1,158 @@
+{
+  "stage": "E10",
+  "controls": [
+    {
+      "id": "E10-01",
+      "completed": true,
+      "requirement": "Mantener carátula, introducción y contenido aprovechable de `tp-Calidad.md`."
+    },
+    {
+      "id": "E10-02",
+      "completed": true,
+      "requirement": "Completar nombres/datos académicos que falten. No inventar legajos, docente u otros datos."
+    },
+    {
+      "id": "E10-03",
+      "completed": true,
+      "requirement": "Conservar la preferencia de informe sin índice."
+    },
+    {
+      "id": "E10-04",
+      "completed": true,
+      "requirement": "Aclarar arquitectura: la web consulta Supabase; no dibujar consumo de FastAPI desde la web como flujo implementado si sigue sin existir."
+    },
+    {
+      "id": "E10-05",
+      "completed": true,
+      "requirement": "Mantener Nivel 2 como avance declarado, no como afirmación de que ya están aprobados todos sus requisitos."
+    },
+    {
+      "id": "E10-06",
+      "completed": true,
+      "requirement": "Reemplazar CP-01 a CP-04 ilustrativos por casos implementados con resultados verificables."
+    },
+    {
+      "id": "E10-07",
+      "completed": true,
+      "requirement": "Corregir la distinción 85,26 % de sentencias / 80,91 % combinada backend."
+    },
+    {
+      "id": "E10-08",
+      "completed": true,
+      "requirement": "Unificar riesgos, nombres de casos, defectos y denominadores con la documentación técnica actualizada."
+    },
+    {
+      "id": "E10-09",
+      "completed": true,
+      "requirement": "Agregar automatización, workflow y criterios exactos de gate."
+    },
+    {
+      "id": "E10-10",
+      "completed": true,
+      "requirement": "Agregar pipeline rojo y verde con SHA, causa y enlaces."
+    },
+    {
+      "id": "E10-11",
+      "completed": true,
+      "requirement": "Describir integración real de aplicación y distinguirla de mocks e investigación por plugin."
+    },
+    {
+      "id": "E10-12",
+      "completed": true,
+      "requirement": "Describir smoke posterior al despliegue con URL, versión y resultado."
+    },
+    {
+      "id": "E10-13",
+      "completed": true,
+      "requirement": "Incorporar estrés y esfuerzo sostenido: entorno, dataset, parámetros previos, umbrales, resultados y límites."
+    },
+    {
+      "id": "E10-14",
+      "completed": true,
+      "requirement": "Incluir gestión de defectos y trazabilidad de los casos seleccionados."
+    },
+    {
+      "id": "E10-15",
+      "completed": true,
+      "requirement": "Desarrollar la herramienta de cinco pasos y matriz de decisión."
+    },
+    {
+      "id": "E10-16",
+      "completed": true,
+      "requirement": "Presentar evolución de métricas con fecha y alcance; las nuevas pruebas pueden cambiar el total y porcentajes."
+    },
+    {
+      "id": "E10-17",
+      "completed": true,
+      "requirement": "Añadir tabla final de metas cumplidas/no cumplidas y evidencia por cada una."
+    },
+    {
+      "id": "E10-18",
+      "completed": true,
+      "requirement": "Redactar análisis crítico: qué confianza aportan las pruebas, qué no cubren y qué riesgos quedan."
+    },
+    {
+      "id": "E10-19",
+      "completed": true,
+      "requirement": "Redactar conclusiones sobre los resultados finales, sin asegurar ausencia total de defectos o preparación productiva completa."
+    },
+    {
+      "id": "E10-20",
+      "completed": true,
+      "requirement": "Agregar mapa breve de herramientas y anexos/enlaces útiles del repositorio."
+    },
+    {
+      "id": "E10-21",
+      "completed": true,
+      "requirement": "Usar capturas de ejecuciones del propio proyecto, no imágenes inventadas de terminal/pipeline."
+    },
+    {
+      "id": "E10-22",
+      "completed": true,
+      "requirement": "Generar gráficos únicamente a partir de datos reales identificados. Etiquetar eje, unidad, fechas y alcance."
+    },
+    {
+      "id": "E10-23",
+      "completed": true,
+      "requirement": "Diferenciar capturas históricas de capturas de la versión final. No etiquetar una imagen de 94 pruebas como resultado actual si la suite ya cambió."
+    },
+    {
+      "id": "E10-24",
+      "completed": true,
+      "requirement": "Elegir capturas legibles; varias recibidas tienen unos 600 píxeles de ancho y pueden necesitar reemplazo por exportaciones nuevas."
+    },
+    {
+      "id": "E10-25",
+      "completed": true,
+      "requirement": "Evitar incluir credenciales, tokens o datos personales reales en capturas."
+    },
+    {
+      "id": "E10-26",
+      "completed": true,
+      "requirement": "Conservar fuente editable, documento de generación si se usa y PDF final dentro de la estructura de entrega elegida."
+    },
+    {
+      "id": "E10-27",
+      "completed": true,
+      "requirement": "Al crear documentos/PDF usar las skills correspondientes y su flujo de renderizado/revisión visual."
+    },
+    {
+      "id": "E10-28",
+      "completed": true,
+      "requirement": "Revisar todas las páginas exportadas: tablas completas, títulos, cortes, pies de figura, caracteres y enlaces."
+    },
+    {
+      "id": "E10-29",
+      "completed": true,
+      "requirement": "Comprobar que los números coincidan con los artefactos de CI y que las conclusiones respondan a esos números."
+    }
+  ],
+  "evidence": [
+    "entrega/INFORME_ACADEMICO_CALIDAD.md",
+    "entrega/INFORME_ACADEMICO_CALIDAD.pdf",
+    "entrega/generar_informe.py",
+    "evidencias/e10/generacion.json",
+    "evidencias/e10/revision-visual.json",
+    "evidencias/e10/reproduccion.json"
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "stage": "E10",
+  "reviewed_at_utc": "2026-10-23T15:03:39.892487+00:00",
+  "pdf": "entrega/INFORME_ACADEMICO_CALIDAD.pdf",
+  "pdf_sha256": "cbd65c5b296353eac845561c7074233b7c5beb0939b01516dceb9e467126a495",
+  "page_count": 27,
+  "renderer": "Poppler pdftoppm, bundled runtime",
+  "dpi": 110,
+  "inspection": "Each final page opened individually at original raster resolution; not only a contact sheet.",
+  "pages": [
+    {
+      "page": 1,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "6c9a323bd8d51c88a95202a043683b9e1696eac96463a5d43421f7d68dcefc19"
+    },
+    {
+      "page": 2,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "0de6e8159a5f8a0bef5aef21b6c4a7f037229810e636baf2345c899fdac4f851"
+    },
+    {
+      "page": 3,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "e693101bb028e1c707be43721b4895acdb3e8c29d6a6161d417b4f856826983d"
+    },
+    {
+      "page": 4,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "52517bca13f6e92d02f2ad8cadde4994fbb5abf889ab11a7f9ea1a029bde006d"
+    },
+    {
+      "page": 5,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "98d8c66684602a138e3b58e53858494acd581645d1c389f3b139f4c05ec0dbff"
+    },
+    {
+      "page": 6,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "24659cd607e2ab12e639f517075d6fcbd4a41f478a75a8db9c57d5fc9aacd7f8"
+    },
+    {
+      "page": 7,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "5149eed9bc2ca409901793972bbe2d9dd79bca60c273e53af152d5e48439ca9d"
+    },
+    {
+      "page": 8,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "02d2280f3205392d2805f0e4f46b01b56a829aab62b4f34cbff265e726c94064"
+    },
+    {
+      "page": 9,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "978dd2ad072791b900983afa517703fd7aef5280f2d945fbb9691d79dd2c587c"
+    },
+    {
+      "page": 10,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "4fa6a67cfd5e6442ae66511a41e11e1426034b399bd351b77ba6e591dcc50271"
+    },
+    {
+      "page": 11,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "fa983fad053e02a152ebfadb00a4b5d8e96d88ba51bb68ecd5b7118340a96721"
+    },
+    {
+      "page": 12,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "3c5948b85f6439c6d1396774a8f502334e79cd22626135878aa731401d1b441b"
+    },
+    {
+      "page": 13,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "5b47eef7f95ea6ef4bb835071529676058df6bcc508760477cd55330d1d9f999"
+    },
+    {
+      "page": 14,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "a7761b370260180a5da39b8c6afadffd2de94f257c660b77dc5ff3686342437e"
+    },
+    {
+      "page": 15,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "5ff7ad5714db4da5c8fa08a46c27010a710413476311da6f792caa485c9933f8"
+    },
+    {
+      "page": 16,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "a57cdb5f08994783321852b0aaa165eb181c7956f42c4ad96f344190d78bf702"
+    },
+    {
+      "page": 17,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "6b1dd112d2c5c5ad6f14420f0c46f8275d39291ae14366b5e3c2b5bf80826cd5"
+    },
+    {
+      "page": 18,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "05c1b45c4c9581cf738373b80df00e27cecb2acb523570088d6d362bdb51b70a"
+    },
+    {
+      "page": 19,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "bc9a5ea05a893237ddf0a625ae77e59d5b84c391e2a978dbbdd4695787b13722"
+    },
+    {
+      "page": 20,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "e9b3c82959b9dab935c92c63fa90ff8bc8c7194ec0c4a3285d1d11fca782564f"
+    },
+    {
+      "page": 21,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "62761b502083b653f4209d6e4dd3117b95d11299bfd776097967cee40a199f15"
+    },
+    {
+      "page": 22,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "a7fca3666e4d646c4e58accc32aa5130fe0a74887bcd411feaa55ed0171e9148"
+    },
+    {
+      "page": 23,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "b99a43fb1f5d25fcd0ddccdeedf531b97cbc156a1a6c84b3300589a492bee846"
+    },
+    {
+      "page": 24,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "9cb2ff6638d8df9c072882b7bc8dce4990eb423cfb9162474e4a7b6bd338797c"
+    },
+    {
+      "page": 25,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "e98c7bbb07e9f82ccc3d5f72260490c52b19d85f7abb4f244287623fdb662aed"
+    },
+    {
+      "page": 26,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "113f4d0d0a869d46490d39c4a5e330292b080b94372d78686880bbe7f255dcac"
+    },
+    {
+      "page": 27,
+      "inspected": true,
+      "result": "pass",
+      "render_sha256": "6253139cea057082c269b5bbe964ea9c0dd357bde5b7f85c6cd22994674c0829"
+    }
+  ],
+  "findings_resolved": [
+    "Narrow header and count column enlarged",
+    "Long tables split with repeated headers and first-row heading protection",
+    "Screenshot display clipped to declared operational list; original unchanged",
+    "Exact rule/version/commit spelling restored and checked",
+    "No index; cover data preserved",
+    "Links, captions, axes, units and limits retained"
+  ]
+}

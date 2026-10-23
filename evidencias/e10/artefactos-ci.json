@@ -1,0 +1,43 @@
+{
+  "run_id": 39968499139,
+  "source_sha": "1472eea8bbd87857a38a6fd0b05283ff9287eb44",
+  "run_url": "https://github.com/ImaDecara/Tesis-EQUITAS/actions/runs/39968499139",
+  "artifacts": [
+    {
+      "id": 12508555711,
+      "name": "ci-summary-39968499139-1",
+      "digest": "sha256:ac26fa24d82949a2501b485c3f76b994de8eb298702d6224b4b9d9c2cc80df86",
+      "created_at": "2026-10-23T14:19:48Z",
+      "expires_at": "2026-11-22T14:19:48Z",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12508555711/zip",
+      "download_sha256_verified": true
+    },
+    {
+      "id": 12508116453,
+      "name": "ci-frontend-39968499139-1",
+      "digest": "sha256:d89ba8200529b059274cc1fbbd1ff9529f7184393b8689dccd1c2b906de8ac68",
+      "created_at": "2026-10-23T14:19:21Z",
+      "expires_at": "2026-11-22T14:19:19Z",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12508116453/zip",
+      "download_sha256_verified": true
+    },
+    {
+      "id": 12507543545,
+      "name": "ci-backend-39968499139-1",
+      "digest": "sha256:5403286c8dc322acda4a9ec04a680556a0a13f08b993781251a3bcd522a35881",
+      "created_at": "2026-10-23T14:19:06Z",
+      "expires_at": "2026-11-22T14:19:06Z",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12507543545/zip",
+      "download_sha256_verified": true
+    },
+    {
+      "id": 12507333264,
+      "name": "ci-supabase-39968499139-1",
+      "digest": "sha256:494292819b019b190c754c46441cc64248e2881c5c051cab467207c82338e10b",
+      "created_at": "2026-10-23T14:19:30Z",
+      "expires_at": "2026-11-22T14:19:29Z",
+      "archive_download_url": "https://api.github.com/repos/ImaDecara/Tesis-EQUITAS/actions/artifacts/12507333264/zip",
+      "download_sha256_verified": true
+    }
+  ]
+}
