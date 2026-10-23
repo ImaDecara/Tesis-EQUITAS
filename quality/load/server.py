@@ -6,7 +6,6 @@ from pathlib import Path
 from types import ModuleType
 
 from anyio.to_thread import current_default_thread_limiter
-
 from quality.load.fixture import FixtureConnector, make_oracle
 
 ROOT = Path(__file__).resolve().parents[2]
