@@ -142,6 +142,7 @@ try {
   await page.getByRole('button', { name: 'Limpiar', exact: true }).click()
   await expect(ownDebtor).toBeVisible()
   await expect(page).toHaveURL(base.origin + '/debtors')
+  await expect(page.getByLabel('Buscar por objeto o persona')).toHaveValue('')
   await noVisibleError()
   await capture('objetos-filtro-restaurado')
   await page.getByRole('link', { name: 'Personas / Deudores', exact: true }).first().click()

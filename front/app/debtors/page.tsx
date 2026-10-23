@@ -206,6 +206,7 @@ export default async function DebtorsPage({
           </CardHeader>
           <CardContent>
             <DebtorsFiltersForm
+              key={JSON.stringify(filters)}
               initialValues={filters}
               riskOptions={riskOptions}
               statusOptions={statusOptions}
