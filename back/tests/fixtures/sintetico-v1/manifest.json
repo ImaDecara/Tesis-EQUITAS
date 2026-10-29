@@ -59,7 +59,7 @@
       "duplicados_identicos": 1,
       "duplicados_conflictivos": 1,
       "detalle_sin_cabecera": 1,
-      "objetos_sin_contacto_utilizable": 7,
+      "objetos_sin_contacto_utilizable": 9,
       "objetos_porcentajes_no_100": 2
     },
     "municipio-sintetico-b": {
@@ -91,9 +91,15 @@
       "oraculo": "expected.json"
     }
   ],
+  "complementarios": [
+    {
+      "ruta": "contactos-vigencia.json",
+      "uso": "precondición del oráculo: vigencia explícita de contactos (clave municipio, Destinatario_Id, columna); no se atribuye al origen real"
+    }
+  ],
   "oraculo": {
     "ruta": "expected.json",
-    "sha256": "642bae3e13a15755d7c93c1f7c217abb8f2d9dcdf7468ad44b95e8bf916a1048"
+    "sha256": "5065f959cf8dfe8ef709ba18ccd11c90850c77ae8557f03eff0068f3c3ee8e87"
   },
   "privacidad": {
     "nombres": "Persona Sintética NNNN / Entidad Sintética NNNN",
@@ -105,38 +111,43 @@
   "archivos": [
     {
       "ruta": "cabecera.tsv",
-      "bytes": 11444,
-      "sha256": "270b088aabe398db2b5decdadfcd9bf216aabdb4ffe4915b4f941b3e72f306e6"
+      "bytes": 11371,
+      "sha256": "0e17a7cf534ee440a86b8d0867634f71aac2b6ec5a2671b179ea7c667d80c38b"
+    },
+    {
+      "ruta": "contactos-vigencia.json",
+      "bytes": 1232,
+      "sha256": "95356381cb6218e4fca8ed89849675e26441c39039ce84b7738fe5f524abfe33"
     },
     {
       "ruta": "detalle.tsv",
-      "bytes": 16740,
-      "sha256": "daea5204c56c37182de1da4675882afe095e06eb6a0e57f9a0ccabd819d8e13c"
+      "bytes": 16727,
+      "sha256": "e6d60eca1190d949854c324886352a96639d022e2f6b15b89417298ba10561ef"
     },
     {
       "ruta": "escenario-social.json",
       "bytes": 8009,
-      "sha256": "f87f7a35be0147c758236456c9d8c26fb8ce78cfe94741707c744674d5f93c45"
+      "sha256": "65797d813abfd37257bc08eb3e3cff1ca6423982a23c4b1f17e8796012897186"
     },
     {
       "ruta": "expected.json",
-      "bytes": 56129,
-      "sha256": "642bae3e13a15755d7c93c1f7c217abb8f2d9dcdf7468ad44b95e8bf916a1048"
+      "bytes": 72627,
+      "sha256": "5065f959cf8dfe8ef709ba18ccd11c90850c77ae8557f03eff0068f3c3ee8e87"
     },
     {
       "ruta": "seguridad/municipio-sintetico-b/cabecera.tsv",
-      "bytes": 1193,
-      "sha256": "4ca32fe2dec18e9487602140384cb05d6b047c946fff710315ca5bb16c0b3552"
+      "bytes": 1213,
+      "sha256": "6c247d4833a4c20024fbe0ea93eabf83dff14ecf713ba2d914cbfe12f4b4b4b2"
     },
     {
       "ruta": "seguridad/municipio-sintetico-b/detalle.tsv",
       "bytes": 791,
-      "sha256": "8d43419bdcee5499fddda8fe253f022acabe2dfdec20af924b302c0da2dfd267"
+      "sha256": "498a6876741769a87e48cdabd169cbe366edd177981edf6347c1a9c436d042fe"
     },
     {
       "ruta": "seguridad/municipios.json",
       "bytes": 2726,
-      "sha256": "58f215638fe00fa00c301ece2f17724ae810f8174699444e58b6e404566b5ef8"
+      "sha256": "da4c1a78017e8e9bd747142289bb57905838e91f43467095c566a26b318eda6b"
     }
   ]
 }

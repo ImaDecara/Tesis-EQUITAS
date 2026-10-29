@@ -5,7 +5,7 @@
 | Ticket | ALIGN-023, plan `2026-10-28-v2` (M3) |
 | Generador | `quality/fixtures/synthetic_portfolio.py` (biblioteca estándar + `openpyxl==3.1.5` solo para XLSX) |
 | Pruebas | `quality/tests/test_synthetic_portfolio.py` (INFRA) y `back/tests/test_synthetic_fixture.py` (BE) |
-| Fixture versionada | `back/tests/fixtures/sintetico-v1/` (perfil `contrato`, semilla por defecto, `--sin-variantes`: TSV + JSON, ~110 KB) |
+| Fixture versionada | `back/tests/fixtures/sintetico-v1/` (perfil `contrato`, semilla por defecto, `--sin-variantes`: TSV + JSON, ~120 KB) |
 | Contrato aplicado | `docs/tesis/contrato-dominio-v1.md` (ALIGN-007): estados de presencia, corte, agregación por objeto |
 | Datos personales | Ninguno. Clase **S**: ninguna fila ni distribución fina deriva de la cartera real |
 
@@ -39,6 +39,7 @@ La carpeta de salida debe estar vacía. Para regenerar la fixture versionada: bo
 | `cabecera.tsv`, `detalle.tsv` | Lote principal (`municipio-sintetico-a`): UTF-8 sin BOM, tabulador, LF, importes `1.234,56`, fechas `dd/mm/aaaa` |
 | `manifest.json` | Versión, semilla, perfil, corte, formato, catálogos del lote, proporciones y su procedencia, conteos por municipio, variantes, sha256 y bytes de cada archivo, sha256 del oráculo. Sin marca de tiempo (determinismo) |
 | `expected.json` | Oráculo (§4) por municipio |
+| `contactos-vigencia.json` | Artefacto complementario: vigencia explícita de contactos que el TSV no puede expresar (§3.1.1) |
 | `escenario-social.json` | Escenario social sintético separado (§3.4) |
 | `seguridad/municipios.json`, `seguridad/municipio-sintetico-b/*.tsv` | Familia de seguridad (§3.2) |
 | `variantes/csv-{coma,puntoycoma}-{utf8,cp1252}/`, `variantes/xlsx/cartera.xlsx` | La **misma** cartera en CSV y XLSX (§3.3) |
@@ -55,11 +56,12 @@ Cada caso es un objeto con nombre propio en `expected.json` (`caso`), y la prueb
 | `base-valido` / `misma-cuenta-otro-tipo` | Cuenta `4100` con `Bien_Tipo_Id` 3 y 6 | Dos objetos distintos, ambos aceptados |
 | `cuenta-canonica-123` / `cuenta-ceros-izquierda` / `cuenta-alfanumerica` | `123`, `000123`, `R-0456` (el ETL actual colapsaría `000123` con `123`) | No canónicas → `CUENTA_NO_CANONICA`, cuarentena |
 | `importe-cero` | `0,00` en capital y total | Cero **observado** y conservado |
-| `importe-vacio` / `importe-no-numerico` | Total vacío; capital `abc` | `IMPORTE_VACIO` (`NO_INFORMADO_EN_ORIGEN`) / `IMPORTE_NO_NUMERICO` (`INVALIDO`); total del objeto nulo con desglose, nunca 0 |
-| `fecha-ambigua` / `fecha-imposible` | `03/04/2023`; `31/02/2024` | Formato declarado `dd/mm/aaaa` → 2023-04-03; `FECHA_IMPOSIBLE` |
-| `estados-origen-vencimiento-viejo` | `NOTD_ESTA_id` pagada/anulada/suspendida/pendiente/vacío con vencimiento 2020 | Solo la pendiente es `VENCIDA`; vacío → `UNKNOWN` (nunca "vencida" inventada) |
-| `vencimiento-posterior-al-corte` | Pendiente con vencimiento > corte | `VIGENTE`; días de atraso `NO_APLICA` |
-| `contacto-inactivo-placeholder` / `contacto-formato-invalido` / `sin-contacto` | `0`, `-`, `NO POSEE`; email sin `@`; sin valores | Contacto no utilizable; bandera `SIN_CONTACTO_UTILIZABLE` (no suma severidad) |
+| `importe-vacio` / `importe-no-numerico` | Total vacío en una de dos obligaciones; capital `abc` en una de dos | `IMPORTE_VACIO` (`NO_INFORMADO_EN_ORIGEN`) / `IMPORTE_NO_NUMERICO` (`INVALIDO`), cuarentena. El importe del objeto es el **subtotal de las filas observadas** (`OBSERVADO`, `completo: false`) con el desglose de las no observadas al lado; nunca el faltante como 0 (§4) |
+| `fecha-ambigua` / `fecha-imposible` | `03/04/2023`; `31/02/2024` (única obligación, pendiente) | Formato declarado `dd/mm/aaaa` → 2023-04-03; `FECHA_IMPOSIBLE`, cuarentena, vencimiento más antiguo y días de atraso nulos con presencia **`INVALIDO`** (no `NO_APLICA`) y la obligación contada en `PENDIENTE_VENCIMIENTO_NO_OBSERVADO` |
+| `estados-origen-vencimiento-viejo` | `NOTD_ESTA_id` pagada/anulada/suspendida/pendiente/vacío con vencimiento 2020 | Solo la pendiente es `VENCIDA`; vacío → `UNKNOWN` (nunca "vencida" inventada). Días de atraso: máximo de las observadas con la fila sin estado contada aparte (`NO_INFORMADO_EN_ORIGEN`, `completo: false`) |
+| `vencimiento-posterior-al-corte` | Pendiente con vencimiento > corte | `VIGENTE`; días de atraso `NO_APLICA` (universo leído completo y sin vencidas) |
+| `contacto-placeholder` / `contacto-formato-invalido` / `sin-contacto` | `0`, `-`, `NO POSEE`; email sin `@`; sin valores | Marcador o formato `INVALIDO` / ausencia; no utilizable; bandera `SIN_CONTACTO_UTILIZABLE` (no suma severidad). No son contactos inactivos |
+| `contacto-inactivo` / `contacto-activo-mismo-valor` | El **mismo** teléfono bien formado: `INACTIVO` (con un email bien formado también `INACTIVO`) para una persona y `ACTIVO` para otra, declarado en `contactos-vigencia.json` | `CONTACTO_INACTIVO` (`OBSERVADO`), 0 utilizables y `SIN_CONTACTO_UTILIZABLE` / 1 utilizable. Solo la vigencia declarada separa ambos resultados (§3.1.1) |
 | `dos-personas-un-objeto` / `persona-varios-objetos-1..3` | 2 personas 50/50; 1 persona en 3 objetos | Relaciones correctas; exposición no aditiva |
 | `porcentajes-120` / `porcentaje-80` / `porcentaje-faltante` | Suma ≠ 100 y vacío | `PORCENTAJES_NO_SUMAN_100` / `PORCENTAJE_FALTANTE`; nunca se normaliza |
 | `duplicado-identico` / `duplicado-conflictivo` | Misma `(Bien_Tipo_Id, Cuenta, DEUD_id)` repetida igual o con otro importe | Se cuenta una vez / `DUPLICADO_CONFLICTIVO`, cuarentena |
@@ -67,6 +69,10 @@ Cada caso es un objeto con nombre propio en `expected.json` (`caso`), y la prueb
 | `conciliacion-diferente` | `Deuda_Actualizada` ≠ Σ `NOTD_totalActualizado` | `CONCILIACION_DIFERENTE`, cuarentena |
 | `cabecera-sin-detalle` / `detalle-sin-cabecera` | Objeto sin obligaciones; `ClaveAgrupacion` huérfana | Total 0 derivado; fila `DETALLE_SIN_CABECERA` |
 | `objeto-inactivo-en-origen`, `persona-juridica` | `Estado = Inactivo`; "Entidad Sintética" | Banderas informativas |
+
+#### 3.1.1 Vigencia de contactos (artefacto complementario)
+
+El archivo municipal actual no trae vigencia de contacto y el ETL crea todos los contactos activos (contrato CO03); por eso `cabecera.tsv` no puede expresar un contacto dado de baja. La fixture de contrato agrega `contactos-vigencia.json` como **precondición del oráculo**, no como columna del origen real: clave (`municipio`, `Destinatario_Id`, `columna`), valores `ACTIVO` (utilizable si el formato es válido) e `INACTIVO` (dado de baja: no utilizable aunque esté bien formado; hallazgo `CONTACTO_INACTIVO` con presencia `OBSERVADO`); un contacto con valor no listado es `ACTIVO`. La vigencia es distinta de la validez de formato o los marcadores (`INVALIDO`) y de la ausencia (columna vacía). Un consumidor que solo lea el TSV no distingue `contacto-inactivo` de `contacto-activo-mismo-valor`; la prueba `test_contact_validity_distinguishes_the_same_value_active_and_inactive` lo fija.
 
 Los catálogos del lote (`Bien_Tipo_Id` 1/3/6, `Tipo_Ingreso_Id` 1/100/801/905, `NOTD_ESTA_id` 10/20/30/40) son **sintéticos** y se declaran en el manifiesto: no son los IDs del municipio real (pendientes de ALIGN-004) ni los de las constantes del ETL.
 
@@ -95,7 +101,14 @@ La misma tabla se escribe en TSV, CSV con `,` y `;` en UTF-8 con BOM y en Window
 | `formulas.xlsx` / `.csv` | Fórmulas sin valor guardado; `=`, `+`, `-`, `@` al inicio | `FORMULA_SIN_VALOR` / `FORMULA_EN_CELDA` |
 | `hojas-extra.xlsx` | Hojas `notas` y `oculta` además de las esperadas | `HOJAS_EXTRA_IGNORADAS` |
 
-Los códigos son sugerencias; ALIGN-053 fija los definitivos. Cada archivo lleva el centinela `CENTINELA-EQUITAS-SINTETICO` para que ALIGN-059 verifique que no aparezca en logs ni respuestas. Ningún archivo supera 1 MB en disco y no se versiona ninguno.
+Los códigos son sugerencias; ALIGN-053 fija los definitivos. Ningún archivo supera 1 MB en disco y no se versiona ninguno.
+
+**Centinelas.** Cada archivo lleva al menos un centinela con el prefijo `CENTINELA-EQUITAS-SINTETICO`, distinto por archivo y ubicación (`CENTINELA-EQUITAS-SINTETICO-<ARCHIVO>-<LUGAR>`), sin alterar su condición hostil. `hostil/manifest.json` declara por archivo `centinelas[]` con `valor`, `partes` (partes del ZIP que lo contienen; vacío = bytes del archivo) y `en_preview_autorizado`:
+
+- `…-DATO` (`true`): campo de datos no personal de las hojas que lee el importador (`Bien_Descripcion` en `cabecera`, `Detalle_Deuda` en `detalle`; en CSV, `Bien_Descripcion`). Si el archivo se acepta, debe verse en el preview autorizado; si se rechaza, no hay preview. Está en todos los archivos legibles.
+- `false`: ubicaciones que nunca deben mostrarse: hojas ignoradas (`…-HOJA-NOTAS`, `…-HOJA-OCULTA`), destino de la entidad externa, `vbaProject.bin`, bytes del OLE2 y del binario, celda gigante y fórmula.
+
+Ningún centinela debe aparecer en logs ni en respuestas no autorizadas. `test_every_hostile_file_carries_its_declared_sentinels` exige su presencia en la entrada (partes descomprimidas incluidas) para que la comprobación de ausencia de ALIGN-059 no sea vacía, y que en `hojas-extra.xlsx` el centinela de datos esté solo en `cabecera`/`detalle` y los de las hojas ignoradas solo en `notas`/`oculta`.
 
 ### 3.6 Escala
 
@@ -103,8 +116,9 @@ Los códigos son sugerencias; ALIGN-053 fija los definitivos. Cada archivo lleva
 
 ## 4. Oráculo (`expected.json`)
 
-- **Calculado por el modelo del generador**: los valores salen de los objetos en memoria con un lector estricto del formato declarado; el generador no importa `back/ETL` ni pandas y se ejecuta con `python -I` (la prueba revisa sus importaciones con `ast`). Una segunda prueba recalcula los totales leyendo los archivos con la biblioteca estándar.
-- Por municipio: `conteos` (filas, objetos aceptados/en cuarentena, personas, relaciones, obligaciones únicas, duplicados, detalle sin cabecera, objetos sin contacto utilizable y con porcentajes ≠ 100), `importes` (aceptado y en cuarentena observado), `objetos` (caso, clave, resultado `ACEPTADO`/`CUARENTENA`, motivos, banderas, personas, obligaciones, importes con estado de presencia y desglose de filas no observadas, estados al corte, vencimiento más antiguo, días de la vencida más antigua, suma de porcentajes, contactos utilizables) y `hallazgos` (archivo, línea, campo, código y estado de presencia; **sin valores**).
+- **Calculado por el modelo del generador**: los valores salen de los objetos en memoria con un lector estricto del formato declarado; el generador no importa `back/ETL` ni pandas y se ejecuta con `python -I` (la prueba revisa sus importaciones con `ast`). Una segunda prueba recalcula, leyendo los archivos con la biblioteca estándar, los importes y los agregados temporales de **todos** los objetos, también los que están en cuarentena.
+- Por municipio: `conteos` (filas, objetos aceptados/en cuarentena, personas, relaciones, obligaciones únicas, duplicados, detalle sin cabecera, objetos sin contacto utilizable y con porcentajes ≠ 100), `importes` (aceptado y en cuarentena observado, más el desglose de filas de total no observadas), `objetos` (caso, clave, resultado `ACEPTADO`/`CUARENTENA`, motivos, banderas, personas, obligaciones, importes, estados al corte, vencimiento más antiguo, días de la vencida más antigua, suma de porcentajes, contactos utilizables e inactivos) y `hallazgos` (archivo, línea, campo, código y estado de presencia; **sin valores**).
+- **Agregados por objeto** (importes, vencimiento más antiguo, días de la vencida más antigua) con la forma `{valor, presencia, filas_no_observadas, completo}` (§4.1 del contrato): `valor` sale solo de las filas observadas y `filas_no_observadas` cuenta aparte las demás por estado. Con `completo: false` el valor es un **subtotal** (o el máximo/mínimo) de las observadas, no el total del objeto; la cuarentena del objeto se mantiene. `valor` es nulo solo si ninguna fila aporta: `NO_APLICA` si el universo se leyó completo (sin obligaciones, o sin vencidas) y, si hay filas no observadas, el primer estado del orden de §4 (`INVALIDO` para un vencimiento imposible). Para los días de atraso, una obligación sin estado de origen o pendiente con vencimiento no interpretable es una fila no observada. `estados_al_corte` cuenta cada obligación única una sola vez (`PENDIENTE_VENCIMIENTO_NO_OBSERVADO` para la pendiente sin vencimiento interpretable).
 - Convenciones: `linea` es la línea física (la fila de nombres de columna es la 1); un faltante nunca se suma como 0 (§4.1 del contrato); la unidad de cuarentena es el objeto (plan v2 §7.8).
 - Es la **lectura más acotada** del contrato v1 para un validador que aún no existe: si ALIGN-024 define otros códigos o reglas, se actualiza el modelo y se sube la versión (`sintetico-v2`), nunca se edita `expected.json` a mano.
 
@@ -134,3 +148,4 @@ La prueba `test_content_is_obviously_fictitious` valida cada campo personal con 
 | Versión | Fecha | Cambio |
 |---|---|---|
 | `sintetico-v1` | 2026-10-29 | Generador, oráculo, variantes, familia de seguridad, escenario social y corpus hostil (ALIGN-023) |
+| `sintetico-v1` (corrección 1) | 2026-10-29 | Antes de integrarse, por la revisión independiente: subtotales observados con desglose, presencia de vencimientos no interpretables en los agregados temporales, vigencia explícita de contactos (`contactos-vigencia.json`) y centinelas declarados en cada archivo hostil. Sin consumidores todavía: se mantiene la versión |

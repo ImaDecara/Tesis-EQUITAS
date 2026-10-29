@@ -14,6 +14,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -91,6 +92,39 @@ def by_case(expected: dict, tenant: str = portfolio.TENANT_A) -> dict[str, dict]
     return {o['caso']: o for o in expected['municipios'][tenant]['objetos'] if o['caso'] != 'relleno'}
 
 
+def records(path: Path) -> list[dict[str, str]]:
+    table = read_delimited(path, '\t', 'utf-8')
+    return [dict(zip(table[0], row)) for row in table[1:]]
+
+
+def first_rows(path: Path) -> dict[str, list[dict[str, str]]]:
+    """Primera fila de cada (ClaveAgrupacion, DEUD_id), agrupada por objeto: la obligación única."""
+    seen, objects = set(), {}
+    for row in records(path):
+        if (row['ClaveAgrupacion'], row['DEUD_id']) not in seen:
+            seen.add((row['ClaveAgrupacion'], row['DEUD_id']))
+            objects.setdefault(row['ClaveAgrupacion'], []).append(row)
+    return objects
+
+
+def money(text: str) -> Decimal | None:
+    return Decimal(text.replace('.', '').replace(',', '.')) if re.fullmatch(r'-?\d{1,3}(\.\d{3})*,\d{2}', text) else None
+
+
+def day(text: str):
+    try:
+        return datetime.strptime(text, '%d/%m/%Y').date() if re.fullmatch(r'\d{2}/\d{2}/\d{4}', text) else None
+    except ValueError:
+        return None
+
+
+def zip_contents(path: Path) -> dict[str, bytes]:
+    if not zipfile.is_zipfile(path):
+        return {'': path.read_bytes()}
+    with zipfile.ZipFile(path) as archive:
+        return {name: archive.read(name) for name in archive.namelist()}
+
+
 class SyntheticPortfolioTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -159,18 +193,49 @@ class SyntheticPortfolioTests(unittest.TestCase):
         })
         self.assertTrue({'base-valido', 'misma-cuenta-otro-tipo', 'cuenta-canonica-123', 'importe-cero'} <= accepted)
         self.assertEqual((cases['base-valido']['cuenta'], cases['misma-cuenta-otro-tipo']['cuenta']), ('4100', '4100'))
+        # Faltante parcial (§4.1 reglas 3 y 4): subtotal de las filas observadas, desglose aparte y
+        # completo=false; nunca nulo si hay filas observadas, nunca el faltante como 0.
+        rows = first_rows(self.first / 'detalle.tsv')
+        observed = [r['NOTD_totalActualizado'] for r in rows[cases['importe-vacio']['clave_agrupacion']]
+                    if r['NOTD_totalActualizado']]
+        self.assertEqual(len(observed), 1)
         self.assertEqual(cases['importe-vacio']['importe_actualizado'],
-                         {'valor': None, 'presencia': 'NO_INFORMADO_EN_ORIGEN', 'filas_no_observadas': {'NO_INFORMADO_EN_ORIGEN': 1}})
-        self.assertEqual(cases['importe-no-numerico']['importe_capital']['presencia'], 'INVALIDO')
-        self.assertEqual(cases['fecha-ambigua']['vencimiento_mas_antiguo'], '2023-04-03')
+                         {'valor': str(money(observed[0])), 'presencia': 'OBSERVADO',
+                          'filas_no_observadas': {'NO_INFORMADO_EN_ORIGEN': 1}, 'completo': False})
+        observed = [r['NOTD_capital'] for r in rows[cases['importe-no-numerico']['clave_agrupacion']] if r['NOTD_capital'] != 'abc']
+        self.assertEqual(cases['importe-no-numerico']['importe_capital'],
+                         {'valor': str(money(observed[0])), 'presencia': 'OBSERVADO',
+                          'filas_no_observadas': {'INVALIDO': 1}, 'completo': False})
+        self.assertEqual(cases['importe-cero']['importe_actualizado']['completo'], True)
+        self.assertEqual(cases['cabecera-sin-detalle']['importe_actualizado'],
+                         {'valor': '0.00', 'presencia': 'OBSERVADO', 'filas_no_observadas': {}, 'completo': True})
+        self.assertEqual(cases['fecha-ambigua']['vencimiento_mas_antiguo']['valor'], '2023-04-03')
         self.assertEqual(cases['estados-origen-vencimiento-viejo']['estados_al_corte'],
-                         {'VENCIDA': 1, 'VIGENTE': 0, 'PAGADA': 1, 'ANULADA': 1, 'SUSPENDIDA': 1, 'UNKNOWN': 1})
-        self.assertEqual(cases['vencimiento-posterior-al-corte']['dias_vencida_mas_antigua'], {'valor': None, 'presencia': 'NO_APLICA'})
-        self.assertEqual(cases['estados-origen-vencimiento-viejo']['dias_vencida_mas_antigua']['valor'],
-                         (portfolio.DEFAULT_AS_OF - portfolio.date(2020, 1, 15)).days)
-        for name in ('contacto-inactivo-placeholder', 'contacto-formato-invalido', 'sin-contacto'):
+                         {'VENCIDA': 1, 'VIGENTE': 0, 'PAGADA': 1, 'ANULADA': 1, 'SUSPENDIDA': 1, 'UNKNOWN': 1,
+                          'PENDIENTE_VENCIMIENTO_NO_OBSERVADO': 0})
+        not_applicable = {'valor': None, 'presencia': 'NO_APLICA', 'filas_no_observadas': {}, 'completo': True}
+        self.assertEqual(cases['vencimiento-posterior-al-corte']['dias_vencida_mas_antigua'], not_applicable)
+        self.assertEqual(cases['cabecera-sin-detalle']['dias_vencida_mas_antigua'], not_applicable)
+        self.assertEqual(cases['cabecera-sin-detalle']['vencimiento_mas_antiguo'], not_applicable)
+        # Vencimiento imposible: INVALIDO, distinto del NO_APLICA de una obligación no vencida.
+        invalid = {'valor': None, 'presencia': 'INVALIDO', 'filas_no_observadas': {'INVALIDO': 1}, 'completo': False}
+        self.assertEqual(cases['fecha-imposible']['dias_vencida_mas_antigua'], invalid)
+        self.assertEqual(cases['fecha-imposible']['vencimiento_mas_antiguo'], invalid)
+        self.assertEqual(cases['fecha-imposible']['estados_al_corte']['PENDIENTE_VENCIMIENTO_NO_OBSERVADO'], 1)
+        # El estado vacío no puede contarse como vencida: el máximo es de las observadas y se cuenta aparte.
+        self.assertEqual(cases['estados-origen-vencimiento-viejo']['dias_vencida_mas_antigua'],
+                         {'valor': (portfolio.DEFAULT_AS_OF - portfolio.date(2020, 1, 15)).days, 'presencia': 'OBSERVADO',
+                          'filas_no_observadas': {'NO_INFORMADO_EN_ORIGEN': 1}, 'completo': False})
+        for name in ('contacto-placeholder', 'contacto-formato-invalido', 'sin-contacto', 'contacto-inactivo'):
             self.assertIn('SIN_CONTACTO_UTILIZABLE', cases[name]['banderas'])
             self.assertEqual(cases[name]['contactos_utilizables'], 0)
+        for name in ('contacto-placeholder', 'contacto-formato-invalido', 'sin-contacto'):
+            self.assertNotIn('CONTACTO_INACTIVO', cases[name]['banderas'])
+            self.assertEqual(cases[name]['contactos_inactivos'], 0)
+        self.assertEqual((cases['contacto-inactivo']['contactos_inactivos'], cases['contacto-activo-mismo-valor']['contactos_utilizables']),
+                         (2, 1))
+        self.assertIn('CONTACTO_INACTIVO', cases['contacto-inactivo']['banderas'])
+        self.assertNotIn('contacto-inactivo-placeholder', cases)
         self.assertEqual(cases['porcentajes-120']['suma_porcentajes'], {'valor': '120', 'presencia': 'OBSERVADO'})
         self.assertIn('PORCENTAJES_NO_SUMAN_100', cases['porcentaje-80']['banderas'])
         self.assertEqual(cases['porcentaje-faltante']['suma_porcentajes'], {'valor': None, 'presencia': 'NO_INFORMADO_EN_ORIGEN'})
@@ -181,25 +246,83 @@ class SyntheticPortfolioTests(unittest.TestCase):
         self.assertIn('TIPO_INGRESO_SIN_MAPEO_EN_ETL', cases['tipo-ingreso-sin-mapeo-etl']['banderas'])
         self.assertEqual(cases['cabecera-sin-detalle']['obligaciones'], 0)
         self.assertNotIn('detalle-sin-cabecera', cases)
+        for tenant in self.expected['municipios']:
+            for item in self.expected['municipios'][tenant]['objetos']:
+                with self.subTest(clave=item['clave_agrupacion']):
+                    # Cada obligación única se clasifica una sola vez; ninguna se descarta del universo.
+                    self.assertEqual(sum(item['estados_al_corte'].values()), item['obligaciones'])
         counts = self.expected['municipios'][portfolio.TENANT_A]['conteos']
         self.assertEqual((counts['objetos'], counts['obligaciones_unicas']), (40, 160))
         self.assertEqual((counts['duplicados_identicos'], counts['duplicados_conflictivos'], counts['detalle_sin_cabecera']), (1, 1, 1))
 
     def test_oracle_totals_match_an_independent_reading_of_the_files(self):
+        """Recalcula, leyendo el TSV, importes y agregados temporales de todos los objetos (también en cuarentena)."""
+        order = ('NO_APLICA', 'NO_INTEGRADO', 'NO_INFORMADO_EN_ORIGEN', 'INVALIDO')  # contrato §4
+
+        def expected_aggregate(value, missing):
+            presence = 'OBSERVADO' if value is not None else 'NO_APLICA' if not missing else next(
+                state for state in order if state in missing)
+            return {'valor': value, 'presencia': presence, 'filas_no_observadas': dict(sorted(missing.items())),
+                    'completo': not missing}
+
+        as_of = datetime.strptime(self.manifest['fecha_corte'], '%Y-%m-%d').date()
+        states = self.manifest['catalogos']['NOTD_ESTA_id']
         header = read_delimited(self.first / 'cabecera.tsv', '\t', 'utf-8')
-        detail = read_delimited(self.first / 'detalle.tsv', '\t', 'utf-8')
-        columns = detail[0]
-        totals: dict[str, dict[str, Decimal]] = {}
-        for row in map(dict, (zip(columns, r) for r in detail[1:])):
-            if re.fullmatch(r'[\d.]+,\d{2}', row['NOTD_totalActualizado']):
-                value = Decimal(row['NOTD_totalActualizado'].replace('.', '').replace(',', '.'))
-                totals.setdefault(row['ClaveAgrupacion'], {}).setdefault(row['DEUD_id'], value)
-        self.assertEqual(len(header) - 1, self.expected['municipios'][portfolio.TENANT_A]['conteos']['filas_cabecera'])
-        for item in self.expected['municipios'][portfolio.TENANT_A]['objetos']:
-            if item['resultado'] == 'ACEPTADO':
-                with self.subTest(clave=item['clave_agrupacion']):
-                    observed = sum(totals.get(item['clave_agrupacion'], {}).values(), Decimal(0))
-                    self.assertEqual(Decimal(item['importe_actualizado']['valor']), observed)
+        municipality = self.expected['municipios'][portfolio.TENANT_A]
+        self.assertEqual(len(header) - 1, municipality['conteos']['filas_cabecera'])
+        rows = first_rows(self.first / 'detalle.tsv')
+        totals = {'ACEPTADO': Decimal(0), 'CUARENTENA': Decimal(0)}
+        not_observed: dict[str, int] = {}
+        for item in municipality['objetos']:
+            obligations = rows.get(item['clave_agrupacion'], [])
+            for column, key in (('NOTD_totalActualizado', 'importe_actualizado'), ('NOTD_capital', 'importe_capital')):
+                missing: dict[str, int] = {}
+                values = [money(r[column]) for r in obligations]
+                for r, value in zip(obligations, values):
+                    if value is None:
+                        state = 'NO_INFORMADO_EN_ORIGEN' if r[column] == '' else 'INVALIDO'
+                        missing[state] = missing.get(state, 0) + 1
+                subtotal = sum((v for v in values if v is not None), Decimal(0))
+                observed = len(obligations) > sum(missing.values()) or not missing
+                with self.subTest(clave=item['clave_agrupacion'], campo=key):
+                    self.assertEqual(item[key], expected_aggregate(f'{subtotal:.2f}' if observed else None, missing))
+                if column == 'NOTD_totalActualizado':
+                    totals[item['resultado']] += subtotal
+                    for state, count in missing.items():
+                        not_observed[state] = not_observed.get(state, 0) + count
+            due_missing: dict[str, int] = {}
+            late_missing: dict[str, int] = {}
+            dues, late = [], []
+            for r in obligations:
+                due = day(r['NOTD_vencimiento'])
+                due_state = 'NO_INFORMADO_EN_ORIGEN' if r['NOTD_vencimiento'] == '' else 'INVALIDO'
+                if due is None:
+                    due_missing[due_state] = due_missing.get(due_state, 0) + 1
+                else:
+                    dues.append(due)
+                label = states.get(r['NOTD_ESTA_id'])
+                if label is None or (label == 'PENDIENTE' and due is None):
+                    state = 'NO_INFORMADO_EN_ORIGEN' if label is None and r['NOTD_ESTA_id'] == '' else (
+                        'INVALIDO' if label is None else due_state)
+                    late_missing[state] = late_missing.get(state, 0) + 1
+                elif label == 'PENDIENTE' and due < as_of:
+                    late.append((as_of - due).days)
+            with self.subTest(clave=item['clave_agrupacion'], campo='temporal'):
+                self.assertEqual(item['vencimiento_mas_antiguo'],
+                                 expected_aggregate(min(dues).isoformat() if dues else None, due_missing))
+                self.assertEqual(item['dias_vencida_mas_antigua'], expected_aggregate(max(late) if late else None, late_missing))
+        self.assertEqual(municipality['importes'], {
+            'actualizado_aceptado': f"{totals['ACEPTADO']:.2f}", 'actualizado_en_cuarentena_observado': f"{totals['CUARENTENA']:.2f}",
+            'actualizado_filas_no_observadas': dict(sorted(not_observed.items()))})
+
+    def test_aggregate_without_observed_rows_is_null_with_the_first_state(self):
+        # §4.1 regla 4 (no la cubre la fixture): sin filas observadas el agregado es nulo, nunca 0.
+        self.assertEqual(portfolio.amount(Decimal(0), 0, {'INVALIDO': 2}),
+                         {'valor': None, 'presencia': 'INVALIDO', 'filas_no_observadas': {'INVALIDO': 2}, 'completo': False})
+        mixed = portfolio.amount(Decimal(0), 0, {'INVALIDO': 1, 'NO_INFORMADO_EN_ORIGEN': 1})
+        self.assertEqual((mixed['valor'], mixed['presencia']), (None, 'NO_INFORMADO_EN_ORIGEN'))
+        self.assertEqual(portfolio.amount(Decimal('5.5'), 1, {'INVALIDO': 1})['valor'], '5.50')
+        self.assertEqual(portfolio.amount(Decimal(0), 0, {})['valor'], '0.00')
 
     def test_tsv_csv_and_xlsx_variants_share_the_same_table_and_oracle(self):
         oracle_sha = sha(self.first / 'expected.json')
@@ -306,6 +429,65 @@ class SyntheticPortfolioTests(unittest.TestCase):
             workbook = archive.read('xl/workbook.xml')
         self.assertEqual(len(re.findall(rb'<sheet ', workbook)), 4)
         self.assertIn(b'state="hidden"', workbook)
+
+    def test_every_hostile_file_carries_its_declared_sentinels(self):
+        """Presencia en la entrada antes de que ALIGN-059 compruebe ausencia en logs y respuestas restringidas."""
+        hostile = self.first / 'hostil'
+        manifest = json.loads((hostile / 'manifest.json').read_text(encoding='utf-8'))
+        unreadable = {'xls-renombrado.xlsx', 'binario.csv'}
+        for entry in manifest['archivos']:
+            with self.subTest(path=entry['ruta']):
+                contents = zip_contents(hostile / entry['ruta'])
+                self.assertIn(portfolio.SENTINEL.encode(), b''.join(contents.values()))
+                self.assertTrue(entry['centinelas'])
+                for marker in entry['centinelas']:
+                    self.assertTrue(marker['valor'].startswith(portfolio.SENTINEL))
+                    for part in marker['partes'] or ['']:
+                        self.assertIn(marker['valor'].encode(), contents[part])
+                shown = {m['valor'] for m in entry['centinelas'] if m['en_preview_autorizado']}
+                self.assertEqual(bool(shown), entry['ruta'] not in unreadable)
+                # Un archivo legible lleva su centinela como valor completo de un campo de datos seleccionado.
+                if entry['ruta'].endswith('.csv') and shown:
+                    cells = {c for r in read_delimited(hostile / entry['ruta'], ',', 'utf-8') for c in r}
+                    self.assertLessEqual(shown, cells)
+                elif shown and entry['ruta'] != 'xml-entidad-externa.xlsx':  # ElementTree rechaza la entidad externa
+                    workbook = read_xlsx(hostile / entry['ruta'])
+                    for sheet in ('cabecera', 'detalle'):
+                        self.assertLessEqual(shown, {c for row in workbook[sheet] for c in row})
+        entry = next(e for e in manifest['archivos'] if e['ruta'] == 'hojas-extra.xlsx')
+        shown = {m['valor'] for m in entry['centinelas'] if m['en_preview_autorizado']}
+        hidden = {m['valor'] for m in entry['centinelas'] if not m['en_preview_autorizado']}
+        workbook = read_xlsx(hostile / 'hojas-extra.xlsx')
+        selected = {c for sheet in ('cabecera', 'detalle') for row in workbook[sheet] for c in row}
+        ignored = {c for sheet in ('notas', 'oculta') for row in workbook[sheet] for c in row}
+        self.assertEqual((len(shown), len(hidden)), (1, 2))
+        self.assertTrue(shown <= selected and not shown & ignored)
+        self.assertTrue(hidden <= ignored and not hidden & selected)
+
+    def test_contact_validity_distinguishes_the_same_value_active_and_inactive(self):
+        cases = by_case(self.expected)
+        validity = json.loads((self.first / 'contactos-vigencia.json').read_text(encoding='utf-8'))
+        self.assertEqual(validity['clave'], ['municipio', 'Destinatario_Id', 'columna'])
+        self.assertIn('contactos-vigencia.json', [c['ruta'] for c in self.manifest['complementarios']])
+        declared = {(c['municipio'], c['Destinatario_Id'], c['columna']): c['vigencia'] for c in validity['contactos']}
+        header = {row['Destinatario_Id']: row for row in records(self.first / 'cabecera.tsv')}
+        inactive, active = (str(cases[name]['personas'][0]) for name in ('contacto-inactivo', 'contacto-activo-mismo-valor'))
+        phone = header[inactive]['Destinatario_Telefono']
+        # Mismo valor bien formado en el TSV: solo la vigencia declarada separa los dos resultados.
+        self.assertRegex(phone, r'^0000-555-\d{4}$')
+        self.assertEqual(header[active]['Destinatario_Telefono'], phone)
+        self.assertRegex(header[inactive]['Destinatario_Email'], r'^persona\.sintetica\.\d{4}@example\.invalid$')
+        self.assertEqual(declared[(portfolio.TENANT_A, inactive, 'Destinatario_Telefono')], 'INACTIVO')
+        self.assertEqual(declared[(portfolio.TENANT_A, inactive, 'Destinatario_Email')], 'INACTIVO')
+        self.assertEqual(declared[(portfolio.TENANT_A, active, 'Destinatario_Telefono')], 'ACTIVO')
+        self.assertEqual([cases[n]['contactos_utilizables'] for n in ('contacto-inactivo', 'contacto-activo-mismo-valor')], [0, 1])
+        findings = {(f['campo'], f['presencia']) for f in self.expected['municipios'][portfolio.TENANT_A]['hallazgos']
+                    if f['codigo'] == 'CONTACTO_INACTIVO'}
+        self.assertEqual(findings, {('Destinatario_Telefono', 'OBSERVADO'), ('Destinatario_Email', 'OBSERVADO')})
+        person = portfolio.Person(pid=1, name='Persona Sintética 0001', document='99-00000001-1', phone=phone)
+        self.assertEqual(portfolio._usable_contacts(person), (1, []))
+        person.vigencia = {'Destinatario_Telefono': 'INACTIVO'}
+        self.assertEqual(portfolio._usable_contacts(person), (0, [('Destinatario_Telefono', 'CONTACTO_INACTIVO', 'OBSERVADO')]))
 
     def test_scale_family_reaches_documented_cardinalities(self):
         with tempfile.TemporaryDirectory() as directory:

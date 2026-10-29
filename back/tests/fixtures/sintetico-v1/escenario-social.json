@@ -225,35 +225,35 @@
     },
     {
       "municipio": "municipio-sintetico-a",
-      "bien_tipo_id": "6",
+      "bien_tipo_id": "3",
       "cuenta": "10028",
       "vulnerable_sintetico": true,
       "grupo_sintetico": "G2"
     },
     {
       "municipio": "municipio-sintetico-a",
-      "bien_tipo_id": "3",
+      "bien_tipo_id": "6",
       "cuenta": "10029",
       "vulnerable_sintetico": false,
       "grupo_sintetico": "G1"
     },
     {
       "municipio": "municipio-sintetico-a",
-      "bien_tipo_id": "6",
+      "bien_tipo_id": "3",
       "cuenta": "10030",
       "vulnerable_sintetico": true,
       "grupo_sintetico": "G2"
     },
     {
       "municipio": "municipio-sintetico-a",
-      "bien_tipo_id": "3",
+      "bien_tipo_id": "6",
       "cuenta": "10031",
       "vulnerable_sintetico": false,
       "grupo_sintetico": "G2"
     },
     {
       "municipio": "municipio-sintetico-a",
-      "bien_tipo_id": "3",
+      "bien_tipo_id": "6",
       "cuenta": "10032",
       "vulnerable_sintetico": false,
       "grupo_sintetico": "G3"
