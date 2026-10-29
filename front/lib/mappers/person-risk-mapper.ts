@@ -50,9 +50,11 @@ function buildPeopleDashboardSummary(people: PersonListItem[], warnings: DataWar
     highRiskCount: riskCount(highRiskCount),
     withoutContactCount: contactFailed ? null : withoutContactCount,
     individualRiskDistribution: riskFailed ? [] : [
-      { label: 'Bajo', value: lowRiskCount },
-      { label: 'Medio', value: mediumRiskCount },
-      { label: 'Alto', value: highRiskCount },
+      ...(riskValues.some(item => item.value !== null) || people.length === 0 ? [
+        { label: 'Bajo', value: lowRiskCount },
+        { label: 'Medio', value: mediumRiskCount },
+        { label: 'Alto', value: highRiskCount },
+      ] : []),
       { label: 'No disponible', value: people.filter(person => person.riskValue === null).length },
     ],
     topPeopleByRiskValue: people.filter(person => person.riskValue !== null)

@@ -149,7 +149,12 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
 
   it('no asigna riesgo al objeto sin perfil ni reemplaza riesgo cero', () => {
     const raw = buildPresenceRawData()
-    expect(mapDebtorObjectsFromRawData(raw).debtors[0]).toMatchObject({ risk: null, riskScore: null, priorityScore: null })
+    const mapped = mapDebtorObjectsFromRawData(raw)
+    expect(mapped.debtors[0]).toMatchObject({ risk: null, riskScore: null, priorityScore: null })
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRisk).toEqual([{ label: 'No disponible', value: 1 }])
+    const peopleRaw = buildPresencePeopleData()
+    peopleRaw.debtorProfilesDetail = []
+    expect(mapPeopleFromRawData(peopleRaw).dashboard.individualRiskDistribution).toEqual([{ label: 'No disponible', value: 2 }])
     raw.debtorProfiles = [{ debtor: 901, socioeconomic_risk_level: 0 }]
     expect(mapDebtorObjectsFromRawData(raw).debtors[0]).toMatchObject({ risk: 'BAJO', riskScore: 0 })
   })

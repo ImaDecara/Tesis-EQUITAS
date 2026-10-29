@@ -138,7 +138,9 @@ export function mapDashboardMetricsFromDebtorObjects({
     byDebtorType: failed('debtor_type') ? [] : Array.from(byDebtorTypeMap.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value),
-    byRisk: failed('debtor_profile') ? [] : Array.from(byRiskMap.entries()).map(([label, value]) => ({ label, value })),
+    byRisk: failed('debtor_profile') ? [] : Array.from(byRiskMap.entries())
+      .filter(([label]) => label === 'No disponible' || !debtors.length || debtors.some(debtor => debtor.risk !== null))
+      .map(([label, value]) => ({ label, value })),
     byRecommendation: metrics.priorityCases.value === null ? [] : Array.from(byRecommendationMap.entries()).map(([label, value]) => ({
       label,
       value,
