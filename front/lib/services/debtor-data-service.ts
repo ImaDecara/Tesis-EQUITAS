@@ -1,6 +1,6 @@
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
-import { calculateDaysSinceDate } from '@/lib/parsers/date-value-parser'
+import { daysSinceData, readingFailed } from '@/lib/data-presence'
 import type { DebtorDetailData } from '@/types/equitas-domain'
 
 // Construye el detalle a partir del resultado ya mapeado.
@@ -30,10 +30,11 @@ function mapDebtorDetailFromMappedObjects(
     contacts,
     debts,
     profile: {
+      metrics: debtor.metrics,
       totalDebt: debtor.totalDebt,
       overdueDebt: debtor.overdueDebt,
       debtCount: debtor.debtCount,
-      antiquityDays: calculateDaysSinceDate(oldestDebt),
+      antiquityDays: readingFailed(mapped.warnings, 'debt') ? null : daysSinceData(oldestDebt).value,
       associatedPeople: debtor.peopleCount,
       availableContacts: debtor.contactCount,
       risk: debtor.risk,

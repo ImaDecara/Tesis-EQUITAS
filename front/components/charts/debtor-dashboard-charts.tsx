@@ -60,17 +60,23 @@ function ChartSkeleton({ title }: { title: string }) {
   )
 }
 
+function EmptyChart({ title }: { title: string }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+    <CardContent>Sin datos disponibles</CardContent></Card>
+}
+
 export function BarDistributionChart({
   title,
   data,
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 0 }]
+  const rows = data
   const contentHeightClass = size === 'compact' ? 'h-56' : 'h-72'
   const maxValue = Math.max(...rows.map((row) => row.value), 0)
   const yAxisWidth = maxValue >= 10000 ? 58 : 34
 
+  if (!rows.length) return <EmptyChart title={title} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -121,11 +127,12 @@ export function RiskDonutChart({
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 1 }]
+  const rows = data
   const total = rows.reduce((acc, row) => acc + row.value, 0)
   const isBottomLegend = legendLayout === 'bottom'
   const isCompact = size === 'compact'
 
+  if (!rows.length || total === 0) return <EmptyChart title={title} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -217,9 +224,10 @@ export function TopDebtHorizontalChart({
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 0 }]
+  const rows = data
   const contentHeightClass = size === 'compact' ? 'h-56' : 'h-72'
 
+  if (!rows.length) return <EmptyChart title={title} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }

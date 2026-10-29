@@ -1,3 +1,4 @@
+import { formatNumber, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { ClipboardCheck, Eye } from 'lucide-react'
 
@@ -27,7 +28,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function RecommendedActionsPage() {
   const { debtors, warnings } = await getDebtorsData()
-  const summary = buildRecommendationSummary(debtors)
+  const summary = buildRecommendationSummary(debtors, warnings)
 
   return (
     <AppShell>
@@ -42,6 +43,7 @@ export default async function RecommendedActionsPage() {
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{summary.map(group => missingSummary(group.metrics)).filter(Boolean).join("; ")}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {RECOMMENDATION_KINDS.map((recommendation) => {
@@ -51,8 +53,8 @@ export default async function RecommendedActionsPage() {
               <MetricCard
                 key={recommendation}
                 label={recommendation}
-                value={(item?.count ?? 0).toLocaleString('es-AR')}
-                hint={formatCurrency(item?.debtAssociated ?? 0)}
+                value={formatNumber(item?.count ?? null)}
+                hint={formatCurrency(item?.debtAssociated ?? null)}
                 icon={ClipboardCheck}
                 tone={
                   recommendation === 'Llamado prioritario'
@@ -99,13 +101,13 @@ export default async function RecommendedActionsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {group.count.toLocaleString('es-AR')}
+                        {formatNumber(group.count)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatCurrency(group.debtAssociated)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {group.averageRisk.toFixed(1)} / 100
+                        {group.metrics.riskScore.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(group.averageRisk, 1)} / 100
                       </TableCell>
                       <TableCell>
                         <div className="flex max-w-[420px] flex-wrap gap-2">

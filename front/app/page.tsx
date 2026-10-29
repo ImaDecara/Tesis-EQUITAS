@@ -1,3 +1,4 @@
+import { aggregateData, formatNumber, formatPercentage, numericData, missingSummary, percentageData } from '@/lib/data-presence'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -40,22 +41,12 @@ export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   const { dashboard, warnings } = await getDashboardData()
   const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
-  const highRiskShare =
-    dashboard.totalDebtors > 0
-      ? Math.round(((riskMap.get('ALTO') ?? 0) / dashboard.totalDebtors) * 100)
-      : 0
-  const topDebtConcentration =
-    dashboard.totalDebt > 0
-      ? Math.round(
-          (dashboard.topDebtDebtors.reduce((sum, debtor) => sum + debtor.totalDebt, 0) /
-            dashboard.totalDebt) *
-            100
-        )
-      : 0
-  const dominantRecommendation =
-    dashboard.byRecommendation.length > 0
-      ? [...dashboard.byRecommendation].sort((a, b) => b.value - a.value)[0]
-      : null
+  const highRiskShare = percentageData(dashboard.byRisk.length && dashboard.metrics?.riskAboveNinetyCases.value !== null ? riskMap.get('ALTO') ?? 0 : null, dashboard.totalDebtors)
+  const topDebtConcentration = percentageData(aggregateData(dashboard.topDebtDebtors.map(debtor => numericData(debtor.totalDebt))).value, dashboard.totalDebt)
+  const availableRecommendations = dashboard.byRecommendation.filter(item => item.label !== 'No disponible')
+  const dominantRecommendation = dashboard.totalDebtors !== null && dashboard.totalDebtors > 0
+    ? availableRecommendations.sort((a, b) => b.value - a.value)[0] : null
+  const dominantTies = availableRecommendations.filter(item => item.value === dominantRecommendation?.value)
 
   return (
     <AppShell>
@@ -72,11 +63,12 @@ export default async function HomePage() {
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{missingSummary(dashboard.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           <MetricCard
             label="Objetos prioritarios"
-            value={dashboard.priorityCases.toLocaleString('es-AR')}
+            value={formatNumber(dashboard.priorityCases)}
             hint="Casos con prioridad alta"
             icon={ShieldAlert}
             tone="critical"
@@ -90,28 +82,28 @@ export default async function HomePage() {
           />
           <MetricCard
             label="Casos vencidos"
-            value={dashboard.overdueCases.toLocaleString('es-AR')}
+            value={formatNumber(dashboard.overdueCases)}
             hint="Al menos una deuda vencida"
             icon={FileWarning}
             tone="danger"
           />
           <MetricCard
             label="Casos sin contacto"
-            value={dashboard.withoutContactCases.toLocaleString('es-AR')}
+            value={formatNumber(dashboard.withoutContactCases)}
             hint="Sin email/telefono activo"
             icon={AlertCircle}
             tone="warning"
           />
           <MetricCard
             label="Recomendacion urgente"
-            value={dashboard.urgentRecommendationCases.toLocaleString('es-AR')}
+            value={formatNumber(dashboard.urgentRecommendationCases)}
             hint="Intervencion en el dia"
             icon={Clock3}
             tone="danger"
           />
           <MetricCard
             label="Con contacto"
-            value={dashboard.withContactCases.toLocaleString('es-AR')}
+            value={formatNumber(dashboard.withContactCases)}
             hint="Gestion directa posible"
             icon={ContactRound}
             tone="success"
@@ -125,18 +117,18 @@ export default async function HomePage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-3">
             <p>
-              <span className="font-semibold text-slate-900">{highRiskShare}%</span> de los objetos
+              <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span> de los objetos
               estan en riesgo alto.
             </p>
             <p>
               Los 5 objetos con mayor deuda concentran{' '}
-              <span className="font-semibold text-slate-900">{topDebtConcentration}%</span> del
+              <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span> del
               saldo total.
             </p>
             <p>
               Hay{' '}
               <span className="font-semibold text-slate-900">
-                {dashboard.withoutContactCases.toLocaleString('es-AR')}
+                {formatNumber(dashboard.withoutContactCases)}
               </span>{' '}
               casos bloqueados por falta de contacto.
             </p>
@@ -170,7 +162,7 @@ export default async function HomePage() {
                       <TableCell>
                         <div className="font-medium text-slate-900">{debtor.identifier}</div>
                         <p className="text-xs text-slate-500">
-                          {debtor.type} · Score {debtor.priorityScore}
+                          {debtor.type} · Score {formatNumber(debtor.priorityScore)}
                         </p>
                       </TableCell>
                       <TableCell>
@@ -219,7 +211,7 @@ export default async function HomePage() {
                       <TableCell>
                         <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                       </TableCell>
-                      <TableCell className="text-right">{debtor.overdueDays} dias</TableCell>
+                      <TableCell className="text-right">{formatNumber(debtor.overdueDays)} dias</TableCell>
                       <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     </TableRow>
                   ))}
@@ -246,9 +238,8 @@ export default async function HomePage() {
             <CardContent className="space-y-3">
               {RECOMMENDATION_KINDS.map((recommendation) => {
                 const bucket = dashboard.byRecommendation.find((item) => item.label === recommendation)
-                const count = bucket?.value ?? 0
-                const percentage =
-                  dashboard.totalDebtors > 0 ? Math.round((count / dashboard.totalDebtors) * 100) : 0
+                const count = bucket?.value ?? null
+                const percentage = percentageData(count, dashboard.totalDebtors)
 
                 return (
                   <div key={recommendation} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -257,7 +248,7 @@ export default async function HomePage() {
                         {recommendation}
                       </Badge>
                       <span className="text-xs font-semibold text-slate-700">
-                        {count.toLocaleString('es-AR')} casos ({percentage}%)
+                        {formatNumber(count)} casos ({formatPercentage(percentage)})
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-200">
@@ -269,7 +260,7 @@ export default async function HomePage() {
                           recommendation === 'Plan de pago / revision humana' && 'bg-[#163a63]',
                           recommendation === 'Seguimiento posterior' && 'bg-[#2d6a4f]'
                         )}
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: percentage.value === null ? undefined : `${percentage.value}%` }}
                       />
                     </div>
                   </div>
@@ -277,9 +268,7 @@ export default async function HomePage() {
               })}
               <p className="text-xs text-slate-700">
                 {dominantRecommendation
-                  ? `"${dominantRecommendation.label}" concentra ${Math.round(
-                      (dominantRecommendation.value / Math.max(dashboard.totalDebtors, 1)) * 100
-                    )}% de los objetos actuales.`
+                  ? `${dominantTies.length > 1 ? 'Empate: ' + dominantTies.map(item => item.label).join(', ') : '"' + dominantRecommendation.label + '"'} concentra ${formatPercentage(percentageData(dominantRecommendation.value, dashboard.totalDebtors))} de los objetos actuales.`
                   : 'Sin datos suficientes para consolidar recomendacion dominante.'}
               </p>
             </CardContent>

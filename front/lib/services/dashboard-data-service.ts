@@ -10,6 +10,7 @@ export async function getDashboardDataFromService() {
   const dashboard = mapDashboardMetricsFromDebtorObjects({
     debtors: mapped.debtors,
     debtStatusBuckets: mapped.debtStatusBuckets,
+    warnings: mapped.warnings,
   })
   const { peopleDashboard, warnings: peopleWarnings } =
     await getPeopleDashboardDataFromService()
