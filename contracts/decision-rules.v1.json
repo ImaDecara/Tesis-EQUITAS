@@ -63,15 +63,31 @@
     "obligacion_vencida_al_corte": "Obligación evaluable con current_amount > 0 y due_date < as_of (estrictamente). Se determina por calendario respecto del corte; no afirma estado de origen, exigibilidad ni ausencia de pago. Una obligación con importe 0 observado se conserva como cero y no está en mora.",
     "estado_severidad": {
       "COMPLETA": "Todas las obligaciones leídas son evaluables (incluye el objeto sin obligaciones: cero derivado).",
-      "PARCIAL": "Hay al menos una obligación evaluable y al menos una no evaluable. El valor es un mínimo: los faltantes no se cuentan como 0 ni se suman.",
+      "PARCIAL": "Hay al menos una obligación evaluable y al menos una no evaluable. El valor, los insumos y la banda son un mínimo calculado solo con las obligaciones evaluables: los faltantes no se cuentan como 0 ni se suman, y no se descarta una banda superior ni deuda vencida entre las no evaluables.",
       "NO_DISPONIBLE": "Hay obligaciones pero ninguna es evaluable. Severidad y prioridad son null (nunca 0)."
+    },
+    "detalle_no_evaluables": {
+      "campo": "severidad.motivos_no_evaluables: lista de {motivo, estado, cantidad}; estado es el estado de presencia (contrato §4) del dato que impidió evaluar la obligación y cantidad, el número de obligaciones con ese motivo y estado. Una obligación puede tener dos motivos (importe y vencimiento). Orden: motivos_no_evaluable y luego estados_de_presencia.",
+      "motivo_por_dato": {
+        "IMPORTE_NO_OBSERVADO": "current_amount con estado distinto de OBSERVADO (se registra ese estado)",
+        "IMPORTE_NEGATIVO": "current_amount OBSERVADO menor que 0 (estado OBSERVADO)",
+        "VENCIMIENTO_NO_OBSERVADO": "due_date con estado distinto de OBSERVADO (se registra ese estado)",
+        "VENCIMIENTO_INCONSISTENTE": "due_date OBSERVADO anterior a fecha_minima_plausible (estado OBSERVADO)"
+      },
+      "etiquetas": {
+        "IMPORTE_NO_OBSERVADO": "importe {estado}",
+        "IMPORTE_NEGATIVO": "importe OBSERVADO negativo",
+        "VENCIMIENTO_NO_OBSERVADO": "vencimiento {estado}",
+        "VENCIMIENTO_INCONSISTENTE": "vencimiento OBSERVADO anterior a 1970-01-01"
+      },
+      "texto": "obligaciones no evaluables: {obligaciones_no_evaluables} de {obligaciones_leidas}; {etiqueta}: {cantidad} (entradas separadas por '; ', en el orden de motivos_no_evaluables)"
     }
   },
   "severidad": {
     "escala": [0, 100],
     "unidad": "puntos heurísticos (no %)",
     "insumos": [
-      "monto_vencido_ars: Σ current_amount de las obligaciones vencidas al corte (monto actualizado del objeto en mora)",
+      "monto_actualizado_ars: monto actualizado del objeto = Σ current_amount de sus obligaciones evaluables, vencidas o no (contrato §3 regla 1, PR01/FO01; no es la deuda vencida PR02/FO02)",
       "dias_atraso_maximo: máximo de as_of − due_date entre las vencidas al corte (NO_APLICA si no hay vencidas)",
       "cantidad_vencidas: cantidad de obligaciones vencidas al corte"
     ],
@@ -85,9 +101,10 @@
       "estado de origen",
       "promedios u otros valores del lote"
     ],
-    "regla_de_bandas": "Cada factor suma los puntos de la última banda cuyo 'desde' es menor o igual que el insumo. Las bandas son absolutas (paramétricas) y no dependen del lote. Sin vencidas, los tres factores aportan 0.",
+    "regla_de_bandas": "Cada factor suma los puntos de la última banda cuyo 'desde' es menor o igual que el insumo. Las bandas son absolutas (paramétricas) y no dependen del lote.",
+    "regla_sin_vencidas": "Si cantidad_vencidas = 0 (ninguna obligación evaluable vencida al corte), los tres factores aportan 0 y la severidad es 0: el monto actualizado del objeto se informa como insumo, pero un objeto sin mora a la fecha de corte no es severo. Con cantidad_vencidas ≥ 1, el monto actualizado del objeto puntúa completo según sus bandas.",
     "factores": {
-      "monto_vencido_ars": {
+      "monto_actualizado_ars": {
         "peso_maximo": 50,
         "bandas": [
           { "desde": 0, "puntos": 0 },
@@ -223,14 +240,14 @@
     "valor": "Igual a la severidad del objeto; null si la severidad es NO_DISPONIBLE.",
     "orden": [
       "prioridad descendente (null al final)",
-      "monto_vencido_ars descendente (null al final)",
+      "monto_actualizado_ars descendente (null al final)",
       "vencimiento_mas_antiguo ascendente (fecha más antigua primero; null al final)",
       "id ascendente por punto de código"
     ],
     "vencimiento_mas_antiguo": "Menor due_date entre las obligaciones vencidas al corte; null si no hay vencidas."
   },
   "explicacion": {
-    "factores": ["monto_vencido_ars", "dias_atraso_maximo", "cantidad_vencidas"],
+    "factores": ["monto_actualizado_ars", "dias_atraso_maximo", "cantidad_vencidas"],
     "severidad_texto": {
       "COMPLETA": "{valor}",
       "PARCIAL": "al menos {valor}",
@@ -238,7 +255,7 @@
     },
     "frases_contrastivas": {
       "R1": "Se sugiere mejorar los datos de contacto y no una gestión con el contribuyente porque el objeto no tiene un contacto activo cargado; la falta de contacto no modifica la severidad ({severidad_texto}).",
-      "R2": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables; los faltantes no se cuentan como cero.",
+      "R2": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables ({detalle_no_evaluables}); los faltantes no se cuentan como cero.",
       "R3": "Se sugiere revisión jurídica y no una gestión de cobro porque al menos una obligación vencida tiene {umbral_prescripcion} días o más de atraso a la fecha de corte; esta alerta no afirma que la deuda esté prescripta.",
       "R4": "Se sugiere contacto personal con ofrecimiento de plan o asistencia y no un recordatorio informativo porque la severidad ({severidad_texto}) alcanza el umbral de {umbral_alta}.",
       "R5": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad ({severidad_texto}) es menor que {umbral_alta} y alcanza {umbral_media}.",
@@ -246,10 +263,22 @@
       "R7": "Se sugiere seguimiento sin contacto y no una comunicación porque no hay deuda vencida con importe positivo a la fecha de corte.",
       "M1": "Se sugiere un recordatorio informativo y no contacto personal con plan porque hay un indicio de vulnerabilidad informado, que solo puede moderar la intensidad; requiere revisión humana."
     },
+    "seleccion_de_frase": "Severidad COMPLETA o NO_DISPONIBLE: frases_contrastivas[regla]. Severidad PARCIAL: frases_contrastivas_parcial[regla] seguida de un espacio y de complemento_parcial. Con M1 y regla R4 se usa la clave M1 en ambos casos.",
+    "frases_contrastivas_parcial": {
+      "R1": "Se sugiere mejorar los datos de contacto y no una gestión con el contribuyente porque el objeto no tiene un contacto activo cargado; la falta de contacto no modifica la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}).",
+      "R3": "Se sugiere revisión jurídica y no una gestión de cobro porque al menos una obligación evaluable vencida tiene {umbral_prescripcion} días o más de atraso a la fecha de corte; esta alerta no afirma que la deuda esté prescripta.",
+      "R4": "Se sugiere contacto personal con ofrecimiento de plan o asistencia y no un recordatorio informativo porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) ya alcanza el umbral de {umbral_alta}.",
+      "R5": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) alcanza {umbral_media}; con los datos disponibles no puede determinarse si alcanza {umbral_alta}.",
+      "R6": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) es mayor que 0; con los datos disponibles no puede determinarse si alcanza {umbral_media}.",
+      "R7": "Se sugiere seguimiento sin contacto y no una comunicación porque ninguna obligación evaluable está vencida con importe positivo a la fecha de corte; con los datos disponibles no puede determinarse si alguna obligación no evaluable lo está.",
+      "M1": "Se sugiere un recordatorio informativo y no contacto personal con plan porque hay un indicio de vulnerabilidad informado, que solo puede moderar la intensidad; requiere revisión humana."
+    },
+    "complemento_parcial": "No se pudo evaluar todo el objeto ({detalle_no_evaluables}): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana.",
     "marcadores": {
       "umbral_alta": "severidad.bandas[ALTA].desde",
       "umbral_media": "severidad.bandas[MEDIA].desde",
-      "umbral_prescripcion": "banderas.verificar_prescripcion.umbral_dias_atraso"
+      "umbral_prescripcion": "banderas.verificar_prescripcion.umbral_dias_atraso",
+      "detalle_no_evaluables": "evaluabilidad.detalle_no_evaluables.texto aplicado a severidad.motivos_no_evaluables"
     }
   },
   "mensajes_borrador": {

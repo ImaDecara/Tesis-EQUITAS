@@ -5,7 +5,7 @@
 | Ticket | ALIGN-008, plan `2026-10-28-v2` (M1) |
 | Versión | `1.0.0`, **provisional**: pendiente de aprobación humana de la política antes de cualquier uso municipal |
 | Parámetros | `contracts/decision-rules.v1.json` (fuente única de umbrales, bandas, reglas y textos) |
-| Casos golden | `contracts/decision-rules.v1.golden.json` (41 casos sintéticos, 14 pares contrafactuales, 5 ordenamientos por cola) |
+| Casos golden | `contracts/decision-rules.v1.golden.json` (43 casos sintéticos, 14 pares contrafactuales, 5 ordenamientos por cola) |
 | Contrato de dominio | `docs/tesis/contrato-dominio-v1.md` (ALIGN-007): nombres, estados de presencia (`DataPresence`) y corte `as_of` |
 | Escala de intensidad | Valor por defecto provisional, pendiente de ALIGN-003 (no aprobado todavía por el usuario): solo habilita uso con datos sintéticos |
 | Consumidores | ALIGN-009 (núcleo TypeScript), ALIGN-015 (servicio Python), ALIGN-010/021 (pantallas y colas), ALIGN-013 (catálogo), ALIGN-035/036 (simulación) |
@@ -15,7 +15,7 @@
 
 Las reglas v1 reemplazan las tres fórmulas incompatibles del código actual (ETL, Python y frontend), donde la falta de contacto **sumaba** riesgo o prioridad (+15 en el ETL, +10 en Python) y a la vez la **restaba** en el puntaje del frontend (−6, escala 0–172) (contrato §10). Separan siete dimensiones que antes estaban mezcladas en un único número:
 
-1. **Severidad** 0–100 de la mora del objeto a la fecha de corte.
+1. **Severidad** 0–100 del objeto a la fecha de corte (monto actualizado, antigüedad máxima y cantidad de vencidas).
 2. **Banderas de calidad** de datos.
 3. **Vulnerabilidad**, que en la cartera real es `NO_INFORMADA`.
 4. **Intervención e intensidad** sugeridas, con canal requerido.
@@ -27,7 +27,7 @@ Las reglas v1 reemplazan las tres fórmulas incompatibles del código actual (ET
 
 **Lo que ninguna regla deduce.** Ninguna regla deduce ni sugiere **pobreza** o situación social del hogar, **voluntad** o capacidad de pago, **exigibilidad** de la deuda ni **prescripción**. "Vencida a la fecha de corte" es un hecho de calendario (el vencimiento es anterior al corte), no una afirmación sobre el estado jurídico. La bandera `VERIFICAR_PRESCRIPCION` solo pide que una persona competente verifique; nunca afirma que la deuda esté prescripta.
 
-**Exclusiones.** Sin probabilidades, sin aprendizaje automático, y ni el domicilio ni el tipo de persona son factores de severidad, intervención o prioridad. Tampoco lo son el contacto, la cantidad de personas, el porcentaje declarado ni la vulnerabilidad (§4).
+**Exclusiones.** Sin probabilidades, sin aprendizaje automático, y ni el domicilio ni el tipo de persona son factores de severidad, intervención o prioridad. El contacto, la cantidad de personas, el porcentaje declarado y la vulnerabilidad tampoco son factores de severidad ni de prioridad (§4, §8). El contacto y la vulnerabilidad sí intervienen en la sugerencia de intervención: la falta de contacto lleva a `MEJORAR_DATOS` (R1) y un indicio de vulnerabilidad solo puede bajar la intensidad y exigir revisión (M1) (§7).
 
 ## 2. Entrada: un objeto tributario a una fecha de corte
 
@@ -39,7 +39,7 @@ La unidad es el **objeto tributario** (contrato §2). Cada dato llega como `{"es
 | `as_of` | L03 | Corte obligatorio. Sin corte no se evalúa: el llamador muestra "no disponible" o usa la fecha de cálculo con aviso (ALIGN-010). Hoy `as_of` es `NO_INTEGRADO` (contrato §5) |
 | `source_updated_at` | L05 | Solo bandera `FECHAS_INCONSISTENTES` |
 | `obligaciones[].id` | DE00 | Identificación |
-| `obligaciones[].current_amount` | DE05 (`updated_amount` idéntico, DE06) | Monto de la severidad |
+| `obligaciones[].current_amount` | DE05 (`updated_amount` idéntico, DE06) | Monto actualizado del objeto (severidad y desempate) y "vencida al corte" |
 | `obligaciones[].due_date` | DE07 | Vencida al corte, antigüedad, prescripción |
 | `obligaciones[].estado_origen` | DE10 (estado de origen `NOTD_ESTA_id`/`NOTD_SITU_id`) | Solo bandera; v1 no interpreta sus valores |
 | `obligaciones[].periodo_fiscal` | DE02 (período real, hoy `NO_INTEGRADO`) | Solo bandera |
@@ -58,22 +58,25 @@ Aritmética común a TypeScript y Python: fechas ISO 8601 sin hora y días calen
 - Una obligación está **vencida a la fecha de corte** si es evaluable, su importe es > 0 y `due_date < as_of` (estrictamente: la que vence el mismo día del corte todavía no está vencida). Una obligación con importe 0 observado conserva su cero y no está en mora.
 - **Estado de la severidad:**
   - `COMPLETA`: todas las obligaciones leídas son evaluables (incluye el objeto sin obligaciones, cero derivado legítimo).
-  - `PARCIAL`: hay al menos una evaluable y al menos una no evaluable. El valor se calcula con las evaluables y se presenta como **mínimo** ("al menos n"); los faltantes no se suman como 0 y exigen revisión humana (`SEVERIDAD_PARCIAL`).
+  - `PARCIAL`: hay al menos una evaluable y al menos una no evaluable. El valor, los insumos y la banda se calculan solo con las evaluables y son un **mínimo** ("al menos n"): no descartan una banda superior ni deuda vencida entre las no evaluables. Los faltantes no se suman como 0 y exigen revisión humana (`SEVERIDAD_PARCIAL`).
+- **Qué no se pudo evaluar.** `severidad.motivos_no_evaluables` lista, por motivo y **estado de presencia** del dato (contrato §4), cuántas obligaciones no se evaluaron: por ejemplo, `importe INVALIDO: 1` o `vencimiento NO_INFORMADO_EN_ORIGEN: 1` (un importe negativo o un vencimiento anterior a `1970-01-01` figuran como `OBSERVADO` contradictorio). Una obligación puede tener dos motivos. Las explicaciones `PARCIAL` y `NO_DISPONIBLE` citan este detalle (§9).
   - `NO_DISPONIBLE`: hay obligaciones pero ninguna es evaluable. Severidad, insumos, puntos y prioridad son `null`, nunca 0.
 
 ## 4. Dimensión 1: severidad (0–100)
 
-Insumos, todos **a la fecha de corte** y solo sobre obligaciones vencidas al corte:
+Insumos, todos **a la fecha de corte**:
 
-- `monto_vencido_ars`: Σ `current_amount` de las vencidas (monto actualizado del objeto en mora).
-- `dias_atraso_maximo`: máximo de `as_of − due_date` entre las vencidas (`NO_APLICA` si no hay vencidas: aporta 0 puntos porque no hay mora, no porque falte un dato).
-- `cantidad_vencidas`: cantidad de vencidas.
+- `monto_actualizado_ars`: **monto actualizado del objeto**, Σ `current_amount` de sus obligaciones evaluables, vencidas o no (contrato §3 regla 1; es la deuda total PR01/FO01, no la deuda vencida PR02/FO02).
+- `dias_atraso_maximo`: máximo de `as_of − due_date` entre las vencidas al corte (`NO_APLICA` si no hay vencidas: aporta 0 puntos porque no hay mora, no porque falte un dato).
+- `cantidad_vencidas`: cantidad de obligaciones vencidas al corte.
 
 Cada factor suma los puntos de la última banda cuyo límite inferior ("desde") es menor o igual que el insumo. Las bandas son **absolutas**: no dependen del promedio ni de ningún otro valor del lote (a diferencia del índice heredado PR08).
 
+**Sin vencidas al corte, severidad 0** (`regla_sin_vencidas`): si `cantidad_vencidas = 0`, los tres factores aportan 0. El monto actualizado del objeto se informa igual como insumo, pero un objeto al día no es severo (G06, G43). Con al menos una vencida, el monto actualizado puntúa completo, incluidas las obligaciones que todavía no vencieron (G39: 510 000 ARS → 40 puntos).
+
 | Factor | Bandas (desde → puntos) | Máximo |
 |---|---|---|
-| `monto_vencido_ars` (ARS) | 0 → 0 · 0,01 → 10 · 50 000 → 20 · 200 000 → 30 · 500 000 → 40 · 1 000 000 → 50 | 50 |
+| `monto_actualizado_ars` (ARS) | 0 → 0 · 0,01 → 10 · 50 000 → 20 · 200 000 → 30 · 500 000 → 40 · 1 000 000 → 50 | 50 |
 | `dias_atraso_maximo` (días) | sin vencidas → 0 · 1 → 5 · 31 → 10 · 91 → 15 · 181 → 20 · 366 → 25 · 731 → 30 | 30 |
 | `cantidad_vencidas` | 0 → 0 · 1 → 5 · 3 → 10 · 6 → 15 · 12 → 20 | 20 |
 
@@ -130,15 +133,22 @@ Revisión humana obligatoria (`requiere_revision_humana = true`, revisión caso 
 
 - Escala 0–100 **dentro de cada cola** (la cola es la intervención). Las prioridades de colas distintas no se comparan.
 - En v1, la prioridad es igual a la severidad del objeto; es `null` si la severidad es `NO_DISPONIBLE`. Esos casos se muestran al final de su cola y contados aparte, nunca como prioridad 0 (contrato §4.1, regla 3).
-- Orden determinista: prioridad descendente (null al final) → `monto_vencido_ars` descendente → vencimiento más antiguo ascendente (menor `due_date` entre las vencidas; null al final) → `id` ascendente por punto de código. Mismos datos, corte y versión producen el mismo orden.
+- Orden determinista: prioridad descendente (null al final) → `monto_actualizado_ars` (monto actualizado del objeto) descendente → vencimiento más antiguo ascendente (menor `due_date` entre las vencidas; null al final) → `id` ascendente por punto de código. Mismos datos, corte y versión producen el mismo orden.
 
 ## 9. Dimensión 6: explicación
 
-Cada resultado incluye los tres factores de severidad (insumo, puntos y máximo) y una **frase contrastiva** ("se sugiere X y no Y porque…") tomada de `explicacion.frases_contrastivas` del JSON, una por regla (R1–R7) y otra para M1 cuando baja la intensidad de R4. La severidad se escribe como el número (`COMPLETA`), "al menos n" (`PARCIAL`) o "no disponible" (`NO_DISPONIBLE`). Ejemplos:
+Cada resultado incluye los tres factores de severidad (insumo, puntos y máximo) y una **frase contrastiva** ("se sugiere X y no Y porque…"), una por regla (R1–R7) y otra para M1 cuando baja la intensidad de R4. La severidad se escribe como el número (`COMPLETA`), "al menos n" (`PARCIAL`) o "no disponible" (`NO_DISPONIBLE`).
+
+- Severidad `COMPLETA` o `NO_DISPONIBLE`: `explicacion.frases_contrastivas`. La de R2 cita qué no se pudo evaluar.
+- Severidad `PARCIAL`: `explicacion.frases_contrastivas_parcial` seguida de `explicacion.complemento_parcial`. Describen el **mínimo** y su universo (las obligaciones evaluables), dicen qué no se pudo evaluar (cantidad, dato y estado de presencia) y que la severidad puede ser mayor. Nunca afirman que la severidad esté debajo de un umbral ni que no haya deuda vencida, porque los datos no lo permiten concluir.
+
+Ejemplos:
 
 - R4: "Se sugiere contacto personal con ofrecimiento de plan o asistencia y no un recordatorio informativo porque la severidad (75) alcanza el umbral de 70."
 - R1: "Se sugiere mejorar los datos de contacto y no una gestión con el contribuyente porque el objeto no tiene un contacto activo cargado; la falta de contacto no modifica la severidad (75)."
 - R3: "Se sugiere revisión jurídica y no una gestión de cobro porque al menos una obligación vencida tiene 1825 días o más de atraso a la fecha de corte; esta alerta no afirma que la deuda esté prescripta."
+- R5 con severidad `PARCIAL` (G27): "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad mínima calculada con las obligaciones evaluables (al menos 55) alcanza 40; con los datos disponibles no puede determinarse si alcanza 70. No se pudo evaluar todo el objeto (obligaciones no evaluables: 1 de 4; importe INVALIDO: 1): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana."
+- R7 con severidad `PARCIAL` (G42): "Se sugiere seguimiento sin contacto y no una comunicación porque ninguna obligación evaluable está vencida con importe positivo a la fecha de corte; con los datos disponibles no puede determinarse si alguna obligación no evaluable lo está. No se pudo evaluar todo el objeto (…)".
 
 Las pantallas agregan las banderas, la vulnerabilidad ("no informada") y el corte; la frase no las reemplaza.
 
@@ -159,30 +169,32 @@ Estado `BORRADOR_SUJETO_A_VALIDACION_JURIDICA`. **EQUITAS no envía mensajes**: 
 |---|---|---|
 | Límites de banda de severidad | 35 BAJA / 40 MEDIA / 65 MEDIA / 70 ALTA / 100 máximo | G11, G07, G12, G13, G16 |
 | Límites de factores | 49 999,99 vs 50 000,00 ARS; 30 vs 31 días; 11 vs 12 vencidas | G08–G10, G11, G14, G15 |
-| Vencimiento igual al corte / un día antes / posterior | No vencida / 1 día / no suma | G06, G07, G39 |
+| Vencimiento igual al corte / un día antes / posterior | No vencida (sin vencidas: severidad 0) / 1 día / suma al monto actualizado, no a antigüedad ni cantidad | G06, G07, G39 |
+| Objeto al día con monto alto | Monto actualizado informado; sin vencidas al corte, severidad 0 | G43 |
 | Umbral de alerta de prescripción | 1825 días activa, 1824 no | G19, G20 |
 | Objeto sin obligaciones | Cero derivado, `SEGUIMIENTO` intensidad 0 | G04 |
 | Importe 0 observado | Cero real, no es mora ni dispara la alerta | G05 |
 | Porcentaje 0 observado | Válido (100 + 0 = 100) | G34 |
 | Cero contactos observados / lectura de contactos no disponible | `SIN_CONTACTO_ACTIVO`, severidad sin cambio | G17, G18 |
-| Importe `INVALIDO` en parte de las obligaciones | Severidad `PARCIAL` ("al menos"), revisión | G27 |
+| Importe `INVALIDO` en parte de las obligaciones | Severidad `PARCIAL` ("al menos"), revisión; la frase no descarta la banda ALTA y nombra el importe `INVALIDO` | G27 |
+| Parcial sin vencidas entre las evaluables | Mínimo 0, `SEGUIMIENTO` intensidad 0 con revisión; la frase no afirma que no haya deuda vencida | G42 |
 | Ninguna obligación evaluable (`INVALIDO`, `NO_INTEGRADO`, `NO_INFORMADO_EN_ORIGEN`) | `NO_DISPONIBLE`, prioridad null, `MEJORAR_DATOS` (R2) | G28, G29 |
 | Porcentaje no informado / sin personas | Bandera / `NO_APLICA` sin bandera | G35, G40 |
 | Tipo de persona `UNKNOWN` | Solo bandera | G36 |
-| Vencimiento centinela `1900-01-01` | No evaluable + `FECHAS_INCONSISTENTES` | G30 |
+| Vencimiento centinela `1900-01-01` | No evaluable + `FECHAS_INCONSISTENTES`; severidad `PARCIAL` | G30 |
 | Actualización de origen posterior al corte | `FECHAS_INCONSISTENTES`, sin cambio de severidad | G31 |
-| Importe negativo observado | No evaluable, no resta severidad | G32 |
+| Importe negativo observado | No evaluable, no resta severidad; severidad `PARCIAL` | G32 |
 | Porcentajes 60 + 30 | `PORCENTAJES_NO_SUMAN_100`, sin normalizar | G33 |
 | Prescripción y sin contacto a la vez | R1 precede a R3; ambas banderas visibles | G21 |
 | Estado de origen y período observados | Sin banderas de origen | G38 |
 
 ## 12. Casos golden y propiedades verificables
 
-`contracts/decision-rules.v1.golden.json` contiene **41 casos** sintéticos (`SINT-G01`…`SINT-G41`). Cada caso tiene `entrada` y el objeto `esperado` completo (severidad con insumos, banderas, vulnerabilidad, intervención, revisión, prioridad, explicación con la frase exacta y mensaje). ALIGN-009 (TypeScript) y ALIGN-015 (Python) deben reproducir **cada objeto esperado completo**, además de:
+`contracts/decision-rules.v1.golden.json` contiene **43 casos** sintéticos (`SINT-G01`…`SINT-G43`). Cada caso tiene `entrada` y el objeto `esperado` completo (severidad con insumos, banderas, vulnerabilidad, intervención, revisión, prioridad, explicación con la frase exacta y mensaje). ALIGN-009 (TypeScript) y ALIGN-015 (Python) deben reproducir **cada objeto esperado completo**, además de:
 
 - **Pares contrafactuales** (14): `contactos_activos` (severidad y prioridad iguales), `vulnerabilidad` (la intensidad de la variante nunca supera la de la base; severidad y prioridad iguales), `personas` y `source_updated_at` (solo cambian las banderas). Cada par difiere únicamente en el campo declarado.
 - **Ordenamientos** (5): el orden esperado de todos los casos de cada cola.
-- **Invariantes**: ninguna intensidad automática supera 2; la prioridad es null solo con severidad `NO_DISPONIBLE`; ninguna intervención con intensidad ≥ 1 se sugiere sin canal.
+- **Invariantes**: ninguna intensidad automática supera 2; la prioridad es null solo con severidad `NO_DISPONIBLE`; ninguna intervención con intensidad ≥ 1 se sugiere sin canal; sin vencidas al corte la severidad es 0; completar con valores evaluables las obligaciones no evaluables de un caso `PARCIAL` nunca baja su severidad ni su banda (el valor parcial es un mínimo).
 
 El oráculo de decisión de cada caso se escribió a mano y se contrastó con un evaluador de referencia de un solo uso, fuera del repositorio (evidencia de ALIGN-008).
 
@@ -190,7 +202,7 @@ El oráculo de decisión de cada caso se escribió a mano y se contrastó con un
 
 | # | Ambigüedad del ticket | Decisión v1 |
 |---|---|---|
-| D1 | "Monto actualizado del objeto … a la fecha de corte" | Se usa el monto actualizado **vencido** al corte: lo que no venció no es mora y no debe hacer severo un objeto al día |
+| D1 | "Monto actualizado del objeto … a la fecha de corte" y objetos al día | El insumo es el **monto actualizado del objeto** (Σ `current_amount` de sus obligaciones evaluables, contrato §3), también en el desempate. Para que un objeto al día no sea severo no se cambia esa variable: se usa la cantidad de vencidas al corte, que el ticket ya prevé (`regla_sin_vencidas`: con 0 vencidas, los tres factores aportan 0). Corrige la versión revisada en `e009951`, que usaba solo el monto vencido (revisión ALIGN-008, hallazgo 1) |
 | D2 | Cómo se cuenta una obligación vencida con importe 0 | No está en mora: conserva su cero y no suma cantidad ni antigüedad |
 | D3 | Orden entre "sin contacto" y `VERIFICAR_PRESCRIPCION` | Se respeta el orden del ticket: R1 antes que R3; la bandera de prescripción sigue visible |
 | D4 | Severidad no calculable (todas las obligaciones no evaluables) | `MEJORAR_DATOS` (R2), coherente con el nivel 0 de ALIGN-003 ("mejorar o verificar datos") |
@@ -202,6 +214,7 @@ El oráculo de decisión de cada caso se escribió a mano y se contrastó con un
 | D10 | Fechas contradictorias | Actualización de origen posterior al corte y vencimientos anteriores a `1970-01-01`; un vencimiento implausible deja la obligación no evaluable |
 | D11 | Porcentaje declarado faltante | Activa `PORCENTAJES_NO_SUMAN_100` porque la suma no puede verificarse; nunca se completa ni se normaliza |
 | D12 | Corte ausente | Las reglas no evalúan sin `as_of`; el rótulo de sustitución lo decide ALIGN-010 |
+| D13 | Sugerencia y explicación con severidad `PARCIAL` | Se conserva la sugerencia provisional calculada con el mínimo, con revisión humana obligatoria. La frase describe el mínimo y su universo, dice qué no se pudo evaluar (dato y estado de presencia) y que la severidad puede ser mayor; nunca afirma un límite superior ni ausencia de deuda (revisión ALIGN-008, hallazgo 2) |
 
 ## 14. Limitaciones y aprobación humana
 
@@ -215,3 +228,4 @@ El oráculo de decisión de cada caso se escribió a mano y se contrastó con un
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0.0 | 29/10/2026 | Versión inicial (ALIGN-008). Provisional hasta la aprobación de la política, de ALIGN-003 y del umbral jurídico. Cualquier cambio de parámetros, reglas o textos crea una versión nueva con sus propios casos golden; esta versión no se edita en silencio |
+| 1.0.0 (corrección de revisión 1) | 29/10/2026 | Antes de su primera integración y sin consumidores, la versión inicial incorpora los cambios pedidos por la revisión independiente: monto actualizado del objeto como insumo (D1), explicaciones parciales sin afirmaciones no justificadas y detalle de no evaluables (D13), casos G42 y G43. El borrador revisado (`e009951`) no se usó en ninguna integración |

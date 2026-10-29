@@ -160,11 +160,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -192,7 +193,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -316,11 +317,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -348,7 +350,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -434,11 +436,12 @@
           "valor": 25,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 30000.0,
+          "monto_actualizado_ars": 30000.0,
           "dias_atraso_maximo": 45,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-16",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -466,7 +469,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 30000.0,
               "puntos": 10,
               "maximo": 50
@@ -532,11 +535,12 @@
           "valor": 0,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 0.0,
+          "monto_actualizado_ars": 0.0,
           "dias_atraso_maximo": null,
           "cantidad_vencidas": 0,
           "vencimiento_mas_antiguo": null,
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [],
         "vulnerabilidad": {
@@ -561,7 +565,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 0.0,
               "puntos": 0,
               "maximo": 50
@@ -664,11 +668,12 @@
           "valor": 0,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 0.0,
+          "monto_actualizado_ars": 0.0,
           "dias_atraso_maximo": null,
           "cantidad_vencidas": 0,
           "vencimiento_mas_antiguo": null,
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -696,7 +701,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 0.0,
               "puntos": 0,
               "maximo": 50
@@ -721,7 +726,7 @@
     },
     {
       "id": "SINT-G06",
-      "descripcion": "Vencimiento igual al corte: todavía no está vencida.",
+      "descripcion": "Vencimiento igual al corte: todavía no está vencida; el monto actualizado (300 000 ARS) se informa pero no puntúa porque no hay vencidas al corte.",
       "categorias": [
         "limite",
         "cero"
@@ -780,11 +785,12 @@
           "valor": 0,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 0.0,
+          "monto_actualizado_ars": 300000.0,
           "dias_atraso_maximo": null,
           "cantidad_vencidas": 0,
           "vencimiento_mas_antiguo": null,
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -812,8 +818,8 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
-              "insumo": 0.0,
+              "factor": "monto_actualizado_ars",
+              "insumo": 300000.0,
               "puntos": 0,
               "maximo": 50
             },
@@ -895,11 +901,12 @@
           "valor": 40,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 300000.0,
+          "monto_actualizado_ars": 300000.0,
           "dias_atraso_maximo": 1,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-09-29",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -927,7 +934,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 300000.0,
               "puntos": 30,
               "maximo": 50
@@ -1013,11 +1020,12 @@
           "valor": 20,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 49999.99,
+          "monto_actualizado_ars": 49999.99,
           "dias_atraso_maximo": 10,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-09-20",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1045,7 +1053,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 49999.99,
               "puntos": 10,
               "maximo": 50
@@ -1131,11 +1139,12 @@
           "valor": 30,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 50000.0,
+          "monto_actualizado_ars": 50000.0,
           "dias_atraso_maximo": 10,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-09-20",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1163,7 +1172,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 50000.0,
               "puntos": 20,
               "maximo": 50
@@ -1249,11 +1258,12 @@
           "valor": 30,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 100000.0,
+          "monto_actualizado_ars": 100000.0,
           "dias_atraso_maximo": 30,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-31",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1281,7 +1291,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 100000.0,
               "puntos": 20,
               "maximo": 50
@@ -1367,11 +1377,12 @@
           "valor": 35,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 100000.0,
+          "monto_actualizado_ars": 100000.0,
           "dias_atraso_maximo": 31,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-30",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1399,7 +1410,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 100000.0,
               "puntos": 20,
               "maximo": 50
@@ -1523,11 +1534,12 @@
           "valor": 65,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 210000.0,
+          "monto_actualizado_ars": 210000.0,
           "dias_atraso_maximo": 366,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2025-09-29",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1555,7 +1567,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 210000.0,
               "puntos": 30,
               "maximo": 50
@@ -1679,11 +1691,12 @@
           "valor": 70,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 210000.0,
+          "monto_actualizado_ars": 210000.0,
           "dias_atraso_maximo": 731,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2024-09-29",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -1711,7 +1724,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 210000.0,
               "puntos": 30,
               "maximo": 50
@@ -1987,11 +2000,12 @@
           "valor": 50,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 110000.0,
+          "monto_actualizado_ars": 110000.0,
           "dias_atraso_maximo": 100,
           "cantidad_vencidas": 11,
           "vencimiento_mas_antiguo": "2026-06-22",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -2019,7 +2033,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 110000.0,
               "puntos": 20,
               "maximo": 50
@@ -2314,11 +2328,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 120000.0,
+          "monto_actualizado_ars": 120000.0,
           "dias_atraso_maximo": 100,
           "cantidad_vencidas": 12,
           "vencimiento_mas_antiguo": "2026-06-22",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -2346,7 +2361,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 120000.0,
               "puntos": 20,
               "maximo": 50
@@ -2641,11 +2656,12 @@
           "valor": 100,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 1200000.0,
+          "monto_actualizado_ars": 1200000.0,
           "dias_atraso_maximo": 1000,
           "cantidad_vencidas": 12,
           "vencimiento_mas_antiguo": "2024-01-04",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -2673,7 +2689,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 1200000.0,
               "puntos": 50,
               "maximo": 50
@@ -2855,11 +2871,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "SIN_CONTACTO_ACTIVO",
@@ -2888,7 +2905,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -3010,11 +3027,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "SIN_CONTACTO_ACTIVO",
@@ -3043,7 +3061,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -3221,11 +3239,12 @@
           "valor": 85,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 1825,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2021-10-01",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -3254,7 +3273,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -3432,11 +3451,12 @@
           "valor": 85,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 1824,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2021-10-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -3464,7 +3484,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -3645,11 +3665,12 @@
           "valor": 85,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 1825,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2021-10-01",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "SIN_CONTACTO_ACTIVO",
@@ -3679,7 +3700,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -3857,11 +3878,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -3891,7 +3913,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -4072,11 +4094,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -4104,7 +4127,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -4228,11 +4251,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -4262,7 +4286,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -4348,11 +4372,12 @@
           "valor": 25,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 30000.0,
+          "monto_actualizado_ars": 30000.0,
           "dias_atraso_maximo": 45,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-16",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -4382,7 +4407,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 30000.0,
               "puntos": 10,
               "maximo": 50
@@ -4563,11 +4588,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "SIN_CONTACTO_ACTIVO",
@@ -4598,7 +4624,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -4623,7 +4649,7 @@
     },
     {
       "id": "SINT-G27",
-      "descripcion": "G02 más una obligación con importe INVALIDO: no se suma como 0; la severidad es un mínimo y exige revisión.",
+      "descripcion": "G02 más una obligación con importe INVALIDO: no se suma como 0; la severidad es un mínimo, la frase no descarta la banda ALTA y exige revisión.",
       "categorias": [
         "faltante"
       ],
@@ -4738,11 +4764,18 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "PARCIAL",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 1
+          "obligaciones_no_evaluables": 1,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "IMPORTE_NO_OBSERVADO",
+              "estado": "INVALIDO",
+              "cantidad": 1
+            }
+          ]
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -4772,7 +4805,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -4790,7 +4823,7 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad (al menos 55) es menor que 70 y alcanza 40."
+          "frase_contrastiva": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad mínima calculada con las obligaciones evaluables (al menos 55) alcanza 40; con los datos disponibles no puede determinarse si alcanza 70. No se pudo evaluar todo el objeto (obligaciones no evaluables: 1 de 4; importe INVALIDO: 1): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana."
         },
         "mensaje_borrador": {
           "plantilla_id": "MSG-RECORDATORIO-v1",
@@ -4877,11 +4910,23 @@
           "valor": null,
           "banda": "NO_DISPONIBLE",
           "estado": "NO_DISPONIBLE",
-          "monto_vencido_ars": null,
+          "monto_actualizado_ars": null,
           "dias_atraso_maximo": null,
           "cantidad_vencidas": null,
           "vencimiento_mas_antiguo": null,
-          "obligaciones_no_evaluables": 2
+          "obligaciones_no_evaluables": 2,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "IMPORTE_NO_OBSERVADO",
+              "estado": "INVALIDO",
+              "cantidad": 1
+            },
+            {
+              "motivo": "VENCIMIENTO_NO_OBSERVADO",
+              "estado": "INVALIDO",
+              "cantidad": 1
+            }
+          ]
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -4909,7 +4954,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": null,
               "puntos": null,
               "maximo": 50
@@ -4927,7 +4972,7 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables; los faltantes no se cuentan como cero."
+          "frase_contrastiva": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables (obligaciones no evaluables: 2 de 2; importe INVALIDO: 1; vencimiento INVALIDO: 1); los faltantes no se cuentan como cero."
         },
         "mensaje_borrador": null
       }
@@ -4992,11 +5037,23 @@
           "valor": null,
           "banda": "NO_DISPONIBLE",
           "estado": "NO_DISPONIBLE",
-          "monto_vencido_ars": null,
+          "monto_actualizado_ars": null,
           "dias_atraso_maximo": null,
           "cantidad_vencidas": null,
           "vencimiento_mas_antiguo": null,
-          "obligaciones_no_evaluables": 1
+          "obligaciones_no_evaluables": 1,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "IMPORTE_NO_OBSERVADO",
+              "estado": "NO_INTEGRADO",
+              "cantidad": 1
+            },
+            {
+              "motivo": "VENCIMIENTO_NO_OBSERVADO",
+              "estado": "NO_INFORMADO_EN_ORIGEN",
+              "cantidad": 1
+            }
+          ]
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -5024,7 +5081,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": null,
               "puntos": null,
               "maximo": 50
@@ -5042,14 +5099,14 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables; los faltantes no se cuentan como cero."
+          "frase_contrastiva": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables (obligaciones no evaluables: 1 de 1; importe NO_INTEGRADO: 1; vencimiento NO_INFORMADO_EN_ORIGEN: 1); los faltantes no se cuentan como cero."
         },
         "mensaje_borrador": null
       }
     },
     {
       "id": "SINT-G30",
-      "descripcion": "G03 más una obligación con vencimiento centinela 1900-01-01: queda no evaluable (no dispara severidad ni prescripción).",
+      "descripcion": "G03 más una obligación con vencimiento centinela 1900-01-01: queda no evaluable (no dispara severidad ni prescripción); la frase no descarta una banda superior.",
       "categorias": [
         "contradictorio"
       ],
@@ -5126,11 +5183,18 @@
           "valor": 25,
           "banda": "BAJA",
           "estado": "PARCIAL",
-          "monto_vencido_ars": 30000.0,
+          "monto_actualizado_ars": 30000.0,
           "dias_atraso_maximo": 45,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-16",
-          "obligaciones_no_evaluables": 1
+          "obligaciones_no_evaluables": 1,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "VENCIMIENTO_INCONSISTENTE",
+              "estado": "OBSERVADO",
+              "cantidad": 1
+            }
+          ]
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -5161,7 +5225,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 30000.0,
               "puntos": 10,
               "maximo": 50
@@ -5179,7 +5243,7 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad (al menos 25) es menor que 40."
+          "frase_contrastiva": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad mínima calculada con las obligaciones evaluables (al menos 25) es mayor que 0; con los datos disponibles no puede determinarse si alcanza 40. No se pudo evaluar todo el objeto (obligaciones no evaluables: 1 de 2; vencimiento OBSERVADO anterior a 1970-01-01: 1): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana."
         },
         "mensaje_borrador": {
           "plantilla_id": "MSG-SEGUIMIENTO-v1",
@@ -5285,11 +5349,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -5318,7 +5383,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -5346,7 +5411,7 @@
     },
     {
       "id": "SINT-G32",
-      "descripcion": "G03 más un importe negativo observado: no evaluable, no resta severidad.",
+      "descripcion": "G03 más un importe negativo observado: no evaluable, no resta severidad; la frase no descarta una banda superior.",
       "categorias": [
         "contradictorio"
       ],
@@ -5423,11 +5488,18 @@
           "valor": 25,
           "banda": "BAJA",
           "estado": "PARCIAL",
-          "monto_vencido_ars": 30000.0,
+          "monto_actualizado_ars": 30000.0,
           "dias_atraso_maximo": 45,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-16",
-          "obligaciones_no_evaluables": 1
+          "obligaciones_no_evaluables": 1,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "IMPORTE_NEGATIVO",
+              "estado": "OBSERVADO",
+              "cantidad": 1
+            }
+          ]
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -5457,7 +5529,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 30000.0,
               "puntos": 10,
               "maximo": 50
@@ -5475,7 +5547,7 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad (al menos 25) es menor que 40."
+          "frase_contrastiva": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad mínima calculada con las obligaciones evaluables (al menos 25) es mayor que 0; con los datos disponibles no puede determinarse si alcanza 40. No se pudo evaluar todo el objeto (obligaciones no evaluables: 1 de 2; importe OBSERVADO negativo: 1): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana."
         },
         "mensaje_borrador": {
           "plantilla_id": "MSG-SEGUIMIENTO-v1",
@@ -5649,11 +5721,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "PORCENTAJES_NO_SUMAN_100",
@@ -5682,7 +5755,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -5874,11 +5947,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -5906,7 +5980,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -6098,11 +6172,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "PORCENTAJES_NO_SUMAN_100",
@@ -6131,7 +6206,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -6313,11 +6388,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -6346,7 +6422,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -6527,11 +6603,12 @@
           "valor": 75,
           "banda": "ALTA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 600000.0,
+          "monto_actualizado_ars": 600000.0,
           "dias_atraso_maximo": 200,
           "cantidad_vencidas": 6,
           "vencimiento_mas_antiguo": "2026-03-14",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -6559,7 +6636,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 600000.0,
               "puntos": 40,
               "maximo": 50
@@ -6683,11 +6760,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 120,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-06-02",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [],
         "vulnerabilidad": {
@@ -6712,7 +6790,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -6740,7 +6818,7 @@
     },
     {
       "id": "SINT-G39",
-      "descripcion": "Obligación de 500 000 ARS que vence después del corte: no suma; solo cuenta la vencida de 10 000 ARS.",
+      "descripcion": "Obligación de 500 000 ARS que vence después del corte y otra de 10 000 ARS vencida hace 10 días: el monto actualizado del objeto es 510 000 ARS (40); antigüedad y cantidad solo cuentan la vencida (5+5).",
       "categorias": [
         "limite"
       ],
@@ -6814,14 +6892,15 @@
       },
       "esperado": {
         "severidad": {
-          "valor": 20,
-          "banda": "BAJA",
+          "valor": 50,
+          "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 10000.0,
+          "monto_actualizado_ars": 510000.0,
           "dias_atraso_maximo": 10,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-09-20",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -6832,10 +6911,10 @@
           "efecto": "NINGUNO"
         },
         "intervencion": {
-          "codigo": "SEGUIMIENTO",
+          "codigo": "RECORDATORIO_INFORMATIVO",
           "intensidad": 1,
           "canal_requerido": true,
-          "regla": "R6",
+          "regla": "R5",
           "modificador": null
         },
         "revision": {
@@ -6843,15 +6922,15 @@
           "motivos": []
         },
         "prioridad": {
-          "cola": "SEGUIMIENTO",
-          "valor": 20
+          "cola": "RECORDATORIO_INFORMATIVO",
+          "valor": 50
         },
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
-              "insumo": 10000.0,
-              "puntos": 10,
+              "factor": "monto_actualizado_ars",
+              "insumo": 510000.0,
+              "puntos": 40,
               "maximo": 50
             },
             {
@@ -6867,10 +6946,10 @@
               "maximo": 20
             }
           ],
-          "frase_contrastiva": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad (20) es menor que 40."
+          "frase_contrastiva": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad (50) es menor que 70 y alcanza 40."
         },
         "mensaje_borrador": {
-          "plantilla_id": "MSG-SEGUIMIENTO-v1",
+          "plantilla_id": "MSG-RECORDATORIO-v1",
           "estado": "BORRADOR_SUJETO_A_VALIDACION_JURIDICA"
         }
       }
@@ -6924,11 +7003,12 @@
           "valor": 25,
           "banda": "BAJA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 30000.0,
+          "monto_actualizado_ars": 30000.0,
           "dias_atraso_maximo": 45,
           "cantidad_vencidas": 1,
           "vencimiento_mas_antiguo": "2026-08-16",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -6956,7 +7036,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 30000.0,
               "puntos": 10,
               "maximo": 50
@@ -7080,11 +7160,12 @@
           "valor": 55,
           "banda": "MEDIA",
           "estado": "COMPLETA",
-          "monto_vencido_ars": 240000.0,
+          "monto_actualizado_ars": 240000.0,
           "dias_atraso_maximo": 150,
           "cantidad_vencidas": 3,
           "vencimiento_mas_antiguo": "2026-05-03",
-          "obligaciones_no_evaluables": 0
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
         },
         "banderas": [
           "ESTADO_ORIGEN_NO_INFORMADO",
@@ -7112,7 +7193,7 @@
         "explicacion": {
           "factores": [
             {
-              "factor": "monto_vencido_ars",
+              "factor": "monto_actualizado_ars",
               "insumo": 240000.0,
               "puntos": 30,
               "maximo": 50
@@ -7136,6 +7217,267 @@
           "plantilla_id": "MSG-RECORDATORIO-v1",
           "estado": "BORRADOR_SUJETO_A_VALIDACION_JURIDICA"
         }
+      }
+    },
+    {
+      "id": "SINT-G42",
+      "descripcion": "Una obligación evaluable que vence el día del corte y otra con importe INVALIDO vencida hace 400 días: severidad mínima 0; la frase no afirma que no haya deuda vencida y exige revisión.",
+      "categorias": [
+        "faltante",
+        "cero"
+      ],
+      "entrada": {
+        "id": "SINT-G42",
+        "as_of": "2026-09-30",
+        "source_updated_at": {
+          "estado": "OBSERVADO",
+          "valor": "2026-09-28"
+        },
+        "obligaciones": [
+          {
+            "id": "SINT-OBL-01",
+            "current_amount": {
+              "estado": "OBSERVADO",
+              "valor": 300000
+            },
+            "due_date": {
+              "estado": "OBSERVADO",
+              "valor": "2026-09-30"
+            },
+            "estado_origen": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            },
+            "periodo_fiscal": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            }
+          },
+          {
+            "id": "SINT-OBL-02",
+            "current_amount": {
+              "estado": "INVALIDO",
+              "valor": null
+            },
+            "due_date": {
+              "estado": "OBSERVADO",
+              "valor": "2025-08-26"
+            },
+            "estado_origen": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            },
+            "periodo_fiscal": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            }
+          }
+        ],
+        "contactos_activos": {
+          "estado": "OBSERVADO",
+          "valor": 1
+        },
+        "personas": [
+          {
+            "tipo": {
+              "estado": "OBSERVADO",
+              "valor": "FISICA"
+            },
+            "porcentaje_declarado": {
+              "estado": "OBSERVADO",
+              "valor": 100
+            }
+          }
+        ],
+        "vulnerabilidad": {
+          "estado": "NO_INFORMADO_EN_ORIGEN",
+          "valor": null
+        }
+      },
+      "esperado": {
+        "severidad": {
+          "valor": 0,
+          "banda": "BAJA",
+          "estado": "PARCIAL",
+          "monto_actualizado_ars": 300000.0,
+          "dias_atraso_maximo": null,
+          "cantidad_vencidas": 0,
+          "vencimiento_mas_antiguo": null,
+          "obligaciones_no_evaluables": 1,
+          "motivos_no_evaluables": [
+            {
+              "motivo": "IMPORTE_NO_OBSERVADO",
+              "estado": "INVALIDO",
+              "cantidad": 1
+            }
+          ]
+        },
+        "banderas": [
+          "ESTADO_ORIGEN_NO_INFORMADO",
+          "PERIODO_NO_INFORMADO"
+        ],
+        "vulnerabilidad": {
+          "valor": "NO_INFORMADA",
+          "efecto": "NINGUNO"
+        },
+        "intervencion": {
+          "codigo": "SEGUIMIENTO",
+          "intensidad": 0,
+          "canal_requerido": false,
+          "regla": "R7",
+          "modificador": null
+        },
+        "revision": {
+          "requiere_revision_humana": true,
+          "motivos": [
+            "SEVERIDAD_PARCIAL"
+          ]
+        },
+        "prioridad": {
+          "cola": "SEGUIMIENTO",
+          "valor": 0
+        },
+        "explicacion": {
+          "factores": [
+            {
+              "factor": "monto_actualizado_ars",
+              "insumo": 300000.0,
+              "puntos": 0,
+              "maximo": 50
+            },
+            {
+              "factor": "dias_atraso_maximo",
+              "insumo": null,
+              "puntos": 0,
+              "maximo": 30
+            },
+            {
+              "factor": "cantidad_vencidas",
+              "insumo": 0,
+              "puntos": 0,
+              "maximo": 20
+            }
+          ],
+          "frase_contrastiva": "Se sugiere seguimiento sin contacto y no una comunicación porque ninguna obligación evaluable está vencida con importe positivo a la fecha de corte; con los datos disponibles no puede determinarse si alguna obligación no evaluable lo está. No se pudo evaluar todo el objeto (obligaciones no evaluables: 1 de 2; importe INVALIDO: 1): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana."
+        },
+        "mensaje_borrador": null
+      }
+    },
+    {
+      "id": "SINT-G43",
+      "descripcion": "Objeto al día: 1 500 000 ARS que vencen después del corte. El monto actualizado se informa, pero sin vencidas al corte la severidad es 0 (regla_sin_vencidas).",
+      "categorias": [
+        "cero",
+        "limite"
+      ],
+      "entrada": {
+        "id": "SINT-G43",
+        "as_of": "2026-09-30",
+        "source_updated_at": {
+          "estado": "OBSERVADO",
+          "valor": "2026-09-28"
+        },
+        "obligaciones": [
+          {
+            "id": "SINT-OBL-01",
+            "current_amount": {
+              "estado": "OBSERVADO",
+              "valor": 1500000
+            },
+            "due_date": {
+              "estado": "OBSERVADO",
+              "valor": "2026-10-30"
+            },
+            "estado_origen": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            },
+            "periodo_fiscal": {
+              "estado": "NO_INTEGRADO",
+              "valor": null
+            }
+          }
+        ],
+        "contactos_activos": {
+          "estado": "OBSERVADO",
+          "valor": 1
+        },
+        "personas": [
+          {
+            "tipo": {
+              "estado": "OBSERVADO",
+              "valor": "FISICA"
+            },
+            "porcentaje_declarado": {
+              "estado": "OBSERVADO",
+              "valor": 100
+            }
+          }
+        ],
+        "vulnerabilidad": {
+          "estado": "NO_INFORMADO_EN_ORIGEN",
+          "valor": null
+        }
+      },
+      "esperado": {
+        "severidad": {
+          "valor": 0,
+          "banda": "BAJA",
+          "estado": "COMPLETA",
+          "monto_actualizado_ars": 1500000.0,
+          "dias_atraso_maximo": null,
+          "cantidad_vencidas": 0,
+          "vencimiento_mas_antiguo": null,
+          "obligaciones_no_evaluables": 0,
+          "motivos_no_evaluables": []
+        },
+        "banderas": [
+          "ESTADO_ORIGEN_NO_INFORMADO",
+          "PERIODO_NO_INFORMADO"
+        ],
+        "vulnerabilidad": {
+          "valor": "NO_INFORMADA",
+          "efecto": "NINGUNO"
+        },
+        "intervencion": {
+          "codigo": "SEGUIMIENTO",
+          "intensidad": 0,
+          "canal_requerido": false,
+          "regla": "R7",
+          "modificador": null
+        },
+        "revision": {
+          "requiere_revision_humana": false,
+          "motivos": []
+        },
+        "prioridad": {
+          "cola": "SEGUIMIENTO",
+          "valor": 0
+        },
+        "explicacion": {
+          "factores": [
+            {
+              "factor": "monto_actualizado_ars",
+              "insumo": 1500000.0,
+              "puntos": 0,
+              "maximo": 50
+            },
+            {
+              "factor": "dias_atraso_maximo",
+              "insumo": null,
+              "puntos": 0,
+              "maximo": 30
+            },
+            {
+              "factor": "cantidad_vencidas",
+              "insumo": 0,
+              "puntos": 0,
+              "maximo": 20
+            }
+          ],
+          "frase_contrastiva": "Se sugiere seguimiento sin contacto y no una comunicación porque no hay deuda vencida con importe positivo a la fecha de corte."
+        },
+        "mensaje_borrador": null
       }
     }
   ],
@@ -7245,7 +7587,7 @@
         "SINT-G37",
         "SINT-G13"
       ],
-      "criterio": "prioridad desc (null al final), monto_vencido_ars desc, vencimiento_mas_antiguo asc, id asc"
+      "criterio": "prioridad desc (null al final), monto_actualizado_ars desc, vencimiento_mas_antiguo asc, id asc"
     },
     {
       "cola": "RECORDATORIO_INFORMATIVO",
@@ -7259,10 +7601,11 @@
         "SINT-G31",
         "SINT-G38",
         "SINT-G15",
+        "SINT-G39",
         "SINT-G14",
         "SINT-G07"
       ],
-      "criterio": "prioridad desc (null al final), monto_vencido_ars desc, vencimiento_mas_antiguo asc, id asc"
+      "criterio": "prioridad desc (null al final), monto_actualizado_ars desc, vencimiento_mas_antiguo asc, id asc"
     },
     {
       "cola": "SEGUIMIENTO",
@@ -7276,12 +7619,13 @@
         "SINT-G32",
         "SINT-G40",
         "SINT-G08",
-        "SINT-G39",
+        "SINT-G43",
+        "SINT-G06",
+        "SINT-G42",
         "SINT-G04",
-        "SINT-G05",
-        "SINT-G06"
+        "SINT-G05"
       ],
-      "criterio": "prioridad desc (null al final), monto_vencido_ars desc, vencimiento_mas_antiguo asc, id asc"
+      "criterio": "prioridad desc (null al final), monto_actualizado_ars desc, vencimiento_mas_antiguo asc, id asc"
     },
     {
       "cola": "MEJORAR_DATOS",
@@ -7293,14 +7637,14 @@
         "SINT-G28",
         "SINT-G29"
       ],
-      "criterio": "prioridad desc (null al final), monto_vencido_ars desc, vencimiento_mas_antiguo asc, id asc"
+      "criterio": "prioridad desc (null al final), monto_actualizado_ars desc, vencimiento_mas_antiguo asc, id asc"
     },
     {
       "cola": "REVISION_JURIDICA",
       "orden_esperado": [
         "SINT-G19"
       ],
-      "criterio": "prioridad desc (null al final), monto_vencido_ars desc, vencimiento_mas_antiguo asc, id asc"
+      "criterio": "prioridad desc (null al final), monto_actualizado_ars desc, vencimiento_mas_antiguo asc, id asc"
     }
   ]
 }
