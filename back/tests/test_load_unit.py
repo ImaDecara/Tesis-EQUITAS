@@ -22,7 +22,7 @@ def test_normalize_debt_key_requires_debtor_and_external_id() -> None:
 
     assert key == (77, 9001)
 
-    with pytest.raises(ValueError, match='sin debtor'):
+    with pytest.raises(ValueError, match='codigo=DEBT_DEBTOR_MISSING'):
         load.normalize_debt_key({'external_id': 9001})
 
 
