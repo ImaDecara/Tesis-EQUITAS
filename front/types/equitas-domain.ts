@@ -1,5 +1,17 @@
 export type RawRow = Record<string, unknown>
 
+// Estados de presencia del contrato de dominio v1 (docs/tesis/contrato-dominio-v1.md §4).
+// Un dato que no esta OBSERVADO se representa como null junto a su estado: nunca como 0.
+export const DATA_PRESENCE_STATES = [
+  'OBSERVADO',
+  'NO_INFORMADO_EN_ORIGEN',
+  'NO_INTEGRADO',
+  'INVALIDO',
+  'NO_APLICA',
+] as const
+
+export type DataPresence = (typeof DATA_PRESENCE_STATES)[number]
+
 export type RiskLevel = 'ALTO' | 'MEDIO' | 'BAJO'
 export type DebtorPriorityLevel = 'ALTA' | 'MEDIA' | 'BAJA'
 
