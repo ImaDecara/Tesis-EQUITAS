@@ -20,6 +20,9 @@ def write_source_files(
 
 
 def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    monkeypatch.setenv('EQUITAS_TARGET_ENV', 'local')
+    monkeypatch.setenv('SUPABASE_URL', 'http://127.0.0.1:54321')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'CLAVE_FICTICIA_ALIGN025')
     state: dict[str, Any] = {
         'persons': {},
         'debtors': {},
@@ -182,5 +185,5 @@ def test_etl_stops_when_the_simulated_debt_loader_fails(
 
     monkeypatch.setattr(run_etl, 'load_debts_bulk', fail_loading_debts)
 
-    with pytest.raises(RuntimeError, match='fallo de carga simulado'):
+    with pytest.raises(RuntimeError, match='codigo=ETL_FAILED'):
         run_etl.run_etl(folder_name='agua', execute=True)

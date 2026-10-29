@@ -1,11 +1,14 @@
 import argparse
+import sys
 from collections.abc import Hashable, Mapping
 from typing import Any
 
 import pandas as pd
 
+from ETL.config import ETLError, get_settings
 from ETL.extract import extract_from_input_folder_limited
 from ETL.load import (
+    etl_message,
     load_address,
     load_city,
     load_debtor,
@@ -16,6 +19,8 @@ from ETL.load import (
     load_debts_bulk,
     load_person,
     load_province,
+    reset_log_context,
+    set_log_context,
 )
 
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
@@ -31,12 +36,12 @@ from ETL.transform import (
     build_header_context_by_clave,
     build_person_payload,
     build_province_payload,
+    build_transform_summary,
     clean_text,
     get_issue_date_from_header,
     get_last_collection_date_from_header,
     parse_decimal,
     parse_int,
-    print_transform_summary,
 )
 
 
@@ -59,6 +64,26 @@ def run_etl(
     limit_objects: int | None = None,
     priority_tipo_ingreso_ids: list[int] | None = None,
 ) -> None:
+    token = set_log_context(0, None)
+    try:
+        if execute:
+            # Rechazar antes de leer archivos, resumir filas o crear el cliente.
+            get_settings(execute=True)
+        _run_etl(folder_name, execute, limit_objects, priority_tipo_ingreso_ids)
+    # Frontera de salida: un error de parsing o del proveedor puede contener filas.
+    except Exception as error:  # noqa: BLE001
+        code = error.code if isinstance(error, ETLError) else "ETL_FAILED"
+        raise ETLError(code, etl_message(code)) from None
+    finally:
+        reset_log_context(token)
+
+
+def _run_etl(
+    folder_name: str,
+    execute: bool,
+    limit_objects: int | None,
+    priority_tipo_ingreso_ids: list[int] | None,
+) -> None:
     source_data = extract_from_input_folder_limited(
         folder_name=folder_name,
         limit_objects=limit_objects,
@@ -68,13 +93,20 @@ def run_etl(
     cabecera_df = source_data.cabecera_df
     detalle_df = source_data.detalle_df
 
-    print_transform_summary(
+    summary = build_transform_summary(
         cabecera_df=cabecera_df,
         detalle_df=detalle_df,
     )
+    print("RESUMEN DE TRANSFORMACIÓN")
+    print(f"Personas únicas: {summary.persons_count}")
+    print(f"Objetos únicos: {summary.debtors_count}")
+    print(f"Relaciones únicas: {summary.debtor_person_relations_count}")
+    print(f"Filas de detalle: {summary.detail_rows_count}")
+    print(f"Deudas únicas: {summary.unique_debts_count}")
+    print(f"Deudas duplicadas: {summary.duplicated_debt_rows_count}")
 
     print()
-    print(f"Carpeta procesada: {folder_name}")
+    print(etl_message("SOURCE_SELECTED", key=folder_name))
     print(f"Límite de objetos: {limit_objects}")
     print(f"Tipos de ingreso priorizados: {priority_tipo_ingreso_ids or []}")
 
@@ -132,6 +164,7 @@ def run_etl(
     # Cargamos primero personas y objetos de deuda.
     # También cargamos la relación debtor_person, contactos, provincia, ciudad y dirección.
     for index, row in enumerate(dataframe_to_records(cabecera_df), start=1):
+        set_log_context(index, ("cabecera", row.get("Bien_Tipo_Id"), row.get("Cuenta"), row.get("Destinatario_Id")))
         person_payload = build_person_payload(row)
         debtor_payload = build_debtor_payload(row)
 
@@ -140,15 +173,15 @@ def run_etl(
         debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
 
         if person_external_id is None:
-            print(f"⚠️ Fila omitida: person sin external_id. Row: {row}")
+            print(etl_message("PERSON_EXTERNAL_ID_MISSING"))
             continue
 
         if debtor_external_id is None:
-            print(f"⚠️ Fila omitida: debtor sin external_id. Row: {row}")
+            print(etl_message("DEBTOR_EXTERNAL_ID_MISSING"))
             continue
 
         if debtor_type_id is None:
-            print(f"⚠️ Fila omitida: debtor sin Bien_Tipo_Id. Row: {row}")
+            print(etl_message("DEBTOR_TYPE_MISSING"))
             continue
 
         person_row = load_person(person_payload)
@@ -272,20 +305,21 @@ def run_etl(
     loaded_debt_keys: set[tuple[int, int, int]] = set()
 
     for index, row in enumerate(dataframe_to_records(detalle_df), start=1):
+        set_log_context(index, ("detalle", row.get("Bien_Tipo_Id"), row.get("Cuenta"), row.get("DEUD_id")))
         bien_tipo_id = parse_int(row.get("Bien_Tipo_Id"))
         account = parse_int(row.get("Cuenta"))
         debt_external_id = parse_int(row.get("DEUD_id"))
 
         if bien_tipo_id is None:
-            print(f"⚠️ Detalle omitido: sin Bien_Tipo_Id. Row: {row}")
+            print(etl_message("DETAIL_TYPE_MISSING"))
             continue
 
         if account is None:
-            print(f"⚠️ Detalle omitido: sin Cuenta. Row: {row}")
+            print(etl_message("DETAIL_ACCOUNT_MISSING"))
             continue
 
         if debt_external_id is None:
-            print(f"⚠️ Detalle omitido: sin DEUD_id. Row: {row}")
+            print(etl_message("DETAIL_EXTERNAL_ID_MISSING"))
             continue
 
         # Clave de deduplicación robusta para múltiples tipos de bien.
@@ -299,11 +333,7 @@ def run_etl(
         debtor_id = debtor_id_by_key.get((bien_tipo_id, account))
 
         if debtor_id is None:
-            print(
-                f"⚠️ Detalle omitido: no existe debtor para "
-                f"Bien_Tipo_Id={bien_tipo_id}, Cuenta={account}, "
-                f"DEUD_id={debt_external_id}"
-            )
+            print(etl_message("DETAIL_DEBTOR_MISSING"))
             continue
 
         clave = clean_text(row.get("ClaveAgrupacion"))
@@ -333,6 +363,7 @@ def run_etl(
 
     print()
     print(f"Cargando {len(debt_payloads_to_load)} deudas por lotes en Supabase...")
+    set_log_context(0, tuple((row.get("debtor"), row.get("external_id")) for row in debt_payloads_to_load))
     debt_bulk_summary = load_debts_bulk(debt_payloads_to_load)
 
     # ========================================================
@@ -365,6 +396,7 @@ def run_etl(
 
     # El perfil se calcula al final porque depende de deudas, personas asociadas y contactos ya cargados.
     for debtor_id, person_ids in persons_by_debtor_id.items():
+        set_log_context(0, ("perfil", debtor_id))
         debt_rows = debt_payloads_by_debtor_id.get(debtor_id, [])
 
         available_contact_count = sum(
@@ -467,12 +499,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    run_etl(
-        folder_name=args.folder,
-        execute=args.execute,
-        limit_objects=args.limit_objects,
-        priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
-    )
+    try:
+        run_etl(
+            folder_name=args.folder,
+            execute=args.execute,
+            limit_objects=args.limit_objects,
+            priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
+        )
+    except ETLError as error:
+        print(str(error), file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

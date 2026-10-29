@@ -111,14 +111,14 @@ def test_specific_loaders_keep_their_deduplication_contracts(
 
 
 def test_loader_rejects_invalid_payloads_and_response_shapes() -> None:
-    with pytest.raises(ValueError, match='sin external_id'):
+    with pytest.raises(ValueError, match='codigo=PERSON_EXTERNAL_ID_MISSING'):
         load.load_person({})
 
-    with pytest.raises(ValueError, match='sin type'):
+    with pytest.raises(ValueError, match='codigo=DEBTOR_TYPE_MISSING'):
         load.load_debtor({'tenant': 1, 'external_id': 2})
 
-    with pytest.raises(RuntimeError, match='Respuesta vac'):
+    with pytest.raises(RuntimeError, match='codigo=RESPONSE_EMPTY_OR_INVALID'):
         load.get_first_response_row([], 'person', 'select')
 
-    with pytest.raises(RuntimeError, match='no es un objeto'):
+    with pytest.raises(RuntimeError, match='codigo=RESPONSE_ROW_INVALID'):
         load.get_first_response_row([1], 'person', 'select')
