@@ -164,3 +164,32 @@ Consecuencias aceptadas:
 |---|---|---|
 | 1 | 29/10/2026 | Versión inicial (ALIGN-013). Provisional hasta la revisión independiente. ALIGN-052 la amplía con la importación interna |
 | 1 (corrección 1) | 29/10/2026 | Revisión independiente: el diagrama muestra la guardia de `--execute` antes de extraer (`back/ETL/run_etl.py:69-72`), el final del dry-run sin escritura (`:113-118`) y la revalidación del destino al crear el cliente |
+| 1 (implementación Python) | 29/10/2026 | ALIGN-015 implementa §4.3 y §4.7 sin cambiar la decisión: núcleo JSON v1, paginación por id y retiro de la fórmula v0 del servicio. Detalle en §8 |
+
+## 8. Implementación Python — ALIGN-015
+
+El diagnóstico y el diagrama de §1/§5 conservan el estado histórico del SHA
+citado. En ALIGN-015, `back/services/decision_rules_v1.py` consume el JSON v1 y
+reproduce los objetos completos, pares y ordenamientos del golden compartido.
+`scoring_service.py` agrupa por intervención y ordena dentro de cada cola por
+prioridad v1. Retira las cuatro funciones v0 de §4.7; su descripción permanece
+en el contrato PY01–PY03 y el código, en git (BASE `b5bc9ab7`).
+
+La lectura usa cursor por `id` hasta página vacía en perfiles, objetos y las
+tablas que alimentan la decisión. El universo son todos los objetos, incluidos
+los que no tienen perfil persistido. Las obligaciones y contactos originales,
+no los agregados del perfil, alimentan el adaptador del contrato. Los errores
+de lectura abortan la solicitud con HTTP 503, sin evaluar prefijos ni convertir
+un fallo en un cero.
+
+Las rutas de scoring requieren corte `as_of` declarado; responden con su
+procedencia y la versión de reglas. El corte municipal sigue no integrado.
+`severity_band` reemplaza el nombre v0 `risk_band`. No se modificó el frontend
+ni se desplegó FastAPI: siguen vigentes todas las restricciones de §4.5/§4.6.
+La paridad ejecutada aquí es Python contra el oráculo congelado; ejecutar la
+suite TS corresponde a la integración de ALIGN-009.
+
+El [README interno de la API](../../back/api/README.md) detalla contrato HTTP,
+adaptación de faltantes, restricciones y reproducibilidad. Los resultados de
+rendimiento E08/E11 no se extrapolan a esta versión: véase la nota en
+[`RENDIMIENTO_CALIDAD.md`](../../RENDIMIENTO_CALIDAD.md).

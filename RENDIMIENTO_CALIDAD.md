@@ -1,5 +1,15 @@
 # Ejecutar y revisar las cargas de E08
 
+**ALIGN-015, 29/10/2026:** el servicio Python cambia a reglas v1, exige `as_of`,
+agrupa por intervención y lee obligaciones/contactos completos con paginación
+por id. Las cargas E08 y E11 conservan validez únicamente para los SHA y las
+fixtures v0 que registran sus manifiestos (E11: `5b62c14`); **no miden ni validan
+los endpoints v1**. El arnés `quality/load/fixture.py` sigue siendo histórico y
+no es compatible con el contrato v1. Una repetición sobre ALIGN-015 requiere
+una fixture/oráculo v1 y una campaña nueva, sin trasladar sus percentiles ni
+modificar umbrales. Este ticket no ejecuta cargas ni afirma una mejora de
+rendimiento. [Contrato de la API interna](back/api/README.md).
+
 **Actualización E11, 23/10/2026:** validación técnica integral aprobada sobre `5b62c14`: cuatro jobs obligatorios, 180 pruebas de producto, nuevo Preview/smoke y dos cargas del mismo SHA; acumulado **183**, con **66 controles de infraestructura aparte**. [Manifiesto portable](evidencias/e11/validacion-integral.json), [ficha](REGISTRO_EJECUCION_E11.md), [guion y repaso individual](entrega/GUION_DEMOSTRACION.md). Auditorías completas/productivas actuales **0/0**, sin excepción utilizada; OBS-DEP-001 cerrado por retiro oficial del aviso, conservando la historia. DEF-SUP-001 original sigue abierto. **E11 no está completamente cerrada: falta confirmar preparación individual, ensayo oral y datos del equipo.** Esta nota prevalece sobre estados históricos anteriores.
 
 El [plan previo](PLAN_RENDIMIENTO_E08.md) y `quality/load/policy.json` fijan carga, datos, SLO y parada. La [evaluación de herramienta](HERRAMIENTA_INCORPORADA_CALIDAD.md) conserva requisitos, alternativas, PoC, matriz y adopción. Se ensaya la API FastAPI con procesamiento real y fuente sintética, sin enviar carga a cloud ni leer credenciales de la cartera original.

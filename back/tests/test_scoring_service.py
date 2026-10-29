@@ -1,185 +1,403 @@
+"""Integración sintética: consultas reales del servicio contra un cliente falso."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from services import scoring_service as scoring
+from services.paginated_reader import DataReadError, read_all_by_id, row_id
 
-
-def build_profile(**overrides: Any) -> dict[str, Any]:
-    profile: dict[str, Any] = {
-        'id': 1,
-        'debtor': 10,
-        'socioeconomic_risk_level': 80,
-        'available_contact_count': 0,
-        'overdue_debt_count': 12,
-        'oldest_debt_days': 400,
-        'active_person_count': 2,
-        'total_debt_amount': 1500.5,
-        'overdue_debt_amount': 1200.0,
-        'debt_count': 13,
-        'average_debt_age_days': 220,
-    }
-    profile.update(overrides)
-    return profile
-
-
-@pytest.mark.parametrize(
-    ('value', 'expected'),
-    [
-        (None, 0),
-        ('12.9', 12),
-        ('invalid', 0),
-        (8.5, 8),
-    ],
+CUTOFF = "2026-09-30"
+GOLDEN = json.loads(
+    (
+        Path(__file__).resolve().parents[2] / "contracts/decision-rules.v1.golden.json"
+    ).read_text()
 )
-def test_scoring_normalizes_numeric_values(value: Any, expected: int) -> None:
-    assert scoring.to_int(value) == expected
-
-
-@pytest.mark.parametrize(
-    ('risk_score', 'expected_band'),
-    [(0, 'low'), (25, 'medium'), (50, 'high'), (75, 'critical')],
-)
-def test_scoring_classifies_risk_boundaries(risk_score: int, expected_band: str) -> None:
-    assert scoring.classify_risk_band(risk_score) == expected_band
-    assert scoring.get_risk_band_label(expected_band).startswith('Riesgo')
-
-
-@pytest.mark.parametrize(
-    ('profile', 'expected_group'),
-    [
-        (build_profile(socioeconomic_risk_level=75, available_contact_count=0), 'critical_no_contact'),
-        (build_profile(socioeconomic_risk_level=75, available_contact_count=1), 'critical_contactable'),
-        (build_profile(socioeconomic_risk_level=50, overdue_debt_count=10), 'high_overdue_volume'),
-        (build_profile(socioeconomic_risk_level=50, overdue_debt_count=2), 'high_recovery_priority'),
-        (build_profile(socioeconomic_risk_level=25), 'medium_recovery'),
-        (build_profile(socioeconomic_risk_level=24), 'low_monitoring'),
-    ],
-)
-def test_scoring_assigns_each_operational_group(
-    profile: dict[str, Any],
-    expected_group: str,
-) -> None:
-    assert scoring.assign_case_group(profile) == expected_group
-
-
-def test_scoring_builds_complete_case_with_tags_and_capped_priority() -> None:
-    profile = build_profile(socioeconomic_risk_level=98)
-
-    result = scoring.build_case_scoring(
-        profile,
-        debtor={
-            'external_id': 5001,
-            'type': 6,
-            'identifier': 'AG-5001',
-            'description': 'Conexion de agua',
-        },
-    )
-
-    assert result['priority_score'] == 100
-    assert result['group_key'] == 'critical_no_contact'
-    assert result['risk_band'] == 'critical'
-    assert set(result['tags']) == {
-        'critical_risk',
-        'no_contact',
-        'data_quality_issue',
-        'multi_person_case',
-        'many_overdue_debts',
-        'old_debt',
-        'has_overdue_amount',
-    }
-    assert result['debtor_identifier'] == 'AG-5001'
-
-
-@dataclass
-class FakeResponse:
-    data: Any
 
 
 class FakeQuery:
-    def __init__(self, execute_result: Any) -> None:
-        self.execute_result = execute_result
-        self.filters: list[tuple[str, Any]] = []
+    def __init__(self, client, table):
+        self.client, self.table_name = client, table
+        self.columns = []
+        self.predicates = []
+        self.order_column = None
+        self.requested_limit = None
 
-    def select(self, _columns: str) -> FakeQuery:
+    def select(self, columns):
+        self.columns = columns.split(",")
         return self
 
-    def eq(self, column: str, value: Any) -> FakeQuery:
-        self.filters.append((column, value))
+    def eq(self, column, value):
+        self.predicates.append(("eq", column, value))
         return self
 
-    def in_(self, column: str, values: list[int]) -> FakeQuery:
-        self.filters.append((column, values))
+    def in_(self, column, values):
+        self.predicates.append(("in", column, values))
         return self
 
-    def execute(self) -> FakeResponse:
-        return FakeResponse(self.execute_result)
+    def gt(self, column, value):
+        self.predicates.append(("gt", column, value))
+        return self
+
+    def order(self, column):
+        self.order_column = column
+        return self
+
+    def limit(self, count):
+        self.requested_limit = count
+        return self
+
+    def execute(self):
+        self.client.queries.append(self)
+        assert self.order_column == "id"
+        assert self.requested_limit == 1000
+        if self.table_name in self.client.fail_tables:
+            raise RuntimeError("sensitive remote payload must not be exposed")
+        rows = deepcopy(self.client.tables.get(self.table_name, []))
+        for operation, column, value in self.predicates:
+            if operation == "eq":
+                rows = [row for row in rows if row.get(column) == value]
+            elif operation == "in":
+                rows = [row for row in rows if row[column] in value]
+            else:
+                rows = [row for row in rows if int(row[column]) > value]
+        rows.sort(key=lambda row: int(row["id"]))
+        rows = rows[: min(self.client.cap, self.requested_limit)]
+        return SimpleNamespace(
+            data=[{key: row.get(key) for key in self.columns} for row in rows]
+        )
 
 
 class FakeSupabase:
-    def __init__(self, profiles: list[dict[str, Any]], debtors: list[dict[str, Any]]) -> None:
-        self.profiles_query = FakeQuery(profiles)
-        self.debtor_queries: list[FakeQuery] = []
-        self.debtors = debtors
+    def __init__(self, tables=None, cap=1000, fail_tables=()):
+        self.tables = tables or {}
+        self.cap = cap
+        self.fail_tables = fail_tables
+        self.queries = []
 
-    def table(self, table_name: str) -> FakeQuery:
-        if table_name == 'debtor_profile':
-            return self.profiles_query
-
-        query = FakeQuery(self.debtors)
-        self.debtor_queries.append(query)
-        return query
+    def table(self, table_name):
+        return FakeQuery(self, table_name)
 
 
-def test_scoring_reads_profiles_and_debtors_in_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
-    profiles = [build_profile(debtor=index) for index in range(1, 202)]
-    debtors = [
-        {'id': index, 'external_id': 10_000 + index, 'identifier': f'OBJ-{index}'}
-        for index in range(1, 202)
-    ]
-    fake_supabase = FakeSupabase(profiles, debtors)
-    monkeypatch.setattr(scoring, 'supabase', fake_supabase)
-
-    fetched_profiles = scoring.fetch_debtor_profiles()
-    fetched_debtors = scoring.fetch_debtors_by_ids(list(range(1, 202)))
-
-    assert len(fetched_profiles) == 201
-    assert fetched_debtors[201]['identifier'] == 'OBJ-201'
-    assert len(fake_supabase.debtor_queries) == 2
-    assert fake_supabase.debtor_queries[0].filters == [('id', list(range(1, 201)))]
-    assert fake_supabase.debtor_queries[1].filters == [('id', [201])]
+def install_client(monkeypatch, **kwargs):
+    client = FakeSupabase(**kwargs)
+    monkeypatch.setattr(scoring, "supabase", client)
+    return client
 
 
-def test_scoring_builds_filters_paginates_and_summarizes_cases(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+@pytest.mark.parametrize("cap", [1000, 37])
+def test_reads_all_2933_profiles_and_debtors_under_server_cap(monkeypatch, cap):
+    ids = [number * 3 for number in range(1, 2934)]
     profiles = [
-        build_profile(id=1, debtor=10, socioeconomic_risk_level=80, available_contact_count=0),
-        build_profile(id=2, debtor=20, socioeconomic_risk_level=55, available_contact_count=2),
-        build_profile(id=3, debtor=30, socioeconomic_risk_level=20, available_contact_count=1),
+        {"id": number, "debtor": number, "active": True} for number in reversed(ids)
     ]
-    debtors = {
-        10: {'id': 10, 'external_id': 100, 'identifier': 'AG-100', 'description': 'Agua'},
-        20: {'id': 20, 'external_id': 200, 'identifier': 'IN-200', 'description': 'Inmueble'},
-        30: {'id': 30, 'external_id': 300, 'identifier': 'RO-300', 'description': 'Rodado'},
+    profiles.append({"id": 1, "debtor": 1, "active": False})
+    debtors = [
+        {"id": number, "identifier": f"SINT-{number}"} for number in reversed(ids)
+    ]
+    client = install_client(
+        monkeypatch, tables={"debtor_profile": profiles, "debtor": debtors}, cap=cap
+    )
+    assert [row["id"] for row in scoring.fetch_debtor_profiles()] == ids
+    assert list(scoring.fetch_debtors_by_ids(ids + ids[:2])) == ids
+    assert list(scoring.fetch_debtors_by_ids()) == ids
+    profile_queries = [
+        query for query in client.queries if query.table_name == "debtor_profile"
+    ]
+    assert len(profile_queries) == (2933 + cap - 1) // cap + 1
+    assert all(("eq", "active", True) in query.predicates for query in profile_queries)
+    assert ("gt", "id", ids[-1]) in profile_queries[-1].predicates
+    chunks = [
+        value
+        for query in client.queries
+        for op, column, value in query.predicates
+        if op == "in"
+    ]
+    assert max(map(len, chunks)) == 200
+    count = len(client.queries)
+    assert scoring.fetch_debtors_by_ids([]) == {}
+    assert len(client.queries) == count
+
+
+@pytest.mark.parametrize("count", [0, 1, 1000, 2000])
+def test_reads_through_empty_page_for_exact_multiples(monkeypatch, count):
+    client = install_client(
+        monkeypatch,
+        tables={
+            "debtor_profile": [
+                {"id": index + 1, "debtor": index + 1, "active": True}
+                for index in range(count)
+            ]
+        },
+    )
+    assert len(scoring.fetch_debtor_profiles()) == count
+    assert len(client.queries) == (count + 999) // 1000 + 1
+
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        [None],
+        [{}],
+        [[None]],
+        [[{"id": None}]],
+        [[{"id": True}]],
+        [[{"id": 2}, {"id": 1}]],
+        [[{"id": 1}], [{"id": 1}]],
+        [[{"id": 1}], RuntimeError("private remote payload")],
+        [[{"id": 1}], None],
+    ],
+)
+def test_incomplete_read_raises_instead_of_returning_prefix(pages):
+    class BrokenQuery:
+        def order(self, _column):
+            return self
+
+        def limit(self, _limit):
+            return self
+
+        def gt(self, _column, _value):
+            return self
+
+        def execute(self):
+            item = pages.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return SimpleNamespace(data=item)
+
+    with pytest.raises(DataReadError, match="^READ_INCOMPLETE:debt$"):
+        read_all_by_id("debt", BrokenQuery)
+
+
+@pytest.mark.parametrize("value", [None, False, 0, -1, 1.5, "", "1.5", "١"])
+def test_rejects_invalid_cursor_ids(value):
+    with pytest.raises(ValueError):
+        row_id(value)
+
+
+def test_accepts_bigint_string_without_float_rounding():
+    assert row_id("9007199254740993") == 9007199254740993
+
+
+def synthetic_tables():
+    tables: dict[str, list[dict[str, Any]]] = {
+        "debtor": [
+            {"id": index, "identifier": f"SINT-OBJ-{index}"} for index in (1, 2, 3, 4)
+        ],
+        "debtor_profile": [
+            {
+                "id": index,
+                "debtor": index,
+                "active": True,
+                "socioeconomic_risk_level": 100,
+                "total_debt_amount": 999999999,
+                "available_contact_count": 999,
+            }
+            for index in (1, 2, 3)
+        ],
+        "debt": [],
+        "debtor_person": [
+            {
+                "id": index,
+                "debtor": index,
+                "person": index,
+                "priority": 100,
+                "active": True,
+            }
+            for index in (1, 2, 3, 4)
+        ],
+        "person": [{"id": index, "type": 1} for index in (1, 2, 3, 4)],
+        "person_type": [{"id": 1, "key": "INDIVIDUAL"}],
+        "debtor_contact": [
+            {
+                "id": index,
+                "person": index,
+                "type": 1,
+                "value": f"SINT-contact-{index}",
+                "active": True,
+            }
+            for index in (2, 3, 4)
+        ],
     }
-    monkeypatch.setattr(scoring, 'fetch_debtor_profiles', lambda: profiles)
-    monkeypatch.setattr(scoring, 'fetch_debtors_by_ids', lambda _ids: debtors)
+    for identifier, golden_index in ((1, 0), (2, 0), (3, 1)):
+        for obligation in GOLDEN["casos"][golden_index]["entrada"]["obligaciones"]:
+            tables["debt"].append(
+                {
+                    "id": len(tables["debt"]) + 1,
+                    "debtor": identifier,
+                    "current_amount": obligation["current_amount"]["valor"],
+                    "due_date": obligation["due_date"]["valor"],
+                }
+            )
+    return tables
 
-    cases = scoring.build_all_case_groups()
-    filtered = scoring.filter_case_groups(cases, risk_band='critical', tag='no_contact', search='ag-100')
-    page = scoring.get_case_groups(limit=1, offset=1)
-    summary = scoring.get_case_groups_summary()
+
+def test_service_evaluates_raw_debt_not_legacy_profiles_and_includes_objects_without_profile(
+    monkeypatch,
+):
+    tables = synthetic_tables()
+    install_client(monkeypatch, tables=tables, cap=2)
+    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    by_id = {case["debtor_id"]: case for case in cases}
+    assert set(by_id) == {1, 2, 3, 4}
+    assert by_id[1]["priority_score"] == by_id[2]["priority_score"] == 75
+    assert by_id[1]["group_key"] == "MEJORAR_DATOS"
+    assert by_id[2]["group_key"] == "CONTACTO_PERSONAL_Y_PLAN"
+    assert by_id[3]["group_key"] == "RECORDATORIO_INFORMATIVO"
+    assert by_id[4]["group_key"] == "SEGUIMIENTO"
+    assert by_id[4]["debtor_profile_id"] is None
+    assert by_id[4]["priority_score"] == 0
+    for case in cases:
+        assert "socioeconomic_risk_level" not in case
+        assert "risk_band" not in case
+        assert case["as_of"] == CUTOFF
+        assert case["version_reglas"] == "1.0.0"
+    # Ningún agregado heredado afecta la salida ni siquiera si es contradictorio.
+    tables["debtor_profile"][0].update(
+        socioeconomic_risk_level=0, total_debt_amount=None
+    )
+    assert scoring.build_all_case_groups(as_of=CUTOFF) == cases
+
+
+def test_paginated_obligations_do_not_stop_at_1000_for_one_object(monkeypatch):
+    tables = synthetic_tables()
+    tables["debt"] = [
+        {"id": index, "debtor": 2, "current_amount": 1000, "due_date": "2026-09-01"}
+        for index in range(1, 2934)
+    ]
+    install_client(monkeypatch, tables=tables)
+    case = next(
+        case
+        for case in scoring.build_all_case_groups(as_of=CUTOFF)
+        if case["debtor_id"] == 2
+    )
+    assert case["decision"]["severidad"]["cantidad_vencidas"] == 2933
+    assert case["decision"]["severidad"]["monto_actualizado_ars"] == 2933000
+    assert case["priority_score"] == 75
+
+
+def test_2933_case_portfolio_is_complete_end_to_end(monkeypatch):
+    tables = {
+        "debtor": [{"id": index} for index in range(1, 2934)],
+        "debtor_profile": [
+            {"id": index, "debtor": index, "active": True} for index in range(1, 2934)
+        ],
+    }
+    install_client(monkeypatch, tables=tables)
+    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    assert len(cases) == 2933
+    assert [case["debtor_id"] for case in cases] == sorted(range(1, 2934), key=str)
+    assert all(case["priority_score"] == 0 for case in cases)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "debt",
+        "debtor_person",
+        "person",
+        "debtor_contact",
+        "person_type",
+        "debtor",
+        "debtor_profile",
+    ],
+)
+def test_failed_table_cannot_become_zero_debt_or_zero_contacts(monkeypatch, table):
+    install_client(monkeypatch, tables=synthetic_tables(), fail_tables=(table,))
+    with pytest.raises(DataReadError, match=f"^READ_INCOMPLETE:{table}$"):
+        scoring.build_all_case_groups(as_of=CUTOFF)
+
+
+def test_invalid_parent_id_cannot_silently_drop_obligation(monkeypatch):
+    tables = synthetic_tables()
+    tables["debtor_person"][0]["person"] = None
+    install_client(monkeypatch, tables=tables)
+    with pytest.raises(DataReadError, match="debtor_person"):
+        scoring.build_all_case_groups(as_of=CUTOFF)
+
+
+def test_filters_pagination_summary_and_console_use_v1(monkeypatch, capsys):
+    install_client(monkeypatch, tables=synthetic_tables())
+    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    filtered = scoring.filter_case_groups(
+        cases,
+        group_key="MEJORAR_DATOS",
+        severity_band="ALTA",
+        tag="SIN_CONTACTO_ACTIVO",
+        search=" sint-obj-1 ",
+    )
+    assert [case["debtor_id"] for case in filtered] == [1]
+    assert scoring.filter_case_groups(cases, group_key="missing") == []
+    assert scoring.filter_case_groups(cases, severity_band="missing") == []
+    assert scoring.filter_case_groups(cases, tag="missing") == []
+    assert scoring.filter_case_groups(cases, search="missing") == []
+    page = scoring.get_case_groups(as_of=CUTOFF, limit=1, offset=1)
+    assert page["total"] == 4
+    assert page["items"] == cases[1:2]
+    summary = scoring.get_case_groups_summary(as_of=CUTOFF)
+    assert summary["total_cases"] == 4
+    assert summary["severity_bands"] == {
+        "BAJA": 1,
+        "MEDIA": 1,
+        "ALTA": 2,
+        "NO_DISPONIBLE": 0,
+    }
+    assert summary["contacts"] == {
+        "without_contact": 1,
+        "with_contact": 3,
+        "unavailable": 0,
+    }
     scoring.print_case_groups_preview(cases)
+    output = capsys.readouterr().out
+    assert "Casos procesados: 4" in output
+    assert "SINT-OBJ" not in output
+    assert "%" not in output
 
-    assert [case['debtor_id'] for case in cases] == [10, 20, 30]
-    assert [case['debtor_id'] for case in filtered] == [10]
-    assert page['total'] == 3
-    assert len(page['items']) == 1
-    assert summary['risk_bands'] == {'critical': 1, 'high': 1, 'medium': 0, 'low': 1}
-    assert summary['contacts'] == {'without_contact': 1, 'with_contact': 2}
-    assert 'Casos procesados: 3' in capsys.readouterr().out
+
+def test_unavailable_severity_is_counted_separately_and_sorted_last(monkeypatch):
+    tables = synthetic_tables()
+    tables["debt"].append(
+        {"id": 100, "debtor": 4, "current_amount": None, "due_date": None}
+    )
+    install_client(monkeypatch, tables=tables)
+    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    queue = [case for case in cases if case["group_key"] == "MEJORAR_DATOS"]
+    assert [case["debtor_id"] for case in queue] == [1, 4]
+    assert queue[-1]["priority_score"] is None
+    assert (
+        scoring.get_case_groups_summary(as_of=CUTOFF)["severity_bands"]["NO_DISPONIBLE"]
+        == 1
+    )
+
+
+def test_empty_portfolio_and_cutoff_and_pagination_validation(monkeypatch):
+    client = install_client(monkeypatch)
+    assert scoring.build_all_case_groups(as_of=CUTOFF) == []
+    assert scoring.get_case_groups_summary(as_of=CUTOFF)["total_cases"] == 0
+    count = len(client.queries)
+    with pytest.raises(ValueError):
+        scoring.build_all_case_groups(as_of="invalid")
+    with pytest.raises(ValueError):
+        scoring.get_case_groups(as_of=CUTOFF, limit=0)
+    with pytest.raises(ValueError):
+        scoring.get_case_groups(as_of=CUTOFF, offset=-1)
+    assert len(client.queries) == count
+
+
+def test_cli_requires_cutoff_and_prints_only_counts(monkeypatch, capsys):
+    install_client(monkeypatch, tables=synthetic_tables())
+    monkeypatch.setattr(
+        "sys.argv", ["scoring_service", "--as-of", CUTOFF, "--limit", "2"]
+    )
+    scoring.main()
+    assert "Casos procesados: 2" in capsys.readouterr().out
+    monkeypatch.setattr("sys.argv", ["scoring_service"])
+    with pytest.raises(SystemExit) as error:
+        scoring.main()
+    assert error.value.code == 2
