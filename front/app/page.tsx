@@ -43,9 +43,10 @@ export default async function HomePage() {
   const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
   const highRiskShare = percentageData(dashboard.byRisk.length && dashboard.metrics?.riskAboveNinetyCases.value !== null ? riskMap.get('ALTO') ?? 0 : null, dashboard.totalDebtors)
   const topDebtConcentration = percentageData(aggregateData(dashboard.topDebtDebtors.map(debtor => numericData(debtor.totalDebt))).value, dashboard.totalDebt)
+  const availableRecommendations = dashboard.byRecommendation.filter(item => item.label !== 'No disponible')
   const dominantRecommendation = dashboard.totalDebtors !== null && dashboard.totalDebtors > 0
-    ? dashboard.byRecommendation.filter(item => item.label !== 'No disponible').sort((a, b) => b.value - a.value)[0] : null
-  const dominantTies = dashboard.byRecommendation.filter(item => item.value === dominantRecommendation?.value)
+    ? availableRecommendations.sort((a, b) => b.value - a.value)[0] : null
+  const dominantTies = availableRecommendations.filter(item => item.value === dominantRecommendation?.value)
 
   return (
     <AppShell>

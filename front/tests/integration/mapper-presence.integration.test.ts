@@ -29,7 +29,7 @@ describe('ALIGN-011: servicios completos con transporte simulado, sin acceso ext
     clientMock.mockResolvedValue(client)
     const { detail, warnings } = await getDebtorDetailDataFromService('901')
     expect(warnings).toEqual([])
-    expect(detail?.debts[0]).toMatchObject({ updatedAmount: 0, status: 'OVERDUE' })
+    expect(detail?.debts[0]).toMatchObject({ updatedAmount: 0, status: 'Vencida' })
     expect(detail?.debtor).toMatchObject({ totalDebt: 0, riskScore: 0, computedAt: '2026-09-30T10:00:00Z' })
     expect(detail?.profile.availableContacts).toBe(2)
     expect(detail?.profile.totalDebt).toBe(0)

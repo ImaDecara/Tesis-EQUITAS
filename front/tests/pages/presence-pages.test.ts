@@ -1,6 +1,6 @@
 import { isValidElement, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildPresencePeopleData, buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
+import { buildDashboard, buildIncompleteStatusRawData, buildPresencePeopleData, buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
 import { textFromReactTree } from '@/tests/helpers/react-tree'
 import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
@@ -72,10 +72,53 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(text).toContain('No aplica')
   })
 
-  it('muestra etiqueta OVERDUE del catálogo en la lista de objetos', async () => {
+  it('muestra etiqueta Vencida del catálogo en la lista de objetos', async () => {
     const text = textFromReactTree(await DebtorsPage({ searchParams: Promise.resolve({}) }))
-    expect(text).toContain('OVERDUE')
+    expect(text).toContain('Vencida')
     expect(text).toContain('No disponible')
+  })
+
+  it('muestra los $50 vencidos observados y el estado faltante, sin fabricar KPI cero', async () => {
+    configure(buildPresencePeopleData(), buildIncompleteStatusRawData())
+    const home = await HomePage()
+    const aging = await DebtAgingPage({ searchParams: Promise.resolve({}) })
+    expect(cardValues(home)['Casos vencidos']).toBe('1')
+    expect(textFromReactTree(home)).toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(cardValues(aging)['Deuda vencida']).toMatch(/\$\s*50/)
+    expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
+  })
+
+  it('muestra no disponible cuando el único estado es desconocido', async () => {
+    const raw = buildPresenceRawData()
+    raw.debts[0].status = 8
+    raw.debts[0].current_amount = 70
+    configure(buildPresencePeopleData(), raw)
+    const home = await HomePage()
+    const aging = await DebtAgingPage({ searchParams: Promise.resolve({}) })
+    expect(cardValues(home)['Casos vencidos']).toBe('No disponible')
+    expect(cardValues(aging)['Deuda vencida']).toBe('No disponible')
+    expect(textFromReactTree(home)).toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
+  })
+
+  it('excluye No disponible del empate de recomendaciones en el caso con perfil', async () => {
+    const raw = buildIncompleteStatusRawData()
+    raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
+    configure(buildPresencePeopleData(), raw)
+    const text = textFromReactTree(await HomePage())
+    expect(text).toContain('"Llamado prioritario" concentra 50%')
+    expect(text).not.toContain('Empate:')
+    expect(text).toContain('Prioridad: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(text).toContain('Recomendación urgente: 1 NO_INFORMADO_EN_ORIGEN')
+  })
+
+  it('declara un empate real solamente entre categorías de recomendación', async () => {
+    const dashboard = buildDashboard()
+    dashboard.byRecommendation.push({ label: 'No disponible', value: 1 })
+    getDashboardData.mockResolvedValue({ dashboard, warnings: [] })
+    const text = textFromReactTree(await HomePage())
+    expect(text).toContain('Empate: Llamado prioritario, Mensaje recordatorio, Seguimiento posterior concentra')
+    expect(text).not.toContain('Seguimiento posterior, No disponible')
   })
 
   it('no muestra una deuda cero cuando falla su lectura, incluso en personas filtradas sin resultados', async () => {

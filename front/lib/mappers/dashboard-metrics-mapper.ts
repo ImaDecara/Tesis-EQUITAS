@@ -106,7 +106,12 @@ export function mapDashboardMetricsFromDebtorObjects({
   )
   const failed = (...tables: string[]) => readingFailed(warnings, 'debtor', ...tables)
   const count = (key: keyof DebtorListItem & string, predicate: (debtor: DebtorListItem) => boolean, ...tables: string[]) =>
-    aggregateData(debtors.map(debtor => metric(debtor, key).value === null ? metric(debtor, key) : observed(predicate(debtor) ? 1 : 0)), 'sum', failed(...tables))
+    aggregateData(debtors.map(debtor => {
+      const input = metric(debtor, key)
+      // El universo del KPI son objetos: cada objeto incompleto cuenta una vez por estado.
+      const missing = Object.fromEntries(Object.entries(input.missing).filter(([, value]) => value > 0).map(([state]) => [state, 1]))
+      return { ...(input.value === null ? input : observed(predicate(debtor) ? 1 : 0)), missing }
+    }), 'sum', failed(...tables))
   const metrics: Record<string, NumericData> = {
     totalDebtors: failed() ? unavailable() : observed(debtors.length),
     totalDebt: aggregateData(debtors.map(debtor => metric(debtor, 'totalDebt')), 'sum', failed('debt', 'debtor_profile')),

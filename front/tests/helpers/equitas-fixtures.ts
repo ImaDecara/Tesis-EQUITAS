@@ -16,7 +16,11 @@ export function buildPresenceRawData(): RawDebtorDataBundle {
     debtorTypes: [{ id: 6, value: 'AGUA' }],
     debts: [{ id: 801, debtor: 901, original_amount: 500, current_amount: 0,
       updated_amount: 0, status: 2, due_date: '2020-01-01', period: 'SINTETICO-DEUDA-801' }],
-    debtStatuses: [{ id: 2, value: 'OVERDUE' }, { id: 3, value: 'PAID' }],
+    debtStatuses: [
+      { id: 2, key: 'OVERDUE', value: 'Vencida' },
+      { id: 3, key: 'PAID', value: 'Pagada' },
+      { id: 8, key: 'UNKNOWN', value: 'Desconocido' },
+    ],
     people: [
       { id: 701, full_name: 'Persona sintética A', document_number: 'SINTETICO-A' },
       { id: 702, full_name: 'Persona sintética B', document_number: 'SINTETICO-B' },
@@ -32,6 +36,18 @@ export function buildPresenceRawData(): RawDebtorDataBundle {
     debtorProfiles: [],
     warnings: [],
   }
+}
+
+export function buildIncompleteStatusRawData(): RawDebtorDataBundle {
+  const raw = buildPresenceRawData()
+  raw.debtors.push({ id: 902, external_id: 'SINTETICO-OBJ-902', type: 6 })
+  raw.debts = [
+    { id: 821, debtor: 902, current_amount: 50, status: 2, due_date: '2020-01-01' },
+    { id: 822, debtor: 902, current_amount: 70, status: 8, due_date: null },
+  ]
+  raw.people = raw.people.slice(0, 1)
+  raw.debtorPeople = [raw.debtorPeople[0], { debtor: 902, person: 701, active: true }]
+  return raw
 }
 
 export function buildPresencePeopleData(): RawPersonDataBundle {

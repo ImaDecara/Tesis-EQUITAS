@@ -67,8 +67,9 @@ function normalizeStatusLabel(value: string) {
   return trimmed
 }
 
-function isDebtOverdue(debt: DebtorDebtItem) {
-  const normalizedStatus = debt.status.trim().toLowerCase()
+function isDebtOverdue(key: string, label: string) {
+  if (key) return key.toUpperCase() === 'OVERDUE'
+  const normalizedStatus = label.trim().toLowerCase()
 
   if (
     normalizedStatus.includes('venc') ||
@@ -156,6 +157,12 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     ['id', 'debt_status_id', 'status_id'],
     ['value', 'name', 'description', 'label', 'status']
   )
+  const debtStatusCatalog = new Map<string, { key: string; label: string }>()
+  for (const row of raw.debtStatuses) {
+    const id = stringifyUnknownValue(selectValueFromRow(row, ['id', 'debt_status_id', 'status_id']))
+    const label = debtStatusLabels.get(id)
+    if (label) debtStatusCatalog.set(id, { key: selectTextFromRow(row, ['key']), label })
+  }
 
   const peopleById = new Map<string, RawRow>()
   for (const person of raw.people) {
@@ -167,6 +174,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   }
 
   const debtsByDebtor = new Map<string, DebtorDebtItem[]>()
+  const overdueDebtItems = new Set<DebtorDebtItem>()
   for (const debt of raw.debts) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(debt, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -183,9 +191,11 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     const dueDate = selectTextFromRow(debt, ['due_date', 'expiration_date', 'vencimiento', 'maturity_date']) || null
     const debtStatusId = stringifyUnknownValue(selectValueFromRow(debt, ['status', 'debt_status_id', 'status_id', 'debt_status']))
     const catalogFailed = readingFailed(raw.warnings, 'debt_status')
-    const status = catalogFailed ? 'No disponible' : debtStatusLabels.get(debtStatusId) ?? 'UNKNOWN'
-    const statusPresence = catalogFailed ? 'NO_INTEGRADO' : debtStatusLabels.has(debtStatusId)
-      ? status.toUpperCase() === 'UNKNOWN' ? 'NO_INFORMADO_EN_ORIGEN' : 'OBSERVADO' : debtStatusId ? 'INVALIDO' : 'NO_INFORMADO_EN_ORIGEN'
+    const catalogStatus = debtStatusCatalog.get(debtStatusId)
+    const status = catalogFailed ? 'No disponible' : catalogStatus?.label ?? 'UNKNOWN'
+    const statusUnknown = (catalogStatus?.key || status).toUpperCase() === 'UNKNOWN'
+    const statusPresence = catalogFailed ? 'NO_INTEGRADO' : catalogStatus
+      ? statusUnknown ? 'NO_INFORMADO_EN_ORIGEN' : 'OBSERVADO' : debtStatusId ? 'INVALIDO' : 'NO_INFORMADO_EN_ORIGEN'
 
     const debtItem: DebtorDebtItem = {
       id:
@@ -204,6 +214,9 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
           'year_month',
         ]) || 'No informado',
       status,
+    }
+    if (statusPresence === 'OBSERVADO' && isDebtOverdue(catalogStatus?.key ?? '', status)) {
+      overdueDebtItems.add(debtItem)
     }
 
     const current = debtsByDebtor.get(debtorId) ?? []
@@ -411,20 +424,24 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     const hasContact = contactCount === null ? null : contactCount > 0
     const debtFailed = readingFailed(raw.warnings, 'debt', 'debtor')
     const profileFailed = readingFailed(raw.warnings, 'debtor_profile')
-    const overdueDebts = debts.filter(isDebtOverdue)
+    const overdueDebts = debts.filter(debt => overdueDebtItems.has(debt))
     const totalFromProfile = selectNumericData(profile ?? {}, ['total_debt_amount', 'total_debt', 'debt_total', 'amount_total'])
     const overdueFromProfile = selectNumericData(profile ?? {}, ['overdue_debt_amount', 'overdue_debt', 'debt_overdue'])
     const totalMetric = debtFailed || profileFailed ? unavailable()
       : totalFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
         ? aggregateData(debts.map(debt => metric(debt, 'updatedAmount'))) : totalFromProfile
-    const statusIncomplete = debts.some(debt => debt.statusPresence !== 'OBSERVADO')
+    const missingStatuses = debts.filter(debt => debt.statusPresence !== 'OBSERVADO')
+      .map(debt => unavailable(debt.statusPresence))
+    const statusIncomplete = missingStatuses.length > 0
     const overdueMetric = debtFailed || profileFailed ? unavailable()
       : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
-        ? aggregateData(overdueDebts.map(debt => metric(debt, 'updatedAmount')), 'sum', statusIncomplete)
+        ? aggregateData([...overdueDebts.map(debt => metric(debt, 'updatedAmount')), ...missingStatuses])
         : overdueFromProfile
     const totalDebt = totalMetric.value
     const overdueDebt = overdueMetric.value
-    const overdueDaysMetric = aggregateData(overdueDebts.map(debt => daysSinceData(debt.dueDate)), 'max', debtFailed || statusIncomplete)
+    // Un estado faltante impide conocer el máximo; no es una falla de lectura del universo.
+    const overdueDaysMetric = aggregateData(statusIncomplete ? missingStatuses
+      : overdueDebts.map(debt => daysSinceData(debt.dueDate)), 'max', debtFailed)
     const maxDaysOverdue = overdueDaysMetric.value
     const providedRisk = selectNumericData(profile ?? {}, ['socioeconomic_risk_level', 'risk_level', 'risk', 'risk_segment'])
     // El perfil ausente se registra como faltante; las fórmulas heredadas se conservan para datos observados.
