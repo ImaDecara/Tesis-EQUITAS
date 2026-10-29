@@ -22,13 +22,15 @@ Este documento fija **qué significa cada dato** que EQUITAS muestra o usa en re
 
 ## 2. Unidades de dominio
 
-| Unidad | Tabla | Clave | Qué es | Qué **no** es |
+La **clave interna** (`id`) la asigna la base, no viene del archivo municipal y es la única que usan las FK, los DTO del frontend y los enlaces de pantalla. La **clave externa** (`external_id` y sus compuestas) proviene del archivo municipal y la usa el ETL para deduplicar; el frontend no la lee como identidad. No son intercambiables (§7.2–§7.4: OB01/OB02, DE00/DE01, PE00/PE01).
+
+| Unidad | Tabla | Clave interna / clave externa | Qué es | Qué **no** es |
 |---|---|---|---|---|
-| Municipio (tenant) | `tenant` | `id` | Jurisdicción que exporta la cartera | No viene en el archivo: hoy es `tenant=1` fijo (`back/ETL/config.py:21-22`) |
-| Objeto tributario | `debtor` | `(tenant, type, external_id)` | Cuenta tributaria (RODADO, AGUA, INMUEBLE) sobre la que recaen obligaciones. **Unidad central** de totales, perfiles y colas | No es una persona ni un hogar, aunque la tabla se llame `debtor` |
-| Obligación | `debt` | `(debtor, external_id)` | Registro individual de deuda (`DEUD_id`) con importe, vencimiento y estado | No es un período fiscal: `debt.period` hoy copia el ID (§8) |
-| Persona | `person` | `external_id` (único global) | Destinatario/responsable informado en origen | No es un hogar; su identidad no está acotada por municipio (`supabase/migrations/20261021221030_active_membership_rls.sql:38,42`) |
-| Relación persona–objeto | `debtor_person` | `(debtor, person)` | Vínculo con rol declarado (`role`) y **porcentaje declarado** (`priority`) | No es una prioridad de gestión ni prueba por sí sola una cuota legal de responsabilidad |
+| Municipio (tenant) | `tenant` | `id` / ninguna | Jurisdicción que exporta la cartera | No viene en el archivo: hoy es `tenant=1` fijo (`back/ETL/config.py:21-22`) |
+| Objeto tributario | `debtor` | `id` / `(tenant, type, external_id)` = (municipio, `Bien_Tipo_Id`, `Cuenta`) (`supabase/migrations/20261021220156_equitas_testing_schema.sql:256`) | Cuenta tributaria (RODADO, AGUA, INMUEBLE) sobre la que recaen obligaciones. **Unidad central** de totales, perfiles y colas | No es una persona ni un hogar, aunque la tabla se llame `debtor` |
+| Obligación | `debt` | `id` / `(debtor, external_id)` = (objeto, `DEUD_id`) (`supabase/migrations/20261021220156_equitas_testing_schema.sql:246`) | Registro individual de deuda (`DEUD_id`) con importe, vencimiento y estado | No es un período fiscal: `debt.period` hoy copia el ID externo (§8) |
+| Persona | `person` | `id` / `external_id` = `Destinatario_Id`, único global (`supabase/migrations/20261021220156_equitas_testing_schema.sql:286`) | Destinatario/responsable informado en origen | No es un hogar; su identidad externa no está acotada por municipio (`supabase/migrations/20261021221030_active_membership_rls.sql:38,42`) |
+| Relación persona–objeto | `debtor_person` | `(debtor, person)`: FK a `debtor.id` y `person.id` (`supabase/migrations/20261021220156_equitas_testing_schema.sql:342-344`) / ninguna propia | Vínculo con rol declarado (`role`) y **porcentaje declarado** (`priority`) | No es una prioridad de gestión ni prueba por sí sola una cuota legal de responsabilidad |
 | Contacto | `debtor_contact` | `id` (por persona) | Valor de teléfono, celular o email informado en origen | Tener un valor no prueba que sea válido, vigente ni que haya permiso para usarlo |
 | Perfil del objeto | `debtor_profile` | `debtor` | Agregado **derivado** por el ETL al momento del cálculo | No es un dato de origen ni está actualizado por sí mismo (§5) |
 | Detalle del perfil por persona | `debtor_profile_detail` | `(debtor_profile, person)` | Índice heredado por persona dentro de un objeto | No es riesgo social ni probabilidad individual |
@@ -50,7 +52,7 @@ Todo dato visible o usado en una regla tiene, además de su valor, uno de estos 
 
 | Estado | Definición | Representación | Ejemplo en EQUITAS |
 |---|---|---|---|
-| `OBSERVADO` | El valor llegó del origen (o se derivó de valores observados con una regla de este contrato) y es válido. Incluye el **cero real** | valor tipado; `0` solo si el origen informó 0 | `NOTD_totalActualizado` informado como `0,00` → importe 0 observado |
+| `OBSERVADO` | El valor llegó del origen (o se derivó de valores observados con una regla de este contrato) y es válido. Incluye el **cero real** | valor tipado; `0` solo como cero observado en origen o cero derivado legítimo (§4.1) | `NOTD_totalActualizado` informado como `0,00` → importe 0 observado; ningún objeto leído supera riesgo 90 → conteo 0 derivado |
 | `NO_INFORMADO_EN_ORIGEN` | El archivo municipal no trae la columna, o la trae vacía para esa fila | valor `null` + estado | Vulnerabilidad, hogar, ingresos, fecha de nacimiento (nula en las 2493 personas), estado de origen de la obligación cuando, una vez integrado, el archivo no trae `NOTD_ESTA_id`/`NOTD_SITU_id` |
 | `NO_INTEGRADO` | El dato existe o podría existir en origen, pero EQUITAS no lo carga, no lo lee o no tiene dónde guardarlo | valor `null` + estado | `previous_contact_count`/`previous_response_count` (siempre en el valor por defecto de la base), pagos, gestiones, `as_of` del lote, totales de control `Deuda_Actualizada`/`Periodos_Deuda` |
 | `INVALIDO` | El valor llegó pero no se puede interpretar (importe ilegible, fecha imposible, código fuera de catálogo) | valor `null` + estado + código de motivo; el valor crudo no se muestra si es personal | `NOTD_capital = "abc"`, `NOTD_vencimiento = "31/02/2024"` |
@@ -58,12 +60,22 @@ Todo dato visible o usado en una regla tiene, además de su valor, uno de estos 
 
 Reglas obligatorias (plan v2 §7.4):
 
-- **Ninguna ausencia se representa ni se interpreta como 0**, como cadena vacía, como "Sin estado"/"Media"/"No especificada" ni como categoría de riesgo. El 0 solo es válido como valor `OBSERVADO`.
+- **Ninguna ausencia se representa ni se interpreta como 0**, como cadena vacía, como "Sin estado"/"Media"/"No especificada" ni como categoría de riesgo. El 0 solo es válido como valor `OBSERVADO`: cero observado en origen o cero derivado legítimo (§4.1).
 - Un faltante **nunca suma severidad**, nunca se convierte en "bajo riesgo" y nunca da lugar a una inferencia social.
 - Un faltante se **muestra** como tal ("no informado", "no integrado", "inválido", "no aplica") y se **cuenta** aparte en los agregados (por ejemplo, "n objetos con importe inválido"), en lugar de sumarse como 0.
-- Un agregado cuyo insumo no está `OBSERVADO` en ninguna fila es `NO_INTEGRADO` o `NO_INFORMADO_EN_ORIGEN`, no 0. Si una lectura de tabla falla (`DataWarning`), los indicadores que dependen de ella quedan "no disponible", no 0.
 
 Orden de decisión cuando una fila admite más de un estado: `NO_APLICA` (por definición) → `NO_INTEGRADO` (EQUITAS no lo lee) → `NO_INFORMADO_EN_ORIGEN` (columna ausente o vacía) → `INVALIDO` (valor presente no interpretable) → `OBSERVADO`.
+
+### 4.1 Reglas de agregación
+
+Un agregado (conteo, suma, promedio, porcentaje, máximo) declara su **universo** (qué filas considera) y su **insumo** (qué variable lee de cada fila). Las entradas de §7 aplican estas reglas; ninguna entrada puede convertir un faltante en 0.
+
+1. **Cero observado en origen**: el archivo municipal informó 0 para esa fila (p. ej., un importe `0,00`). Se conserva como 0 `OBSERVADO`.
+2. **Cero derivado legítimo**: el universo se leyó completo, las filas pertinentes tienen su insumo `OBSERVADO` y ninguna cumple la condición (o todas suman 0 observado). El resultado es 0 `OBSERVADO` derivado. Ejemplo: "objetos con riesgo > 90" = 0 cuando todos los objetos leídos tienen riesgo observado ≤ 90.
+3. **Filas no observadas aparte**: las filas del universo cuyo insumo no está `OBSERVADO` no se suman como 0 ni se cuentan dentro de una categoría observada. El agregado se calcula sobre las filas observadas y muestra al lado el conteo por estado (p. ej., "12 objetos con importe `INVALIDO`").
+4. **Ninguna fila observada**: el agregado es `null`. Si todas las filas comparten un estado, el agregado toma ese estado (`NO_INFORMADO_EN_ORIGEN`, `NO_INTEGRADO` o `INVALIDO`); si difieren, toma el primero según el orden de decisión de §4 y muestra el desglose por estado.
+5. **`NO_APLICA` por definición**: un promedio, porcentaje o máximo cuyo denominador o conjunto es vacío en un universo leído correctamente (p. ej., promedio de atraso sin objetos con mora, porcentaje sobre 0 objetos) es `NO_APLICA`, no 0. Un conteo o una suma sobre un subconjunto vacío sí es 0 derivado (regla 2).
+6. **Lectura fallida**: si la lectura de una tabla falla (`DataWarning`), el universo no se conoce: los agregados que dependen de ella son "no disponible" (`NO_INTEGRADO` en esa consulta), nunca 0 derivado ni `NO_APLICA`.
 
 En código, el estado se expresa con el tipo `DataPresence` (`front/types/equitas-domain.ts`); la lista `DATA_PRESENCE_STATES` es la fuente única de los cinco valores y una prueba (`front/tests/unit/domain-contract.test.ts`) verifica que coincida con esta tabla.
 
@@ -72,14 +84,33 @@ En código, el estado se expresa con el tipo `DataPresence` (`front/types/equita
 | Nombre | Significado | Quién lo fija | Estado hoy (@36f35b4) |
 |---|---|---|---|
 | `as_of` (corte) | Fecha a la que el municipio certifica el estado exportado. Antigüedad, "vencida", severidad y colas se calculan **respecto de `as_of`** | Manifiesto del lote (cada importación web lo declara) | `NO_INTEGRADO`: no existe. El ETL usa `date.today()` (`back/ETL/transform.py:266-279`, `512-523`) y el frontend `new Date()`/`Date.now()` (`front/lib/parsers/date-value-parser.ts:12-31`) |
-| `computed_at` (cálculo) | Momento en que EQUITAS calculó un perfil, un índice o una cola | Sistema | `debtor_profile.profile_generated_at` (`back/ETL/transform.py:648`); los indicadores del frontend se recalculan en cada consulta y no guardan su momento |
+| `computed_at` (cálculo) | Momento en que EQUITAS calculó un perfil, un índice o una cola | Sistema | Perfiles: `debtor_profile.profile_generated_at` (`back/ETL/transform.py:648`), persistido pero **no leído** por el frontend. Estado inferido de la obligación (`debt.status`): calculado al cargar, **sin registro** de su momento (desconocido). Indicadores del frontend: se recalculan en cada consulta y no guardan su momento |
 | `source_updated_at` (actualización de origen) | Fecha de actualización del registro en el ERP municipal (`Fecha_Actualizacion`) | Archivo de origen | `NO_INTEGRADO` como tal: se guarda en `debt.issue_date` **y** `debt.last_collection_date` (`back/ETL/transform.py:763-777`). Destino propuesto: `import_batch.source_updated_at` |
 
 Consecuencias:
 
-- Un perfil calculado con `computed_at` anterior a la consulta **no es actual**: sus días de antigüedad difieren de un recálculo (informe de input §5, "Perfil temporal"). Mostrarlo exige rotular su `computed_at` y, cuando exista, su `as_of`.
+- Un perfil calculado con `computed_at` anterior a la consulta **no es actual**: sus días de antigüedad difieren de un recálculo (informe de input §5, "Perfil temporal"; perfiles generados entre el 30/09 y el 02/10/2026, §3). Consultarlo no lo recalcula.
 - `issue_date` no es fecha de emisión y `last_collection_date` no es fecha de gestión o cobro: en todas las obligaciones observadas `issue_date > due_date` y `last_collection_date = issue_date`. Ninguna regla puede afirmar que hubo emisión, contacto o cobro a partir de ellas.
-- Hasta que exista `as_of`, todo indicador temporal se rotula "calculado al día de la consulta" y su corte es `NO_INTEGRADO`.
+- Mientras `as_of` no exista, el corte de **todo** indicador es `NO_INTEGRADO`. La fecha de lectura, la de carga o la de cálculo **no sustituyen** al corte municipal ni a la antigüedad de los insumos (`source_updated_at`).
+
+### 5.1 Procedencia temporal y rótulo obligatorio
+
+Cada indicador temporal tiene una de tres procedencias. El rótulo depende de la procedencia, no de la pantalla donde se muestra:
+
+| Procedencia | Qué significa | Rótulo obligatorio (mientras `as_of` sea `NO_INTEGRADO`) | Indicadores (@36f35b4) |
+|---|---|---|---|
+| **Recalculado en la consulta** | Se calcula con el reloj del servidor (`new Date()`/`Date.now()`) cada vez que se arma la pantalla | "Calculado al día de la consulta; corte no integrado" | FO06; DE10 cuando el frontend lo infiere por vencimiento (`resolveDebtStatusFromDueDate`, `front/lib/mappers/debtor-object-mapper.ts:199-205`) |
+| **Persistido** | Se calculó antes (ETL) y se lee tal cual; la consulta no lo recalcula | "Calculado el `<computed_at>`; corte no integrado". Para `debtor_profile`/`debtor_profile_detail`, `computed_at` = `profile_generated_at`; si no se lee o falta: "momento de cálculo desconocido". Para `debt.status` inferido por el ETL: "momento de cálculo desconocido" (no se registra) | PR01–PR10; DE10 cuando proviene del catálogo (`debt.status` inferido al cargar, `back/ETL/transform.py:266-279`); FP01, AG13 y VP11 (leen PR09) |
+| **Mixto** | Combina valores persistidos con cálculos de la consulta, o elige entre ambos según haya perfil | Declara las dos partes: "Calculado el `<computed_at>` o momento desconocido (componente persistido) y al día de la consulta (componente recalculado); corte no integrado". No se reduce a ninguno de los dos | FO01/FO02 (PR01/PR02 o recálculo según haya perfil, `front/lib/mappers/debtor-object-mapper.ts:445-459`); FO10 (PR08 o fallback por señales); FO04, FO05 (conjunto de vencidas según DE10 persistido o inferido; días con el reloj de la consulta); FO12–FO14; AG02, AG03, AG05–AG07c, AG10 (parte de objetos), AG11, AG12, AG15–AG17; VP01–VP04, VP07–VP10 |
+
+Reglas:
+
+- El rótulo "calculado al día de la consulta" se usa **solo** para la procedencia "recalculado en la consulta". Un valor persistido nunca se rotula así, aunque se lea en esa consulta.
+- Un valor persistido muestra su `computed_at` real; hoy el frontend no lee `profile_generated_at`, por lo que su momento de cálculo es "desconocido" en pantalla hasta que ALIGN-011 lo lea. Nunca se muestra la fecha de lectura en su lugar.
+- Un indicador mixto declara qué parte es persistida y cuál recalculada. Si la elección depende de cada objeto (con perfil o sin él), la procedencia se declara por objeto o el agregado se rotula mixto.
+- Los indicadores sin dependencia temporal (Corte "—" en §7) no llevan rótulo temporal.
+
+En §7, la columna **Corte** indica de qué fecha depende el valor: `as_of` (depende del corte; hoy sustituido por un reloj según §5.1), `computed_at` (valor persistido, válido a la fecha de su cálculo), `source_updated_at` (vale a la fecha de actualización de origen) o "—" (no depende de una fecha).
 
 ## 6. Clasificación de origen (O/D/A/S/P)
 
@@ -95,7 +126,9 @@ Las combinaciones como "O (semántica P)" indican un valor observado cuyo signif
 
 ## 7. Diccionario de variables
 
-Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual en pantalla ("—" si no se muestra), **Fuente → fórmula**, **Unidad**, **Corte** (`as_of` si depende de la fecha de corte; "—" si no depende), **Faltantes** (estado aplicable; "Hoy:" describe el comportamiento @36f35b4 cuando contradice §4), **Clase**.
+Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual en pantalla ("—" si no se muestra), **Fuente → fórmula**, **Unidad**, **Corte** (fecha de la que depende el valor, §5; su rótulo sigue la procedencia de §5.1), **Faltantes** (estado aplicable; "Hoy:" describe el comportamiento @36f35b4 cuando contradice §4), **Clase**.
+
+El diccionario cubre los campos de los DTO, las columnas usadas en reglas y también los **cálculos hechos dentro de páginas y componentes** (§7.9, prefijo VP), que no pasan por un DTO.
 
 ### 7.1 Lote, municipio y tiempo
 
@@ -104,7 +137,7 @@ Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual 
 | L01 | `tenant.id`, `tenant.name` | — | `back/ETL/config.py:21-22` (fijo) | id / texto | — | El municipio real no está declarado en el lote: `NO_INTEGRADO` | D |
 | L02 | `currency.id` | — (formato ARS) | `DEFAULT_CURRENCY_ID = 1` (`back/ETL/transform.py:36`) | id de catálogo | — | Moneda no informada por el lote: supuesto ARS | D |
 | L03 | `as_of` | — | §5 | fecha | — | `NO_INTEGRADO` | A |
-| L04 | `debtor_profile.profile_generated_at` (`computed_at`) | — | `datetime.now(UTC)` al construir el perfil (`back/ETL/transform.py:648`) | fecha-hora UTC | — | Nula si el perfil no se generó: `NO_INTEGRADO` | D |
+| L04 | `debtor_profile.profile_generated_at` (`computed_at`) | — | `datetime.now(UTC)` al construir el perfil (`back/ETL/transform.py:648`) | fecha-hora UTC | — | Nula si el perfil no se generó: `NO_INTEGRADO`. Hoy el frontend no la lee: el momento de cálculo de los valores persistidos es "desconocido" en pantalla (§5.1) | D |
 | L05 | `Fecha_Actualizacion` (`source_updated_at`) | — | Cabecera, vía `ClaveAgrupacion` (`back/ETL/transform.py:747-777`) | fecha | — | Cabecera ausente → `NO_INFORMADO_EN_ORIGEN`; ilegible → `INVALIDO` (hoy ambos quedan nulos en `issue_date`) | O (semántica P) |
 | L06 | `DataWarning` | Avisos de lectura (`front/components/equitas/data-warnings.tsx`) | Error de lectura de una tabla (`front/lib/data/raw-debtor-loader.ts`) | mensaje + código | — | Si existe, los indicadores que dependen de esa tabla son "no disponible", no 0 | D |
 
@@ -112,8 +145,8 @@ Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual 
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
-| OB01 | `debtor.id`, `DebtorListItem.id` | — (enlaces) | Identidad interna de la base | id | — | Fila sin id se descarta | D |
-| OB02 | `debtor.external_id` | — | `Cuenta` (`back/ETL/transform.py:330-339`) | id numérico canónico | — | No numérico → hoy `None`; contrato: `INVALIDO` con rechazo (ALIGN-024) | O (P) |
+| OB01 | `debtor.id`, `DebtorListItem.id`, `PersonListItem.debtorIds`, FK `debt.debtor`, `debtor_person.debtor`, `debtor_profile.debtor` | — (enlaces `/debtors/<id>`) | **Clave interna** asignada por la base (`supabase/migrations/20261021220156_equitas_testing_schema.sql:91-92`); el frontend lee `id`/`debtor_id` (`front/lib/mappers/debtor-object-mapper.ts:422-424`) y las FK de obligaciones, relaciones y perfiles (`:173-175`, `:231-233`, `:404-406`) | id interno (texto en el DTO) | — | Fila sin id: se descarta (`front/lib/mappers/debtor-object-mapper.ts:426-428`). No es la cuenta municipal | D (identidad del sistema) |
+| OB02 | `debtor.external_id` | — (solo como respaldo de "Identificador") | `Cuenta` → solo dígitos (`back/ETL/transform.py:102-125`, `334`); clave externa compuesta `(tenant, type, external_id)` (`supabase/migrations/20261021220156_equitas_testing_schema.sql:256`). El frontend no lo usa como identidad; solo lo muestra si faltan `identifier`/`code`/`account_number`/`domain` (`front/lib/mappers/debtor-object-mapper.ts:503-511`) | id externo numérico (cuenta municipal) | — | Sin dígitos → `None` y la fila se omite al cargar (`back/ETL/run_etl.py:146-148`); con caracteres no numéricos se conservan solo los dígitos. Contrato: `INVALIDO` con rechazo (ALIGN-024) | O (P) |
 | OB03 | `debtor.type`, `DebtorListItem.type` | Tipo | `Bien_Tipo_Id` → catálogo `debtor_type` | etiqueta de catálogo | — | Hoy "Sin tipo" (`front/lib/mappers/debtor-object-mapper.ts:498-502`); contrato: `NO_INFORMADO_EN_ORIGEN` o `INVALIDO` si el código no está en el catálogo | O |
 | OB04 | `debtor.identifier`, `DebtorListItem.identifier` | Identificador / Objeto | `Identificador` | texto | — | Hoy `OBJ-<id>` (`front/lib/mappers/debtor-object-mapper.ts:503-511`); contrato: `NO_INFORMADO_EN_ORIGEN` con el id interno como referencia rotulada | O |
 | OB05 | `debtor.description`, `DebtorListItem.description` | Descripcion | `Bien_Descripcion` | texto | — | Hoy "Objeto de deuda …" (`front/lib/mappers/debtor-object-mapper.ts:512-514`); contrato: `NO_INFORMADO_EN_ORIGEN` | O |
@@ -124,7 +157,8 @@ Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual 
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
-| DE01 | `debt.external_id`, `DebtorDebtItem.id` | — | `DEUD_id` (`back/ETL/transform.py:357-379`) | id externo | — | No numérico → `INVALIDO` | O |
+| DE00 | `debt.id`, `DebtorDebtItem.id` | — (clave de fila) | **Clave interna** asignada por la base (`supabase/migrations/20261021220156_equitas_testing_schema.sql:67`). El frontend lee `id`/`debt_id` y, si falta, genera `<debtor_id>-<n>` por posición de lectura (`front/lib/mappers/debtor-object-mapper.ts:207-210`); no lee `external_id` para este campo | id interno (texto en el DTO) | — | El id posicional del respaldo es **D** inestable: no identifica la obligación entre consultas ni es `DEUD_id`. Contrato: sin id interno, la obligación no es enlazable (`NO_INTEGRADO`) | D (identidad del sistema) |
+| DE01 | `debt.external_id` | — (no se lee en el frontend; su texto se copia en DE02 y DE11) | `DEUD_id` → solo dígitos (`back/ETL/transform.py:364`, `368`); clave externa `(debtor, external_id)` (`supabase/migrations/20261021220156_equitas_testing_schema.sql:246`); al cargar se deduplica por (`Bien_Tipo_Id`, `Cuenta`, `DEUD_id`) (`back/ETL/run_etl.py:291-296`) | id externo numérico | — | Sin dígitos → la fila se omite al cargar (`back/ETL/run_etl.py:287-289`). Contrato: `INVALIDO` con rechazo (ALIGN-024) | O |
 | DE02 | `debt.period`, `DebtorDebtItem.period` | Periodo | Copia de `DEUD_id` (`back/ETL/transform.py:378`) | — (no es período) | — | El período fiscal real es `NO_INTEGRADO` (¿`Detalle_Deuda`/`Periodos_Deuda`?, P). Hoy, si falta, "Sin periodo" (`front/lib/mappers/debtor-object-mapper.ts:214-220`) | O (semántica P) |
 | DE03 | `debt.type` | — | `Tipo_Ingreso_Id` → clave textual de 8 códigos fijos (`back/ETL/transform.py:286-308`) | clave de tributo | — | Código no listado → `unknown_<id>`; contrato: `INVALIDO` con motivo | O |
 | DE04 | `debt.original_amount`, `DebtorDebtItem.originalAmount` | Monto original | `NOTD_capital` | ARS | — | Hoy inválido → `0.0` (`back/ETL/transform.py:142-160`) y en el frontend inválido → 0 (`front/lib/parsers/numeric-value-parser.ts:6-18`); contrato: `INVALIDO`, cero real preservado | O |
@@ -141,7 +175,8 @@ Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual 
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
-| PE01 | `person.external_id`, `PersonListItem.id`, `DebtorPersonItem.id`, `DebtorPersonRelation.personId` | — (enlaces) | `Destinatario_Id` (`back/ETL/transform.py:315-326`) | id externo, único global | — | No numérico → `INVALIDO` | O |
+| PE00 | `person.id`, `PersonListItem.id`, `DebtorPersonItem.id`, `DebtorPersonRelation.personId`, `DebtorContactItem.personId`, `DebtorListItem.peopleIds`, FK `debtor_person.person`, `debtor_contact.person`, `debtor_profile_detail.person` | — (enlaces y filtro `personId`) | **Clave interna** asignada por la base (`supabase/migrations/20261021220156_equitas_testing_schema.sql:160`, `288`); las FK apuntan a `person.id` (`:338`, `:344`, `:350`). El frontend lee `id`/`person_id` de `person` (`front/lib/mappers/person-risk-mapper.ts:237`; `front/lib/mappers/debtor-object-mapper.ts:164`) y la FK de la relación (`front/lib/mappers/debtor-object-mapper.ts:234-236`), que conserva como id del DTO (`:379`) | id interno (texto en el DTO) | — | Persona sin id o relación sin FK: se descarta (`front/lib/mappers/person-risk-mapper.ts:239-241`; `front/lib/mappers/debtor-object-mapper.ts:238-240`). No es `Destinatario_Id` | D (identidad del sistema) |
+| PE01 | `person.external_id` | — (no se lee en el frontend) | `Destinatario_Id` → solo dígitos (`back/ETL/transform.py:320`); clave de deduplicación al cargar (`back/ETL/load.py:380-395`); única global, sin municipio (`supabase/migrations/20261021220156_equitas_testing_schema.sql:286`) | id externo numérico, único global | — | Sin dígitos → la fila se omite al cargar (`back/ETL/run_etl.py:142-144`). Contrato: `INVALIDO` con rechazo (ALIGN-024); la unicidad global sin municipio es brecha (§2) | O |
 | PE02 | `person.full_name`, `DebtorPersonItem.name`, `PersonListItem.name`, `DebtorContactItem.personName` | Nombre / Persona | `Destinatario` | texto personal | — | Hoy "Persona <id>" (`front/lib/mappers/person-risk-mapper.ts:245-248`); contrato: `NO_INFORMADO_EN_ORIGEN` | O |
 | PE03 | `person.document_number`, `DebtorPersonItem.document`, `PersonListItem.document` | Documento | `Destinatario_CUIT` | texto personal | — | Hoy "Sin documento"; contrato: `NO_INFORMADO_EN_ORIGEN`. Validez no verificada | O |
 | PE04 | `person.type` | — | Inferido por prefijo del CUIT (`back/ETL/transform.py:246-262`) | catálogo `person_type` | — | Prefijo no reconocido → `UNKNOWN` (1242 personas). Nunca es factor de prioridad | D |
@@ -154,18 +189,18 @@ Columnas: **Variable** (DTO del frontend o `tabla.columna`), **Rótulo** actual 
 | CO01 | `debtor_contact.value`, `DebtorContactItem.value`, `DebtorPersonItem.contact` | Valor / Contacto | `Destinatario_Telefono`, `Destinatario_Celular`, `Destinatario_Email` (`back/ETL/transform.py:455-505`) | texto personal | — | Sin valor → no se crea fila. Validez y consentimiento: `NO_INTEGRADO` ("no verificado"). Hoy "Sin contacto" en el resumen por persona | O; validez A |
 | CO02 | `debtor_contact.type`, `DebtorContactItem.channel` | Canal | Tipo fijado por la columna de origen; en el frontend, columna explícita o inferencia por `@` (`front/lib/mappers/debtor-object-mapper.ts:87-105`) | catálogo `contact_type` | — | Inferencia por `@` es D, no O | O |
 | CO03 | `debtor_contact.active`, `DebtorContactItem.isActive` | Estado | Siempre `true` al cargar | booleano | — | Activo ≠ verificado | D |
-| CO04 | `DebtorContactItem.id`, `DebtorContactItem.personId` | — | Identidad interna | id | — | — | D |
+| CO04 | `DebtorContactItem.id` (`personId`: PE00) | — | Clave interna de `debtor_contact`; si falta, el frontend genera `<person_id>-<n>` por posición (`front/lib/mappers/debtor-object-mapper.ts:320-322`) | id interno | — | El id posicional del respaldo no es identidad estable | D (identidad del sistema) |
 
 ### 7.5 Perfil del objeto calculado por el ETL
 
-Todas las columnas de `debtor_profile` son **D** con `computed_at = profile_generated_at` y antigüedad calculada contra `date.today()` del momento de carga (`back/ETL/transform.py:601-650`). Las de `debtor_profile_detail` se construyen en `back/ETL/transform.py:694`.
+Todas las columnas de `debtor_profile` son **D** y **persistidas** (§5.1): `computed_at = profile_generated_at` y antigüedad calculada contra `date.today()` del momento de carga (`back/ETL/transform.py:601-650`). Las de `debtor_profile_detail` se construyen en `back/ETL/transform.py:694` en la misma carga. Leerlas no las recalcula: se rotulan "calculado el `<profile_generated_at>`" (hoy "momento de cálculo desconocido", porque el frontend no lee esa columna) y su corte es `NO_INTEGRADO`; nunca "calculado al día de la consulta".
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
 | PR01 | `debtor_profile.total_debt_amount` | (vía DebtorListItem.totalDebt) | Σ `current_amount` del objeto | ARS | `computed_at` | Perfil ausente → `NO_INTEGRADO`, no 0 | D |
-| PR02 | `debtor_profile.overdue_debt_amount` | (vía DebtorListItem.overdueDebt) | Σ `current_amount` con estado inferido "vencida" | ARS | `as_of` (hoy fecha de carga) | Depende de DE10 (P) | D |
-| PR03 | `debtor_profile.debt_count`, `debtor_profile.overdue_debt_count` | — | Conteo de obligaciones / de obligaciones vencidas inferidas | obligaciones | `as_of` | — | D |
-| PR04 | `debtor_profile.oldest_debt_days`, `debtor_profile.average_debt_age_days` | — | Máximo / promedio de días desde `due_date` hasta la fecha de carga (`back/ETL/transform.py:512-523`) | días | `as_of` (hoy fecha de carga) | Vencimiento ilegible → hoy 0 días; contrato: `INVALIDO` | D |
+| PR02 | `debtor_profile.overdue_debt_amount` | (vía DebtorListItem.overdueDebt) | Σ `current_amount` con estado inferido "vencida" | ARS | `computed_at` (`as_of` `NO_INTEGRADO`; "vencida" según la fecha de carga) | Depende de DE10 (P) | D |
+| PR03 | `debtor_profile.debt_count`, `debtor_profile.overdue_debt_count` | — | Conteo de obligaciones / de obligaciones vencidas inferidas | obligaciones | `computed_at` (`as_of` `NO_INTEGRADO`) | — | D |
+| PR04 | `debtor_profile.oldest_debt_days`, `debtor_profile.average_debt_age_days` | — | Máximo / promedio de días desde `due_date` hasta la fecha de carga (`back/ETL/transform.py:512-523`, `620-625`) | días a la fecha de `computed_at` | `computed_at` (`as_of` `NO_INTEGRADO`; no equivale a días a la fecha de consulta) | Vencimiento ilegible → hoy 0 días; contrato: `INVALIDO` | D |
 | PR05 | `debtor_profile.active_person_count` | — | Personas con relación activa | personas | — | — | D |
 | PR06 | `debtor_profile.available_contact_count` | — | Contactos con valor de las personas del objeto | contactos | — | "Disponible" = con valor, no verificado | D |
 | PR07 | `debtor_profile.previous_contact_count`, `debtor_profile.previous_response_count` | — | Ningún código los alimenta ni los lee; quedan en el valor por defecto de la base | gestiones / respuestas | — | **`NO_INTEGRADO`**. El valor almacenado no significa "cero gestiones" | A |
@@ -175,7 +210,7 @@ Todas las columnas de `debtor_profile` son **D** con `computed_at = profile_gene
 
 ### 7.6 Indicadores del objeto calculados por el frontend
 
-Se recalculan en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420-553`; su corte es el reloj del servidor (`as_of` `NO_INTEGRADO`).
+Se arman en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420-553`, pero **no todos se recalculan**: varios reutilizan valores persistidos del perfil cuando existen (FO01, FO02, FO10) y otros dependen del estado DE10 inferido al cargar. Su procedencia temporal (recalculado, persistido o mixto) y su rótulo están en §5.1; el corte es siempre `NO_INTEGRADO`.
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
@@ -185,7 +220,7 @@ Se recalculan en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420
 | FO04 | `DebtorListItem.overdueDebtsCount` | — | Obligaciones con estado de texto "venc/mora/atras" o vencimiento anterior a hoy (`front/lib/mappers/debtor-object-mapper.ts:73-85`) | obligaciones | `as_of` | Depende de DE10 (P) | D |
 | FO05 | `DebtorListItem.maxDaysOverdue` (`overdueDays` en el tablero) | Atraso / Dias de atraso | Máximo de días desde `dueDate` de obligaciones vencidas (`front/lib/mappers/debtor-object-mapper.ts:460-463`) | días | `as_of` | Sin vencidas → `NO_APLICA` (hoy 0); vencimiento ilegible → hoy 0 (`front/lib/parsers/date-value-parser.ts:23-31`), contrato `INVALIDO` | D |
 | FO06 | `DebtorProfileSummary.antiquityDays` | Antiguedad | Días desde el vencimiento más antiguo (`front/lib/services/debtor-data-service.ts:21-36`) | días | `as_of` | Sin vencimientos → hoy 0; contrato: `NO_INFORMADO_EN_ORIGEN` | D |
-| FO07 | `DebtorListItem.peopleCount`, `DebtorListItem.peopleIds`, `DebtorListItem.peopleNames`, `DebtorProfileSummary.associatedPeople` | Personas / Personas asociadas | Relaciones activas del objeto | personas | — | Sin relaciones → `NO_INFORMADO_EN_ORIGEN` (todo objeto observado tiene ≥1) | D |
+| FO07 | `DebtorListItem.peopleCount`, `DebtorListItem.peopleIds`, `DebtorListItem.peopleNames`, `DebtorProfileSummary.associatedPeople` | Personas / Personas asociadas | Relaciones activas del objeto (`peopleIds` = ids internos PE00) | personas | — | Sin relaciones → `NO_INFORMADO_EN_ORIGEN` (todo objeto observado tiene ≥1) | D |
 | FO08 | `DebtorListItem.contactCount`, `DebtorProfileSummary.availableContacts` | Contactos disponibles | Máximo entre PR06, personas con contacto activo y contactos activos (`front/lib/mappers/debtor-object-mapper.ts:436-442`): mezcla unidades distintas | contactos o personas (ambiguo) | — | Unificar en ALIGN-011; validez `NO_INTEGRADO` | D |
 | FO09 | `DebtorListItem.hasContact` | Contacto / Con contacto | `contactCount > 0` | booleano | — | "Con contacto" = con valor cargado, no verificado | D |
 | FO10 | `DebtorListItem.riskScore`, `DebtorListItem.risk`, `DebtorProfileSummary.riskScore`, `DebtorProfileSummary.risk` | Riesgo | PR08 si existe; si no, etiqueta textual (85/55/25) o fallback 78/55/25 por señales, donde **la falta de contacto sube a 55** (`front/lib/services/debtor-risk-calculator.ts:85-134`). Bandas: 0–39 BAJO, 40–69 MEDIO, 70–100 ALTO (`front/lib/services/debtor-risk-calculator.ts:14-29`) | puntos 0–100 / banda | `computed_at` | El fallback convierte un perfil `NO_INTEGRADO` en riesgo inferido y un faltante (contacto) en severidad: viola §4 | D |
@@ -199,7 +234,7 @@ Se recalculan en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
 | FP01 | `PersonListItem.individualRisk` | Riesgo individual | Banda de FO10 aplicada a PR09 | banda | `computed_at` | Sin detalle → hoy "BAJO"; contrato: "no disponible" | D |
-| FP02 | `PersonListItem.debtorsCount`, `PersonListItem.debtorIds`, `PersonListItem.debtorIdentifiers` | Objetos / Objetos asociados | Objetos con relación activa | objetos | — | — | D |
+| FP02 | `PersonListItem.debtorsCount`, `PersonListItem.debtorIds`, `PersonListItem.debtorIdentifiers` | Objetos / Objetos asociados | Objetos con relación activa (`debtorIds` = ids internos OB01; `debtorIdentifiers` = OB04 o `OBJ-<id interno>`) | objetos | — | — | D |
 | FP03 | `PersonListItem.hasContact` | Contacto disponible | Al menos un contacto activo con valor (`front/lib/mappers/person-risk-mapper.ts:186-233`) | booleano | — | Validez `NO_INTEGRADO` | D |
 | FP04 | `PersonListItem.totalDebtAssociated` | Deuda total asociada | Σ total por objeto vinculado (`front/lib/mappers/person-risk-mapper.ts:98-125`, `258-261`) = **exposición asociada no aditiva** (§3) | ARS, no aditivo | `computed_at` | Usa `updated_amount` o, si da 0, el original (mismo defecto que DE06) | D |
 
@@ -213,20 +248,43 @@ Se recalculan en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420
 | AG04 | `DashboardData.withContactCases`, `DashboardData.withoutContactCases` | Con contacto / Casos sin contacto | Objetos por FO09 | objetos | — | "Sin contacto" = sin valor cargado | D |
 | AG05 | `DashboardData.priorityCases` | Objetos prioritarios | Objetos con FO14 = ALTA | objetos | `as_of` | — | D |
 | AG06 | `DashboardData.urgentRecommendationCases` | Recomendacion urgente | Objetos con FO12 urgente | objetos | `as_of` | — | D |
-| AG07 | `DashboardData.criticalCasesToday`, `DashboardData.riskAboveNinetyCases`, `DashboardData.criticalDebtTotal` | — (riesgo-análisis usa el mismo umbral) | FO10 > 90, recomendación urgente o deuda vencida sin contacto (`front/lib/mappers/dashboard-metrics-mapper.ts:98-107`) | objetos / ARS | `as_of` | — | D |
-| AG08 | `DashboardData.byDebtStatus` | Deuda por estado | Conteo de obligaciones por DE10 | obligaciones | `as_of` | Estados `NO_INTEGRADO` o `UNKNOWN` en barra propia | D |
+| AG07a | `DashboardData.criticalCasesToday` | — (no se muestra hoy) | **Conjunto operativo amplio**: objetos con FO10 `riskScore > 90` **o** FO12 `isUrgentRecommendation` **o** (FO02 > 0 **y** FO09 falso) (`front/lib/mappers/dashboard-metrics-mapper.ts:98-103`, `117`) | objetos | `as_of` | Hereda FO02, FO09, FO10 y FO12; un objeto sin perfil entra por el fallback de FO10 o por falta de contacto | D |
+| AG07b | `DashboardData.riskAboveNinetyCases` | — (no se muestra hoy; riesgo-análisis calcula su propio conteo, VP10) | Objetos con FO10 `riskScore > 90` **estrictamente**; no incluye urgentes ni vencidos sin contacto (`front/lib/mappers/dashboard-metrics-mapper.ts:104`) | objetos | `as_of` | Objetos con riesgo no disponible se cuentan aparte (§4.1), no como ≤ 90 | D |
+| AG07c | `DashboardData.criticalDebtTotal` | — (no se muestra hoy) | Σ FO01 de los objetos de AG07b (riesgo > 90), **no** de AG07a (`front/lib/mappers/dashboard-metrics-mapper.ts:105-107`) | ARS | `as_of` | Hereda FO01; ningún objeto > 90 con universo leído → 0 derivado (§4.1 regla 2) | D |
+| AG08 | `DashboardData.byDebtStatus` | — (no se muestra hoy; **no** es el gráfico "Deuda por estado", VP07) | **Conteo de obligaciones** agrupado por la etiqueta DE10 de cada obligación (`front/lib/mappers/debtor-object-mapper.ts:413-418`; `front/lib/mappers/dashboard-metrics-mapper.ts:120-122`), orden descendente | obligaciones | `as_of` | Estados `NO_INTEGRADO` o `UNKNOWN` en barra propia | D |
 | AG09 | `DashboardData.byDebtorType` | Objetos por tipo | Objetos por OB03 | objetos | — | — | D |
-| AG10 | `DashboardData.byRisk`, `PeopleDashboardSummary.individualRiskDistribution`, `PeopleDashboardSummary.lowRiskCount`, `PeopleDashboardSummary.mediumRiskCount`, `PeopleDashboardSummary.highRiskCount` | Distribucion por riesgo / Riesgo bajo, medio, alto | Conteo por banda FO10 / FP01 | objetos / personas | `computed_at` | "No disponible" en categoría propia, nunca en BAJO | D |
-| AG11 | `DashboardData.byRecommendation` | Recomendaciones sugeridas | Conteo por FO12 | objetos | `as_of` | — | D |
+| AG10 | `DashboardData.byRisk`, `PeopleDashboardSummary.individualRiskDistribution`, `PeopleDashboardSummary.lowRiskCount`, `PeopleDashboardSummary.mediumRiskCount`, `PeopleDashboardSummary.highRiskCount` | Distribucion por riesgo / Riesgo bajo, medio, alto | Conteo por banda FO10 (objetos, `front/lib/mappers/dashboard-metrics-mapper.ts:24-38`) / FP01 (personas, `front/lib/mappers/person-risk-mapper.ts:29-31`, `40-44`); las tres bandas se inicializan en 0 | objetos / personas | `computed_at` | "No disponible" en categoría propia, nunca en BAJO | D |
+| AG11 | `DashboardData.byRecommendation` | Recomendaciones sugeridas | Conteo de objetos por FO12; las cuatro categorías se inicializan en 0 (`front/lib/mappers/dashboard-metrics-mapper.ts:29-42`) | objetos | `as_of` | — | D |
 | AG12 | `DashboardData.topDebtChart`, `DashboardData.topDebtors`, `DashboardData.topDebtDebtors`, `DashboardData.topPriorityDebtors`, `DashboardData.withoutContactDebtors` | Top de deuda / A quien gestionar primero / Casos sin contacto | Proyecciones de `DebtorListItem` ordenadas por FO01 o FO13 (`overdueDays` = FO05) | objetos | `as_of` | Heredan los de sus campos | D |
 | AG13 | `PeopleDashboardSummary.totalPeople`, `PeopleDashboardSummary.withoutContactCount`, `PeopleDashboardSummary.topPeopleByRiskValue` | Sin contacto / Top 5 personas con mayor riesgo | Conteos y orden por PR09 (`front/lib/mappers/person-risk-mapper.ts:28-68`) | personas | `computed_at` | — | D |
-| AG14 | "Deuda asociada" y "Riesgo promedio" de personas filtradas | Deuda asociada | Σ FP04 y promedio de PR09 de las personas filtradas (`front/app/people/page.tsx:101-108`) | ARS / puntos | `computed_at` | **Suma exposiciones no aditivas** (viola §3); sin personas → hoy 0 | D |
-| AG15 | Resumen por recomendación (`buildRecommendationSummary`) | Cantidad de casos / Deuda asociada / Riesgo promedio | Conteo, Σ FO01 y promedio de FO10 por FO12 (`front/lib/equitas-view-selectors.ts:115-134`) | objetos / ARS / puntos | `as_of` | Promedio sin casos → hoy 0; contrato: `NO_APLICA` | D |
+| AG14 | `totalDebtAssociated` y `averageRiskValue` de las personas filtradas | Deuda asociada / Riesgo promedio | Universo: personas que pasan los filtros de VP06. `totalDebtAssociated` = Σ FP04; `averageRiskValue` = Σ `riskValue` (PR09) / n, con un decimal (`front/app/people/page.tsx:101-108`, mostrado en `:186`, `:189`) | ARS / puntos 0–100 | `computed_at` | **Suma exposiciones no aditivas** (viola §3; contrato: deduplicar por objeto). Sin personas → hoy 0 y 0,0; contrato: suma 0 derivada, promedio `NO_APLICA`. Personas sin detalle entran con riesgo 0 (PR09): contrato, contarlas aparte | D |
+| AG15 | Resumen por recomendación (`buildRecommendationSummary`) | Cantidad de casos / Deuda asociada / Riesgo promedio | Por cada categoría FO12: conteo de objetos, Σ FO01, promedio de FO10 `riskScore` (un decimal) y los 3 primeros por prioridad operativa (`front/lib/equitas-view-selectors.ts:115-134`; `front/app/recommended-actions/page.tsx:30`, `48-55`, `105-108`) | objetos / ARS / puntos | `as_of` | Promedio sin casos → hoy 0; contrato: `NO_APLICA`. Conteo y suma de una categoría vacía: 0 derivado | D |
 | AG16 | Resumen de antigüedad (`buildDebtAgingSummary`) | Deuda total / Deuda vencida / Promedio de atraso / Distribucion por atraso | Σ FO01, Σ FO02, promedio de FO05 sobre objetos con deuda vencida, bandas 0 / 1–30 / 31–90 / +90 días (`front/lib/equitas-view-selectors.ts:71-113`) | ARS / días / objetos | `as_of` | Promedio sin casos → hoy 0 (`NO_APLICA`); FO05 `NO_APLICA` hoy cae en "Sin atraso" | D |
-| AG17 | Métricas de casos sin contacto | Total sin contacto / Deuda asociada / Riesgo alto sin contacto / Sobre el total | Conteo, Σ FO01, conteo con FO10 ALTO y proporción sobre AG01 (`front/app/no-contact/page.tsx`) | objetos / ARS / % | — | Base 0 → `NO_APLICA` | D |
+| AG17 | `noContactCases`, `associatedDebt`, `highRiskNoContact`, `totalShare` | Total sin contacto / Deuda asociada / Riesgo alto sin contacto / Sobre el total | Universo: objetos con FO09 falso. Conteo; Σ FO01; conteo con banda FO10 = ALTO; `totalShare` = round(100 · sin contacto / objetos leídos) (`front/app/no-contact/page.tsx:47-51`, mostrados en `:75-96`) | objetos / ARS / % entero | `as_of` | Base 0 → hoy 0 %; contrato: `NO_APLICA`. "Sin contacto" = sin valor cargado (validez `NO_INTEGRADO`) | D |
 | AG18 | Cifras de la pantalla de ingreso | Casos criticos / Sin contacto / Deuda gestionada | Literales fijos en código (`front/app/login/page.tsx:9-24`) | — | — | **No son datos**: no hay ningún dato de gestión (`NO_INTEGRADO`). Retirar o rotular "ilustrativo" (ALIGN-012) | S |
 
-### 7.9 Reglas de prioridad en Python (servicio de scoring)
+### 7.9 Cálculos locales de páginas y componentes
+
+Valores que una página o un componente calcula y muestra sin que existan en un DTO. Inventario completo de `front/app/**/page.tsx` y `front/components/**` @36f35b4: las demás cifras de esas pantallas son campos de DTO ya definidos en §7.2–§7.8 (incluida la ficha `front/app/debtors/[debtorId]/page.tsx`, que solo muestra campos de `DebtorListItem`, `DebtorProfileSummary`, `DebtorDebtItem`, `DebtorPersonItem` y `DebtorContactItem`), o son paginación (página actual, "Mostrando a–b de n", `front/lib/pagination.ts:18-29`), que no es un dato de dominio. La prueba `front/tests/unit/domain-contract.test.ts` exige que cada nombre de esta tabla siga existiendo en su archivo y tenga entrada aquí.
+
+| ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
+|---|---|---|---|---|---|---|---|
+| VP01 | `highRiskShare` (`front/app/page.tsx`) | "n% de los objetos estan en riesgo alto" | `round(100 · byRisk[ALTO] / totalDebtors)`; numerador AG10 (banda FO10 = ALTO, `riskScore` ≥ 70), denominador AG01 (`front/app/page.tsx:42-46`, mostrado en `:128`) | % de objetos, entero | `as_of` | Universo: todos los objetos leídos. `totalDebtors` = 0 → hoy 0 %; contrato: `NO_APLICA` (lectura fallida: "no disponible"). Objetos con riesgo no disponible: fuera del numerador y contados aparte (hoy el fallback de FO10 les asigna banda) | D |
+| VP02 | `topDebtConcentration` (`front/app/page.tsx`) | "Los 5 objetos con mayor deuda concentran n% del saldo total" | `round(100 · Σ FO01 de topDebtDebtors / totalDebt)`: numerador = los 5 objetos de mayor FO01 (AG12), denominador AG02 (`front/app/page.tsx:47-54`, mostrado en `:133`) | % del saldo ARS, entero | `as_of` | Universo: todos los objetos leídos; con ≤5 objetos da 100 %. `totalDebt` ≤ 0 → hoy 0 %; contrato: `NO_APLICA`. Hereda el `||` de FO01 | D |
+| VP03 | `percentage` por recomendación (`front/app/page.tsx`) | "n casos (p%)" y ancho de la barra | Para cada una de las 4 categorías FO12: `count` = valor de AG11 (`?? 0`) y `percentage` = `round(100 · count / totalDebtors)` (`front/app/page.tsx:247-251`, mostrado en `:260`, `:272`) | objetos / % de objetos, entero | `as_of` | Universo: todos los objetos leídos. `count` 0 de una categoría vacía es 0 derivado (AG11 siempre trae las 4). `totalDebtors` = 0 → hoy 0 %; contrato: `NO_APLICA`. Los redondeos pueden no sumar 100 | D |
+| VP04 | `dominantRecommendation` (`front/app/page.tsx`) | «"<categoría>" concentra n% de los objetos actuales» | Categoría de mayor conteo en AG11 (orden descendente estable: en empate gana la primera de las 4 en su orden fijo); participación = `round(100 · value / max(totalDebtors, 1))` (`front/app/page.tsx:55-58`, `279-283`) | categoría FO12 / % de objetos, entero | `as_of` | AG11 siempre tiene 4 filas, así que el texto "Sin datos suficientes" nunca aparece: con 0 objetos hoy muestra «"Llamado prioritario" concentra 0%». Contrato: sin objetos, `NO_APLICA` (sin categoría dominante); con empate, declarar el empate | D |
+| VP05 | `withContactCount` (`front/app/people/page.tsx`) | "Con contacto: n" (dentro de la tarjeta "Sin contacto") | Conteo de las **personas filtradas** (VP06) con FP03 `hasContact` verdadero (`front/app/people/page.tsx:109`, mostrado en `:176`) | personas | — | Universo filtrado, distinto del de `PeopleDashboardSummary.withoutContactCount` (AG13, todas las personas) que se muestra en la misma tarjeta (`:173`): no se suman ni se restan entre sí. "Con contacto" = con valor activo cargado, no verificado (AU05). Subconjunto vacío → 0 derivado | D |
+| VP06 | `filteredPeople`, `filteredDebtors`, `filteredCases` (contadores de resultados) | "n / N personas", "n / N registros", "n casos" | Conteo de personas u objetos que pasan los filtros de la pantalla: personas por texto (nombre o documento) y banda FP01 (`front/app/people/page.tsx:36-48`, `89`, mostrado en `:125-126`); objetos por texto, FO10, OB07, OB03, FO09 y persona (`front/app/debtors/page.tsx:72-99`, `154`, mostrado en `:192-193`); casos prioritarios por texto, FO10, FO09, OB03 y monto mínimo sobre FO01 (`front/app/priority-cases/page.tsx:69-88`, mostrado en `:108`). `N` = total leído | personas / objetos | — | Lectura fallida → "no disponible", no "0 / 0". Monto mínimo no numérico → hoy ningún caso coincide y se muestra "0 casos" (`front/app/priority-cases/page.tsx:78-79`); contrato: filtro `INVALIDO` informado, no 0 resultados | D |
+| VP07 | `debtByStatusChart` (`front/app/debt-aging/page.tsx`) | "Deuda por estado" | **Suma ARS** de FO01 (`DebtorListItem.totalDebt`) agrupada por la etiqueta de estado **del objeto** OB07 (`DebtorListItem.status`), orden descendente (`front/app/debt-aging/page.tsx:52-60`, mostrado en `:115`) | ARS por etiqueta de estado del objeto | `as_of` | **No es AG08**: AG08 cuenta obligaciones por estado de la obligación (DE10). Objetos sin estado caen en "En gestion" inventado (OB07); hereda el `||` de FO01. Contrato: barra propia para estado `NO_INFORMADO_EN_ORIGEN` | D |
+| VP08 | `topDebtChart` de Deuda y mora (`front/app/debt-aging/page.tsx`) | "Top deuda por objeto" / "Top 10 mayor deuda" | Los 10 objetos de mayor FO01 (`buildDebtAgingSummary().topDebtCases`, `front/lib/equitas-view-selectors.ts:82`), rotulados por OB04 (`front/app/debt-aging/page.tsx:61-64`, mostrado en `:116`) | ARS por objeto | `as_of` | Distinto de `DashboardData.topDebtChart` (top 5, AG12). Hereda FO01 | D |
+| VP09 | `objectRiskDistribution` (`front/app/risk-analysis/page.tsx`) | "Distribucion de objetos por riesgo" | Conteo de objetos por banda FO10 (ALTO/MEDIO/BAJO), recalculado en la página con la misma regla que AG10 (`front/app/risk-analysis/page.tsx:29-32`, mostrado en `:96`) | objetos | `as_of` | Igual que AG10: riesgo no disponible en categoría propia, nunca en BAJO | D |
+| VP10 | `highRiskCases` (`front/app/risk-analysis/page.tsx`) | "Objetos con riesgo > 90" y tabla "Objetos con riesgo mayor a 90" | Objetos con FO10 `riskScore > 90` estrictamente, ordenados por prioridad operativa (`getHighRiskCases`, `front/lib/equitas-view-selectors.ts:55-57`; `front/app/risk-analysis/page.tsx:33`, conteo en `:64`, 10 primeros en `:120`). Misma condición que AG07b | objetos | `as_of` | Conjunto sin objetos > 90 con universo leído → 0 derivado; riesgo no disponible se cuenta aparte | D |
+| VP11 | `highIndividualRiskPeople` (`front/app/risk-analysis/page.tsx`) | "Personas con puntaje alto" ("Puntaje individual desde 70") | Personas con PR09 `riskValue` ≥ 70 (coincide con la banda ALTO de FP01), ordenadas por `riskValue` y luego FP04 (`getHighIndividualRiskPeople`, `front/lib/equitas-view-selectors.ts:59-69`; `front/app/risk-analysis/page.tsx:34`, conteo en `:85`, 10 primeros en `:162`) | personas | `computed_at` | Personas sin detalle entran con riesgo 0 (PR09) y quedan fuera sin aviso; contrato: contarlas aparte como "no disponible" | D |
+| VP12 | Porcentaje de la leyenda de `RiskDonutChart` (`front/components/charts/debtor-dashboard-charts.tsx`) | "n,n%" junto a cada banda | `percentage` = 100 · valor de la banda / Σ valores de la serie, un decimal (`front/components/charts/debtor-dashboard-charts.tsx:124-125`, `170`, mostrado en `:202`). Series: AG10 `byRisk`, VP09 y `individualRiskDistribution` | % de la serie (objetos o personas) | según la serie | Serie vacía → hoy se dibuja "Sin datos" con valor 1, que se muestra como 100,0 %; contrato: "sin datos" sin porcentaje (`NO_APLICA`) | D |
+| VP13 | Relleno "Sin datos" de `BarDistributionChart` y `TopDebtHorizontalChart` (`front/components/charts/debtor-dashboard-charts.tsx`) | Barra "Sin datos" | Serie vacía → una barra `{ label: 'Sin datos', value: 0 }` (`front/components/charts/debtor-dashboard-charts.tsx:69`, `220`) | — | — | Dibuja un 0 que no es dato; contrato: mensaje "sin datos" (o "no disponible" si la lectura falló), sin barra | D |
+| VP14 | Puntaje redondeado en `RiskBadge` y `PersonRiskBadge` | "ALTO (n)" | `Math.round(score)` de FO10 / PR09 (`front/components/equitas/risk-badge.tsx:8`; `front/components/people/person-risk-badge.tsx:9`); en riesgo-análisis también `riskValue.toFixed(2)` (`front/app/risk-analysis/page.tsx:171`) | puntos 0–100 (no %) | según el puntaje | Solo formato: hereda los faltantes de FO10/PR09 | D |
+
+### 7.10 Reglas de prioridad en Python (servicio de scoring)
 
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
@@ -234,7 +292,7 @@ Se recalculan en cada consulta en `front/lib/mappers/debtor-object-mapper.ts:420
 | PY02 | `priority_score` | — | PR08 + 10/3 por 0/1 contactos + 5 si ≥10 vencidas + 5 si ≥365 días + 5 si >1 persona, acotado a 100 (`back/services/scoring_service.py:139-167`) — fórmula distinta de FO13 | puntos 0–100 | `computed_at` | La falta de contacto suma prioridad (faltante como severidad) | D |
 | PY03 | `case_group`, `tags` | — | Grupos y etiquetas por PR08, contactos, vencidas y antigüedad (`back/services/scoring_service.py:175-235`) | categoría | `computed_at` | `no_contact` se etiqueta además `data_quality_issue` (correcto como bandera, no como severidad) | D |
 
-### 7.10 Dimensiones ausentes (no inferibles con esta cartera)
+### 7.11 Dimensiones ausentes (no inferibles con esta cartera)
 
 | ID | Variable | Estado | Regla |
 |---|---|---|---|
@@ -276,6 +334,8 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 7. **Totales por objeto**: los totales sobre conjuntos de personas se deduplican por objeto (§3); la exposición individual se rotula "no aditiva".
 8. **Faltante no suma severidad**: la falta de contacto o de perfil es una bandera de calidad, no un incremento de riesgo ni de prioridad.
 9. **Valores por defecto prohibidos**: no se reemplaza un faltante por un texto que parezca dato ("Media", "No especificada", "Sin estado", "En gestion", "Sin periodo"); se muestra el estado de §4.
+10. **Procedencia temporal**: un valor persistido se expone con su `computed_at` real (`profile_generated_at` para perfiles) o como "momento de cálculo desconocido"; solo lo recalculado con el reloj de la consulta se rotula "calculado al día de la consulta" (§5.1).
+11. **Identidad**: los DTO y enlaces usan la clave interna (`id`/FK); la clave externa (`external_id`) se expone, si hace falta, en un campo propio rotulado como identificador municipal, nunca en lugar del `id` (§2).
 
 ## 10. Brechas del código actual frente a este contrato
 
@@ -285,6 +345,8 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 | Importe o fecha ilegible → 0 / nula | `back/ETL/transform.py:142-177`; `front/lib/parsers/numeric-value-parser.ts:6-18`; `front/lib/parsers/date-value-parser.ts:23-31` | ALIGN-024 (origen), ALIGN-011 (frontend) |
 | Persona sin detalle → 0 y BAJO | `front/lib/mappers/person-risk-mapper.ts:252` | ALIGN-011 |
 | Exposición sumada entre personas | `front/app/people/page.tsx:101-104` | ALIGN-011 |
+| Porcentaje o promedio con base vacía mostrado como 0 % / 0; recomendación dominante con 0 objetos; serie vacía dibujada como barra 0 o anillo 100 % | VP01–VP04, VP12, VP13; AG14–AG17 | ALIGN-011 (valores), ALIGN-012 (pantallas) |
+| Valores persistidos sin momento de cálculo en pantalla (`profile_generated_at` no se lee) | §5.1; `front/lib/mappers/debtor-object-mapper.ts:434-476` | ALIGN-011 |
 | Falta de contacto suma riesgo/prioridad (+15 ETL, +10 Python, fallback 55 frontend) y resta −6 en el puntaje frontend | `back/ETL/transform.py:577-582`; `back/services/scoring_service.py:150-153`; `front/lib/services/debtor-risk-calculator.ts:121-127`; `front/lib/mappers/debtor-object-mapper.ts:136` | ALIGN-008 |
 | Índice relativo al promedio del lote y antigüedad contra `date.today()` | `back/ETL/transform.py:512-523`, `535-597`; `back/ETL/run_etl.py:343-358` | ALIGN-008, ALIGN-010 |
 | Rótulos engañosos ("Prioridad de contacto", "Periodo", "Nivel socioeconomico / riesgo", cifras fijas del ingreso) | §8; `front/app/login/page.tsx:9-24` | ALIGN-012 |
@@ -300,20 +362,20 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 | §3 27 objetos con porcentajes que no suman 100 | §3 regla 4, RE01 |
 | §3 Tipo de persona UNKNOWN en 1242 personas | PE04 |
 | §3 Fecha de nacimiento nula en todas las personas | PE06 |
-| §3 Perfiles generados entre 30/09 y 02/10/2026 | L04, §5 |
+| §3 Perfiles generados entre 30/09 y 02/10/2026 | L04, §5, §5.1 (rótulo de valores persistidos) |
 | §3 `previous_*_count` en 0 en los 2933 perfiles, sin alimentarse | PR07, §8, AU03 |
 | §3 `socioeconomic_risk_level` entre 25 y 100, no calibrado | PR08, §8 |
 | §5 Período fiscal sin contrato (`period = external_id`) | DE02, §8 |
 | §5 Fechas con significado mezclado (`issue_date > due_date`, `last_collection_date = issue_date`) | DE08–DE09, §5 |
 | §5 Estado inferido por vencimiento | DE10 |
-| §5 Perfil temporal: edades persistidas difieren del recálculo | §5, PR04 |
+| §5 Perfil temporal: edades persistidas difieren del recálculo | §5, §5.1, PR04 |
 | §5 Riesgo no social | PR08, FO11, §8, AU01 |
 | §5 Prioridad no unificada (frontend 0–172, Python 0–100) | FO13, PY02, §8 |
 | §5 Gestión sin historia comprobada | PR07, AU03 |
 | §5 Contactabilidad limitada | FO09, AG04, AG17 |
 | §5 Relaciones y duplicación económica | §3, FP04, AG14 |
 | §5 Procedencia insuficiente (`data_source` vacía, tenant "Demo") | L01, L03 |
-| §5 Identidad multitenant (`person.external_id` global) | §2, PE01 |
+| §5 Identidad multitenant (`person.external_id` global) | §2, PE00 (clave interna), PE01 (clave externa) |
 | §5 Original y migración de testing difieren (`updated_amount` generado vs numérico) | DE06, §9 regla 2 |
 | §5 Importes actuales sin ceros ni negativos en la carga | §4 (cero real `OBSERVADO`), §9 regla 1: se prueba con datos sintéticos |
 
@@ -322,3 +384,4 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 | Versión | Fecha | Cambio |
 |---|---|---|
 | v1 | 28/10/2026 | Versión inicial (ALIGN-007). Provisional hasta la homologación del significado de origen por el custodio (ALIGN-004) |
+| v1 (corrección 1) | 29/10/2026 | Revisión independiente de ALIGN-007: inventario de cálculos de páginas y componentes (§7.9) y separación de AG08/VP07; claves internas separadas de las externas (§2, OB01/OB02, DE00/DE01, PE00/PE01, CO04); procedencia temporal y rótulos (§5.1); AG07 dividido en AG07a–c; reglas de agregación (§4.1) |

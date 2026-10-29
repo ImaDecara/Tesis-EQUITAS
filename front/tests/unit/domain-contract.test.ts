@@ -87,6 +87,43 @@ const ruleColumns = [
   'debtor_profile.profile_generated_at', 'debtor_profile_detail.risk_value',
 ]
 
+// Calculos hechos dentro de paginas y componentes, sin DTO propio (contrato §7.8-§7.9).
+// Si se renombra o elimina uno, la prueba obliga a actualizar el diccionario.
+const pageCalculations: Record<string, string[]> = {
+  'app/page.tsx': ['highRiskShare', 'topDebtConcentration', 'percentage', 'dominantRecommendation'],
+  'app/people/page.tsx': [
+    'withContactCount', 'filteredPeople', 'totalDebtAssociated', 'averageRiskValue',
+  ],
+  'app/debtors/page.tsx': ['filteredDebtors'],
+  'app/priority-cases/page.tsx': ['filteredCases'],
+  'app/debt-aging/page.tsx': ['debtByStatusChart', 'topDebtChart'],
+  'app/risk-analysis/page.tsx': [
+    'objectRiskDistribution', 'highRiskCases', 'highIndividualRiskPeople',
+  ],
+  'app/no-contact/page.tsx': ['noContactCases', 'associatedDebt', 'highRiskNoContact', 'totalShare'],
+  'app/recommended-actions/page.tsx': ['buildRecommendationSummary'],
+  'components/charts/debtor-dashboard-charts.tsx': [
+    'RiskDonutChart', 'BarDistributionChart', 'TopDebtHorizontalChart',
+  ],
+  'components/equitas/risk-badge.tsx': ['RiskBadge'],
+  'components/people/person-risk-badge.tsx': ['PersonRiskBadge'],
+}
+
+function source(path: string) {
+  return readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')
+}
+
+// Filas del diccionario (§7) partidas en columnas: ID, Variable, Rotulo, Fuente, Unidad, ...
+function dictionaryRow(name: string) {
+  const row = section(7)
+    .split('\n')
+    .filter((line) => /^\| [A-Z]{2}\d/.test(line))
+    .map((line) => line.split(' | '))
+    .find((cells) => cells[1].includes(`\`${name}\``))
+  expect(row, `fila del diccionario para ${name}`).toBeDefined()
+  return row as string[]
+}
+
 describe('ALIGN-007: contrato de dominio v1', () => {
   it('documenta exactamente los estados de presencia del tipo DataPresence', () => {
     const documented = [...section(4).matchAll(/^\| `([A-Z_]+)` \|/gm)].map((match) => match[1])
@@ -113,6 +150,52 @@ describe('ALIGN-007: contrato de dominio v1', () => {
     )
 
     expect(missing).toEqual([])
+  })
+
+  it('inventaria los calculos visibles hechos en paginas y componentes', () => {
+    const dictionary = section(7)
+
+    for (const [path, names] of Object.entries(pageCalculations)) {
+      const code = source(path)
+
+      for (const name of names) {
+        expect(code, `${name} sigue existiendo en ${path}`).toMatch(new RegExp(`\\b${name}\\b`))
+        expect(dictionary, `${name} tiene entrada en el diccionario`).toContain(`\`${name}\``)
+      }
+    }
+  })
+
+  it('distingue el conteo de obligaciones por estado de la suma en ARS por estado del objeto', () => {
+    expect(dictionaryRow('DashboardData.byDebtStatus')[4]).toBe('obligaciones')
+    expect(dictionaryRow('debtByStatusChart')[4]).toContain('ARS')
+  })
+
+  it('separa las claves internas de los identificadores externos del archivo municipal', () => {
+    for (const [internal, external] of [
+      ['DebtorListItem.id', 'debtor.external_id'],
+      ['DebtorDebtItem.id', 'debt.external_id'],
+      ['PersonListItem.id', 'person.external_id'],
+      ['DebtorPersonItem.id', 'person.external_id'],
+      ['DebtorPersonRelation.personId', 'person.external_id'],
+    ]) {
+      const internalRow = dictionaryRow(internal)
+      const externalRow = dictionaryRow(external)
+
+      expect(internalRow[0], internal).not.toBe(externalRow[0])
+      expect(internalRow[1], internal).not.toContain('external_id')
+      expect(internalRow[4], internal).toContain('interno')
+      expect(externalRow[4], external).toContain('externo')
+    }
+  })
+
+  it('define por separado cada metrica critica del tablero', () => {
+    const ids = [
+      'DashboardData.criticalCasesToday',
+      'DashboardData.riskAboveNinetyCases',
+      'DashboardData.criticalDebtTotal',
+    ].map((name) => dictionaryRow(name)[0])
+
+    expect(new Set(ids).size).toBe(3)
   })
 
   it('fija el significado de los nombres heredados sin renombrar columnas', () => {
