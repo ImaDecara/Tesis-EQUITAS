@@ -1,0 +1,142 @@
+{
+  "generador": "quality/fixtures/synthetic_portfolio.py",
+  "version": "sintetico-v1",
+  "semilla": 20261028,
+  "perfil": "contrato",
+  "fecha_corte": "2026-09-30",
+  "clase": "S (sintético; ninguna fila deriva de la cartera real)",
+  "formato_origen": {
+    "separador": "\\t",
+    "codificacion": "utf-8",
+    "decimal": ",",
+    "miles": ".",
+    "fecha": "dd/mm/aaaa",
+    "fin_de_linea": "LF"
+  },
+  "catalogos": {
+    "Bien_Tipo_Id": {
+      "1": "INMUEBLE",
+      "3": "RODADO",
+      "6": "AGUA"
+    },
+    "Tipo_Ingreso_Id": {
+      "1": "inmuebles",
+      "100": "automotor",
+      "801": "conexion de agua",
+      "905": "tasa sintetica sin mapeo en el ETL"
+    },
+    "NOTD_ESTA_id": {
+      "10": "PENDIENTE",
+      "20": "PAGADA",
+      "30": "ANULADA",
+      "40": "SUSPENDIDA"
+    },
+    "NOTD_SITU_id": "columna presente y vacía (NO_INFORMADO_EN_ORIGEN)"
+  },
+  "proporciones": {
+    "tipo_bien": {
+      "3": 0.6,
+      "6": 0.35,
+      "1": 0.05
+    },
+    "objeto_con_dos_personas": 0.02,
+    "persona_reutilizada": 0.1,
+    "persona_sin_contacto": 0.55,
+    "porcentaje_distinto_de_100": 0.01,
+    "interes_maximo_sobre_capital": 0.8
+  },
+  "procedencia_proporciones": "cardinalidades y proporciones agregadas del informe de input §3 redondeadas (5 puntos, o 1 punto si < 5 %) o supuestas; sin ALIGN-004 no se calibra con la cartera real",
+  "conteos": {
+    "municipio-sintetico-a": {
+      "filas_cabecera": 42,
+      "filas_detalle": 163,
+      "objetos": 40,
+      "objetos_aceptados": 31,
+      "objetos_en_cuarentena": 9,
+      "personas": 40,
+      "relaciones": 42,
+      "obligaciones_unicas": 160,
+      "duplicados_identicos": 1,
+      "duplicados_conflictivos": 1,
+      "detalle_sin_cabecera": 1,
+      "objetos_sin_contacto_utilizable": 7,
+      "objetos_porcentajes_no_100": 2
+    },
+    "municipio-sintetico-b": {
+      "filas_cabecera": 3,
+      "filas_detalle": 6,
+      "objetos": 3,
+      "objetos_aceptados": 3,
+      "objetos_en_cuarentena": 0,
+      "personas": 3,
+      "relaciones": 3,
+      "obligaciones_unicas": 6,
+      "duplicados_identicos": 0,
+      "duplicados_conflictivos": 0,
+      "detalle_sin_cabecera": 0,
+      "objetos_sin_contacto_utilizable": 1,
+      "objetos_porcentajes_no_100": 0
+    }
+  },
+  "variantes": [
+    {
+      "id": "tsv",
+      "archivos": [
+        "cabecera.tsv",
+        "detalle.tsv"
+      ],
+      "separador": "\\t",
+      "codificacion": "utf-8",
+      "fin_de_linea": "LF",
+      "oraculo": "expected.json"
+    }
+  ],
+  "oraculo": {
+    "ruta": "expected.json",
+    "sha256": "642bae3e13a15755d7c93c1f7c217abb8f2d9dcdf7468ad44b95e8bf916a1048"
+  },
+  "privacidad": {
+    "nombres": "Persona Sintética NNNN / Entidad Sintética NNNN",
+    "documentos": "prefijo 99 (no asignado a CUIT/CUIL)",
+    "emails": "@example.invalid",
+    "telefonos": "0000-555-NNNN y 0000-15-555-NNNN",
+    "domicilios": "Calle/Localidad/Provincia Sintética"
+  },
+  "archivos": [
+    {
+      "ruta": "cabecera.tsv",
+      "bytes": 11444,
+      "sha256": "270b088aabe398db2b5decdadfcd9bf216aabdb4ffe4915b4f941b3e72f306e6"
+    },
+    {
+      "ruta": "detalle.tsv",
+      "bytes": 16740,
+      "sha256": "daea5204c56c37182de1da4675882afe095e06eb6a0e57f9a0ccabd819d8e13c"
+    },
+    {
+      "ruta": "escenario-social.json",
+      "bytes": 8009,
+      "sha256": "f87f7a35be0147c758236456c9d8c26fb8ce78cfe94741707c744674d5f93c45"
+    },
+    {
+      "ruta": "expected.json",
+      "bytes": 56129,
+      "sha256": "642bae3e13a15755d7c93c1f7c217abb8f2d9dcdf7468ad44b95e8bf916a1048"
+    },
+    {
+      "ruta": "seguridad/municipio-sintetico-b/cabecera.tsv",
+      "bytes": 1193,
+      "sha256": "4ca32fe2dec18e9487602140384cb05d6b047c946fff710315ca5bb16c0b3552"
+    },
+    {
+      "ruta": "seguridad/municipio-sintetico-b/detalle.tsv",
+      "bytes": 791,
+      "sha256": "8d43419bdcee5499fddda8fe253f022acabe2dfdec20af924b302c0da2dfd267"
+    },
+    {
+      "ruta": "seguridad/municipios.json",
+      "bytes": 2726,
+      "sha256": "58f215638fe00fa00c301ece2f17724ae810f8174699444e58b6e404566b5ef8"
+    }
+  ]
+}

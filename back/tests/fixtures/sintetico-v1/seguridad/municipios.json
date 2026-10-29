@@ -1,0 +1,114 @@
+{
+  "version": "sintetico-v1",
+  "municipios": [
+    {
+      "clave": "municipio-sintetico-a",
+      "nombre": "Municipio Sintético A",
+      "lote": "."
+    },
+    {
+      "clave": "municipio-sintetico-b",
+      "nombre": "Municipio Sintético B",
+      "lote": "seguridad/municipio-sintetico-b"
+    }
+  ],
+  "cuentas": [
+    {
+      "municipio": "municipio-sintetico-a",
+      "rol": "consulta",
+      "email": "consulta.municipio-sintetico-a@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "rol": "operador",
+      "email": "operador.municipio-sintetico-a@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "rol": "importador",
+      "email": "importador.municipio-sintetico-a@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "rol": "supervisor",
+      "email": "supervisor.municipio-sintetico-a@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "rol": "consulta",
+      "email": "consulta.municipio-sintetico-b@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "rol": "operador",
+      "email": "operador.municipio-sintetico-b@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "rol": "importador",
+      "email": "importador.municipio-sintetico-b@example.invalid"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "rol": "supervisor",
+      "email": "supervisor.municipio-sintetico-b@example.invalid"
+    }
+  ],
+  "credenciales": "no incluidas: cada campaña crea contraseñas efímeras en la base local",
+  "objetos_por_municipio": {
+    "municipio-sintetico-a": [
+      "1-10014",
+      "1-10018",
+      "3-000123",
+      "3-10003",
+      "3-10004",
+      "3-10005",
+      "3-10007",
+      "3-10008",
+      "3-10009",
+      "3-10010",
+      "3-10012",
+      "3-10016",
+      "3-10017",
+      "3-10019",
+      "3-10023",
+      "3-10025",
+      "3-10029",
+      "3-10031",
+      "3-10032",
+      "3-10033",
+      "3-10034",
+      "3-10035",
+      "3-10036",
+      "3-123",
+      "3-4100",
+      "6-10001",
+      "6-10002",
+      "6-10006",
+      "6-10011",
+      "6-10013",
+      "6-10015",
+      "6-10020",
+      "6-10021",
+      "6-10024",
+      "6-10026",
+      "6-10028",
+      "6-10030",
+      "6-4100",
+      "6-R-0456",
+      "9-10022"
+    ],
+    "municipio-sintetico-b": [
+      "1-10038",
+      "3-4100",
+      "6-10037"
+    ]
+  },
+  "objetos_misma_clave_en_ambos": [
+    "3-4100"
+  ],
+  "personas_en_ambos": [
+    90001
+  ],
+  "esperado": "un usuario de un municipio nunca ve objetos, personas ni contactos cargados solo por el otro; la persona compartida expone DEF-SEC-003 (identidad y contactos sin municipio)"
+}
