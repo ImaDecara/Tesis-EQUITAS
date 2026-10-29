@@ -92,14 +92,16 @@ La web consulta la prioridad a la API Python.
 
 ## 5. Flujo real y capas
 
-Trazo continuo: existe en `c17a1bf`. Trazo discontinuo: lo agrega el ticket indicado. El diagrama del plan (§4) muestra además la importación web, la analítica experimental y el chat, que no cambian esta decisión.
+Trazo continuo: existe en `c17a1bf` y sigue igual en la integración con ALIGN-011 (`ab4c5b3`), que no modificó los archivos citados en este ADR. Trazo discontinuo: lo agrega el ticket indicado. El diagrama del plan (§4) muestra además la importación web, la analítica experimental y el chat, que no cambian esta decisión.
 
 ```mermaid
 flowchart LR
   subgraph Ingesta
-    TSV["TSV cabecera y detalle"] --> EXT["ETL CLI: extract.py"]
+    TSV["TSV cabecera y detalle"] --> PRE["Solo con execute: guardia de destino ALIGN-025<br/>antes de extraer; solo local o testing en loopback<br/>original rechazado"]
+    PRE --> EXT["ETL CLI: extract.py"]
     EXT --> VAL["Validación<br/>hoy parcial en transform.py<br/>contrato de origen: ALIGN-024"]
-    VAL --> GUARD["Guardia de destino ALIGN-025<br/>solo local o testing en loopback<br/>original rechazado"]
+    VAL --> DRY["Modo por defecto: dry-run<br/>resumen, sin escritura"]
+    VAL -->|modo execute| GUARD["Revalidación del destino<br/>al crear el cliente"]
     GUARD --> LOAD["load.py<br/>REST con clave de servicio"]
   end
   LOAD --> DB[("Supabase Postgres<br/>RLS por membresía")]
@@ -161,3 +163,4 @@ Consecuencias aceptadas:
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1 | 29/10/2026 | Versión inicial (ALIGN-013). Provisional hasta la revisión independiente. ALIGN-052 la amplía con la importación interna |
+| 1 (corrección 1) | 29/10/2026 | Revisión independiente: el diagrama muestra la guardia de `--execute` antes de extraer (`back/ETL/run_etl.py:69-72`), el final del dry-run sin escritura (`:113-118`) y la revalidación del destino al crear el cliente |
