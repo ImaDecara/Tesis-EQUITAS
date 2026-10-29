@@ -1,572 +1,302 @@
+"""Servicio interno v1: cartera completa, corte explícito y colas por intervención.
+
+La fórmula v0 (PY01–PY03) está archivada en el contrato y en git. No hay
+fallback a sus agregados. Solo uso local sintético hasta ALIGN-052 (ADR-001).
+"""
+
 import argparse
-from typing import Any, cast
+from collections import defaultdict
+from typing import Any
 
 from ETL.config import supabase
+from services.decision_input import build_decision_input
+from services.decision_rules_v1 import (
+    RULES,
+    RULES_VERSION,
+    evaluate,
+    parse_date,
+    priority_sort_key,
+)
+from services.paginated_reader import (
+    ID_CHUNK_SIZE,
+    DataReadError,
+    read_all_by_id,
+    row_id,
+)
 
-# ============================================================
-# DEFINICIÓN DE GRUPOS PARA DASHBOARD
-# ============================================================
-
-# Estos grupos son calculados dinámicamente desde debtor_profile.
-# No se guardan en Supabase para mantener simple el MVP.
-GROUP_DEFINITIONS: dict[str, dict[str, str]] = {
-    "critical_no_contact": {
-        "label": "Crítico sin contacto disponible",
-        "description": "Casos críticos donde primero se debe validar o conseguir contacto.",
-        "recommended_action": (
-            "Priorizar búsqueda, validación o actualización de datos de contacto "
-            "antes de iniciar gestión intensiva."
-        ),
-    },
-    "critical_contactable": {
-        "label": "Crítico con contacto disponible",
-        "description": "Casos críticos que ya tienen al menos un contacto disponible.",
-        "recommended_action": (
-            "Iniciar contacto inmediato y ofrecer alternativa de regularización."
-        ),
-    },
-    "high_overdue_volume": {
-        "label": "Alto riesgo con muchas deudas vencidas",
-        "description": "Casos de riesgo alto con volumen importante de obligaciones vencidas.",
-        "recommended_action": (
-            "Priorizar gestión por volumen de deuda vencida y evaluar plan de pago."
-        ),
-    },
-    "high_recovery_priority": {
-        "label": "Alta prioridad de recupero",
-        "description": "Casos de riesgo alto que conviene incluir en gestión prioritaria.",
-        "recommended_action": "Incluir en lote prioritario de recupero.",
-    },
-    "medium_recovery": {
-        "label": "Riesgo medio para regularización",
-        "description": "Casos aptos para campañas generales de regularización.",
-        "recommended_action": (
-            "Incluir en campaña de regularización o recordatorio preventivo."
-        ),
-    },
-    "low_monitoring": {
-        "label": "Riesgo bajo para seguimiento preventivo",
-        "description": "Casos de bajo riesgo que no requieren gestión intensiva inmediata.",
-        "recommended_action": (
-            "Mantener seguimiento preventivo sin priorización intensiva."
-        ),
-    },
-}
+GROUP_DEFINITIONS = RULES["intervenciones"]
+DEBTOR_COLUMNS = "id,tenant,external_id,type,identifier,description,status"
 
 
-# ============================================================
-# FUNCIONES AUXILIARES
-# ============================================================
-
-# Convierte un valor a entero de forma segura.
-def to_int(value: Any, default: int = 0) -> int:
-    try:
-        if value is None:
-            return default
-
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
+def _read(table: str, columns: str) -> list[dict[str, Any]]:
+    return read_all_by_id(table, lambda: supabase.table(table).select(columns))
 
 
-# Convierte un valor a decimal de forma segura.
-def to_float(value: Any, default: float = 0.0) -> float:
-    try:
-        if value is None:
-            return default
+def _read_for_ids(
+    table: str, columns: str, column: str, ids: list[int], *, active: bool = False
+) -> list[dict[str, Any]]:
+    rows = []
+    identifiers = sorted({row_id(identifier) for identifier in ids})
+    for start in range(0, len(identifiers), ID_CHUNK_SIZE):
+        chunk = identifiers[start : start + ID_CHUNK_SIZE]
 
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+        def query(chunk=chunk):
+            result = supabase.table(table).select(columns).in_(column, chunk)
+            return result.eq("active", True) if active else result
 
-
-# Limita un puntaje entre un mínimo y un máximo.
-def clamp_score(value: float, minimum: int = 0, maximum: int = 100) -> int:
-    return int(max(minimum, min(round(value), maximum)))
-
-
-# Convierte la respuesta genérica de Supabase a list[dict[str, Any]].
-# Esto evita errores de tipado en Pylance/Pyright.
-def cast_response_rows(data: Any) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-
-    if not data:
-        return rows
-
-    for item in data:
-        if isinstance(item, dict):
-            rows.append(cast(dict[str, Any], item))
-
+        rows.extend(read_all_by_id(table, query))
     return rows
 
 
-# ============================================================
-# CLASIFICACIÓN DE RIESGO
-# ============================================================
-
-# Clasifica el riesgo porcentual en una banda legible.
-def classify_risk_band(risk_score: int) -> str:
-    if risk_score >= 75:
-        return "critical"
-
-    if risk_score >= 50:
-        return "high"
-
-    if risk_score >= 25:
-        return "medium"
-
-    return "low"
+def fetch_debtor_profiles() -> list[dict[str, Any]]:
+    """Metadatos únicamente: los valores persistidos v0 nunca alimentan v1."""
+    return read_all_by_id(
+        "debtor_profile",
+        lambda: (
+            supabase.table("debtor_profile")
+            .select("id,debtor,active")
+            .eq("active", True)
+        ),
+    )
 
 
-# Devuelve una etiqueta legible para la banda de riesgo.
-def get_risk_band_label(risk_band: str) -> str:
-    labels = {
-        "critical": "Riesgo crítico",
-        "high": "Riesgo alto",
-        "medium": "Riesgo medio",
-        "low": "Riesgo bajo",
-    }
-
-    return labels.get(risk_band, "Riesgo no clasificado")
-
-
-# ============================================================
-# SCORE OPERATIVO
-# ============================================================
-
-# Calcula un score operativo para ordenar casos dentro del dashboard.
-# Parte del riesgo porcentual del objeto y suma ajustes por complejidad operativa.
-def calculate_priority_score(profile: dict[str, Any]) -> int:
-    risk_score = to_int(profile.get("socioeconomic_risk_level"))
-
-    available_contact_count = to_int(profile.get("available_contact_count"))
-    overdue_debt_count = to_int(profile.get("overdue_debt_count"))
-    oldest_debt_days = to_int(profile.get("oldest_debt_days"))
-    active_person_count = to_int(profile.get("active_person_count"))
-
-    score = risk_score
-
-    # Sin contactos disponibles: más difícil de gestionar.
-    if available_contact_count == 0:
-        score += 10
-    elif available_contact_count == 1:
-        score += 3
-
-    # Muchas deudas vencidas: mayor complejidad.
-    if overdue_debt_count >= 10:
-        score += 5
-
-    # Deuda muy antigua: mayor urgencia de gestión.
-    if oldest_debt_days >= 365:
-        score += 5
-
-    # Más de una persona asociada: puede requerir análisis adicional.
-    if active_person_count > 1:
-        score += 5
-
-    return clamp_score(score)
+def fetch_debtors_by_ids(
+    debtor_ids: list[int] | None = None,
+) -> dict[int, dict[str, Any]]:
+    """None lee toda la cartera; [] es un conjunto vacío y no hace consultas."""
+    rows = (
+        _read("debtor", DEBTOR_COLUMNS)
+        if debtor_ids is None
+        else _read_for_ids("debtor", DEBTOR_COLUMNS, "id", debtor_ids)
+    )
+    return {row_id(row["id"]): row for row in rows}
 
 
-# ============================================================
-# TAGS DEL CASO
-# ============================================================
-
-# Genera etiquetas auxiliares para explicar el caso.
-def build_case_tags(profile: dict[str, Any]) -> list[str]:
-    tags: list[str] = []
-
-    risk_score = to_int(profile.get("socioeconomic_risk_level"))
-    available_contact_count = to_int(profile.get("available_contact_count"))
-    overdue_debt_count = to_int(profile.get("overdue_debt_count"))
-    oldest_debt_days = to_int(profile.get("oldest_debt_days"))
-    active_person_count = to_int(profile.get("active_person_count"))
-    overdue_debt_amount = to_float(profile.get("overdue_debt_amount"))
-
-    risk_band = classify_risk_band(risk_score)
-
-    tags.append(f"{risk_band}_risk")
-
-    if available_contact_count == 0:
-        tags.append("no_contact")
-        tags.append("data_quality_issue")
-    else:
-        tags.append("contactable")
-
-    if active_person_count > 1:
-        tags.append("multi_person_case")
-
-    if overdue_debt_count >= 10:
-        tags.append("many_overdue_debts")
-
-    if oldest_debt_days >= 365:
-        tags.append("old_debt")
-
-    if overdue_debt_amount > 0:
-        tags.append("has_overdue_amount")
-
-    return tags
-
-
-# ============================================================
-# AGRUPACIÓN PRINCIPAL DEL CASO
-# ============================================================
-
-# Asigna el grupo principal del caso según riesgo y gestionabilidad.
-def assign_case_group(profile: dict[str, Any]) -> str:
-    risk_score = to_int(profile.get("socioeconomic_risk_level"))
-    available_contact_count = to_int(profile.get("available_contact_count"))
-    overdue_debt_count = to_int(profile.get("overdue_debt_count"))
-
-    if risk_score >= 75 and available_contact_count == 0:
-        return "critical_no_contact"
-
-    if risk_score >= 75 and available_contact_count > 0:
-        return "critical_contactable"
-
-    if risk_score >= 50 and overdue_debt_count >= 10:
-        return "high_overdue_volume"
-
-    if risk_score >= 50:
-        return "high_recovery_priority"
-
-    if risk_score >= 25:
-        return "medium_recovery"
-
-    return "low_monitoring"
-
-
-# ============================================================
-# ARMADO DEL CASO PARA EL DASHBOARD
-# ============================================================
-
-# Construye el resultado completo de scoring y agrupación para un debtor_profile.
-# Puede recibir datos del debtor para mostrar cuenta, identificador y descripción en el frontend.
 def build_case_scoring(
-    profile: dict[str, Any],
+    entry: dict[str, Any],
     debtor: dict[str, Any] | None = None,
+    profile_id: int | None = None,
 ) -> dict[str, Any]:
-    risk_score = to_int(profile.get("socioeconomic_risk_level"))
-    risk_band = classify_risk_band(risk_score)
-    group_key = assign_case_group(profile)
-    group_definition = GROUP_DEFINITIONS[group_key]
-
+    """La decisión completa acompaña los campos de navegación del servicio."""
+    decision = evaluate(entry)
     debtor = debtor or {}
-
     return {
-        "debtor_profile_id": profile.get("id"),
-        "debtor_id": profile.get("debtor"),
+        "debtor_id": row_id(entry["id"]),
+        "debtor_profile_id": profile_id,
         "debtor_external_id": debtor.get("external_id"),
         "debtor_type": debtor.get("type"),
         "debtor_identifier": debtor.get("identifier"),
         "debtor_description": debtor.get("description"),
-        "socioeconomic_risk_level": risk_score,
-        "risk_band": risk_band,
-        "risk_band_label": get_risk_band_label(risk_band),
-        "priority_score": calculate_priority_score(profile),
-        "group_key": group_key,
-        "group_label": group_definition["label"],
-        "group_description": group_definition["description"],
-        "recommended_action": group_definition["recommended_action"],
-        "tags": build_case_tags(profile),
-        "total_debt_amount": to_float(profile.get("total_debt_amount")),
-        "overdue_debt_amount": to_float(profile.get("overdue_debt_amount")),
-        "debt_count": to_int(profile.get("debt_count")),
-        "overdue_debt_count": to_int(profile.get("overdue_debt_count")),
-        "oldest_debt_days": to_int(profile.get("oldest_debt_days")),
-        "average_debt_age_days": to_int(profile.get("average_debt_age_days")),
-        "active_person_count": to_int(profile.get("active_person_count")),
-        "available_contact_count": to_int(profile.get("available_contact_count")),
+        "version_reglas": RULES_VERSION,
+        "as_of": entry["as_of"],
+        "procedencia_corte": "DECLARADO_POR_LLAMADOR; corte municipal no integrado",
+        "decision": decision,
+        "group_key": decision["intervencion"]["codigo"],
+        "group_label": GROUP_DEFINITIONS[decision["intervencion"]["codigo"]]["cola"],
+        "severity_band": decision["severidad"]["banda"],
+        "priority_score": decision["prioridad"]["valor"],
+        "tags": decision["banderas"],
+        "available_contact_count": entry["contactos_activos"]["valor"],
     }
 
 
-# ============================================================
-# LECTURA DESDE SUPABASE
-# ============================================================
-
-# Trae perfiles calculados desde Supabase.
-def fetch_debtor_profiles() -> list[dict[str, Any]]:
-    response = (
-        supabase
-        .table("debtor_profile")
-        .select(
-            "id,"
-            "debtor,"
-            "total_debt_amount,"
-            "overdue_debt_amount,"
-            "debt_count,"
-            "overdue_debt_count,"
-            "oldest_debt_days,"
-            "average_debt_age_days,"
-            "active_person_count,"
-            "available_contact_count,"
-            "socioeconomic_risk_level,"
-            "active"
-        )
-        .eq("active", True)
-        .execute()
-    )
-
-    return cast_response_rows(response.data)
+def _by_parent(
+    rows: list[dict[str, Any]], key: str, table: str
+) -> dict[int, list[dict[str, Any]]]:
+    grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    try:
+        for row in rows:
+            grouped[row_id(row[key])].append(row)
+    except (KeyError, ValueError, TypeError):
+        raise DataReadError(table) from None
+    return grouped
 
 
-# Trae objetos debtor por lote para enriquecer la respuesta al frontend.
-def fetch_debtors_by_ids(debtor_ids: list[int]) -> dict[int, dict[str, Any]]:
-    if not debtor_ids:
-        return {}
+def build_all_case_groups(*, as_of: str) -> list[dict[str, Any]]:
+    """Evalúa todos los objetos, también los que no tienen perfil persistido.
 
-    rows: list[dict[str, Any]] = []
-    chunk_size = 200
-
-    for start in range(0, len(debtor_ids), chunk_size):
-        chunk = debtor_ids[start:start + chunk_size]
-
-        response = (
-            supabase
-            .table("debtor")
-            .select(
-                "id,"
-                "tenant,"
-                "external_id,"
-                "type,"
-                "identifier,"
-                "description,"
-                "status"
-            )
-            .in_("id", chunk)
-            .execute()
-        )
-
-        rows.extend(cast_response_rows(response.data))
-
-    return {
-        int(row["id"]): row
-        for row in rows
-        if row.get("id") is not None
-    }
-
-
-# ============================================================
-# QUERY DE CASOS PARA FRONTEND
-# ============================================================
-
-# Construye todos los casos agrupados dinámicamente desde debtor_profile.
-def build_all_case_groups() -> list[dict[str, Any]]:
+    Una lectura fallida aborta con READ_INCOMPLETE: jamás se convierte en cero
+    obligaciones/contactos. Las consultas por id requieren un lote estable.
+    """
+    parse_date(as_of)
     profiles = fetch_debtor_profiles()
-
-    debtor_ids = [
-        int(profile["debtor"])
-        for profile in profiles
-        if profile.get("debtor") is not None
-    ]
-
-    debtors_by_id = fetch_debtors_by_ids(debtor_ids)
-
-    cases = [
-        build_case_scoring(
-            profile=profile,
-            debtor=debtors_by_id.get(int(profile["debtor"])),
-        )
-        for profile in profiles
-        if profile.get("debtor") is not None
-    ]
-
-    cases.sort(
-        key=lambda item: (
-            int(item["priority_score"]),
-            int(item["socioeconomic_risk_level"]),
-            float(item["total_debt_amount"]),
-        ),
-        reverse=True,
+    debtors = fetch_debtors_by_ids()
+    if not debtors:
+        return []
+    debtor_ids = list(debtors)
+    obligations = _read_for_ids(
+        "debt", "id,debtor,current_amount,due_date", "debtor", debtor_ids
     )
+    relations = _read_for_ids(
+        "debtor_person",
+        "id,debtor,person,priority,active",
+        "debtor",
+        debtor_ids,
+        active=True,
+    )
+    debts_by_object = _by_parent(obligations, "debtor", "debt")
+    relations_by_object = _by_parent(relations, "debtor", "debtor_person")
+    relations_by_person = _by_parent(relations, "person", "debtor_person")
+    person_ids = list(relations_by_person)
+    people = {
+        row_id(row["id"]): row
+        for row in _read_for_ids("person", "id,type", "id", person_ids)
+    }
+    contacts = _read_for_ids(
+        "debtor_contact",
+        "id,person,type,value,active",
+        "person",
+        person_ids,
+        active=True,
+    )
+    contacts_by_person = _by_parent(contacts, "person", "debtor_contact")
+    person_types = (
+        {row_id(row["id"]): row for row in _read("person_type", "id,key")}
+        if person_ids
+        else {}
+    )
+    profiles_by_object = _by_parent(profiles, "debtor", "debtor_profile")
+    queues: dict[str, list[dict[str, Any]]] = {key: [] for key in GROUP_DEFINITIONS}
+    for identifier, debtor in debtors.items():
+        object_relations = relations_by_object[identifier]
+        object_person_ids = {
+            row_id(relation["person"]) for relation in object_relations
+        }
+        object_contacts = [
+            contact
+            for person in object_person_ids
+            for contact in contacts_by_person[person]
+        ]
+        entry = build_decision_input(
+            debtor,
+            debts_by_object[identifier],
+            object_relations,
+            people,
+            object_contacts,
+            person_types,
+            as_of=as_of,
+        )
+        object_profiles = profiles_by_object[identifier]
+        # Si hay más de un perfil, solo se referencia el último id: no altera reglas.
+        profile_id = max(
+            (row_id(profile["id"]) for profile in object_profiles), default=None
+        )
+        case = build_case_scoring(entry, debtor, profile_id)
+        queues[case["group_key"]].append(case)
+    return [
+        case
+        for queue in queues.values()
+        for case in sorted(
+            queue,
+            key=lambda item: priority_sort_key(
+                str(item["debtor_id"]), item["decision"]
+            ),
+        )
+    ]
 
-    return cases
 
-
-# Aplica filtros de grupo, banda, tag o búsqueda textual.
 def filter_case_groups(
     cases: list[dict[str, Any]],
     group_key: str | None = None,
-    risk_band: str | None = None,
+    severity_band: str | None = None,
     tag: str | None = None,
     search: str | None = None,
 ) -> list[dict[str, Any]]:
-    filtered = cases
-
-    if group_key:
-        filtered = [
-            case for case in filtered
-            if case["group_key"] == group_key
-        ]
-
-    if risk_band:
-        filtered = [
-            case for case in filtered
-            if case["risk_band"] == risk_band
-        ]
-
-    if tag:
-        filtered = [
-            case for case in filtered
-            if tag in case["tags"]
-        ]
-
-    if search:
-        normalized_search = search.lower().strip()
-
-        filtered = [
-            case for case in filtered
-            if normalized_search in str(case.get("debtor_external_id", "")).lower()
-            or normalized_search in str(case.get("debtor_identifier", "")).lower()
-            or normalized_search in str(case.get("debtor_description", "")).lower()
-        ]
-
-    return filtered
+    query = search.strip().lower() if search else ""
+    return [
+        case
+        for case in cases
+        if (not group_key or case["group_key"] == group_key)
+        and (not severity_band or case["severity_band"] == severity_band)
+        and (not tag or tag in case["tags"])
+        and (
+            not query
+            or any(
+                query in str(case.get(key) or "").lower()
+                for key in (
+                    "debtor_external_id",
+                    "debtor_identifier",
+                    "debtor_description",
+                )
+            )
+        )
+    ]
 
 
-# Devuelve casos agrupados paginados para el frontend.
 def get_case_groups(
+    *,
+    as_of: str,
     group_key: str | None = None,
-    risk_band: str | None = None,
+    severity_band: str | None = None,
     tag: str | None = None,
     search: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
-    cases = build_all_case_groups()
-
-    filtered_cases = filter_case_groups(
-        cases=cases,
-        group_key=group_key,
-        risk_band=risk_band,
-        tag=tag,
-        search=search,
+    if limit < 1 or offset < 0:
+        raise ValueError("Paginación inválida")
+    cases = filter_case_groups(
+        build_all_case_groups(as_of=as_of), group_key, severity_band, tag, search
     )
-
-    total = len(filtered_cases)
-    paginated_items = filtered_cases[offset:offset + limit]
-
     return {
-        "total": total,
+        "version_reglas": RULES_VERSION,
+        "as_of": as_of,
+        "total": len(cases),
         "limit": limit,
         "offset": offset,
-        "items": paginated_items,
+        "items": cases[offset : offset + limit],
     }
 
 
-# ============================================================
-# SUMMARY PARA DASHBOARD
-# ============================================================
-
-# Devuelve resumen de grupos para tarjetas del dashboard.
-def get_case_groups_summary() -> dict[str, Any]:
-    cases = build_all_case_groups()
-
-    group_counts: dict[str, int] = {
-        group_key: 0
-        for group_key in GROUP_DEFINITIONS
-    }
-
-    risk_band_counts: dict[str, int] = {
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-    }
-
-    contact_counts: dict[str, int] = {
-        "without_contact": 0,
-        "with_contact": 0,
-    }
-
+def get_case_groups_summary(*, as_of: str) -> dict[str, Any]:
+    cases = build_all_case_groups(as_of=as_of)
+    counts = {key: 0 for key in GROUP_DEFINITIONS}
+    bands = {band["codigo"]: 0 for band in RULES["severidad"]["bandas"]}
+    bands[RULES["severidad"]["banda_sin_valor"]] = 0
+    contacts = {"without_contact": 0, "with_contact": 0, "unavailable": 0}
     for case in cases:
-        group_counts[str(case["group_key"])] += 1
-        risk_band_counts[str(case["risk_band"])] += 1
-
-        if int(case["available_contact_count"]) == 0:
-            contact_counts["without_contact"] += 1
-        else:
-            contact_counts["with_contact"] += 1
-
-    groups = []
-
-    for group_key, definition in GROUP_DEFINITIONS.items():
-        groups.append(
-            {
-                "group_key": group_key,
-                "group_label": definition["label"],
-                "description": definition["description"],
-                "recommended_action": definition["recommended_action"],
-                "total": group_counts[group_key],
-            }
-        )
-
+        counts[case["group_key"]] += 1
+        bands[case["severity_band"]] += 1
+        available = case["available_contact_count"]
+        contacts[
+            "unavailable"
+            if available is None
+            else "with_contact"
+            if available > 0
+            else "without_contact"
+        ] += 1
     return {
+        "version_reglas": RULES_VERSION,
+        "as_of": as_of,
         "total_cases": len(cases),
-        "groups": groups,
-        "risk_bands": risk_band_counts,
-        "contacts": contact_counts,
+        "groups": [
+            {"group_key": key, "group_label": definition["cola"], "total": counts[key]}
+            for key, definition in GROUP_DEFINITIONS.items()
+        ],
+        "severity_bands": bands,
+        "contacts": contacts,
     }
 
 
-# ============================================================
-# PREVIEW POR CONSOLA
-# ============================================================
-
-# Imprime un resumen simple para validar la agrupación.
-def print_case_groups_preview(case_groups: list[dict[str, Any]]) -> None:
-    print("SCORING / CASE GROUPING PREVIEW")
-    print("-" * 80)
-    print(f"Casos procesados: {len(case_groups)}")
-    print()
-
-    group_counts: dict[str, int] = {}
-
-    for case in case_groups:
-        group_key = str(case["group_key"])
-        group_counts[group_key] = group_counts.get(group_key, 0) + 1
-
-    print("Distribución por grupo:")
-    for group_key, count in sorted(group_counts.items()):
-        print(f"- {group_key}: {count}")
-
-    print()
-    print("Primeros casos:")
-    print("-" * 80)
-
-    for case in case_groups[:10]:
-        print(
-            f"debtor={case['debtor_id']} | "
-            f"risk={case['socioeconomic_risk_level']}% | "
-            f"priority={case['priority_score']} | "
-            f"group={case['group_key']} | "
-            f"contacts={case['available_contact_count']} | "
-            f"overdue_count={case['overdue_debt_count']}"
-        )
+def print_case_groups_preview(cases: list[dict[str, Any]]) -> None:
+    # Solo conteos: no expone identificadores municipales ni datos de personas.
+    print(f"Reglas {RULES_VERSION} | Casos procesados: {len(cases)}")
+    for key in GROUP_DEFINITIONS:
+        print(f"{key}: {sum(case['group_key'] == key for case in cases)}")
 
 
-# ============================================================
-# ENTRYPOINT CLI
-# ============================================================
-
-# Permite ejecutar el servicio desde consola.
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Calcula scoring operativo y agrupación de casos desde debtor_profile."
+        description="Scoring v1 interno; solo local sintético (ADR-001)."
     )
-
     parser.add_argument(
-        "--limit",
-        type=int,
-        default=50,
-        help="Cantidad máxima de perfiles a mostrar para preview.",
+        "--as-of",
+        required=True,
+        help="Corte declarado YYYY-MM-DD; no se sustituye por hoy.",
     )
-
+    parser.add_argument("--limit", type=int, default=50)
     args = parser.parse_args()
-
-    all_cases = build_all_case_groups()
-    preview_cases = all_cases[:args.limit]
-
-    print_case_groups_preview(preview_cases)
+    print_case_groups_preview(build_all_case_groups(as_of=args.as_of)[: args.limit])
 
 
 if __name__ == "__main__":
