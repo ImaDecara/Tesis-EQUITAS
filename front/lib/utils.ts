@@ -7,12 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // Formato de moneda consistente en tarjetas, tablas y detalle.
-export function formatCurrency(value: number, currency = 'ARS') {
+export function formatCurrency(value: number | null, currency = 'ARS') {
+  if (value === null || !Number.isFinite(value)) return 'No disponible'
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency,
     maximumFractionDigits: 0,
-  }).format(Number.isFinite(value) ? value : 0)
+  }).format(value)
 }
 
 // Formato de fecha seguro para valores nulos o invalidos.

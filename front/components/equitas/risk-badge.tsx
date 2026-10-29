@@ -9,7 +9,9 @@ function formatRiskBadgeLabel(label: string, score?: number | null) {
 }
 
 // Mapea niveles de riesgo del dominio a una severidad visual consistente.
-export function RiskBadge({ risk, score }: { risk: string; score?: number | null }) {
+export function RiskBadge({ risk, score }: { risk: string | null; score?: number | null }) {
+  if (risk === null) return <Badge variant="neutral">No disponible</Badge>
+
   if (risk === 'ALTO') {
     return <Badge variant="danger">{formatRiskBadgeLabel('Alto', score)}</Badge>
   }

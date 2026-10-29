@@ -142,7 +142,7 @@ describe('R-DAT-01: limites, fallos y relaciones de la lectura completa', () => 
     const result = await getPeopleDataFromService()
 
     expect(result.people).toHaveLength(1)
-    expect(result.people[0]).toMatchObject({ id: '1', riskValue: 0 })
+    expect(result.people[0]).toMatchObject({ id: '1', riskValue: null, individualRisk: null })
     expect(result.warnings).toEqual([{ table: 'debtor_profile_detail', message: 'second page unavailable', code: '57014', needsSelectPolicy: false }])
   })
 
@@ -177,7 +177,7 @@ describe('R-DAT-01: limites, fallos y relaciones de la lectura completa', () => 
       debtor: [{ id: 1, external_id: 'OBJ-E03', type: 1 }],
       debtor_type: [{ id: 1, value: 'Agua' }],
       debt_status: [{ id: 1, value: 'Vigente' }],
-      debt: rows.map((row) => ({ id: row.id, debtor: 1, original_amount: 2, debt_status: 1, due_date: '2099-01-01' })),
+      debt: rows.map((row) => ({ id: row.id, debtor: 1, original_amount: 2, current_amount: 2, status: 1, due_date: '2099-01-01' })),
       person: rows,
       debtor_person: rows.map((row) => ({ id: row.id, debtor: 1, person: row.id, active: true })),
       debtor_contact: rows.map((row) => ({ id: row.id, person: row.id, value: `persona-${row.id}@example.test`, active: true })),

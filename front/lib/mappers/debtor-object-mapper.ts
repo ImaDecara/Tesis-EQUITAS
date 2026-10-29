@@ -1,17 +1,13 @@
 import {
-  calculateDaysSinceDate,
-  resolveDebtStatusFromDueDate,
-} from '@/lib/parsers/date-value-parser'
-import {
   parseBooleanFromUnknown,
   rowHasCandidateKey,
   selectTextFromRow,
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { selectNumericValueFromRow } from '@/lib/parsers/numeric-value-parser'
+import { aggregateData, currentAmount, daysSinceData, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
-import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
+import { clampRiskScore, mapRiskLevel } from '@/lib/services/debtor-risk-calculator'
 import type {
   DebtorContactItem,
   DebtorDebtItem,
@@ -37,8 +33,9 @@ function mapLabelById(rows: RawRow[], idCandidates: string[], labelCandidates: s
 
     const label =
       selectTextFromRow(row, labelCandidates) ||
-      selectTextFromRow(row, ['name', 'description', 'status', 'code']) ||
-      id
+      selectTextFromRow(row, ['name', 'description', 'status', 'code'])
+
+    if (!label || /^[0-9]+$/.test(label)) continue
 
     result.set(id, label)
   }
@@ -81,7 +78,8 @@ function isDebtOverdue(debt: DebtorDebtItem) {
     return true
   }
 
-  return resolveDebtStatusFromDueDate(debt.dueDate) === 'Vencida'
+  return normalizedStatus === 'overdue'
+
 }
 
 function inferContactChannel(contact: RawRow, value: string) {
@@ -178,31 +176,16 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       continue
     }
 
-    const originalAmount = selectNumericValueFromRow(debt, [
-      'original_amount',
-      'amount_original',
-      'capital_amount',
-      'amount',
-      'monto_original',
-    ])
-    const updatedAmount =
-      selectNumericValueFromRow(debt, [
-        'updated_amount',
-        'amount_updated',
-        'total_amount',
-        'amount_due',
-        'monto_actualizado',
-      ]) || originalAmount
-    const dueDate =
-      selectTextFromRow(debt, ['due_date', 'expiration_date', 'vencimiento', 'maturity_date']) ||
-      null
-    const debtStatusId = stringifyUnknownValue(
-      selectValueFromRow(debt, ['debt_status_id', 'status_id', 'debt_status'])
-    )
-    const status =
-      debtStatusLabels.get(debtStatusId) ||
-      selectTextFromRow(debt, ['status', 'state']) ||
-      resolveDebtStatusFromDueDate(dueDate)
+    const original = selectNumericData(debt, ['original_amount', 'amount_original', 'capital_amount', 'amount', 'monto_original'])
+    const updated = currentAmount(debt)
+    const originalAmount = original.value
+    const updatedAmount = updated.value
+    const dueDate = selectTextFromRow(debt, ['due_date', 'expiration_date', 'vencimiento', 'maturity_date']) || null
+    const debtStatusId = stringifyUnknownValue(selectValueFromRow(debt, ['status', 'debt_status_id', 'status_id', 'debt_status']))
+    const catalogFailed = readingFailed(raw.warnings, 'debt_status')
+    const status = catalogFailed ? 'No disponible' : debtStatusLabels.get(debtStatusId) ?? 'UNKNOWN'
+    const statusPresence = catalogFailed ? 'NO_INTEGRADO' : debtStatusLabels.has(debtStatusId)
+      ? status.toUpperCase() === 'UNKNOWN' ? 'NO_INFORMADO_EN_ORIGEN' : 'OBSERVADO' : debtStatusId ? 'INVALIDO' : 'NO_INFORMADO_EN_ORIGEN'
 
     const debtItem: DebtorDebtItem = {
       id:
@@ -210,6 +193,8 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
         `${debtorId}-${(debtsByDebtor.get(debtorId)?.length ?? 0) + 1}`,
       originalAmount,
       updatedAmount,
+      metrics: { originalAmount: original, updatedAmount: updated },
+      statusPresence,
       dueDate,
       period:
         selectTextFromRow(debt, [
@@ -217,7 +202,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
           'fiscal_period',
           'billing_period',
           'year_month',
-        ]) || 'Sin periodo',
+        ]) || 'No informado',
       status,
     }
 
@@ -259,7 +244,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     current.push({
       personId,
       priority:
-        selectTextFromRow(relation, ['priority', 'priority_level', 'order']) || 'Media',
+        selectTextFromRow(relation, ['priority', 'priority_level', 'order']) || 'No informado',
       relation:
         selectTextFromRow(relation, [
           'relation',
@@ -267,7 +252,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
           'person_role',
           'role',
           'link_type',
-        ]) || 'No especificada',
+        ]) || 'No informado',
     })
     personRelationsByDebtor.set(debtorId, current)
   }
@@ -349,9 +334,11 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
   for (const [debtorId, relations] of personRelationsByDebtor.entries()) {
     const currentPeople: DebtorPersonItem[] = []
     const currentContacts: DebtorContactItem[] = []
-    const personsWithActiveContact = new Set<string>()
+    const seenPeople = new Set<string>()
 
     for (const relation of relations) {
+      if (seenPeople.has(relation.personId)) continue
+      seenPeople.add(relation.personId)
       const personRow = peopleById.get(relation.personId)
       const firstName = personRow ? selectTextFromRow(personRow, ['first_name', 'name']) : ''
       const lastName = personRow ? selectTextFromRow(personRow, ['last_name', 'surname']) : ''
@@ -370,9 +357,6 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       const activeValues = personContacts.filter((item) => item.isActive).map((item) => item.value)
       const contactSummary = activeValues.length > 0 ? activeValues.join(' | ') : 'Sin contacto'
 
-      if (activeValues.length > 0) {
-        personsWithActiveContact.add(relation.personId)
-      }
 
       currentContacts.push(...personContacts)
       currentPeople.push({
@@ -387,16 +371,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
 
     peopleByDebtor.set(debtorId, currentPeople)
     contactsByDebtor.set(debtorId, currentContacts)
-    contactCountByDebtor.set(debtorId, personsWithActiveContact.size)
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    // Log temporal para validar las relaciones de contacto cuando cambia el schema de datos.
-    console.log('[EQUITAS contact debug]', {
-      debtorPersonRows: raw.debtorPeople.length,
-      debtorContactRows: raw.debtorContacts.length,
-      mappedDebtorsWithContacts: contactCountByDebtor.size,
-    })
+    contactCountByDebtor.set(debtorId, currentContacts.filter(contact => contact.isActive).length)
   }
 
   const profileByDebtor = new Map<string, RawRow>()
@@ -429,68 +404,47 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
 
     const debts = debtsByDebtor.get(id) ?? []
     const people = peopleByDebtor.get(id) ?? []
-    const contacts = contactsByDebtor.get(id) ?? []
-    const activeContacts = contacts.filter((item) => item.isActive)
     const profile = profileByDebtor.get(id)
-
-    const profileContactCount = selectNumericValueFromRow(profile ?? {}, [
-      'available_contact_count',
-      'available_contacts_count',
-      'contact_available_count',
-    ])
-    const relationContactCount = contactCountByDebtor.get(id) ?? 0
-    const contactCount = Math.max(profileContactCount, relationContactCount, activeContacts.length)
-    const hasContact = contactCount > 0
-
-    const totalDebt =
-      selectNumericValueFromRow(profile ?? {}, [
-        'total_debt_amount',
-        'total_debt',
-        'debt_total',
-        'amount_total',
-      ]) || debts.reduce((acc, debt) => acc + debt.updatedAmount, 0)
-
-    const overdueDebts = debts.filter((debt) => isDebtOverdue(debt))
-    const overdueDebt =
-      selectNumericValueFromRow(profile ?? {}, [
-        'overdue_debt_amount',
-        'overdue_debt',
-        'debt_overdue',
-      ]) || overdueDebts.reduce((acc, debt) => acc + debt.updatedAmount, 0)
-    const maxDaysOverdue = overdueDebts.reduce((acc, debt) => {
-      const overdueDays = calculateDaysSinceDate(debt.dueDate)
-      return Math.max(acc, overdueDays)
-    }, 0)
-
-    const riskAssessment = calculateDebtorRiskAssessment({
-      providedRisk: selectValueFromRow(profile ?? {}, [
-        'socioeconomic_risk_level',
-        'risk_level',
-        'risk',
-        'risk_segment',
-      ]),
-      totalDebt,
-      overdueDebt,
-      hasContact,
-      maxDaysOverdue,
-    })
-    const risk = riskAssessment.risk
-
-    const recommendationResult = generateDebtorRecommendation({
-      risk,
-      hasContact,
-      overdueDebt,
-      totalDebt,
-      overdueDays: maxDaysOverdue,
-    })
-    const priorityScore = calculatePriorityScore({
-      totalDebt,
-      overdueDays: maxDaysOverdue,
-      risk,
-      hasContact,
-      recommendationType: recommendationResult.type,
-    })
-    const priorityLevel = toPriorityLevel(priorityScore)
+    const contactsFailed = readingFailed(raw.warnings, 'debtor_contact', 'debtor_person')
+    const contactMetric = contactsFailed ? unavailable() : observed(contactCountByDebtor.get(id) ?? 0)
+    const contactCount = contactMetric.value
+    const hasContact = contactCount === null ? null : contactCount > 0
+    const debtFailed = readingFailed(raw.warnings, 'debt', 'debtor')
+    const profileFailed = readingFailed(raw.warnings, 'debtor_profile')
+    const overdueDebts = debts.filter(isDebtOverdue)
+    const totalFromProfile = selectNumericData(profile ?? {}, ['total_debt_amount', 'total_debt', 'debt_total', 'amount_total'])
+    const overdueFromProfile = selectNumericData(profile ?? {}, ['overdue_debt_amount', 'overdue_debt', 'debt_overdue'])
+    const totalMetric = debtFailed || profileFailed ? unavailable()
+      : totalFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
+        ? aggregateData(debts.map(debt => metric(debt, 'updatedAmount'))) : totalFromProfile
+    const statusIncomplete = debts.some(debt => debt.statusPresence !== 'OBSERVADO')
+    const overdueMetric = debtFailed || profileFailed ? unavailable()
+      : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
+        ? aggregateData(overdueDebts.map(debt => metric(debt, 'updatedAmount')), 'sum', statusIncomplete)
+        : overdueFromProfile
+    const totalDebt = totalMetric.value
+    const overdueDebt = overdueMetric.value
+    const overdueDaysMetric = aggregateData(overdueDebts.map(debt => daysSinceData(debt.dueDate)), 'max', debtFailed || statusIncomplete)
+    const maxDaysOverdue = overdueDaysMetric.value
+    const providedRisk = selectNumericData(profile ?? {}, ['socioeconomic_risk_level', 'risk_level', 'risk', 'risk_segment'])
+    // El perfil ausente se registra como faltante; las fórmulas heredadas se conservan para datos observados.
+    const riskMetric = profileFailed || !profile ? unavailable() : providedRisk
+    const riskScore = riskMetric.value === null ? null : clampRiskScore(riskMetric.value)
+    const risk = riskScore === null ? null : mapRiskLevel(riskScore)
+    const recommendationResult = risk !== null && totalDebt !== null && overdueDebt !== null && hasContact !== null && (maxDaysOverdue !== null || overdueDaysMetric.presence === 'NO_APLICA')
+      ? generateDebtorRecommendation({ risk, hasContact, overdueDebt, totalDebt, overdueDays: maxDaysOverdue ?? 0 })
+      : { type: 'No disponible' as const, summary: 'No disponible', reason: 'Insumos no disponibles', isUrgent: false }
+    const priorityScore = risk !== null && totalDebt !== null && overdueDebt !== null && hasContact !== null && (maxDaysOverdue !== null || overdueDaysMetric.presence === 'NO_APLICA')
+      ? calculatePriorityScore({ totalDebt, overdueDays: maxDaysOverdue ?? 0, risk, hasContact, recommendationType: recommendationResult.type }) : null
+    const priorityLevel = priorityScore === null ? null : toPriorityLevel(priorityScore)
+    const priorityMetric = priorityScore === null
+      ? aggregateData([totalMetric, overdueMetric, contactMetric, riskMetric, overdueDaysMetric].filter(item => item.value === null && item.presence !== 'NO_APLICA'), 'max')
+      : observed(priorityScore)
+    const rawComputedAt = selectTextFromRow(profile ?? {}, ['profile_generated_at']) || null
+    const computedAt = !profileFailed && rawComputedAt && Number.isFinite(Date.parse(rawComputedAt)) ? rawComputedAt : null
+    const temporalProvenance = profile
+      ? `Calculado ${computedAt ? 'el ' + computedAt : 'en momento de cálculo desconocido'} (componente persistido); al día de la consulta (antigüedad recalculada); estado del catálogo persistido: momento de cálculo desconocido; corte no integrado`
+      : 'Calculado al día de la consulta (importes y antigüedad); perfil no integrado; estado del catálogo persistido: momento de cálculo desconocido; corte no integrado'
 
     const debtorTypeId = stringifyUnknownValue(
       selectValueFromRow(debtorRow, ['debtor_type_id', 'type_id', 'type'])
@@ -523,7 +477,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       selectTextFromRow(debtorRow, ['status_text', 'status', 'state'])
     )
     const status =
-      statusByDebts || statusById || statusFromDebtor || (overdueDebt > 0 ? 'Vencido' : 'En gestion')
+      statusByDebts || statusById || statusFromDebtor || 'No informado'
 
     debtors.push({
       id,
@@ -533,15 +487,18 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       status,
       totalDebt,
       overdueDebt,
-      peopleCount: people.length,
+      metrics: { totalDebt: totalMetric, overdueDebt: overdueMetric, contactCount: contactMetric, riskScore: riskScore === null ? riskMetric : observed(riskScore), maxDaysOverdue: overdueDaysMetric, priorityScore: priorityMetric },
+      computedAt,
+      temporalProvenance,
+      peopleCount: readingFailed(raw.warnings, 'debtor_person', 'person') ? null : people.length,
       peopleIds: people.map((person) => person.id),
       peopleNames: people.map((person) => person.name),
       hasContact,
       contactCount,
       risk,
-      riskScore: riskAssessment.riskScore,
-      debtCount: debts.length,
-      overdueDebtsCount: overdueDebts.length,
+      riskScore,
+      debtCount: debtFailed ? null : debts.length,
+      overdueDebtsCount: debtFailed || statusIncomplete ? null : overdueDebts.length,
       maxDaysOverdue,
       priorityScore,
       priorityLevel,

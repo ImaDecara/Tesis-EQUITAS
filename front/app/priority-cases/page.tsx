@@ -1,3 +1,4 @@
+import { formatNumber, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, Search, SlidersHorizontal } from 'lucide-react'
 
@@ -73,10 +74,10 @@ export default async function PriorityCasesPage({
     const matchesContact =
       !filters.contact ||
       (filters.contact === 'with' && debtor.hasContact) ||
-      (filters.contact === 'without' && !debtor.hasContact)
+      (filters.contact === 'without' && debtor.hasContact === false)
     const matchesType = !filters.type || debtor.type === filters.type
     const matchesAmount =
-      !filters.minAmount || (!Number.isNaN(minAmount) && debtor.totalDebt >= minAmount)
+      !filters.minAmount || (Number.isFinite(minAmount) && debtor.totalDebt !== null && debtor.totalDebt >= minAmount)
 
     return (
       matchesDebtorSearch(debtor, filters.q) &&
@@ -105,12 +106,13 @@ export default async function PriorityCasesPage({
         </div>
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {filteredCases.length.toLocaleString('es-AR')} casos
+          {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredCases.length.toLocaleString('es-AR')} casos
         </Badge>
       </section>
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        {filters.minAmount && !Number.isFinite(minAmount) && <p role="alert">Monto mínimo inválido</p>}
 
         <Card className="border-[#d2dceb]">
           <CardHeader>
@@ -254,10 +256,10 @@ export default async function PriorityCasesPage({
                     </TableCell>
                     <TableCell>
                       <Badge variant={debtor.priorityLevel === 'ALTA' ? 'danger' : 'warning'}>
-                        {debtor.priorityScore} / {debtor.priorityLevel}
+                        {formatNumber(debtor.priorityScore)} / {debtor.priorityLevel}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">{debtor.maxDaysOverdue} dias</TableCell>
+                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell>
                       <ContactAvailabilityBadge hasContact={debtor.hasContact} />
