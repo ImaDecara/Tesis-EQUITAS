@@ -12,6 +12,15 @@ export const DATA_PRESENCE_STATES = [
 
 export type DataPresence = (typeof DATA_PRESENCE_STATES)[number]
 
+export type NumericData = {
+  value: number | null
+  presence: DataPresence
+  missing: Partial<Record<DataPresence, number>>
+  reason?: string
+}
+
+export type PresenceMetrics = { metrics?: Record<string, NumericData> }
+
 export type RiskLevel = 'ALTO' | 'MEDIO' | 'BAJO'
 export type DebtorPriorityLevel = 'ALTA' | 'MEDIA' | 'BAJA'
 
@@ -20,6 +29,7 @@ export type RecommendationKind =
   | 'Mensaje recordatorio'
   | 'Plan de pago / revision humana'
   | 'Seguimiento posterior'
+  | 'No disponible'
 
 export type PersonIndividualRiskLevel = 'ALTO' | 'MEDIO' | 'BAJO'
 
@@ -35,17 +45,17 @@ export type ChartBucket = {
   value: number
 }
 
-export type DashboardData = {
-  totalDebtors: number
-  totalDebt: number
-  overdueCases: number
-  withContactCases: number
-  withoutContactCases: number
-  priorityCases: number
-  urgentRecommendationCases: number
-  criticalCasesToday: number
-  riskAboveNinetyCases: number
-  criticalDebtTotal: number
+export type DashboardData = PresenceMetrics & {
+  totalDebtors: number | null
+  totalDebt: number | null
+  overdueCases: number | null
+  withContactCases: number | null
+  withoutContactCases: number | null
+  priorityCases: number | null
+  urgentRecommendationCases: number | null
+  criticalCasesToday: number | null
+  riskAboveNinetyCases: number | null
+  criticalDebtTotal: number | null
   byDebtStatus: ChartBucket[]
   byDebtorType: ChartBucket[]
   byRisk: ChartBucket[]
@@ -55,64 +65,67 @@ export type DashboardData = {
     id: string
     identifier: string
     type: string
-    totalDebt: number
-    risk: RiskLevel
-    riskScore: number
+    totalDebt: number | null
+    risk: RiskLevel | null
+    riskScore: number | null
   }>
   topPriorityDebtors: Array<{
     id: string
     identifier: string
     type: string
-    totalDebt: number
-    overdueDays: number
-    risk: RiskLevel
-    riskScore: number
-    hasContact: boolean
+    totalDebt: number | null
+    overdueDays: number | null
+    risk: RiskLevel | null
+    riskScore: number | null
+    hasContact: boolean | null
     recommendationType: RecommendationKind
-    priorityScore: number
-    priorityLevel: DebtorPriorityLevel
+    priorityScore: number | null
+    priorityLevel: DebtorPriorityLevel | null
   }>
   withoutContactDebtors: Array<{
     id: string
     identifier: string
     type: string
-    totalDebt: number
-    overdueDays: number
-    risk: RiskLevel
-    riskScore: number
+    totalDebt: number | null
+    overdueDays: number | null
+    risk: RiskLevel | null
+    riskScore: number | null
   }>
   topDebtDebtors: Array<{
     id: string
     identifier: string
     type: string
-    totalDebt: number
-    overdueDays: number
-    risk: RiskLevel
-    riskScore: number
+    totalDebt: number | null
+    overdueDays: number | null
+    risk: RiskLevel | null
+    riskScore: number | null
     recommendationType: RecommendationKind
   }>
 }
 
-export type DebtorListItem = {
+export type DebtorListItem = PresenceMetrics & {
+  computedAt?: string | null
+  temporalProvenance?: string
+
   id: string
   identifier: string
   type: string
   description: string
   status: string
-  totalDebt: number
-  overdueDebt: number
-  peopleCount: number
+  totalDebt: number | null
+  overdueDebt: number | null
+  peopleCount: number | null
   peopleIds: string[]
   peopleNames: string[]
-  hasContact: boolean
-  contactCount: number
-  risk: RiskLevel
-  riskScore: number
-  debtCount: number
-  overdueDebtsCount: number
-  maxDaysOverdue: number
-  priorityScore: number
-  priorityLevel: DebtorPriorityLevel
+  hasContact: boolean | null
+  contactCount: number | null
+  risk: RiskLevel | null
+  riskScore: number | null
+  debtCount: number | null
+  overdueDebtsCount: number | null
+  maxDaysOverdue: number | null
+  priorityScore: number | null
+  priorityLevel: DebtorPriorityLevel | null
   recommendation: string
   recommendationType: RecommendationKind
   recommendationReason: string
@@ -137,24 +150,25 @@ export type DebtorContactItem = {
   isActive: boolean
 }
 
-export type DebtorDebtItem = {
+export type DebtorDebtItem = PresenceMetrics & {
   id: string
-  originalAmount: number
-  updatedAmount: number
+  originalAmount: number | null
+  updatedAmount: number | null
   dueDate: string | null
   period: string
   status: string
+  statusPresence?: DataPresence
 }
 
-export type DebtorProfileSummary = {
-  totalDebt: number
-  overdueDebt: number
-  debtCount: number
-  antiquityDays: number
-  associatedPeople: number
-  availableContacts: number
-  risk: RiskLevel
-  riskScore: number
+export type DebtorProfileSummary = PresenceMetrics & {
+  totalDebt: number | null
+  overdueDebt: number | null
+  debtCount: number | null
+  antiquityDays: number | null
+  associatedPeople: number | null
+  availableContacts: number | null
+  risk: RiskLevel | null
+  riskScore: number | null
   socioeconomicLevel: string
 }
 
@@ -166,34 +180,37 @@ export type DebtorDetailData = {
   profile: DebtorProfileSummary
 }
 
-export type PersonListItem = {
+export type PersonListItem = PresenceMetrics & {
+  debtExposure: Array<{ debtorId: string; amount: NumericData }>
+  exposureLabel: 'Exposición asociada (no aditiva)'
+
   id: string
   name: string
   document: string
-  individualRisk: PersonIndividualRiskLevel
-  riskValue: number
-  debtorsCount: number
-  hasContact: boolean
-  totalDebtAssociated: number
+  individualRisk: PersonIndividualRiskLevel | null
+  riskValue: number | null
+  debtorsCount: number | null
+  hasContact: boolean | null
+  totalDebtAssociated: number | null
   debtorIds: string[]
   debtorIdentifiers: string[]
 }
 
-export type PeopleDashboardSummary = {
-  totalPeople: number
-  lowRiskCount: number
-  mediumRiskCount: number
-  highRiskCount: number
-  withoutContactCount: number
+export type PeopleDashboardSummary = PresenceMetrics & {
+  totalPeople: number | null
+  lowRiskCount: number | null
+  mediumRiskCount: number | null
+  highRiskCount: number | null
+  withoutContactCount: number | null
   individualRiskDistribution: ChartBucket[]
   topPeopleByRiskValue: Array<{
     id: string
     name: string
     document: string
-    riskValue: number
-    individualRisk: PersonIndividualRiskLevel
-    debtorsCount: number
-    hasContact: boolean
+    riskValue: number | null
+    individualRisk: PersonIndividualRiskLevel | null
+    debtorsCount: number | null
+    hasContact: boolean | null
   }>
 }
 

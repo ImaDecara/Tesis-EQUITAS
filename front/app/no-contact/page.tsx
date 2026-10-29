@@ -1,3 +1,4 @@
+import { formatNumber, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { AlertCircle, CircleDollarSign, Eye, Percent, ShieldAlert } from 'lucide-react'
 
@@ -45,10 +46,12 @@ export default async function NoContactPage({
   const { debtors, warnings } = await getDebtorsData()
   const resolvedSearchParams = await searchParams
   const noContactCases = getNoContactCases(debtors)
-  const associatedDebt = noContactCases.reduce((acc, debtor) => acc + debtor.totalDebt, 0)
-  const highRiskNoContact = noContactCases.filter((debtor) => debtor.risk === 'ALTO').length
+  const associatedDebt = aggregateData(noContactCases.map(debtor => metric(debtor, 'totalDebt')), 'sum', readingFailed(warnings, 'debtor', 'debt', 'debtor_contact', 'debtor_person')).value
+  const contactsFailed = readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person')
+  const highRiskMetric = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debtor_profile'))
+  const highRiskNoContact = highRiskMetric.value
   const totalShare =
-    debtors.length > 0 ? Math.round((noContactCases.length / debtors.length) * 100) : 0
+    percentageData(readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person') ? null : noContactCases.length, debtors.length)
   const pagination = paginateItems(
     noContactCases,
     resolvedSearchParams.page,
@@ -68,11 +71,12 @@ export default async function NoContactPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{missingSummary({ riskScore: highRiskMetric })}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Total sin contacto"
-            value={noContactCases.length.toLocaleString('es-AR')}
+            value={formatNumber(contactsFailed ? null : noContactCases.length)}
             hint="Objetos sin canal activo"
             icon={AlertCircle}
             tone="warning"
@@ -86,14 +90,14 @@ export default async function NoContactPage({
           />
           <MetricCard
             label="Riesgo alto sin contacto"
-            value={highRiskNoContact.toLocaleString('es-AR')}
+            value={formatNumber(highRiskNoContact)}
             hint="Criticos sin canal directo"
             icon={ShieldAlert}
             tone="danger"
           />
           <MetricCard
             label="Sobre el total"
-            value={`${totalShare}%`}
+            value={`${formatPercentage(totalShare)}`}
             hint="Participacion del universo"
             icon={Percent}
             tone="accent"
@@ -160,7 +164,7 @@ export default async function NoContactPage({
                       <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
-                    <TableCell className="text-right">{debtor.maxDaysOverdue} dias</TableCell>
+                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
                     <TableCell>Sin telefono/email activo</TableCell>
                     <TableCell className="text-right">
                       <Link

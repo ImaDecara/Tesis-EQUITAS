@@ -1,3 +1,4 @@
+import { formatNumber, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -69,6 +70,8 @@ export default async function DebtorDetailPage({
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>
+        <p className="text-xs text-slate-600">{missingSummary(debtor.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
@@ -101,7 +104,7 @@ export default async function DebtorDetailPage({
             </CardHeader>
             <CardContent className="pt-0">
               <Badge variant={debtor.hasContact ? 'success' : 'warning'}>
-                {debtor.hasContact ? 'Disponible' : 'Faltante'}
+                {debtor.hasContact === null ? 'No disponible' : debtor.hasContact ? 'Disponible' : 'Faltante'}
               </Badge>
             </CardContent>
           </Card>
@@ -116,7 +119,7 @@ export default async function DebtorDetailPage({
                 {debtor.recommendationType}
               </Badge>
               <p className="text-xs text-slate-600">
-                {debtor.peopleCount} persona(s) asociada(s)
+                {formatNumber(debtor.peopleCount)} persona(s) asociada(s)
               </p>
             </CardContent>
           </Card>
@@ -161,14 +164,14 @@ export default async function DebtorDetailPage({
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Dias de atraso:</span>{' '}
-                    {debtor.maxDaysOverdue} dias
+                    {formatNumber(debtor.maxDaysOverdue)} dias
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Estado:</span> {debtor.status}
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Prioridad:</span>{' '}
-                    {debtor.priorityLevel} (score {debtor.priorityScore})
+                    {debtor.priorityLevel ?? 'No disponible'} (score {formatNumber(debtor.priorityScore)})
                   </p>
                 </CardContent>
               </Card>
@@ -342,7 +345,7 @@ export default async function DebtorDetailPage({
                   <CardTitle className="text-sm">Cantidad de deudas</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {profile.debtCount}
+                  {formatNumber(profile.debtCount)}
                 </CardContent>
               </Card>
               <Card>
@@ -350,7 +353,7 @@ export default async function DebtorDetailPage({
                   <CardTitle className="text-sm">Antiguedad</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {profile.antiquityDays} dias
+                  {formatNumber(profile.antiquityDays)} dias
                 </CardContent>
               </Card>
               <Card>
@@ -358,7 +361,7 @@ export default async function DebtorDetailPage({
                   <CardTitle className="text-sm">Contactos disponibles</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {profile.availableContacts}
+                  {formatNumber(profile.availableContacts)}
                 </CardContent>
               </Card>
               <Card>
@@ -386,8 +389,8 @@ export default async function DebtorDetailPage({
                 <p>{debtor.recommendationReason}</p>
                 <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                   Ejemplo de lectura operativa: {debtor.recommendation} porque el caso combina{' '}
-                  {formatCurrency(debtor.totalDebt)} de deuda total, {debtor.maxDaysOverdue} dias
-                  de atraso y contacto {debtor.hasContact ? 'disponible' : 'faltante'}.
+                  {formatCurrency(debtor.totalDebt)} de deuda total, {formatNumber(debtor.maxDaysOverdue)} dias
+                  de atraso y contacto {debtor.hasContact === null ? 'no disponible' : debtor.hasContact ? 'disponible' : 'faltante'}.
                 </p>
               </CardContent>
             </Card>

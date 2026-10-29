@@ -32,6 +32,7 @@ function fields<T>(dto: string, keys: Record<keyof T, true>) {
 // Record<keyof T, true> obliga a listar cada campo: un campo nuevo sin entrada rompe el chequeo de tipos.
 const visibleFields = [
   ...fields<DebtorListItem>('DebtorListItem', {
+    metrics: true, computedAt: true, temporalProvenance: true,
     id: true, identifier: true, type: true, description: true, status: true, totalDebt: true,
     overdueDebt: true, peopleCount: true, peopleIds: true, peopleNames: true, hasContact: true,
     contactCount: true, risk: true, riskScore: true, debtCount: true, overdueDebtsCount: true,
@@ -48,17 +49,21 @@ const visibleFields = [
     id: true, personId: true, personName: true, channel: true, value: true, isActive: true,
   }),
   ...fields<DebtorDebtItem>('DebtorDebtItem', {
+    metrics: true, statusPresence: true,
     id: true, originalAmount: true, updatedAmount: true, dueDate: true, period: true, status: true,
   }),
   ...fields<DebtorProfileSummary>('DebtorProfileSummary', {
+    metrics: true,
     totalDebt: true, overdueDebt: true, debtCount: true, antiquityDays: true, associatedPeople: true,
     availableContacts: true, risk: true, riskScore: true, socioeconomicLevel: true,
   }),
   ...fields<PersonListItem>('PersonListItem', {
+    metrics: true, debtExposure: true, exposureLabel: true,
     id: true, name: true, document: true, individualRisk: true, riskValue: true, debtorsCount: true,
     hasContact: true, totalDebtAssociated: true, debtorIds: true, debtorIdentifiers: true,
   }),
   ...fields<DashboardData>('DashboardData', {
+    metrics: true,
     totalDebtors: true, totalDebt: true, overdueCases: true, withContactCases: true,
     withoutContactCases: true, priorityCases: true, urgentRecommendationCases: true,
     criticalCasesToday: true, riskAboveNinetyCases: true, criticalDebtTotal: true,
@@ -67,6 +72,7 @@ const visibleFields = [
     topDebtDebtors: true,
   }),
   ...fields<PeopleDashboardSummary>('PeopleDashboardSummary', {
+    metrics: true,
     totalPeople: true, lowRiskCount: true, mediumRiskCount: true, highRiskCount: true,
     withoutContactCount: true, individualRiskDistribution: true, topPeopleByRiskValue: true,
   }),

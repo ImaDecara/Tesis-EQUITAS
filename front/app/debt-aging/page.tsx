@@ -1,3 +1,4 @@
+import { compareNullable, formatNumber, missingSummary, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { CalendarClock, CircleDollarSign, Eye, FileWarning } from 'lucide-react'
 
@@ -48,26 +49,26 @@ export default async function DebtAgingPage({
 }) {
   const { debtors, warnings } = await getDebtorsData()
   const resolvedSearchParams = await searchParams
-  const summary = buildDebtAgingSummary(debtors)
+  const summary = buildDebtAgingSummary(debtors, warnings)
   const debtByStatus = [...debtors]
     .reduce((map, debtor) => {
-      map.set(debtor.status, (map.get(debtor.status) ?? 0) + debtor.totalDebt)
+      if (debtor.totalDebt !== null) map.set(debtor.status, (map.get(debtor.status) ?? 0) + debtor.totalDebt)
 
       return map
     }, new Map<string, number>())
   const debtByStatusChart = Array.from(debtByStatus.entries())
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value)
-  const topDebtChart = summary.topDebtCases.map((debtor) => ({
+  const topDebtChart = summary.topDebtCases.flatMap((debtor) => debtor.totalDebt === null ? [] : [{
     label: debtor.identifier,
     value: debtor.totalDebt,
-  }))
+  }])
   const sortedDebtors = [...debtors].sort((a, b) => {
     if (b.overdueDebt !== a.overdueDebt) {
-      return b.overdueDebt - a.overdueDebt
+      return compareNullable(a.overdueDebt, b.overdueDebt)
     }
 
-    return b.maxDaysOverdue - a.maxDaysOverdue
+    return compareNullable(a.maxDaysOverdue, b.maxDaysOverdue)
   })
   const pagination = paginateItems(
     sortedDebtors,
@@ -86,25 +87,26 @@ export default async function DebtAgingPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{missingSummary(summary.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <MetricCard
             label="Deuda total"
-            value={formatCurrency(summary.totalDebt)}
+            value={formatCurrency(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile') ? null : summary.totalDebt)}
             hint="Saldo consolidado"
             icon={CircleDollarSign}
             tone="primary"
           />
           <MetricCard
             label="Deuda vencida"
-            value={formatCurrency(summary.overdueDebt)}
+            value={formatCurrency(readingFailed(warnings, 'debtor', 'debt', 'debt_status', 'debtor_profile') ? null : summary.overdueDebt)}
             hint="Saldo con vencimiento registrado"
             icon={FileWarning}
             tone="danger"
           />
           <MetricCard
             label="Promedio de atraso"
-            value={`${summary.averageOverdueDays.toLocaleString('es-AR')} dias`}
+            value={`${summary.metrics.averageOverdueDays.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(summary.averageOverdueDays)} dias`}
             hint="Sobre objetos con mora"
             icon={CalendarClock}
             tone="warning"
@@ -144,7 +146,7 @@ export default async function DebtAgingPage({
                     <TableCell>{debtor.type}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.overdueDebt)}</TableCell>
-                    <TableCell className="text-right">{debtor.maxDaysOverdue} dias</TableCell>
+                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -185,9 +187,9 @@ export default async function DebtAgingPage({
                     <TableCell>{debtor.type}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.overdueDebt)}</TableCell>
-                    <TableCell className="text-right">{debtor.maxDaysOverdue} dias</TableCell>
+                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
                     <TableCell>
-                      <Badge variant={debtor.overdueDebt > 0 ? 'danger' : 'neutral'}>
+                      <Badge variant={debtor.overdueDebt !== null && debtor.overdueDebt > 0 ? 'danger' : 'neutral'}>
                         {debtor.status}
                       </Badge>
                     </TableCell>

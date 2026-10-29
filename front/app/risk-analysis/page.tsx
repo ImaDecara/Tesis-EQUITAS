@@ -1,3 +1,5 @@
+import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
+import { formatNumber, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, ShieldAlert, UsersRound } from 'lucide-react'
 
@@ -26,10 +28,8 @@ export default async function RiskAnalysisPage() {
   const [{ debtors, warnings: debtorWarnings }, { people, peopleDashboard, warnings: peopleWarnings }] =
     await Promise.all([getDebtorsData(), getPeopleData()])
   const warnings = [...debtorWarnings, ...peopleWarnings]
-  const objectRiskDistribution = ['ALTO', 'MEDIO', 'BAJO'].map((risk) => ({
-    label: risk,
-    value: debtors.filter((debtor) => debtor.risk === risk).length,
-  }))
+  const objectDashboard = mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets: new Map(), warnings: debtorWarnings })
+  const objectRiskDistribution = objectDashboard.byRisk
   const highRiskCases = getHighRiskCases(debtors)
   const highIndividualRiskPeople = getHighIndividualRiskPeople(people)
 
@@ -47,6 +47,7 @@ export default async function RiskAnalysisPage() {
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{missingSummary(objectDashboard.metrics)} {missingSummary(peopleDashboard.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Card className="border-[#d2dceb]">
@@ -61,7 +62,7 @@ export default async function RiskAnalysisPage() {
                     Objetos con riesgo &gt; 90
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {highRiskCases.length.toLocaleString('es-AR')}
+                    {formatNumber(objectDashboard.riskAboveNinetyCases)}
                   </p>
                   <p className="text-xs text-slate-600">Criticidad extrema del caso</p>
                 </div>
@@ -82,7 +83,7 @@ export default async function RiskAnalysisPage() {
                     Personas con puntaje alto
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {highIndividualRiskPeople.length.toLocaleString('es-AR')}
+                    {formatNumber(peopleDashboard.highRiskCount)}
                   </p>
                   <p className="text-xs text-slate-600">Puntaje individual desde 70</p>
                 </div>
@@ -168,8 +169,8 @@ export default async function RiskAnalysisPage() {
                       <TableCell>
                         <PersonRiskBadge risk={person.individualRisk} score={person.riskValue} />
                       </TableCell>
-                      <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{person.debtorsCount}</TableCell>
+                      <TableCell className="text-right">{formatNumber(person.riskValue, 2)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(person.debtorsCount)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

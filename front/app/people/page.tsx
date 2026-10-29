@@ -1,3 +1,5 @@
+import { formatNumber, missingSummary, readingFailed } from '@/lib/data-presence'
+import { summarizePeople } from '@/lib/mappers/person-risk-mapper'
 import Link from 'next/link'
 import { Filter, UsersRound } from 'lucide-react'
 
@@ -86,6 +88,7 @@ export default async function PeoplePage({
     q: resolvedSearchParams.q?.trim() ?? '',
     risk: resolvedSearchParams.risk?.trim() ?? '',
   }
+  const filterReadFailed = readingFailed(warnings, 'person') || (Boolean(filters.risk) && readingFailed(warnings, 'debtor_profile_detail'))
   const filteredPeople = applyPeopleFilters(people, filters)
   const parsedPageSize = parsePositiveInteger(resolvedSearchParams.pageSize)
   const pageSize = isPageSizeOption(parsedPageSize) ? parsedPageSize : DEFAULT_PAGE_SIZE
@@ -98,15 +101,10 @@ export default async function PeoplePage({
   const currentEnd = Math.min(startIndex + pageSize, filteredPeople.length)
   const hasPreviousPage = currentPage > 1
   const hasNextPage = currentPage < totalPages
-  const totalDebtAssociated = filteredPeople.reduce(
-    (acc, person) => acc + person.totalDebtAssociated,
-    0
-  )
-  const averageRiskValue =
-    filteredPeople.length > 0
-      ? filteredPeople.reduce((acc, person) => acc + person.riskValue, 0) / filteredPeople.length
-      : 0
-  const withContactCount = filteredPeople.filter((person) => person.hasContact).length
+  const summary = summarizePeople(filteredPeople, warnings, filterReadFailed)
+  const totalDebtAssociated = summary.totalDebtAssociated.value
+  const averageRiskValue = summary.averageRiskValue.value
+  const withContactCount = filterReadFailed || readingFailed(warnings, 'person', 'debtor_contact') ? null : filteredPeople.filter(person => person.hasContact === true).length
 
   return (
     <AppShell>
@@ -122,13 +120,14 @@ export default async function PeoplePage({
 
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {filteredPeople.length.toLocaleString('es-AR')} /{' '}
-          {people.length.toLocaleString('es-AR')} personas
+          {filterReadFailed ? 'No disponible' : filteredPeople.length.toLocaleString('es-AR')} /{' '}
+          {formatNumber(peopleDashboard.totalPeople)} personas
         </Badge>
       </section>
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
+        <p className="text-xs text-slate-600">{missingSummary(summary)}</p>
 
         <Card className="border-[#d2dceb]">
           <CardHeader>
@@ -145,7 +144,7 @@ export default async function PeoplePage({
               <CardTitle className="text-sm">Riesgo bajo</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-emerald-700">
-              {peopleDashboard.lowRiskCount.toLocaleString('es-AR')}
+              {formatNumber(peopleDashboard.lowRiskCount)}
             </CardContent>
           </Card>
           <Card className="border-[#ead8b0] bg-[#f9f3e4] shadow-sm">
@@ -153,7 +152,7 @@ export default async function PeoplePage({
               <CardTitle className="text-sm">Riesgo medio</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-amber-700">
-              {peopleDashboard.mediumRiskCount.toLocaleString('es-AR')}
+              {formatNumber(peopleDashboard.mediumRiskCount)}
             </CardContent>
           </Card>
           <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
@@ -161,7 +160,7 @@ export default async function PeoplePage({
               <CardTitle className="text-sm">Riesgo alto</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-rose-700">
-              {peopleDashboard.highRiskCount.toLocaleString('es-AR')}
+              {formatNumber(peopleDashboard.highRiskCount)}
             </CardContent>
           </Card>
           <Card className="border-[#efd9b7] bg-[#f8f2e3] shadow-sm">
@@ -170,10 +169,10 @@ export default async function PeoplePage({
             </CardHeader>
             <CardContent className="space-y-0.5 pb-4">
               <p className="text-2xl font-semibold text-[#8a6f2a]">
-                {peopleDashboard.withoutContactCount.toLocaleString('es-AR')}
+                {formatNumber(peopleDashboard.withoutContactCount)}
               </p>
               <p className="text-xs text-slate-600">
-                Con contacto: {withContactCount.toLocaleString('es-AR')}
+                Con contacto: {formatNumber(withContactCount)}
               </p>
             </CardContent>
           </Card>
@@ -186,7 +185,7 @@ export default async function PeoplePage({
                 {formatCurrency(totalDebtAssociated)}
               </p>
               <p className="text-xs text-slate-600">
-                Riesgo promedio {averageRiskValue.toFixed(1)} / 100
+                Riesgo promedio {averageRiskValue === null && summary.averageRiskValue.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(averageRiskValue, 1)} / 100
               </p>
             </CardContent>
           </Card>
@@ -225,8 +224,8 @@ export default async function PeoplePage({
                           score={person.riskValue}
                         />
                       </TableCell>
-                      <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{person.debtorsCount}</TableCell>
+                      <TableCell className="text-right">{formatNumber(person.riskValue, 2)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(person.debtorsCount)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -242,7 +241,7 @@ export default async function PeoplePage({
               <p className="mt-2 text-sm text-slate-600">
                 Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {filteredPeople.length.toLocaleString('es-AR')} personas.
+                {filterReadFailed ? 'No disponible' : filteredPeople.length.toLocaleString('es-AR')} personas.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -299,15 +298,16 @@ export default async function PeoplePage({
                         score={person.riskValue}
                       />
                     </TableCell>
-                    <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{person.debtorsCount}</TableCell>
+                    <TableCell className="text-right">{formatNumber(person.riskValue, 2)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(person.debtorsCount)}</TableCell>
                     <TableCell>
                       <Badge variant={person.hasContact ? 'success' : 'warning'}>
-                        {person.hasContact ? 'Disponible' : 'Faltante'}
+                        {person.hasContact === null ? 'No disponible' : person.hasContact ? 'Disponible' : 'Faltante'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(person.totalDebtAssociated)}
+                      <span className="block text-xs text-slate-500">{person.exposureLabel}</span>
                     </TableCell>
                     <TableCell className="text-right">
                       <Link

@@ -1,3 +1,4 @@
+import { formatNumber, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, SlidersHorizontal } from 'lucide-react'
 
@@ -41,7 +42,9 @@ type DebtorFilters = {
 }
 
 // Traduce la prioridad operacional a un bloque visual rapido para lectura en mesa de gestion.
-function getPriorityVisual(priorityLevel: string) {
+function getPriorityVisual(priorityLevel: string | null) {
+  if (priorityLevel === null) return { wrapper: 'border-slate-200 bg-slate-50', badge: 'bg-slate-200 text-slate-700', accent: 'border-slate-300' }
+
   if (priorityLevel === 'ALTA') {
     return {
       wrapper: 'border-[#e5c0c0] bg-[#fbefef]',
@@ -84,7 +87,7 @@ function applyDebtorFilters(debtors: DebtorListItem[], filters: DebtorFilters) {
     const matchesContact =
       !filters.contact ||
       (filters.contact === 'with' && debtor.hasContact) ||
-      (filters.contact === 'without' && !debtor.hasContact)
+      (filters.contact === 'without' && debtor.hasContact === false)
     const matchesPerson = !filters.personId || debtor.peopleIds.includes(filters.personId)
 
     return (
@@ -189,8 +192,8 @@ export default async function DebtorsPage({
 
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {filteredDebtors.length.toLocaleString('es-AR')} /{' '}
-          {debtors.length.toLocaleString('es-AR')} registros
+          {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredDebtors.length.toLocaleString('es-AR')} /{' '}
+          {readingFailed(warnings, 'debtor') ? 'No disponible' : debtors.length.toLocaleString('es-AR')} registros
         </Badge>
       </section>
 
@@ -239,7 +242,7 @@ export default async function DebtorsPage({
               <p className="mt-2 text-sm text-slate-600">
                 Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {filteredDebtors.length.toLocaleString('es-AR')} registros.
+                {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredDebtors.length.toLocaleString('es-AR')} registros.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -315,9 +318,9 @@ export default async function DebtorsPage({
                                 priorityVisual.accent
                               )}
                             >
-                              Prioridad {debtor.priorityLevel}
+                              Prioridad {debtor.priorityLevel ?? 'No disponible'}
                             </span>
-                            <span className="text-xs text-slate-700">Score {debtor.priorityScore}</span>
+                            <span className="text-xs text-slate-700">Score {formatNumber(debtor.priorityScore)}</span>
                           </div>
                         </Link>
                       </TableCell>
@@ -347,7 +350,7 @@ export default async function DebtorsPage({
                       </TableCell>
                       <TableCell className="p-0">
                         <Link href={detailHref} className={linkClassName}>
-                          <p className="text-sm font-medium text-slate-800">{debtor.peopleCount}</p>
+                          <p className="text-sm font-medium text-slate-800">{formatNumber(debtor.peopleCount)}</p>
                           {debtor.peopleNames.length > 0 && (
                             <p
                               className="max-w-[170px] truncate text-xs text-slate-600"
