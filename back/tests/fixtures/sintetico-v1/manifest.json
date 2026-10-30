@@ -1,0 +1,153 @@
+{
+  "generador": "quality/fixtures/synthetic_portfolio.py",
+  "version": "sintetico-v1",
+  "semilla": 20261028,
+  "perfil": "contrato",
+  "fecha_corte": "2026-09-30",
+  "clase": "S (sintético; ninguna fila deriva de la cartera real)",
+  "formato_origen": {
+    "separador": "\\t",
+    "codificacion": "utf-8",
+    "decimal": ",",
+    "miles": ".",
+    "fecha": "dd/mm/aaaa",
+    "fin_de_linea": "LF"
+  },
+  "catalogos": {
+    "Bien_Tipo_Id": {
+      "1": "INMUEBLE",
+      "3": "RODADO",
+      "6": "AGUA"
+    },
+    "Tipo_Ingreso_Id": {
+      "1": "inmuebles",
+      "100": "automotor",
+      "801": "conexion de agua",
+      "905": "tasa sintetica sin mapeo en el ETL"
+    },
+    "NOTD_ESTA_id": {
+      "10": "PENDIENTE",
+      "20": "PAGADA",
+      "30": "ANULADA",
+      "40": "SUSPENDIDA"
+    },
+    "NOTD_SITU_id": "columna presente y vacía (NO_INFORMADO_EN_ORIGEN)"
+  },
+  "proporciones": {
+    "tipo_bien": {
+      "3": 0.6,
+      "6": 0.35,
+      "1": 0.05
+    },
+    "objeto_con_dos_personas": 0.02,
+    "persona_reutilizada": 0.1,
+    "persona_sin_contacto": 0.55,
+    "porcentaje_distinto_de_100": 0.01,
+    "interes_maximo_sobre_capital": 0.8
+  },
+  "procedencia_proporciones": "cardinalidades y proporciones agregadas del informe de input §3 redondeadas (5 puntos, o 1 punto si < 5 %) o supuestas; sin ALIGN-004 no se calibra con la cartera real",
+  "conteos": {
+    "municipio-sintetico-a": {
+      "filas_cabecera": 42,
+      "filas_detalle": 163,
+      "objetos": 40,
+      "objetos_aceptados": 31,
+      "objetos_en_cuarentena": 9,
+      "personas": 40,
+      "relaciones": 42,
+      "obligaciones_unicas": 160,
+      "duplicados_identicos": 1,
+      "duplicados_conflictivos": 1,
+      "detalle_sin_cabecera": 1,
+      "objetos_sin_contacto_utilizable": 9,
+      "objetos_porcentajes_no_100": 2
+    },
+    "municipio-sintetico-b": {
+      "filas_cabecera": 3,
+      "filas_detalle": 6,
+      "objetos": 3,
+      "objetos_aceptados": 3,
+      "objetos_en_cuarentena": 0,
+      "personas": 3,
+      "relaciones": 3,
+      "obligaciones_unicas": 6,
+      "duplicados_identicos": 0,
+      "duplicados_conflictivos": 0,
+      "detalle_sin_cabecera": 0,
+      "objetos_sin_contacto_utilizable": 1,
+      "objetos_porcentajes_no_100": 0
+    }
+  },
+  "variantes": [
+    {
+      "id": "tsv",
+      "archivos": [
+        "cabecera.tsv",
+        "detalle.tsv"
+      ],
+      "separador": "\\t",
+      "codificacion": "utf-8",
+      "fin_de_linea": "LF",
+      "oraculo": "expected.json"
+    }
+  ],
+  "complementarios": [
+    {
+      "ruta": "contactos-vigencia.json",
+      "uso": "precondición del oráculo: vigencia explícita de contactos (clave municipio, Destinatario_Id, columna); no se atribuye al origen real"
+    }
+  ],
+  "oraculo": {
+    "ruta": "expected.json",
+    "sha256": "5065f959cf8dfe8ef709ba18ccd11c90850c77ae8557f03eff0068f3c3ee8e87"
+  },
+  "privacidad": {
+    "nombres": "Persona Sintética NNNN / Entidad Sintética NNNN",
+    "documentos": "prefijo 99 (no asignado a CUIT/CUIL)",
+    "emails": "@example.invalid",
+    "telefonos": "0000-555-NNNN y 0000-15-555-NNNN",
+    "domicilios": "Calle/Localidad/Provincia Sintética"
+  },
+  "archivos": [
+    {
+      "ruta": "cabecera.tsv",
+      "bytes": 11371,
+      "sha256": "0e17a7cf534ee440a86b8d0867634f71aac2b6ec5a2671b179ea7c667d80c38b"
+    },
+    {
+      "ruta": "contactos-vigencia.json",
+      "bytes": 1232,
+      "sha256": "95356381cb6218e4fca8ed89849675e26441c39039ce84b7738fe5f524abfe33"
+    },
+    {
+      "ruta": "detalle.tsv",
+      "bytes": 16727,
+      "sha256": "e6d60eca1190d949854c324886352a96639d022e2f6b15b89417298ba10561ef"
+    },
+    {
+      "ruta": "escenario-social.json",
+      "bytes": 8009,
+      "sha256": "65797d813abfd37257bc08eb3e3cff1ca6423982a23c4b1f17e8796012897186"
+    },
+    {
+      "ruta": "expected.json",
+      "bytes": 72627,
+      "sha256": "5065f959cf8dfe8ef709ba18ccd11c90850c77ae8557f03eff0068f3c3ee8e87"
+    },
+    {
+      "ruta": "seguridad/municipio-sintetico-b/cabecera.tsv",
+      "bytes": 1213,
+      "sha256": "6c247d4833a4c20024fbe0ea93eabf83dff14ecf713ba2d914cbfe12f4b4b4b2"
+    },
+    {
+      "ruta": "seguridad/municipio-sintetico-b/detalle.tsv",
+      "bytes": 791,
+      "sha256": "498a6876741769a87e48cdabd169cbe366edd177981edf6347c1a9c436d042fe"
+    },
+    {
+      "ruta": "seguridad/municipios.json",
+      "bytes": 2726,
+      "sha256": "da4c1a78017e8e9bd747142289bb57905838e91f43467095c566a26b318eda6b"
+    }
+  ]
+}

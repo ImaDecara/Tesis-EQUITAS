@@ -1,0 +1,311 @@
+{
+  "version": "sintetico-v1",
+  "semilla": 20261028,
+  "clase": "S",
+  "uso_permitido": "solo simulación (ALIGN-036) y evaluaciones de equidad (ALIGN-062/063)",
+  "prohibido": "variable de entrada de cualquier regla, puntaje o modelo; nunca se une a cabecera/detalle en el ETL",
+  "proceso_generador": "Bernoulli independiente por objeto (p=0,20, supuesto) y grupo uniforme G1-G3; independiente de importes, contactos y domicilio",
+  "objetos": [
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "4100",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "4100",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "123",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "000123",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "R-0456",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10001",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10002",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10003",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10004",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10005",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10006",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10007",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10008",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10009",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10010",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10011",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10012",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10013",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "1",
+      "cuenta": "10014",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10015",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10016",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10017",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "1",
+      "cuenta": "10018",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10019",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10020",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10021",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "9",
+      "cuenta": "10022",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10023",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10024",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10025",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10026",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10028",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10029",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10030",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10031",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "6",
+      "cuenta": "10032",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10033",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10034",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G2"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10035",
+      "vulnerable_sintetico": true,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "bien_tipo_id": "3",
+      "cuenta": "10036",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "bien_tipo_id": "3",
+      "cuenta": "4100",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "bien_tipo_id": "6",
+      "cuenta": "10037",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G1"
+    },
+    {
+      "municipio": "municipio-sintetico-b",
+      "bien_tipo_id": "1",
+      "cuenta": "10038",
+      "vulnerable_sintetico": false,
+      "grupo_sintetico": "G3"
+    }
+  ]
+}
