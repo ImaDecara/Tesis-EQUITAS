@@ -75,7 +75,7 @@ O = observado; P = pendiente. El snapshot del 21/10 (`database/schema-observado-
 
 ### Catálogos del ETL y e06 son excluyentes
 
-`etl-compat-catalogs.sql` no forma parte de la migración. Las claves que el ETL necesita y que lee el contrato (`OVERDUE`/`UNKNOWN` en `debt_status`, `docs/tesis/contrato-dominio-v1.md` §9 regla 4) coinciden con cuatro claves únicas de e06: `ARS`, `OVERDUE`, `EMAIL` y `ACTIVE` (`database/testing/fixtures.sql:15-21`). Si las semillas estuvieran en la migración, `fixtures.sql` fallaría en `currency_code_key` después de cada `db reset` (verificado el 30/10, ver más abajo). Cambiar esas claves rompería el conteo de vencidas del frontend, y cambiar e06 está excluido. Por eso:
+`etl-compat-catalogs.sql` no forma parte de la migración. El ETL actual solo usa IDs fijos, pero las claves canónicas de esas constantes, que el contrato ya lee (`OVERDUE`/`UNKNOWN` en `debt_status`, `docs/tesis/contrato-dominio-v1.md` §9 regla 4), coinciden con cuatro claves únicas de e06: `ARS`, `OVERDUE`, `EMAIL` y `ACTIVE` (`database/testing/fixtures.sql:15-21`). Si las semillas estuvieran en la migración, `fixtures.sql` fallaría en `currency_code_key` después de cada `db reset` (verificado el 30/10, ver más abajo). Cambiar esas claves rompería el conteo de vencidas del frontend, y cambiar e06 está excluido. Por eso:
 
 - `db reset` deja la base sin filas y e06 carga igual que antes.
 - `etl-compat-catalogs.sql` exige la migración `20261030090000` (registrada solo en la base local) y una base sin e06. Ante un id o una clave ya usados falla y no modifica nada. Repetirlo no cambia la base.
