@@ -5,6 +5,7 @@
   "moneda": "ARS",
   "fecha_corte": "2026-09-30",
   "formato": {
+    "tipo": "tsv",
     "separador": "\\t",
     "codificacion": "utf-8",
     "decimal": ",",
@@ -33,6 +34,7 @@
     "NOTD_SITU_id": {}
   },
   "columnas": {},
+  "transformaciones": {},
   "vigencia_contactos": [],
   "vigencia_por_defecto": "ACTIVO",
   "solo_fixture": "sintetico-v1"

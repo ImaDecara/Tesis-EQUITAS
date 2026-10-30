@@ -586,7 +586,9 @@ class _Validator:
         link_evaluable = all(r.values.get('ClaveAgrupacion') for r in obj.headers) and 'CLAVE_AGRUPACION_AMBIGUA' not in obj.reasons
         if not link_evaluable:
             for subtotal in amounts.values():
-                subtotal.update(valor=None, presencia='NO_INTEGRADO', completo=False)
+                subtotal.update(presencia='NO_INTEGRADO', completo=False)
+                if not obj.details:
+                    subtotal['valor'] = None
         if control.value is not None and actual['completo'] and link_evaluable:
             difference = control.value - Decimal(actual['valor'])
             if abs(difference) > Decimal(self.contract['consistencias']['tolerancia_importe']):

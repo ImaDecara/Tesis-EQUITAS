@@ -1,9 +1,254 @@
+"""Lectores TSV/CSV por perfil; validación dry-run y compatibilidad con el ETL."""
+
+import argparse
+import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
 from ETL.config import settings
+from ETL.validate_source import (
+    DEFAULT_CONTRACT,
+    SourceRow,
+    SourceTable,
+    ValidationError,
+    load_contract,
+    parse_amount,
+    parse_date,
+    render_markdown,
+    validate_batch,
+)
+
+MAPPING_SCHEMA = DEFAULT_CONTRACT.with_name('source-mapping.schema.json')
+
+
+def _profile_require(condition):
+    if not condition:
+        raise ValidationError('PERFIL_INVALIDO')
+
+
+def _check_schema(value, spec, schema):
+    """Evalúa el subconjunto de JSON Schema usado por el esquema versionado local.
+
+    Sin dependencias, resolución remota ni coerciones. No es un validador de
+    esquemas arbitrarios: el esquema es código confiable del repositorio.
+    """
+    if '$ref' in spec:
+        return _check_schema(value, schema['definitions'][spec['$ref'].split('/')[-1]], schema)
+    if 'oneOf' in spec:
+        matches = 0
+        for alternative in spec['oneOf']:
+            try:
+                _check_schema(value, alternative, schema)
+                matches += 1
+            except ValidationError:
+                pass
+        _profile_require(matches == 1)
+    if 'const' in spec:
+        _profile_require(value == spec['const'])
+    if 'enum' in spec:
+        _profile_require(value in spec['enum'])
+    if 'type' in spec:
+        _profile_require(type(value) is {'object': dict, 'array': list, 'string': str}[spec['type']])
+    if isinstance(value, dict):
+        _profile_require(set(spec.get('required', [])) <= set(value))
+        _profile_require(len(value) >= spec.get('minProperties', 0))
+        for key, item in value.items():
+            _profile_require(isinstance(key, str))
+            child = spec.get('properties', {}).get(key, spec.get('additionalProperties', True))
+            _profile_require(child is not False)
+            if isinstance(child, dict):
+                _check_schema(item, child, schema)
+    elif isinstance(value, list) and 'items' in spec:
+        for item in value:
+            _check_schema(item, spec['items'], schema)
+    elif isinstance(value, str):
+        _profile_require(len(value) >= spec.get('minLength', 0))
+        if 'pattern' in spec:
+            _profile_require(re.search(spec['pattern'], value) is not None)
+
+
+def _source_format(mapping):
+    separator = mapping['formato']['separador']
+    inferred = 'tsv' if separator in ('\t', '\\t') else 'csv'
+    kind = mapping['formato'].get('tipo', inferred)
+    _profile_require(kind == inferred)
+    return kind, '\t' if kind == 'tsv' else separator
+
+
+def validate_source_profile(mapping, contract=None):
+    """Esquema compartido con ALIGN-056 y restricciones cruzadas del motor v1."""
+    contract = load_contract() if contract is None else contract
+    if (isinstance(mapping, dict) and isinstance(mapping.get('formato'), dict)
+            and mapping['formato'].get('tipo', 'tsv') not in ('tsv', 'csv')):
+        raise ValidationError('FORMATO_NO_SOPORTADO')
+    schema = load_contract(MAPPING_SCHEMA)
+    _check_schema(mapping, schema, schema)
+    _source_format(mapping)
+    # El motor valida el contrato, corte, alias, separadores y catálogos antes
+    # de leer. Tablas vacías permiten usar esa API pública sin copiar sus reglas.
+    validate_batch(dict.fromkeys(('cabecera', 'detalle'), SourceTable([], [])),
+                   mapping, contract, mapping['fecha_corte'])
+    for kind in ('cabecera', 'detalle'):
+        known = contract['archivos'][kind]['columnas']
+        transformations = mapping.get('transformaciones', {}).get(kind, {})
+        _profile_require(set(transformations) <= set(known))
+        for operations in transformations.values():
+            for operation in operations:
+                for code in operation.get('valores', {}):
+                    _check_schema(code, schema['definitions']['texto'], schema)
+        for catalog in mapping['catalogos'].values():
+            for code in catalog:
+                _check_schema(code, schema['definitions']['texto'], schema)
+
+
+def load_source_profile(path, contract=None):
+    """Lee y valida un perfil explícito; nunca busca credenciales ni layouts."""
+    mapping = load_contract(path)
+    validate_source_profile(mapping, contract)
+    return mapping
+
+
+def _source_error(code, kind, line=0, field='*'):
+    # kind/field son nombres del contrato, nunca rutas o valores municipales.
+    raise ValidationError(f'{code}: archivo={kind}, linea={line}, campo={field}')
+
+
+def _check_cells(values, kind, line, limits):
+    if any('\x00' in value or '\n' in value or '\r' in value for value in values):
+        _source_error('ESTRUCTURA_INVALIDA', kind, line)
+    if any(len(value) > limits['celda'] for value in values):
+        _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
+
+
+def apply_source_transformations(table, kind, mapping, contract=None):
+    """Copia una SourceTable, preservando encabezados físicos y líneas.
+
+    El perfil debe validarse antes. No agrega columnas ni rellena faltantes.
+    ALIGN-053 puede reutilizarlo después de leer su propio formato.
+    """
+    contract = load_contract() if contract is None else contract
+    operations = mapping.get('transformaciones', {}).get(kind, {})
+    aliases = mapping.get('columnas', {}).get(kind, {})
+    rows = []
+    for name in operations:
+        if aliases.get(name, name) not in table.columns:
+            _source_error('COLUMNA_MAPEADA_AUSENTE', kind, 1, name)
+    for row in table.rows:
+        values = row.values.copy()
+        for name, sequence in operations.items():
+            column = aliases.get(name, name)
+            value = values[column]
+            for operation in sequence:
+                action = operation['operacion']
+                if action == 'recortar':
+                    value = value.strip()
+                elif action == 'mayusculas':
+                    value = value.upper()
+                elif action == 'minusculas':
+                    value = value.lower()
+                elif value.strip():
+                    if value not in operation['valores']:
+                        _source_error('CODIGO_NO_MAPEADO', kind, row.line, name)
+                    value = operation['valores'][value]
+            values[column] = value
+        _check_cells(values.values(), kind, row.line, contract['limites'])
+        rows.append(SourceRow(row.line, values))
+    return SourceTable(table.columns.copy(), rows)
+
+
+def _read_delimited(path, kind, mapping, contract):
+    source_type, separator = _source_format(mapping)
+    limits = contract['limites']
+    rows = []
+    try:
+        path = Path(path)
+        if path.suffix.lower() != '.' + source_type:
+            _source_error('FORMATO_NO_SOPORTADO', kind)
+        if not path.is_file():
+            _source_error('ARCHIVO_NO_LEIBLE', kind)
+        if path.stat().st_size > limits['bytes']:
+            _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind)
+        encoding = mapping['formato']['codificacion']
+        with path.open(encoding='utf-8-sig' if encoding == 'utf-8' else encoding, newline='') as stream:
+            reader = csv.reader(stream, delimiter=separator, strict=True)
+            raw_columns = next(reader, [])
+            _check_cells(raw_columns, kind, 1, limits)
+            columns = [name.strip() for name in raw_columns]
+            if not columns or any(not name for name in columns) or len(set(columns)) != len(columns):
+                _source_error('ESTRUCTURA_INVALIDA', kind, 1)
+            if len(columns) > limits['columnas']:
+                _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, 1)
+            for values in reader:
+                _check_cells(values, kind, reader.line_num, limits)
+                if not values or (len(values) == 1 and not values[0].strip()):
+                    continue
+                line = reader.line_num
+                if len(rows) >= limits['filas']:
+                    _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
+                if len(values) != len(columns):
+                    _source_error('ESTRUCTURA_INVALIDA', kind, line)
+                rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
+    except ValidationError:
+        raise
+    except (OSError, UnicodeError, csv.Error, TypeError, ValueError):
+        _source_error('ARCHIVO_NO_LEIBLE', kind)
+    aliases = mapping.get('columnas', {}).get(kind, {})
+    for name, spec in contract['archivos'][kind]['columnas'].items():
+        if spec['requerida'] and aliases.get(name, name) not in columns:
+            _source_error('COLUMNA_OBLIGATORIA_AUSENTE', kind, 1, name)
+    return apply_source_transformations(SourceTable(columns, rows), kind, mapping, contract)
+
+
+def read_source_tables(files, mapping, *, contract=None):
+    """Lee TSV/CSV según el perfil y devuelve tablas para validate_batch.
+
+    Ante una lectura corrupta no entrega prefijos parciales. Los errores son
+    códigos seguros con ubicación; no contienen valores ni nombres externos.
+    """
+    contract = load_contract() if contract is None else contract
+    validate_source_profile(mapping, contract)
+    if not isinstance(files, dict) or set(files) != {'cabecera', 'detalle'}:
+        raise ValidationError('ARCHIVOS_REQUERIDOS')
+    return {kind: _read_delimited(files[kind], kind, mapping, contract) for kind in ('cabecera', 'detalle')}
+
+
+def validate_source_files(files, mapping, *, contract=None, cut_off):
+    """Dry-run: el reporte del motor, sin archivos de salida ni publicación."""
+    contract = load_contract() if contract is None else contract
+    tables = read_source_tables(files, mapping, contract=contract)
+    return validate_batch(tables, mapping, contract, cut_off)
+
+
+def _canonical_dataframe(table, kind, mapping, contract):
+    """Puente al ETL heredado: nombres canónicos, decimal sin miles y fecha D/M/A.
+
+    Solo normaliza formatos válidos. Nunca convierte celdas inválidas o ausentes
+    en cero. Los consumidores deben validar las SourceTable antes de publicar.
+    """
+    fmt = mapping['formato']
+    aliases = mapping.get('columnas', {}).get(kind, {})
+    columns = {name: aliases.get(name, name) for name in contract['archivos'][kind]['columnas']
+               if aliases.get(name, name) in table.columns}
+    records = []
+    for row in table.rows:
+        record = {}
+        for name, physical in columns.items():
+            value = row.values[physical].strip()
+            field_type = contract['archivos'][kind]['columnas'][name]['tipo']
+            if field_type in ('importe', 'porcentaje'):
+                parsed = parse_amount(value, fmt['decimal'], '' if field_type == 'porcentaje' else fmt['miles'])
+                if parsed.value is not None:
+                    value = format(parsed.value, 'f')
+            elif field_type == 'fecha':
+                parsed = parse_date(value, fmt['fecha'], contract)
+                if parsed.value is not None:
+                    value = parsed.value.strftime('%d/%m/%Y')
+            record[name] = value
+        records.append(record)
+    return pd.DataFrame(records, columns=list(columns), dtype=str)
 
 
 @dataclass
@@ -42,13 +287,22 @@ def read_tsv(path: Path) -> pd.DataFrame:
 def extract_source_files(
     cabecera_path: str | Path,
     detalle_path: str | Path,
+    *,
+    mapping: dict | None = None,
+    contract: dict | None = None,
 ) -> ExtractedSourceData:
 
     cabecera_file = Path(cabecera_path)
     detalle_file = Path(detalle_path)
 
-    cabecera_df = read_tsv(cabecera_file)
-    detalle_df = read_tsv(detalle_file)
+    if mapping is None:
+        cabecera_df = read_tsv(cabecera_file)
+        detalle_df = read_tsv(detalle_file)
+    else:
+        contract = load_contract() if contract is None else contract
+        tables = read_source_tables({'cabecera': cabecera_file, 'detalle': detalle_file}, mapping, contract=contract)
+        cabecera_df, detalle_df = (_canonical_dataframe(tables[kind], kind, mapping, contract)
+                                  for kind in ('cabecera', 'detalle'))
 
     return ExtractedSourceData(
         cabecera_df=cabecera_df,
@@ -265,6 +519,25 @@ def print_extraction_summary(source_data: ExtractedSourceData) -> None:
     print(list(source_data.detalle_df.columns[:10]))
 
 
-if __name__ == "__main__":
-    data = extract_from_input_folder("inmuebles")
-    print_extraction_summary(data)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Lectura TSV/CSV y validación dry-run; no escribe ni publica.')
+    parser.add_argument('--cabecera', type=Path, required=True)
+    parser.add_argument('--detalle', type=Path, required=True)
+    parser.add_argument('--mapping', type=Path, required=True)
+    parser.add_argument('--contract', type=Path, default=DEFAULT_CONTRACT)
+    parser.add_argument('--cut-off', required=True)
+    args = parser.parse_args(argv)
+    try:
+        contract = load_contract(args.contract)
+        mapping = load_source_profile(args.mapping, contract)
+        report = validate_source_files({'cabecera': args.cabecera, 'detalle': args.detalle}, mapping,
+                                       contract=contract, cut_off=args.cut_off)
+    except ValidationError as error:
+        print(str(error))
+        return 2
+    print(render_markdown(report), end='')
+    return 1 if report['resultado_lote'] == 'BLOQUEADO' else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

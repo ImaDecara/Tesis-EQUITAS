@@ -32,8 +32,9 @@ No se importan `ETL.config`, `ETL.transform`, pandas, dotenv ni clientes de base
 no se leen variables de entorno ni `.env`. Solo se usa la biblioteca estándar.
 El validador no publica, modifica ni consulta datos persistidos. Los límites son
 25 000 000 bytes, 300 000 registros, 60 columnas y 32 767 caracteres por celda.
-La lectura de rutas de esta versión admite TSV; los lectores CSV/XLSX pertenecen
-a ALIGN-030/053. No sustituye los controles de archivos hostiles de esos tickets.
+La lectura directa de rutas de este validador admite TSV. ALIGN-030 incorpora
+el adaptador TSV/CSV en `ETL.extract`, que entrega `SourceTable` al mismo motor;
+XLSX y los controles adicionales de archivos hostiles corresponden a ALIGN-053.
 
 `python -m ETL.inspect_tsv --cabecera … --detalle … --cut-off … [--mapping …]`
 llama al mismo motor. Ya no tiene parsers monetarios propios, conciliación
@@ -54,7 +55,7 @@ jurisdicción, moneda, corte, catálogos ni formato. El JSON tiene esta estructu
   "moneda": "ARS",
   "fecha_corte": "2026-09-30",
   "formato": {
-    "separador": "\\t", "codificacion": "utf-8",
+    "tipo": "tsv", "separador": "\\t", "codificacion": "utf-8",
     "decimal": ",", "miles": ".", "fecha": "dd/mm/aaaa"
   },
   "catalogos": {
@@ -90,6 +91,87 @@ Ese adaptador no demuestra procedencia ni autoriza usar datos reales. Para el
 municipio B se pasa un mapeo explícito con su municipio y los mismos catálogos.
 No se lee `expected.json` desde el código productivo.
 
+### 2.1 Perfiles TSV/CSV — ALIGN-030 (R14)
+
+[`source-mapping.schema.json`](../../contracts/source-mapping.schema.json) es el
+esquema JSON Schema Draft 7 compartido con ALIGN-056. El lector lo evalúa con
+biblioteca estándar, sin añadir dependencias, y después verifica las restricciones
+cruzadas del contrato mediante la API pública del validador. Los perfiles de
+ejemplo son [`source-mapping.sintetico-v1.json`](../../contracts/source-mapping.sintetico-v1.json)
+y [`source-mapping.sintetico-csv.v1.json`](../../contracts/source-mapping.sintetico-csv.v1.json).
+No contienen datos reales ni homologan un layout municipal.
+
+- `tipo`: `tsv` o `csv`. En perfiles anteriores que lo omiten se deriva únicamente
+  del separador declarado: tabulador para TSV, coma o punto y coma para CSV.
+  No se inspeccionan datos para adivinar el formato. La extensión `.tsv`/`.csv`
+  debe coincidir; `.xls`/`.xlsx` se rechazan con `FORMATO_NO_SOPORTADO`.
+- Codificaciones: `utf-8`, `utf-8-sig`, `cp1252`. UTF-8 admite BOM inicial.
+  Decimales: coma o punto; miles: punto, coma o vacío, distinto del decimal.
+  Fechas: `dd/mm/aaaa` o `aaaa-mm-dd`. No se usan locales del equipo.
+- `fin_de_linea` es metadato heredado del manifiesto (`LF` o `CRLF`); ambos
+  finales se leen. Las comillas CSV son dobles y se escapan duplicándolas.
+  No se admiten celdas multilínea ni NUL, incluso si están entre comillas.
+- Los encabezados se recortan y deben ser únicos. Las líneas vacías sin
+  delimitadores se omiten conservando su posición física. La fila de títulos
+  debe ser la primera. Las celdas y los identificadores siguen siendo texto.
+- Los límites de bytes, filas, columnas y celda salen del contrato. Una lectura
+  corrupta, excedida o incompleta lanza un error seguro y **no devuelve un prefijo
+  utilizable del lote**. Una columna requerida ausente indica archivo, línea 1
+  y nombre canónico, sin reproducir nombres externos ni valores del archivo.
+
+`transformaciones` es opcional y contiene secuencias por archivo y campo canónico:
+
+```json
+{
+  "cabecera": {
+    "Estado": [
+      {"operacion": "recortar"},
+      {"operacion": "mayusculas"},
+      {"operacion": "mapear_codigos", "valores": {"A": "Activo", "I": "Inactivo"}}
+    ]
+  },
+  "detalle": {
+    "NOTD_ESTA_id": [
+      {"operacion": "mapear_codigos", "valores": {"P": "10", "C": "20"}}
+    ]
+  }
+}
+```
+
+Las únicas operaciones son `recortar`, `mayusculas`, `minusculas` y
+`mapear_codigos`. Se aplican en el orden escrito, antes de validar; el mapa del
+ejemplo entrega `10`/`20` al catálogo del lote, que los interpreta como
+`PENDIENTE`/`PAGADA`. Los códigos no incluidos generan `CODIGO_NO_MAPEADO`, sin
+default. Vacíos y espacios sin contenido permanecen faltantes; no se permiten
+entradas o destinos vacíos en el mapa. Una transformación sobre una columna
+ausente genera `COLUMNA_MAPEADA_AUSENTE`. No se ejecutan expresiones, scripts,
+regex del usuario ni inferencias sobre identificadores. Las transformaciones
+también deben respetar el límite de celda después de aplicarse.
+
+Los perfiles rechazan propiedades extra, operaciones desconocidas, alias
+ambiguos y campos ajenos al contrato. `load_source_profile(path)` lee y valida;
+`validate_source_profile(mapping, contract)` valida un dict sin modificarlo.
+Los errores de esquema usan `PERFIL_INVALIDO`; los del contrato o sus
+restricciones cruzadas, `CONFIGURACION_INVALIDA` o `CORTE_INVALIDO`.
+
+Desde `back/`, el nuevo comando es siempre dry-run y escribe el reporte solo
+en stdout. `-B` evita además la generación de cachés de bytecode:
+
+```sh
+.venv/bin/python -B -m ETL.extract \
+  --cabecera /tmp/lote-sintetico/cabecera.csv \
+  --detalle /tmp/lote-sintetico/detalle.csv \
+  --mapping /tmp/lote-sintetico/perfil.json \
+  --contract ../contracts/source-contract.v1.json --cut-off 2026-09-30
+```
+
+Salidas: **0** validado, **1** analizado y bloqueado, **2** perfil/archivo no
+procesable. No tiene modo de publicación ni crea reportes en disco, clientes de
+base o conexiones. El módulo de extracción conserva sus imports del ETL
+heredado; la garantía de biblioteca estándar sin importarlos corresponde a
+`ETL.validate_source`. `run_etl.py` conserva sus argumentos y su flujo de TSV de
+ALIGN-025; no adquiere un `--mapping` ni publica a través de este adaptador.
+
 ## 3. Columnas, claves y tipos
 
 La lista exacta y su condición están en `archivos.*.columnas` del contrato.
@@ -114,8 +196,9 @@ define el tributo validado, evitando dos hallazgos por la misma referencia.
   y la ambigüedad bloquea el lote. Un enlace vacío nunca se registra ni se busca:
   se informa `CAMPO_OBLIGATORIO_VACIO`; el detalle no asignable también se informa
   como `DETALLE_SIN_CABECERA`. No se concilia un objeto cuyo enlace es vacío o
-  ambiguo. Sus subtotales son null con presencia `NO_INTEGRADO` y `completo=false`:
-  el universo de obligaciones del objeto no se puede determinar. El importe de
+  ambiguo. Sus subtotales tienen presencia `NO_INTEGRADO` y `completo=false`:
+  el universo de obligaciones del objeto no se puede determinar. Son null si no
+  hay detalles asignados; si los hay, conservan ese subtotal parcial. El importe de
   los detalles no asignables sigue informado aparte; `importe_evaluable=false`.
 - `Cuenta` y `Bien_Tipo_Id` del detalle se comparan con la cabecera únicamente
   cuando están informados. Su vacío opcional no es una diferencia ni invalida.
@@ -318,6 +401,39 @@ ceros y ubicaciones. Los adaptadores CSV pueden declarar separador coma/punto y
 coma, XLSX `null`; la lectura de rutas del validador solo permite tabulador.
 TSV v1 rechaza celdas multilínea. La fila de títulos es 1. Los adaptadores futuros
 deben documentar cómo corresponde `line` a registro/fila de hoja.
+
+Para leer CSV o aplicar transformaciones, ALIGN-026/052 deben usar el adaptador:
+
+```python
+from ETL.extract import load_source_profile, read_source_tables, validate_source_files
+
+mapping = load_source_profile(path_perfil, contract)
+tables = read_source_tables(files, mapping, contract=contract)
+report = validate_batch(tables, mapping, contract, "2026-09-30")
+# Alternativa de una llamada, también sin escrituras:
+report = validate_source_files(files, mapping, contract=contract, cut_off="2026-09-30")
+```
+
+Las tablas preservan nombres físicos, líneas y todos los registros, incluidos
+los que el motor pondrá en cuarentena. Se pasan con el mismo mapeo; el lector no
+deduplica ni filtra objetos. `apply_source_transformations` copia las tablas y
+puede reutilizarse en ALIGN-053 después de validar el perfil y la estructura.
+Habilitar XLSX requerirá ampliar explícitamente el esquema y su selector; esta
+versión solo acepta TSV/CSV. ALIGN-056 debe guardar el mismo JSON y validar en
+servidor, sin crear un segundo motor de reglas en la pantalla.
+Las transformaciones pertenecen al adaptador: pasar rutas directamente a
+`validate_batch` no las aplica. Un perfil con `transformaciones` debe pasar
+siempre por `read_source_tables` o `validate_source_files`.
+
+`extract_source_files(cabecera, detalle, mapping=mapping, contract=contract)`
+ofrece el puente a DataFrames del ETL existente. Renombra campos canónicos y
+normaliza únicamente importes/porcentajes válidos a decimal punto sin miles y
+fechas válidas a `dd/mm/aaaa`, formatos consumidos por el transformador heredado.
+No completa importes ausentes ni convierte inválidos a cero. Los DataFrames no
+son un reporte de validación ni una autorización de publicación: ALIGN-026 debe
+validar las `SourceTable` originales, preservar objetos completos en cuarentena
+y consumir sus decisiones antes de construir payloads. La llamada sin `mapping`
+mantiene la lectura TSV heredada. La semántica del publicador sigue en ALIGN-026.
 
 No se mutan entradas. El resultado es serializable y determinista, sin timestamps
 del equipo, personas, documentos, teléfonos, correos, domicilios, cuentas, claves

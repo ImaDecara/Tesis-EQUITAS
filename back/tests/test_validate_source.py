@@ -646,6 +646,17 @@ def test_unimplemented_percentage_column_is_rejected(simple):
         check(simple, contract=contract)
 
 
+def test_incomplete_join_keeps_known_money_without_claiming_completeness(simple):
+    simple['cabecera'].append({**simple['cabecera'][0], 'Destinatario_Id': '42', 'ClaveAgrupacion': ''})
+    report = check(simple)
+    amount = report['objetos'][0]['importe_actualizado']
+    assert amount['valor'] == '30.00'
+    assert amount['presencia'] == 'NO_INTEGRADO'
+    assert not amount['completo']
+    assert report['importes']['actualizado_en_cuarentena_observado'] == '30.00'
+    assert not report['cuarentena']['importe_evaluable']
+
+
 def test_markdown_unevaluable_difference_is_explicit():
     report = fixture_report()
     assert any(not obj['conciliacion']['evaluable'] for obj in report['objetos'])
