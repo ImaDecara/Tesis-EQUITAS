@@ -1,0 +1,41 @@
+{
+  "version": "source-mapping.v1",
+  "municipio": "municipio-sintetico-a",
+  "jurisdiccion": "SINTETICA",
+  "moneda": "ARS",
+  "fecha_corte": "2026-09-30",
+  "formato": {
+    "tipo": "csv",
+    "separador": ",",
+    "codificacion": "utf-8",
+    "decimal": ",",
+    "miles": ".",
+    "fecha": "dd/mm/aaaa",
+    "fin_de_linea": "LF"
+  },
+  "catalogos": {
+    "Bien_Tipo_Id": {
+      "1": "INMUEBLE",
+      "3": "RODADO",
+      "6": "AGUA"
+    },
+    "Tipo_Ingreso_Id": {
+      "1": "inmuebles",
+      "100": "automotor",
+      "801": "conexion de agua",
+      "905": "tasa sintetica sin mapeo en el ETL"
+    },
+    "NOTD_ESTA_id": {
+      "10": "PENDIENTE",
+      "20": "PAGADA",
+      "30": "ANULADA",
+      "40": "SUSPENDIDA"
+    },
+    "NOTD_SITU_id": {}
+  },
+  "columnas": {},
+  "transformaciones": {},
+  "vigencia_contactos": [],
+  "vigencia_por_defecto": "ACTIVO",
+  "solo_fixture": "sintetico-v1"
+}

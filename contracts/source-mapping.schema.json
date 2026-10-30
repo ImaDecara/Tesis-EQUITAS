@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "source-mapping.schema.json",
+  "title": "Perfil de origen EQUITAS v1 (TSV/CSV)",
+  "description": "Configuración declarativa. Las restricciones cruzadas y los nombres canónicos se verifican además con source-contract.v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "municipio", "jurisdiccion", "moneda", "fecha_corte", "formato", "catalogos"],
+  "properties": {
+    "version": {"const": "source-mapping.v1"},
+    "municipio": {"$ref": "#/definitions/texto"},
+    "jurisdiccion": {"$ref": "#/definitions/texto"},
+    "moneda": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "fecha_corte": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "formato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["separador", "codificacion", "decimal", "miles", "fecha"],
+      "properties": {
+        "tipo": {"enum": ["tsv", "csv"]},
+        "separador": {"enum": ["\\t", "\t", ",", ";"]},
+        "codificacion": {"enum": ["utf-8", "utf-8-sig", "cp1252"]},
+        "decimal": {"enum": [",", "."]},
+        "miles": {"enum": ["", ",", "."]},
+        "fecha": {"enum": ["dd/mm/aaaa", "aaaa-mm-dd"]},
+        "fin_de_linea": {"enum": ["LF", "CRLF"]}
+      }
+    },
+    "columnas": {
+      "description": "Campo canónico -> nombre físico; identidad para campos omitidos. Los alias deben ser únicos, incluidos los implícitos.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cabecera": {"$ref": "#/definitions/mapa_texto"},
+        "detalle": {"$ref": "#/definitions/mapa_texto"}
+      }
+    },
+    "catalogos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Bien_Tipo_Id", "Tipo_Ingreso_Id", "NOTD_ESTA_id", "NOTD_SITU_id"],
+      "properties": {
+        "Bien_Tipo_Id": {"$ref": "#/definitions/mapa_texto"},
+        "Tipo_Ingreso_Id": {"$ref": "#/definitions/mapa_texto"},
+        "NOTD_ESTA_id": {"$ref": "#/definitions/mapa_estado"},
+        "NOTD_SITU_id": {"$ref": "#/definitions/mapa_estado"}
+      }
+    },
+    "transformaciones": {
+      "description": "Secuencias por archivo y campo canónico, aplicadas antes de validar; nunca ejecutan código.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cabecera": {"$ref": "#/definitions/transformaciones_campos"},
+        "detalle": {"$ref": "#/definitions/transformaciones_campos"}
+      }
+    },
+    "vigencia_por_defecto": {"enum": ["ACTIVO", "NO_INTEGRADO"]},
+    "vigencia_contactos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["municipio", "Destinatario_Id", "columna", "vigencia"],
+        "properties": {
+          "municipio": {"$ref": "#/definitions/texto"},
+          "Destinatario_Id": {"$ref": "#/definitions/texto"},
+          "columna": {"enum": ["Destinatario_Email", "Destinatario_Telefono", "Destinatario_Celular"]},
+          "vigencia": {"enum": ["ACTIVO", "INACTIVO"]}
+        }
+      }
+    },
+    "solo_fixture": {"const": "sintetico-v1"}
+  },
+  "definitions": {
+    "texto": {"type": "string", "minLength": 1, "pattern": "^[^\\s\\x00](?:[^\\r\\n\\x00]*[^\\s\\x00])?$"},
+    "mapa_texto": {"type": "object", "additionalProperties": {"$ref": "#/definitions/texto"}},
+    "mapa_estado": {
+      "type": "object",
+      "additionalProperties": {"enum": ["PENDIENTE", "PAGADA", "ANULADA", "SUSPENDIDA", "UNKNOWN"]}
+    },
+    "transformaciones_campos": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operacion"],
+              "properties": {"operacion": {"enum": ["recortar", "mayusculas", "minusculas"]}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operacion", "valores"],
+              "properties": {
+                "operacion": {"const": "mapear_codigos"},
+                "valores": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/definitions/texto"}}
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
