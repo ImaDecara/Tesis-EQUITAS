@@ -193,3 +193,50 @@ El [README interno de la API](../../back/api/README.md) detalla contrato HTTP,
 adaptación de faltantes, restricciones y reproducibilidad. Los resultados de
 rendimiento E08/E11 no se extrapolan a esta versión: véase la nota en
 [`RENDIMIENTO_CALIDAD.md`](../../RENDIMIENTO_CALIDAD.md).
+
+## 8. Frontera de autorización de lecturas (ALIGN-019, 30/10/2026)
+
+Las pantallas de servidor ya no dependen del `AuthGuard` de navegador para impedir
+la lectura. `front/lib/server/dal.ts` usa `auth.getUser()` con el cliente de sesión,
+resuelve el usuario de aplicación por `auth_user`, exige `user.status = ACTIVE`,
+una membresía `tenant_user.status = true`, municipio activo y rol aprobado en el
+catálogo `role.name`. No acepta roles enviados por el navegador ni equivalencias
+implícitas (`admin`, `operator` o un ID de rol no conceden permisos).
+
+Sin selección se exige exactamente una membresía activa. Con varias, se devuelve
+`TENANT_SELECTION_REQUIRED`; el llamador puede indicar `tenantId` o la cookie
+`equitas_tenant_id`. Esa selección es entrada no confiable: se vuelve a comprobar
+contra las membresías del usuario en cada entrada, y nunca concede acceso sola.
+El conteo exacto evita que un límite de filas oculte una segunda membresía.
+
+`requireTenantAccess({ permission, tenantId? })` devuelve contexto y cliente de
+sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`,
+`supervisor`; registro de decisiones: `operador`, `supervisor`; aprobación y
+supervisión: `supervisor`; importación: `importador`, `supervisor`.
+`importador_sistema` no tiene acceso web. Estos permisos no implementan escrituras.
+
+`createTenantReader()` es la entrada de los cargadores de objetos y personas.
+Cada consulta de negocio lleva el filtro del municipio autorizado, directamente o
+por relaciones `!inner`, incluidas todas las páginas de una lectura paginada. Los
+alias de relación se eliminan de las filas antes de mapearlas. Solo los catálogos
+compartidos carecen de filtro de municipio; también requieren autorización previa.
+RLS sigue siendo una segunda barrera, necesaria para las lecturas directas por la
+Data API. La DAL no reemplaza RLS ni audita accesos directos a PostgREST.
+
+Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores de
+consulta conservan `DataWarning` y el tratamiento «no disponible» de ALIGN-011/012
+(contrato §4.1.6); no se convierten en un cero ni en un vacío exitoso. No hay caché
+de autorización entre solicitudes, clave de servicio ni secretos nuevos.
+
+Puntos cubiertos: tablero `/`, objetos `/debtors`, detalle `/debtors/[debtorId]`,
+personas `/people`, colas `/priority-cases`, sin contacto `/no-contact`, mora
+`/debt-aging`, riesgo `/risk-analysis`, acciones recomendadas `/recommended-actions`.
+Las futuras Server Actions (ALIGN-020), lecturas de revisión (021) y rutas CSV (028)
+deben autorizar **dentro de cada entrada** y extender el lector con filtros de tenant
+para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
+insertarse después de autorizar y antes de entregar el DTO, sin datos personales.
+
+Validación actual: pruebas negativas y positivas con Auth/REST simulados, incluida
+la separación por municipio con políticas permisivas simuladas. La prueba HTTP
+HTML/RSC sobre Supabase local con `USING(true)` está pendiente de la liberación del
+stack por ALIGN-018; este registro no afirma que se haya ejecutado.

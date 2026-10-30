@@ -5,6 +5,7 @@ import type { DataWarning, RawRow } from '@/types/equitas-domain'
 
 const PAGE_SIZE = 1000
 type RowId = string | number
+export type TableReadScope = { select: string; filters: readonly (readonly [string, string | boolean])[] }
 type ReadResult = { rows: RawRow[]; warning: DataWarning | null }
 
 function failedRead(table: string, error: { message: string; code?: string | null }): ReadResult {
@@ -27,7 +28,7 @@ function validId(id: unknown): id is RowId {
 }
 
 // Las tablas de estas rutas tienen PK bigint id. Cada request conserva la sesion/RLS.
-export async function loadAllTableRows(table: string, supabase: SupabaseClient | null): Promise<ReadResult> {
+export async function loadAllTableRows(table: string, supabase: SupabaseClient | null, scope?: TableReadScope): Promise<ReadResult> {
   if (!supabase || !hasSupabaseCredentials) {
     return {
       rows: [],
@@ -43,12 +44,13 @@ export async function loadAllTableRows(table: string, supabase: SupabaseClient |
   let cursor: RowId | null = null
   try {
     while (true) {
-      let query = supabase.from(table).select('*').order('id', { ascending: true }).limit(PAGE_SIZE)
+      let query = supabase.from(table).select(scope?.select ?? '*').order('id', { ascending: true }).limit(PAGE_SIZE)
+      for (const [column, value] of scope?.filters ?? []) query = query.eq(column, value)
       if (cursor !== null) query = query.gt('id', cursor)
       const response = await query
       if (response.error) return failedRead(table, response.error)
 
-      const page = response.data ?? []
+      const page: unknown = response.data ?? []
       if (!Array.isArray(page)) {
         return failedRead(table, { message: 'Respuesta de pagina invalida.', code: 'DATA_PAGINATION_INVALID' })
       }
@@ -65,7 +67,7 @@ export async function loadAllTableRows(table: string, supabase: SupabaseClient |
         }
         cursor = id
       }
-      rows.push(...page)
+      rows.push(...page.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith('__')))))
     }
   } catch (error) {
     return failedRead(table, { message: error instanceof Error ? error.message : 'Error desconocido al leer datos' })

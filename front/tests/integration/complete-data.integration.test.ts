@@ -4,6 +4,7 @@ const { createServerSupabaseClientMock } = vi.hoisted(() => ({
   createServerSupabaseClientMock: vi.fn(),
 }))
 
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
 vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: createServerSupabaseClientMock }))
 
@@ -12,7 +13,7 @@ import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-me
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { getPeopleDataFromService } from '@/lib/services/person-data-service'
 import type { RawRow } from '@/types/equitas-domain'
-import { createPaginatedSupabase, primaryRows } from '../fixtures/paginated-supabase'
+import { createAuthorizedPaginatedSupabase as createPaginatedSupabase, primaryRows } from '../fixtures/paginated-supabase'
 
 type Route = 'objetos' | 'personas'
 

@@ -86,24 +86,26 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   })
 
   it('AUTH-06: usa el usuario validado por Auth y la pertenencia activa', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: '42' }]), ok([{ tenant: 7, role: 'operator' }])])
+    const { client, queries } = clientWithReplies([ok([{ id: '42', auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     expect(await validateCurrentUserTenantAccess()).toEqual({ isAuthorized: true, requiresLogin: false,
-      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'operator' } })
+      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'consulta' } })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
     expect(queries).toEqual([
-      { table: 'user', filters: [['auth_user', 'auth-test']], limit: 1 },
-      { table: 'tenant_user', filters: [['user', 42], ['status', true]], limit: 1 },
+      { table: 'user', filters: [['auth_user', 'auth-test']], limit: 2 },
+      { table: 'tenant_user', filters: [['user', '42'], ['status', true]], limit: 2 },
+      { table: 'tenant', filters: [['id', '7']], limit: 1 },
+      { table: 'role', filters: [['id', '3']], limit: 1 },
     ])
   })
 
   it('AUTH-06 / E06: conserva el cliente y su sesion al validar pertenencia', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: 42 }]), ok([{ tenant: 7, role: 1 }])])
+    const { client, queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     browserClient.mockClear()
     expect(await validateAuthUserTenantAccess('auth-test', client as unknown as SupabaseClient)).toMatchObject({
-      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '1' },
+      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'consulta' },
     })
     expect(browserClient).not.toHaveBeenCalled()
-    expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user'])
+    expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user', 'tenant', 'role'])
   })
 
   it.each([
@@ -111,16 +113,16 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
     [ok([{ status: false }]), 'TENANT_ACCESS_INACTIVE'],
     [{ data: null, error: { message: 'membership read failed', code: '42501' } }, 'DATABASE_ERROR'],
   ] as const)('AUTH-07: sin pertenencia activa consulta estados y rechaza %s', async (fallback, code) => {
-    const { queries } = clientWithReplies([ok([{ id: 42 }]), ok([]), fallback])
+    const { queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([]), fallback])
     const result = await validateAuthUserTenantAccess('auth-test')
     expect(result).toMatchObject({ isAuthorized: false, requiresLogin: false, code })
     expect(result.context).toBeUndefined()
-    expect(queries[2]).toEqual({ table: 'tenant_user', filters: [['user', 42]], limit: 20 })
+    expect(queries[2]).toEqual({ table: 'tenant_user', filters: [['user', '42']], limit: 2 })
   })
 
   it('AUTH-08: error leyendo pertenencia no autoriza ni consulta estados adicionales', async () => {
-    const { queries } = clientWithReplies([ok([{ id: 42 }]), { data: null, error: { message: 'permission denied' } }])
-    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'Error consultando tenant_user: permission denied' })
+    const { queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), { data: null, error: { message: 'permission denied' } }])
+    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'No disponible: no se pudo verificar la membresia.' })
     expect(queries).toHaveLength(2)
   })
 

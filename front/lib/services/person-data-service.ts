@@ -1,7 +1,6 @@
-import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { EQUITAS_TABLE_NAMES } from '@/lib/data/table-names'
 import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createTenantReader } from '@/lib/server/dal'
 import type {
   DataWarning,
   PeopleDashboardSummary,
@@ -27,9 +26,9 @@ function buildLikelyRlsWarning(table: string, message: string): DataWarning {
 }
 
 async function loadRawPeopleData(): Promise<RawPersonDataBundle> {
-  const supabase = await createServerSupabaseClient()
+  const reader = await createTenantReader()
   const results = await Promise.all(
-    PEOPLE_TABLE_LOAD_ORDER.map((table) => loadAllTableRows(table, supabase))
+    PEOPLE_TABLE_LOAD_ORDER.map((table) => reader.readTable(table))
   )
   const warnings = results
     .map((result) => result.warning)
