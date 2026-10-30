@@ -75,7 +75,8 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
   it('muestra etiqueta Vencida del catálogo en la lista de objetos', async () => {
     const text = textFromReactTree(await DebtorsPage({ searchParams: Promise.resolve({}) }))
     expect(text).toContain('Vencida')
-    expect(text).toContain('No disponible')
+    expect(text).toContain('Seguimiento')
+    expect(text).toContain('corte de origen no informado')
   })
 
   it('muestra los $50 vencidos observados y el estado faltante, sin fabricar KPI cero', async () => {
@@ -101,13 +102,13 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
   })
 
-  it('excluye No disponible del empate de recomendaciones en el caso con perfil', async () => {
+  it('las intervenciones v1 reemplazan las del perfil y conservan los faltantes del objeto parcial', async () => {
     const raw = buildIncompleteStatusRawData()
     raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
     configure(buildPresencePeopleData(), raw)
     const text = textFromReactTree(await HomePage())
-    expect(text).toContain('"Llamado prioritario" concentra 50%')
-    expect(text).not.toContain('Empate:')
+    expect(text).toContain('Empate: Seguimiento, Revisión jurídica concentra 50%')
+    expect(text).not.toContain('Revisión jurídica, No disponible')
     expect(text).toContain('Prioridad: 1 NO_INFORMADO_EN_ORIGEN')
     expect(text).toContain('Recomendación urgente: 1 NO_INFORMADO_EN_ORIGEN')
   })
@@ -159,10 +160,15 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(text).not.toContain('concentra 0%')
   })
 
-  it('no presenta 0 % de riesgo alto cuando ningún objeto tiene perfil', async () => {
+  it('puede contar cero objetos de severidad alta sin perfil cuando las obligaciones son evaluables', async () => {
     const text = textFromReactTree(await HomePage())
-    expect(text).toMatch(/No disponible\s*de los objetos/ )
-    expect(text).not.toMatch(/0%\s*de los objetos/)
+    expect(text).toMatch(/0%\s*de los objetos/)
+    const raw = buildPresenceRawData()
+    raw.debts[0].current_amount = null
+    configure(buildPresencePeopleData(), raw)
+    const unavailable = textFromReactTree(await HomePage())
+    expect(unavailable).toMatch(/No disponible\s*de los objetos/)
+    expect(unavailable).not.toMatch(/0%\s*de los objetos/)
   })
 
   it('un filtro de riesgo cuya lectura falla no produce deuda cero', async () => {

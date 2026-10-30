@@ -32,6 +32,8 @@ function fields<T>(dto: string, keys: Record<keyof T, true>) {
 // Record<keyof T, true> obliga a listar cada campo: un campo nuevo sin entrada rompe el chequeo de tipos.
 const visibleFields = [
   ...fields<DebtorListItem>('DebtorListItem', {
+    decision: true, decisionInput: true, decisionAsOf: true, decisionAsOfSource: true,
+    decisionComputedAt: true, rulesVersion: true, decisionIssues: true,
     metrics: true, computedAt: true, temporalProvenance: true,
     id: true, identifier: true, type: true, description: true, status: true, totalDebt: true,
     overdueDebt: true, peopleCount: true, peopleIds: true, peopleNames: true, hasContact: true,
@@ -49,6 +51,7 @@ const visibleFields = [
     id: true, personId: true, personName: true, channel: true, value: true, isActive: true,
   }),
   ...fields<DebtorDebtItem>('DebtorDebtItem', {
+    ruleInput: true, decisionIssues: true,
     metrics: true, statusPresence: true,
     id: true, originalAmount: true, updatedAmount: true, dueDate: true, period: true, status: true,
   }),

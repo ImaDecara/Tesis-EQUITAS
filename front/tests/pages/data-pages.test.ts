@@ -162,7 +162,11 @@ describe('pantallas con datos de gestion simulados', () => {
 
     expect(text).toContain('Acciones recomendadas')
     expect(text).toContain('Resumen por recomendacion')
-    expect(text).toContain('Seguimiento posterior')
+    expect(text).toContain('Seguimiento')
+    expect(text).toContain('Mejorar datos')
+    expect(text).toContain('Revisión jurídica')
+    expect(text).toContain('Contacto y plan')
+    expect(text).toContain('Recordatorio')
   })
 
   it('muestra el detalle completo de un objeto y deriva a notFound cuando falta', async () => {

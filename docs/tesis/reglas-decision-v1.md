@@ -277,3 +277,65 @@ La instrucción de ejecución de ALIGN-009 confirma la aprobación de la escala
 metadatos del JSON describen el estado de su especificación congelada; esta
 implementación no modifica ese archivo. La aprobación de la política completa
 y del umbral jurídico sigue siendo una condición separada.
+
+## 17. Adaptador web — ALIGN-010
+
+El [mapper de objetos](../../front/lib/mappers/debtor-object-mapper.ts) construye
+`DecisionInput` con las obligaciones leídas, los contactos activos con valor de
+las personas con relación activa y sus porcentajes declarados. Evalúa una vez
+el núcleo y entrega `decision`, `decisionInput`, `rulesVersion`, `decisionAsOf`,
+`decisionAsOfSource`, `decisionComputedAt` y `decisionIssues`. Los estados se
+conservan: un dato mal formado lleva null, `INVALIDO` y motivo; uno ausente
+nunca se completa con capital, un alias de importe presente ni un perfil.
+Una lectura fallida de `debt`/`debtor` impide construir la entrada/evaluar. Una
+lista vacía leída correctamente permite el cero derivado de v1.
+
+`RawDebtorDataBundle.batch` es el punto de entrada opcional del manifiesto
+(`as_of` y `source_updated_at`); el lector actual todavía no lo integra. Sin
+manifiesto se usa la fecha UTC de cálculo capturada una sola vez, con el aviso
+**“Fecha de cálculo usada: …; corte de origen no informado (corte no integrado)”**.
+No se presenta como corte certificado. Con un manifiesto presente pero inválido
+o sin fecha, la decisión es no disponible, sin sustitución silenciosa. El segundo
+argumento del mapper permite inyectar `computedAt` para reproducir la consulta.
+La fecha persistida del perfil sigue en `computedAt`; no se confunde con
+`decisionComputedAt`. La versión y la fecha usada acompañan el motivo visible.
+
+Los campos `estado_origen` y `periodo_fiscal` solo se consideran integrados si
+llegan explícitamente. `debt.status` sigue siendo el catálogo persistido;
+`debt.period` no se interpreta como período fiscal, ni `issue_date`/
+`last_collection_date` como actualización de origen. Las FK numéricas de tipo
+de persona no se interpretan sin su catálogo. La vulnerabilidad permanece
+`NO_INFORMADO_EN_ORIGEN`; este adaptador no ofrece un canal para inferirla.
+
+`risk`/`riskScore` del DTO de **objetos** son alias transitorios de banda y
+severidad v1, para que las pantallas existentes consuman la misma decisión.
+El perfil `socioeconomic_risk_level` y las fórmulas anteriores ya no intervienen.
+`priorityScore` = severidad (0–100 o null), `priorityLevel` = banda v1; la falta
+de contacto cambia la bandera, la intervención/cola y su explicación, **no**
+los puntos. `isUrgentRecommendation` queda como alias de necesidad de revisión
+humana o jurídica, no como urgencia legal. El presentador usa las etiquetas y
+explicaciones del JSON y agrega “Evaluar con supervisor antes de gestionar”
+cuando hay revisión. No afirma exigibilidad ni propone escalamiento.
+
+Los [selectores](../../front/lib/equitas-view-selectors.ts) crean las cinco colas
+por código de intervención. El orden de presentación es el del catálogo del
+JSON, sin comparar prioridades entre colas; dentro de cada una se usa
+`comparePriority`. Los objetos sin evaluación tienen un grupo separado **No
+disponible**, ordenado por id. En un universo leído, `count = cases.length`,
+los destacados son los primeros tres de esa misma lista y los agregados toman
+el monto evaluable y la severidad de la decisión, con desglose de faltantes.
+Si falla la lectura del universo de objetos, los conteos son null y las listas
+quedan vacías. La banda alta se obtiene del núcleo, inclusive desde 70 puntos.
+
+La [adenda del catálogo](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1)
+define unidades, poblaciones y límites. ALIGN-012 debe actualizar los rótulos
+heredados “riesgo”, “riesgo >90”, “Score” y “urgente”; ALIGN-014 conserva la
+responsabilidad de reemplazar los agregados y el orden global del tablero y
+los indicadores de mora basados en perfil/catálogo. Esos componentes no se
+modifican aquí. Los campos financieros históricos se mantienen separados y
+no alimentan las decisiones ni las sumas de las colas v1.
+
+**Seguimiento Python (MENOR-2 de ALIGN-009):** el motor Python todavía redondea
+fracciones de centavo. Su responsable debe aplicar el mismo rechazo decimal
+antes de evaluar; no se modificó backend/ETL en ALIGN-010. La paridad exigida
+para entradas válidas se conserva mediante los golden compartidos sin cambios.
