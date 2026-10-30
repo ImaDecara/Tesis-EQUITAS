@@ -20,7 +20,7 @@
   "naturaleza": {
     "que_es": "Especificación única del mundo sintético que comparten la simulación (ALIGN-035/036) y la analítica experimental (ALIGN-061/062/063): población, latentes, escenario social, segmentos plantados, comportamiento de pago, historial de acciones con submuestra aleatoria y escenarios, más el plan de análisis pre-registrado.",
     "que_no_es": "No describe ningún municipio real ni se calibra con la cartera real. Sus resultados acreditan factibilidad experimental, no desempeño predictivo, equidad ni impacto reales.",
-    "politica_de_cambios": "Cualquier cambio de un valor incluido en el hash crea una versión nueva (1.1.0, 2.0.0) con su propio hash y su propia aprobación, antes de ver resultados. Los cambios después de ver resultados son enmiendas: se versionan, se justifican y se publican junto con los resultados originales."
+    "politica_de_cambios": "Mientras la versión 1.0.0 sea borrador, las correcciones de revisión cambian su hash y se registran en el protocolo. Una vez aprobada, cualquier cambio de un valor incluido en el hash crea una versión nueva (1.1.0, 2.0.0) con su propio hash y su propia aprobación, antes de ver resultados. Los cambios después de ver resultados son enmiendas: se versionan, se justifican y se publican junto con los resultados originales."
   },
   "consumidores": {
     "ALIGN-061": "Implementa el generador del mundo (quality/fixtures/) y las tablas action_log y payment_event; verifica el hash de esta especificación",
@@ -61,7 +61,7 @@
     "poblacion": "Objetos del municipio sintético A aceptados por el oráculo expected.json de la cartera base (sin cuarentena)",
     "canal_utilizable": "Objeto con al menos un contacto utilizable según el oráculo de la cartera base (formato válido y vigente)",
     "identificacion": "El sha256 del manifest.json de la cartera base se registra en el manifiesto de cada mundo generado. Otra versión, perfil, semilla o fecha de corte es otra cartera: el generador se detiene (CARTERA_BASE_DISTINTA) y hace falta una versión nueva de esta especificación",
-    "estado_al_redactar": "ALIGN-023 en revisión; esta especificación cita su diseño (TICKETS/ALIGN-023.md) y no depende de su código",
+    "estado_integracion": "ALIGN-023 integrado en la rama de integración del plan (bc0fd54, posterior a la base de esta rama); esta especificación cita su diseño (TICKETS/ALIGN-023.md) y no depende de su código. El manifiesto versionado en el repositorio es del perfil contrato: el generador del mundo debe generar el perfil escala, registrar su propio manifest.json y usar sus objetos aceptados como población",
     "escenario_social_de_la_cartera": "No se usa en el mundo: el escenario social del mundo es el de la sección escenario_social"
   },
   "tiempo": {
@@ -138,7 +138,7 @@
     },
     "observable": false,
     "nombres": "S1–S4 y su comportamiento sintético; nunca rótulos sociales",
-    "uso": "Chequeo de cordura del clustering (ALIGN-063); nunca criterio de éxito"
+    "uso": "Chequeo de cordura del clustering (ALIGN-063): diagnóstico que se publica; nunca criterio de éxito ni de factibilidad"
   },
   "modelo_de_pago": {
     "tipo": "Riesgo mensual (hazard) logístico por objeto; a lo sumo un evento de pago por objeto y mes",
@@ -170,7 +170,7 @@
     "capacidad": "round(capacidad_mensual_fraccion × tamaño de la población) gestiones (intensidad ≥ 1) por mes",
     "elegibilidad": "Saldo vencido > 0, no regularizado, canal utilizable y sin gestión en los dos ciclos anteriores (período de espera: las ventanas de 90 días de un mismo objeto no se superponen)",
     "fraccion_aleatoria": 0.25,
-    "brazo_aleatorio": "round(fraccion_aleatoria × capacidad) objetos elegidos uniformemente entre los elegibles (flujo asignacion), con intensidad uniforme en {1, 2}; se registra la probabilidad de asignación (elegidos / elegibles)",
+    "brazo_aleatorio": "Los round(fraccion_aleatoria × capacidad) elegibles con menor clave de asignación del ciclo (sorteo clave_asignacion, semillas.acoplamiento), lo que equivale a elegirlos uniformemente; intensidad 1 si el sorteo intensidad_aleatoria es < 0,5 y 2 si no; se registra la probabilidad de asignación (elegidos / elegibles)",
     "brazo_reglas": "El resto de la capacidad, entre los elegibles no elegidos al azar cuya sugerencia v1 tiene intensidad ≥ 1, en orden de intensidad sugerida descendente y luego priority_sort_key; intensidad = la sugerida",
     "intensidades_registradas": [0, 1, 2],
     "intensidad_maxima_historial": 2,
@@ -269,8 +269,25 @@
     "regla_replicas": "Réplica k (k = 0..19) usa semilla principal + k; k = 0 es la corrida principal",
     "semilla_independiente_utilidad": 20262029,
     "flujos_rng": ["latentes", "social", "segmentos", "shock", "pagos", "dias", "asignacion", "particion", "modelos", "bootstrap"],
-    "derivacion_flujos": "numpy.random.SeedSequence(semilla, spawn_key=(índice del flujo en flujos_rng,)) → numpy.random.Generator(PCG64)",
-    "numeros_aleatorios_comunes": "Con la misma semilla, los tres escenarios comparten latentes, escenario social, segmentos, días y asignaciones; solo cambian los parámetros del escenario"
+    "flujos_del_mundo": ["latentes", "social", "segmentos", "shock", "pagos", "dias", "asignacion"],
+    "derivacion_flujos": "Flujos del mundo: un sorteo por (flujo, objeto, mes, propósito) según acoplamiento. Flujos de análisis (particion, modelos, bootstrap): secuenciales, numpy.random.Generator(numpy.random.PCG64(numpy.random.SeedSequence(semilla, spawn_key=(índice del flujo en flujos_rng,))))",
+    "acoplamiento": {
+      "sorteo": "numpy.random.Generator(numpy.random.PCG64(numpy.random.SeedSequence(semilla, spawn_key=(índice del flujo en flujos_rng, índice del objeto, mes, índice del propósito en su flujo)))); uniforme = .random() y normal = .standard_normal() del primer valor",
+      "indice_objeto": "Posición del objeto en la población ordenada por su clave externa (Bien_Tipo_Id, Cuenta) por punto de código; es la misma en los tres escenarios",
+      "mes": "0 para los sorteos invariantes en el tiempo; m = 1..24 para los del ciclo m",
+      "propositos": {
+        "latentes": ["capacidad_latente"],
+        "social": ["vulnerable", "grupo"],
+        "segmentos": ["segmento"],
+        "shock": ["shock_inicial", "innovacion"],
+        "pagos": ["evento", "tipo", "fraccion"],
+        "dias": ["dia"],
+        "asignacion": ["clave", "intensidad"]
+      },
+      "uso": "Bernoulli: uniforme < p. Categórica: inversa de la acumulada en el orden declarado (G1–G3 por tercios; S1–S4 según probabilidades). Evento de pago del ciclo: uniforme evento < h_i(m). Tipo: con regularización posible, REGULARIZACION si uniforme tipo < psi, PAGO_TOTAL si cae en [psi, psi + (1 − psi) · pi_total) y PAGO_PARCIAL si no; sin regularización posible, PAGO_TOTAL si < pi_total. Fracción parcial: mínimo + (máximo − mínimo) · uniforme fraccion. Día: piso(uniforme dia · días del mes). Brazo aleatorio: los elegibles con menor uniforme clave; intensidad 1 si uniforme intensidad < 0,5",
+      "por_que": "Cada sorteo depende solo de su índice y no del orden de consumo: si un escenario cambia los elegibles o los eventos de un objeto, los sorteos de los demás objetos y ciclos no se desplazan, y los objetos elegibles en ambos escenarios conservan su orden relativo de asignación"
+    },
+    "numeros_aleatorios_comunes": "Con la misma semilla, los tres escenarios comparten la población inicial y todos los sorteos subyacentes por objeto, ciclo y propósito (latentes, escenario social, segmentos, eventos, tipos, fracciones, días y claves de asignación). Las gestiones y los eventos realizados pueden diferir entre escenarios, porque la elegibilidad, el saldo y la sugerencia de las reglas evolucionan distinto (por ejemplo, un pago total en un escenario saca al objeto de la cartera vencida y cambia los elegibles siguientes); por eso se comparan sorteos comunes, no historias idénticas"
   },
   "observaciones": {
     "unidad_de_analisis": "Objeto tributario (contrato-dominio-v1 §2)",
@@ -460,18 +477,24 @@
       "remuestras": 100,
       "medida": "ARI entre la asignación de referencia y la de cada remuestra bootstrap de objetos, predicha sobre todos los objetos",
       "estadistico": "mediana",
+      "condiciona_factibilidad": false,
       "umbral_estable": 0.75,
       "umbral_inestable": 0.6
     },
     "cordura_plantados": {
+      "tipo": "Diagnóstico (chequeo de cordura): se ejecuta y se publica siempre; no es criterio de éxito ni de factibilidad",
+      "condiciona_factibilidad": false,
       "medida": "ARI entre la asignación de k-means y s_i, en PRINCIPAL y en NULO con la misma semilla",
-      "aprobado_si": "ARI_PRINCIPAL − ARI_NULO ≥ 0,05, |ARI_NULO| ≤ 0,05 y ARI_PRINCIPAL ≤ 0,95",
+      "estructura_recuperada_si": "ARI_PRINCIPAL − ARI_NULO ≥ 0,05, |ARI_NULO| ≤ 0,05 y ARI_PRINCIPAL ≤ 0,95",
       "margen": 0.05,
       "maximo_sin_fuga": 0.95,
-      "si_falla": "Se publica como estructura no recuperada y los segmentos no se interpretan; un ARI > 0,95 se investiga como fuga de la etiqueta plantada"
+      "si_no_se_recupera": "Se publica como 'estructura plantada no recuperada' y los segmentos no se interpretan como estructura del mundo; la corrida sigue siendo válida y se informan igual estabilidad y utilidad",
+      "posible_fuga": "ARI_PRINCIPAL > 0,95 o |ARI_NULO| > 0,05 se investigan como posible fuga de la etiqueta plantada o error del circuito (FUGA_SOSPECHADA); solo una fuga o un error demostrados invalidan la corrida (abandono A2)",
+      "tension_con_ALIGN_063": "El criterio de aceptación de ALIGN-063 pide 'chequeo de cordura contra lo plantado aprobado', mientras que ALIGN-048 dice que el ARI contra lo plantado no es criterio de éxito. Este protocolo propone leer 'aprobado' como 'ejecutado, publicado y revisado, sin fuga demostrada', no como 'estructura recuperada'. Los tickets congelados no se editan: la lectura queda sujeta a la aprobación humana (pregunta 9 del resumen de aprobación)"
     },
     "perfil": "Tamaño y medianas de cada variable por segmento; tabla de contingencia con las colas de reglas v1 en c_18",
     "utilidad_operativa": {
+      "condiciona_factibilidad": false,
       "corrida_independiente": "Mundo con semilla_independiente_utilidad y el mismo escenario; se le aplican el escalador y los centroides ajustados en la semilla principal, sin reajustar",
       "poblacion": "Observaciones de prueba (meses 18–21) del brazo ALEATORIO del mundo independiente",
       "U1_separacion_de_resultados": {
@@ -494,14 +517,16 @@
     "documento": "docs/tesis/clustering-v1.md (con el rótulo de analítica)"
   },
   "criterios": {
+    "alcance_factibilidad": "La factibilidad es la integridad del experimento: que corra completo, sin fuga, reproducible y publicado. No depende de que el método recupere la estructura plantada ni de que el modelo o los segmentos rindan bien; esos resultados son diagnósticos e hipótesis que se publican igual",
     "factibilidad": {
       "F1": "Reproducibilidad: misma especificación, semilla y escenario producen los mismos hashes de datos y artefactos y las mismas métricas",
       "F2": "Controles temporales: ninguna variable usa eventos con fecha ≥ instante y ninguna etiqueta inmadura entra en entrenamiento (pruebas alrededor del corte y del final del historial)",
       "F3": "Escenario nulo: todas las AUC de intervalo_nulo dentro del intervalo, en la corrida principal y en todas las réplicas",
-      "F4": "Publicación completa: todas las métricas, baselines, poblaciones, escenarios y réplicas con sus IC, la tabla de auditoría y, en clustering, todos los k, la estabilidad, la cordura y la utilidad",
+      "F4": "Publicación completa: todas las métricas, baselines, poblaciones, escenarios y réplicas con sus IC, la tabla de auditoría y, en clustering, todos los k, la estabilidad, el chequeo de cordura y la utilidad",
       "F5": "Rótulos, control de entrada y ausencia de variables prohibidas verificados por prueba",
-      "F6": "Clustering: chequeo de cordura aprobado y estabilidad informada (el resultado de estabilidad y de utilidad no condiciona la factibilidad)"
+      "F6": "Clustering: circuito completo ejecutado (selección de k, estabilidad, chequeo de cordura en PRINCIPAL y NULO y utilidad en la corrida independiente) sin fuga demostrada de la etiqueta plantada. El valor del ARI con lo plantado, la estabilidad y la utilidad se publican y no condicionan la factibilidad"
     },
+    "no_condicionan_factibilidad": ["clustering.cordura_plantados", "clustering.estabilidad", "clustering.utilidad_operativa", "criterios.hipotesis"],
     "hipotesis": {
       "H-P1": "PRINCIPAL: en la población ALEATORIA, la mejor de REGRESION_LOGISTICA y HGB supera a SEVERIDAD_V1 calibrada y a TASA_BASE (diferencia media de AUC ≥ 0,02 y positiva en al menos 16 de 20 réplicas). Predicción: se cumple, por construcción del generador",
       "H-P2": "PRINCIPAL: la calibración difiere entre REGLAS y ALEATORIA (sesgo de selección de la política de reglas). Predicción: pendiente de recalibración distinta de 1 en REGLAS",
@@ -509,13 +534,13 @@
       "H-P4": "PRINCIPAL: el puntaje medio difiere entre vulnerable = 1 y 0 aunque la vulnerabilidad no sea entrada [P0273]–[P0274]; el grupo placebo no difiere (|Δ| ≤ 0,01). Una disparidad placebo > 0,02 se investiga como error de métrica",
       "H-P5": "PRINCIPAL: |AUC_HGB − AUC_LR| ≤ 0,02, porque el generador es aditivo en logit. Si HGB supera a LR por más de 0,05 se investiga una fuga",
       "H-P6": "SEVERIDAD_V1 cruda tiene AUC < 0,5 en PRINCIPAL: en este mundo, más deuda y más atraso bajan la propensión. Severidad mide urgencia, no probabilidad de pago",
-      "H-C1": "Cordura: se aprueba (ARI_PRINCIPAL > ARI_NULO + 0,05)",
+      "H-C1": "Cordura (diagnóstico): la estructura plantada se recupera según cordura_plantados.estructura_recuperada_si. Predicción: sí, con ARI moderado. Si no se recupera, se publica y no invalida la corrida",
       "H-C2": "Utilidad: predicción del autor, de baja confianza: U1 débilmente positiva (S3/S4 dejan huella en recencia y frecuencia) y U2 negativa (S1/S2 solo difieren en la respuesta, que no es observable antes de la gestión)"
     },
     "lectura_de_hipotesis": "Las hipótesis no son criterios de éxito: cualquiera sea el resultado se publica. Confirmar una predicción hecha por construcción solo muestra que el método recupera lo que el generador puso",
     "abandono": {
       "A1": "scikit-learn sin autorización: 062 y 063 no se ejecutan ni se implementan con otra biblioteca; quedan pendientes con esta especificación vigente",
-      "A2": "FUGA_SOSPECHADA sin resolver después de dos ciclos de corrección: el experimento de propensión se declara no concluyente por fuga y no se publica ninguna métrica de PRINCIPAL como válida",
+      "A2": "FUGA_SOSPECHADA (propensión: AUC del nulo fuera del intervalo; clustering: posible fuga de cordura_plantados) sin resolver después de dos ciclos de corrección: el experimento afectado se declara no concluyente por fuga y no se publica ninguna de sus métricas de PRINCIPAL como válida",
       "A3": "Tamaño insuficiente (verificado con conteos, antes de entrenar): menos de 50 positivos o 50 negativos en la prueba ALEATORIA de la corrida principal. Se admite una única enmienda registrada de capacidad_mensual_fraccion o fraccion_aleatoria antes de entrenar; si persiste, ALEATORIA se informa solo agregada sobre las réplicas y, con menos de 200 positivos agregados, como no concluyente",
       "A4": "Cualquier indicio de datos reales (manifiesto no sintético, identificadores no ficticios): se detiene la corrida, se registra el incidente y no se publica nada de ella",
       "A5": "La cartera base o el hash no coinciden con esta especificación: se detiene y hace falta una versión nueva",
@@ -553,6 +578,6 @@
     "canonicalizacion": "json.dumps(documento sin las claves excluidas, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')",
     "excluye": ["estado", "aprobacion", "integridad"],
     "motivo_exclusion": "Aprobar (estado y aprobacion) no cambia la especificación aprobada; integridad contiene el propio hash",
-    "especificacion_sha256": "9278c16d3b2c0515d7126c3c440fd28984f1d32af721436b50a603f9c5154d5e"
+    "especificacion_sha256": "3c3101555a1375cb63b591e599c476c519237dced39d3ec38de5707c3e87c740"
   }
 }

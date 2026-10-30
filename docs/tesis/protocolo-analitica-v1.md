@@ -5,9 +5,9 @@
 | Campo | Valor |
 |---|---|
 | Ticket | ALIGN-048, plan `2026-10-28-v2` (M8). Objetivos 3 y 8; requisito R35 (propuesto) |
-| Versión | v1 (borrador del 29/10/2026) |
+| Versión | v1 (borrador del 29/10/2026, con la corrección de la revisión 1 del 30/10/2026) |
 | Especificación | `contracts/synthetic-world.v1.json`, versión `1.0.0`, estado `BORRADOR_PENDIENTE_APROBACION` |
-| sha256 de la especificación | `9278c16d3b2c0515d7126c3c440fd28984f1d32af721436b50a603f9c5154d5e` (canónico: §3.8) |
+| sha256 de la especificación | `3c3101555a1375cb63b591e599c476c519237dced39d3ec38de5707c3e87c740` (canónico: §3.8) |
 | Rótulo obligatorio | **Factibilidad experimental con datos sintéticos; no es desempeño predictivo real** `[T02.R04]` |
 | Consumidores | ALIGN-061 (generador y tablas), 062 (propensión), 063 (clustering), 064 (pantalla), 035/036 (simulación), 070 (verificación) |
 | Fuentes | Ticket ALIGN-048; plan v2 §7.7 y §7.10; DECISIONS D-26 y D-31 y revisión v2 (A-1, A-9, B-2 a B-5); decisiones del usuario del 29/10 (ALIGN-002, 003, 004); [contrato de dominio][contrato]; [reglas v1][reglas]; síntesis de tesis |
@@ -38,7 +38,7 @@ Los valores numéricos son **supuestos declarados**, no mediciones. Cambiar cual
 
 ### 3.1 Población y tiempo
 
-- **Población:** la cartera sintética de ALIGN-023, perfil `escala` (2933 objetos y 56 286 obligaciones), versión `sintetico-v1`, semilla 20261028, municipio sintético A, objetos aceptados por su oráculo (`cartera_base`). ALIGN-023 está en revisión: se cita su diseño (`TICKETS/ALIGN-023.md`), no su código. Cada mundo registra el sha256 del `manifest.json` de la cartera; si la cartera integrada declara otra fecha de corte, otro perfil u otra semilla, el generador se detiene (`CARTERA_BASE_DISTINTA`).
+- **Población:** la cartera sintética de ALIGN-023, perfil `escala` (2933 objetos y 56 286 obligaciones), versión `sintetico-v1`, semilla 20261028, municipio sintético A, objetos aceptados por su oráculo (`cartera_base`). ALIGN-023 está integrado en la rama de integración del plan (`bc0fd54`); se cita su diseño (`TICKETS/ALIGN-023.md`), no su código. El manifiesto versionado en el repositorio es del perfil `contrato`: el generador del mundo genera el perfil `escala`, registra el sha256 de **su** `manifest.json` y usa sus objetos aceptados como población; si la cartera integrada declara otra fecha de corte, otro perfil u otra semilla, el generador se detiene (`CARTERA_BASE_DISTINTA`).
 - **Tiempo:** 24 ciclos mensuales desde T0 = día siguiente al corte de la cartera (2026-10-01 con el corte esperado 2026-09-30); `c_m` = primer día del mes m y `T_final` = `c_25`. Los eventos tienen fecha dentro de su mes y toda comparación temporal usa fechas.
 - **Simplificaciones v1:** no aparecen obligaciones nuevas (se trabaja el stock de la cartera) y el canal utilizable de cada objeto no cambia.
 
@@ -67,7 +67,7 @@ Riesgo mensual logístico por objeto con saldo vencido: `logit h = theta0 + thet
 | Reglas | `contracts/decision-rules.v1.json` 1.0.0, implementación Python de ALIGN-015, `as_of = c_m`, vulnerabilidad `NO_INFORMADO_EN_ORIGEN` |
 | Capacidad | 12 % de la población en gestiones (intensidad ≥ 1) por mes |
 | Elegibles | Saldo > 0, no regularizado, canal utilizable y sin gestión en los dos ciclos anteriores (las ventanas de 90 días de un objeto no se superponen) |
-| Brazo aleatorio | 25 % de la capacidad, objetos al azar entre los elegibles, intensidad al azar 1 o 2; se registra la probabilidad de asignación |
+| Brazo aleatorio | 25 % de la capacidad: los elegibles con menor clave de asignación del ciclo (equivale a elegirlos al azar), intensidad al azar 1 o 2; se registra la probabilidad de asignación |
 | Brazo de reglas | Resto de la capacidad: sugerencias v1 de intensidad ≥ 1, por intensidad y luego por el orden de prioridad de las reglas |
 | Intensidad 0 | Se registra sin consumir capacidad ni generar observaciones |
 | Intensidades 3–4 | No ocurren en el historial (el sistema nunca las sugiere); las decisiones humanas intensas las modela ALIGN-035 |
@@ -81,7 +81,7 @@ Riesgo mensual logístico por objeto con saldo vencido: `logit h = theta0 + thet
 | `NULO` | Pago independiente de todo (riesgo mensual constante, sin efecto de gestión) | AUC esperado 0,5 con intervalo declarado; salirse se trata como **fuga** |
 | `MAL_ESPECIFICADO` | Señal observable a un cuarto, latente fuerte, shock mensual persistente, respuesta a la gestión que depende del latente, segmentos débiles | Mostrar qué pasa cuando los impulsores no se observan |
 
-Con la misma semilla los tres escenarios comparten latentes, escenario social, segmentos, días y asignaciones (números aleatorios comunes). Semilla principal 20261029; 20 réplicas (semilla + k); corrida independiente de utilidad con 20262029. ALIGN-035 puede variar parámetros de `PRINCIPAL` para su sensibilidad registrando el hash y los cambios.
+**Números aleatorios comunes.** Con la misma semilla, los tres escenarios comparten la población inicial y **todos los sorteos subyacentes** por objeto, ciclo y propósito (latentes, escenario social, segmentos, evento, tipo y fracción de pago, día y clave de asignación). **No** comparten necesariamente las gestiones ni los eventos realizados: la elegibilidad, el saldo y la sugerencia de las reglas evolucionan distinto en cada escenario (un pago total en `PRINCIPAL` que no ocurre en `NULO` saca al objeto de la cartera vencida y cambia los elegibles siguientes). Para que esa divergencia no desplace los demás sorteos, cada sorteo se obtiene de su propio índice (flujo, objeto, ciclo, propósito) y no del orden de consumo (`semillas.acoplamiento`): un objeto paga si su uniforme del ciclo es menor que su riesgo, y el brazo aleatorio toma a los elegibles con menor clave, de modo que los objetos elegibles en ambos escenarios conservan su orden relativo. Semilla principal 20261029; 20 réplicas (semilla + k); corrida independiente de utilidad con 20262029. ALIGN-035 puede variar parámetros de `PRINCIPAL` para su sensibilidad registrando el hash y los cambios.
 
 ### 3.8 Versión, hash y control de entrada
 
@@ -147,14 +147,14 @@ La métrica de la submuestra aleatoria es la que no depende de quién eligieron 
 | Métodos | k-means (20 inicios) y, como contraste, mezcla gaussiana con covarianza completa; se informa el ARI entre ambos |
 | k | Entre 3 y 8. Entre los k cuyo segmento más chico tiene al menos 5 % de los objetos, el de mayor silueta; diferencias < 0,01 se desempatan por Davies–Bouldin y luego por el menor k. Silueta y Davies–Bouldin se publican para todos los k |
 | Estabilidad | 100 remuestras bootstrap; mediana del ARI con la referencia: ≥ 0,75 estable, < 0,60 inestable |
-| Chequeo de cordura (no criterio de éxito) | ARI con los segmentos plantados: se aprueba si el de `PRINCIPAL` supera al de `NULO` en al menos 0,05, el de `NULO` está en ±0,05 y el de `PRINCIPAL` no supera 0,95 (más alto se investiga como fuga de la etiqueta plantada) |
+| Chequeo de cordura (**diagnóstico**: no es criterio de éxito ni de factibilidad) | ARI con los segmentos plantados en `PRINCIPAL` y `NULO`, publicado siempre. La estructura se considera **recuperada** si el de `PRINCIPAL` supera al de `NULO` en al menos 0,05, el de `NULO` está en ±0,05 y el de `PRINCIPAL` no supera 0,95. Si no se recupera, se publica como "estructura plantada no recuperada", los segmentos no se interpretan como estructura y la corrida sigue siendo válida. Un ARI de `PRINCIPAL` > 0,95 o de `NULO` fuera de ±0,05 se investiga como posible fuga o error del circuito; solo una fuga demostrada invalida la corrida (A2) |
 | Perfil | Tamaño y medianas por segmento; tabla de contingencia con las colas v1 |
 | Utilidad operativa `[T02.R04]`, `[P0261]` | En una **corrida independiente** (otra semilla del mismo mundo, con el escalador y los centroides ya ajustados): U1, los segmentos reducen al menos 2 % la log-loss de la etiqueta respecto de las colas solas, con IC que excluye 0; U2, la respuesta a la intensidad asignada al azar (1 frente a 2) difiere entre segmentos más allá de las colas (razón de verosimilitud, p < 0,05). **Positiva** si se cumple U1 o U2 y los segmentos no son redundantes con las colas (V de Cramér ≤ 0,80); **negativa** en otro caso |
 | Salida | `segment_assignment` por corrida y `docs/tesis/clustering-v1.md` con el rótulo; segmentos numerados, nunca con rótulos sociales |
 
 ## 8. Criterios de éxito y de abandono, fijados antes de correr
 
-**Factibilidad lograda** si se cumplen todos:
+**Factibilidad lograda** si se cumplen todos. La factibilidad es la **integridad del experimento** (que corra completo, sin fuga, reproducible y publicado); no depende de que el método recupere la estructura plantada ni de que el modelo o los segmentos rindan bien, que son diagnósticos e hipótesis publicados igual (`criterios.no_condicionan_factibilidad`):
 
 | ID | Criterio |
 |---|---|
@@ -163,7 +163,9 @@ La métrica de la submuestra aleatoria es la que no depende de quién eligieron 
 | F3 | Escenario nulo: todas las AUC dentro del intervalo, en la corrida principal y en las 20 réplicas |
 | F4 | Publicación completa de métricas, baselines, poblaciones, escenarios, réplicas, auditoría y, en clustering, todos los k, estabilidad, cordura y utilidad |
 | F5 | Rótulos, control de entrada y ausencia de variables prohibidas verificados por prueba |
-| F6 | Clustering: chequeo de cordura aprobado; estabilidad y utilidad se informan pero no condicionan la factibilidad |
+| F6 | Clustering: circuito completo ejecutado (selección de k, estabilidad, chequeo de cordura en `PRINCIPAL` y `NULO` y utilidad en la corrida independiente) sin fuga demostrada de la etiqueta plantada. El valor del ARI con lo plantado, la estabilidad y la utilidad se publican y **no** condicionan la factibilidad |
+
+**Tensión con ALIGN-063 (a resolver en la aprobación).** El criterio de aceptación de ALIGN-063 pide "chequeo de cordura contra lo plantado aprobado", mientras que ALIGN-048 establece que el ARI contra los segmentos plantados es un chequeo de cordura y **no** un criterio de éxito. Este protocolo propone leer "aprobado" como "ejecutado, publicado y revisado, sin fuga demostrada", no como "estructura recuperada". Los tickets congelados no se editan: esa lectura queda sujeta a la aprobación humana (pregunta 9 del resumen de aprobación) y, si se rechaza, hace falta una decisión explícita sobre cuál de los dos criterios rige.
 
 **Hipótesis con predicción registrada** (no son criterios de éxito; se publican con cualquier resultado):
 
@@ -175,7 +177,7 @@ La métrica de la submuestra aleatoria es la que no depende de quién eligieron 
 | H-P4 | El puntaje medio difiere entre vulnerables y no vulnerables aunque la vulnerabilidad no sea entrada `[P0273]`–`[P0274]`; el placebo no difiere | Brecha ≠ 0; placebo ≤ 0,01 (> 0,02 se investiga) |
 | H-P5 | HGB y regresión logística empatan (±0,02) porque el generador es aditivo en logit | HGB > LR + 0,05 se investiga como fuga |
 | H-P6 | La severidad cruda tiene AUC < 0,5 | Severidad mide urgencia, no probabilidad de pago |
-| H-C1 | El chequeo de cordura se aprueba | Sí |
+| H-C1 | Diagnóstico de cordura: la estructura plantada se recupera | Sí, con ARI moderado; si no se recupera, se publica y no invalida la corrida |
 | H-C2 | Utilidad operativa | Confianza baja: U1 débilmente positiva y U2 negativa (S1 y S2 solo difieren en la respuesta, que no se observa antes de la gestión) |
 
 Confirmar una predicción hecha por construcción solo muestra que el método recupera lo que el generador puso.
@@ -185,7 +187,7 @@ Confirmar una predicción hecha por construcción solo muestra que el método re
 | ID | Condición | Consecuencia |
 |---|---|---|
 | A1 | `scikit-learn` sin autorización | 062 y 063 no se ejecutan ni se implementan con otra biblioteca; quedan pendientes |
-| A2 | `FUGA_SOSPECHADA` sin resolver tras dos ciclos de corrección | Propensión no concluyente por fuga; ninguna métrica de `PRINCIPAL` se publica como válida |
+| A2 | `FUGA_SOSPECHADA` (propensión: AUC del nulo fuera del intervalo; clustering: posible fuga de la etiqueta plantada) sin resolver tras dos ciclos de corrección | El experimento afectado es no concluyente por fuga; ninguna de sus métricas de `PRINCIPAL` se publica como válida |
 | A3 | Menos de 50 positivos o 50 negativos en la prueba aleatoria de la corrida principal (verificado con conteos, antes de entrenar) | Una única enmienda registrada de capacidad o fracción aleatoria; si persiste, la aleatoria se informa solo agregada sobre réplicas y, con menos de 200 positivos agregados, como no concluyente |
 | A4 | Indicio de datos reales | Se detiene, se registra el incidente y no se publica nada de esa corrida |
 | A5 | Cartera base o hash distintos de la especificación | Se detiene; hace falta una versión nueva |
@@ -233,7 +235,7 @@ El usuario decidió el 29/10 que no se usa ningún dato real (ALIGN-004). **Solo
 |---|---|
 | ALIGN-061 | Hash de la especificación igual al aprobado; misma semilla → mismo mundo; cartera base con la fecha de corte esperada; campos temporales en cada observación; recencia y frecuencia sin eventos posteriores al instante; escenario social en archivo de lectura restringida |
 | ALIGN-062 | Control de entrada; partición y madurez de §4; intervalo nulo; métricas en total y aleatoria; auditoría de proxy; publicación aunque pierda |
-| ALIGN-063 | Control de entrada; regla de k; estabilidad; cordura; utilidad en corrida independiente; publicación aunque sea negativa |
+| ALIGN-063 | Control de entrada; regla de k; estabilidad; chequeo de cordura ejecutado y publicado (su valor no bloquea; ver §8); utilidad en corrida independiente; publicación aunque sea negativa |
 | ALIGN-064 | Rótulo de pantalla; solo vistas agregadas; nada sin manifiesto válido |
 | ALIGN-035/036 | Mismo hash; escenario social solo para equidad, carga y P1; puntajes de ML nunca como entrada |
 | ALIGN-070 | Reproducibilidad, rótulos y ausencia de efecto en decisiones |
@@ -244,11 +246,12 @@ El usuario decidió el 29/10 que no se usa ningún dato real (ALIGN-004). **Solo
 
 | Fecha | Quién | Referencia | sha256 de la especificación | sha256 del protocolo aprobado | Cambios pedidos |
 |---|---|---|---|---|---|
-| — | Pendiente | — | `9278c16d3b2c0515d7126c3c440fd28984f1d32af721436b50a603f9c5154d5e` (borrador) | — | — |
+| — | Pendiente | — | `3c3101555a1375cb63b591e599c476c519237dced39d3ec38de5707c3e87c740` (borrador) | — | — |
 
 | Versión | Fecha | Cambio |
 |---|---|---|
-| v1 (borrador) | 29/10/2026 | Versión inicial (ALIGN-048): mundo único, unidad, objetivo, temporalidad, escenarios, variables, auditoría de proxy, plan de análisis, criterios, rótulos, límites y publicación. Pendiente de revisión de otro proveedor y de aprobación humana |
+| v1 (borrador) | 29/10/2026 | Versión inicial (ALIGN-048): mundo único, unidad, objetivo, temporalidad, escenarios, variables, auditoría de proxy, plan de análisis, criterios, rótulos, límites y publicación. sha256 de la especificación `9278c16d…4d5e` |
+| v1 (borrador, corrección de revisión 1) | 30/10/2026 | Antes de cualquier aprobación o corrida: la recuperación de los segmentos plantados pasa de condición de factibilidad a diagnóstico (F6, H-C1, A2) y se expone la tensión con ALIGN-063; se precisa qué comparten los escenarios (sorteos por índice, no historias idénticas); se actualiza el estado de ALIGN-023. Pendiente de aprobación humana |
 
 [contrato]: contrato-dominio-v1.md
 [reglas]: reglas-decision-v1.md

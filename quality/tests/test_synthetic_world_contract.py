@@ -162,6 +162,41 @@ class SyntheticWorldTimelineTests(unittest.TestCase):
         self.assertNotIn(seeds['semilla_independiente_utilidad'],
                          range(seeds['principal'], seeds['principal'] + seeds['replicas']))
 
+    def test_world_draws_are_indexed_by_object_cycle_and_purpose(self):
+        seeds = SPEC['semillas']
+        world = seeds['flujos_del_mundo']
+        self.assertTrue(set(world) < set(seeds['flujos_rng']))
+        self.assertEqual(list(seeds['acoplamiento']['propositos']), world)
+        self.assertTrue(all(seeds['acoplamiento']['propositos'][stream] for stream in world))
+        self.assertIn('índice del objeto, mes, índice del propósito', seeds['acoplamiento']['sorteo'])
+
+
+class FeasibilityScopeTests(unittest.TestCase):
+    """The planted-segment ARI is a published diagnostic, never a success or feasibility gate (ticket ALIGN-048)."""
+
+    def resolve(self, path):
+        node = SPEC
+        for key in path.split('.'):
+            node = node[key]
+        return node
+
+    def test_diagnostics_never_condition_feasibility(self):
+        listed = SPEC['criterios']['no_condicionan_factibilidad']
+        self.assertTrue({'clustering.cordura_plantados', 'criterios.hipotesis'} <= set(listed))
+        for path in listed:
+            node = self.resolve(path)
+            if 'condiciona_factibilidad' in node or path.startswith('clustering.'):
+                self.assertIs(node['condiciona_factibilidad'], False, path)
+        self.assertNotIn('aprobado_si', SPEC['clustering']['cordura_plantados'])
+
+    def test_feasibility_criteria_do_not_require_recovering_planted_structure(self):
+        for key, text in SPEC['criterios']['factibilidad'].items():
+            with self.subTest(criterion=key):
+                self.assertNotIn('recuper', text.lower())
+                self.assertNotIn('aprobad', text.lower())
+        self.assertIn('ALIGN-063', SPEC['clustering']['cordura_plantados']['tension_con_ALIGN_063'])
+        self.assertIn('Tensión con ALIGN-063', PROTOCOL)
+
 
 if __name__ == '__main__':
     unittest.main()
