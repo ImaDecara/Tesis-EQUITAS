@@ -7,7 +7,7 @@
 | Parámetros | `contracts/decision-rules.v1.json` (fuente única de umbrales, bandas, reglas y textos) |
 | Casos golden | `contracts/decision-rules.v1.golden.json` (43 casos sintéticos, 14 pares contrafactuales, 5 ordenamientos por cola) |
 | Contrato de dominio | `docs/tesis/contrato-dominio-v1.md` (ALIGN-007): nombres, estados de presencia (`DataPresence`) y corte `as_of` |
-| Escala de intensidad | Valor por defecto provisional, pendiente de ALIGN-003 (no aprobado todavía por el usuario): solo habilita uso con datos sintéticos |
+| Escala de intensidad | Aprobada por el usuario en ALIGN-003 el 2026-10-30T00:15Z: 0–4, intensa ≥3, máximo automático 2; rige solo con datos sintéticos |
 | Consumidores | ALIGN-009 (núcleo TypeScript), ALIGN-015 (servicio Python), ALIGN-010/021 (pantallas y colas), ALIGN-013 (catálogo), ALIGN-035/036 (simulación) |
 | Datos personales | Ninguno. Los casos golden usan identificadores `SINT-*` |
 
@@ -254,8 +254,22 @@ Un error de lectura de obligaciones no debe convertirse en `[]`; el adaptador
 debe detener la evaluación. Los valores mal formados se rechazan: el adaptador
 declara `INVALIDO` con valor null. Los importes y sus sumas deben caber en
 centavos enteros seguros de JavaScript; un desbordamiento se rechaza en lugar
-de redondear silenciosamente. La ausencia del corte municipal se rotula en el
+de redondear silenciosamente. Desde ALIGN-010, `amountInCents` deriva los centavos
+de `String(value)` con aritmética decimal entera: una fracción de centavo (por
+ejemplo, `1.005`) produce `RangeError`, incluso si otro dato de la obligación
+no es evaluable. El adaptador la declara `INVALIDO` con motivo antes de evaluar.
+`[0.29, 49999.71]` suma exactamente 50 000 ARS y aporta 20 puntos de monto.
+La ausencia del corte municipal se rotula en el
 consumidor según el contrato §5.1; este núcleo no inventa un corte.
+
+**Resolución de módulos en Next (ALIGN-010).** Turbopack no resuelve archivos
+fuera de su raíz. `front/next.config.ts` usa
+`turbopack.root: path.join(__dirname, '..')` para importar el único JSON de
+`contracts/` también desde las páginas existentes a través del mapper. No se
+copia el contrato a `front/`. El despliegue debe incluir esa raíz del repositorio.
+La suite fija `America/New_York` y restaura el huso para probar los cambios de
+horario de verano; cubre actualización de origen igual al corte, ausente y
+posterior. Los 43 casos, 14 pares y 5 ordenamientos golden siguen intactos.
 
 La instrucción de ejecución de ALIGN-009 confirma la aprobación de la escala
 0–4 por el usuario en ALIGN-003 (29/10/2026): intensa desde 3, máximo automático
@@ -263,3 +277,98 @@ La instrucción de ejecución de ALIGN-009 confirma la aprobación de la escala
 metadatos del JSON describen el estado de su especificación congelada; esta
 implementación no modifica ese archivo. La aprobación de la política completa
 y del umbral jurídico sigue siendo una condición separada.
+
+## 17. Adaptador web — ALIGN-010
+
+El [mapper de objetos](../../front/lib/mappers/debtor-object-mapper.ts) construye
+`DecisionInput` con las obligaciones leídas, los contactos activos con valor de
+las personas con relación activa y sus porcentajes declarados. Evalúa una vez
+el núcleo y entrega `decision`, `decisionInput`, `rulesVersion`, `decisionAsOf`,
+`decisionAsOfSource`, `decisionComputedAt` y `decisionIssues`. Los estados se
+conservan: un dato mal formado lleva null, `INVALIDO` y motivo; uno ausente
+nunca se completa con capital, un alias de importe presente ni un perfil.
+El adaptador lee exclusivamente `current_amount`: clave ausente →
+`NO_INTEGRADO`; clave presente con null, undefined o vacío →
+`NO_INFORMADO_EN_ORIGEN`. No cambia el selector general de importes de otros
+consumidores.
+Una lectura fallida de `debt`/`debtor` impide construir la entrada/evaluar. Una
+lista vacía leída correctamente permite el cero derivado de v1.
+Si falla `debtor_person`, se registra `personas: NO_INTEGRADO: LECTURA_FALLIDA`
+en `decisionIssues`. Las banderas de tipo de persona y porcentajes no son
+evaluables: el núcleo requiere una lista completa y no admite una lista de
+presencia desconocida. Por eso `decisionInput` y `decision` quedan null, sin
+enviar `[]` como si no hubiera personas; `peopleCount` y prioridad también
+quedan null. Una lectura correcta sin relaciones sí permite `personas: []`.
+
+`RawDebtorDataBundle.batch` es el punto de entrada opcional del manifiesto
+(`as_of` y `source_updated_at`); el lector actual todavía no lo integra. Sin
+manifiesto se usa la fecha UTC de cálculo capturada una sola vez, con el aviso
+**“Fecha de cálculo usada: …; corte de origen no informado (corte no integrado)”**.
+No se presenta como corte certificado. Con un manifiesto presente pero inválido
+o sin fecha, la decisión es no disponible, sin sustitución silenciosa. El segundo
+argumento del mapper permite inyectar `computedAt` para reproducir la consulta.
+La fecha persistida del perfil sigue en `computedAt`; no se confunde con
+`decisionComputedAt`. La versión y la fecha usada acompañan el motivo visible.
+
+Los campos `estado_origen` y `periodo_fiscal` solo se consideran integrados si
+llegan explícitamente. `debt.status` sigue siendo el catálogo persistido;
+`debt.period` no se interpreta como período fiscal, ni `issue_date`/
+`last_collection_date` como actualización de origen. Las FK numéricas de tipo
+de persona no se interpretan sin su catálogo. La vulnerabilidad permanece
+`NO_INFORMADO_EN_ORIGEN`; este adaptador no ofrece un canal para inferirla.
+
+`risk`/`riskScore` del DTO de **objetos** son alias transitorios de banda y
+severidad v1, para que las pantallas existentes consuman la misma decisión.
+El perfil `socioeconomic_risk_level` y las fórmulas anteriores ya no intervienen.
+`priorityScore` = severidad (0–100 o null), `priorityLevel` = banda v1; la falta
+de contacto cambia la bandera, la intervención/cola y su explicación, **no**
+los puntos. `isUrgentRecommendation` queda como alias de necesidad de revisión
+humana o jurídica, no como urgencia legal. El presentador usa las etiquetas y
+explicaciones del JSON y agrega “Evaluar con supervisor antes de gestionar”
+cuando hay revisión. No afirma exigibilidad ni propone escalamiento.
+Cuando hay obligaciones vencidas evaluables, el adaptador añade al motivo
+“N obligación(es) vencida(s) a la fecha de corte AAAA-MM-DD”, con concordancia
+singular/plural y la fecha del manifiesto, aunque se calcule otro día. Si no hay
+manifiesto dice “a la fecha de cálculo usada”; si la severidad es PARCIAL,
+antepone “al menos” porque la cantidad es un mínimo. Ante lectura fallida de
+contactos añade “Lectura de contactos no disponible: no se pudo verificar si
+hay contacto cargado.” No modifica las frases del JSON congelado.
+
+Los [selectores](../../front/lib/equitas-view-selectors.ts) crean las cinco colas
+por código de intervención. El orden de presentación es el del catálogo del
+JSON, sin comparar prioridades entre colas; dentro de cada una se usa
+`comparePriority`. Los objetos sin evaluación tienen un grupo separado **No
+disponible**, ordenado por id. En un universo leído, `count = cases.length`,
+los destacados son los primeros tres de esa misma lista y los agregados toman
+el monto evaluable y la severidad de la decisión, con desglose de faltantes.
+Si falla `debtor`, todos los conteos y agregados son null y las listas quedan
+vacías. Si falla `debt`, `debtor_contact` o `debtor_person`, o hay objetos pero
+ninguno tiene decisión (por ejemplo, corte inválido), la pertenencia a las cinco
+colas es desconocida: conteos, sumas y promedios son null/`NO_INTEGRADO`, nunca
+0 derivado ni `NO_APLICA`, y sus listas quedan vacías. El grupo **No disponible**
+conserva todos los objetos conocidos con `count = cases.length`, aun si tienen
+decisión individual pero la lectura de contactos impide conocer la cola.
+Sin falla de lectura y con al menos una decisión, los objetos evaluados siguen
+en sus colas, conservando mínimos parciales y faltantes; los bloqueados se
+cuentan aparte (§4.1, regla 3 del contrato). `person`, `debtor_profile` y
+`debt_status` no determinan disponibilidad de las colas. Un universo leído
+correctamente sin objetos sí permite conteos/sumas 0 y promedios `NO_APLICA`.
+La banda alta se obtiene del núcleo, inclusive desde 70 puntos.
+
+La [adenda del catálogo](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1)
+define unidades, poblaciones y límites. ALIGN-012 debe actualizar los rótulos
+heredados “riesgo”, “riesgo >90”, “Score” y “urgente”; ALIGN-014 conserva la
+responsabilidad de reemplazar los agregados y el orden global del tablero y
+los indicadores de mora basados en perfil/catálogo. ALIGN-010 inicializa los
+conteos del tablero desde las cinco etiquetas v1 y “No disponible”: una cola
+vacía leída tiene 0; la misma condición de colas desconocidas del resumen
+produce `byRecommendation: []`. Una decisión R2 sin puntaje sí permite contar
+su cola; no se usa la disponibilidad de `priorityCases` como condición.
+Los demás agregados del tablero no se modifican aquí.
+Los campos financieros históricos se mantienen separados y
+no alimentan las decisiones ni las sumas de las colas v1.
+
+**Seguimiento Python (MENOR-2 de ALIGN-009):** el motor Python todavía redondea
+fracciones de centavo. Su responsable debe aplicar el mismo rechazo decimal
+antes de evaluar; no se modificó backend/ETL en ALIGN-010. La paridad exigida
+para entradas válidas se conserva mediante los golden compartidos sin cambios.

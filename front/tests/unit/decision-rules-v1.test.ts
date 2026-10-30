@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import contract from '../../../contracts/decision-rules.v1.json'
 import golden from '../../../contracts/decision-rules.v1.golden.json'
 import { DATA_PRESENCE_STATES } from '@/types/equitas-domain'
@@ -123,6 +123,28 @@ describe('ALIGN-009: oráculo compartido completo', () => {
 })
 
 describe('límites monetarios, calendario y porcentajes', () => {
+  const originalTimezone = process.env.TZ
+  beforeAll(() => { process.env.TZ = 'America/New_York' })
+  afterAll(() => {
+    if (originalTimezone === undefined) delete process.env.TZ
+    else process.env.TZ = originalTimezone
+  })
+
+  it('suma centavos exactos en el umbral, incluso cuando ×100 queda por debajo del entero', () => {
+    const input = withDebt(0.29)
+    input.obligaciones.push({ ...input.obligaciones[0], id: 'SINT-CENTAVOS', current_amount: observed(49_999.71) })
+    const result = evaluate(input)
+    expect(result.severidad.monto_actualizado_ars).toBe(50_000)
+    expect(result.explicacion.factores[0].puntos).toBe(20)
+  })
+
+  it.each([
+    [observed('2026-09-30'), false], [missing, false], [observed('2026-10-01'), true],
+  ])('source_updated_at %j: inconsistencia %s frente al corte', (updated, flagged) => {
+    const input = withDebt(1)
+    input.source_updated_at = updated
+    expect(evaluate(input).banderas.includes('FECHAS_INCONSISTENTES')).toBe(flagged)
+  })
   it.each([
     [0, 0], [0.01, 10], [49_999.99, 10], [50_000, 20],
     [199_999.99, 20], [200_000, 30], [499_999.99, 30], [500_000, 40],
@@ -313,5 +335,10 @@ describe('entrada mal formada: el adaptador debe declarar INVALIDO, no inventar 
     expect(() => evaluate(withDebt(1, '2026-02-30'))).toThrow(/fecha ISO/)
     expect(() => evaluate(withDebt(Number.MAX_SAFE_INTEGER))).toThrow(/centavos seguros/)
     expect(() => evaluate(withDebt(50_000_000_000_000, '2026-09-29', 2))).toThrow(/centavos seguros/)
+  })
+
+  it.each([1.005, 1.015, -1.005, 1e-7])('rechaza %s sin redondear fracciones de centavo', (amount) => {
+    expect(() => evaluate(withDebt(amount))).toThrow(RangeError)
+    expect(() => evaluate(withDebt(amount))).toThrow(/exacto de centavos/)
   })
 })

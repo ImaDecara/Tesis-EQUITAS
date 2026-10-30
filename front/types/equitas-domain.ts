@@ -1,3 +1,5 @@
+import type { Decision, DecisionInput, DecisionObligation, RuleDatum } from '@/lib/domain/decision-rules-v1'
+
 export type RawRow = Record<string, unknown>
 
 // Estados de presencia del contrato de dominio v1 (docs/tesis/contrato-dominio-v1.md §4).
@@ -25,6 +27,12 @@ export type RiskLevel = 'ALTO' | 'MEDIO' | 'BAJO'
 export type DebtorPriorityLevel = 'ALTA' | 'MEDIA' | 'BAJA'
 
 export type RecommendationKind =
+  | 'Mejorar datos'
+  | 'Revisión jurídica'
+  | 'Contacto y plan'
+  | 'Recordatorio'
+  | 'Seguimiento'
+  // Etiquetas de DTO anteriores; el adaptador v1 ya no las genera.
   | 'Llamado prioritario'
   | 'Mensaje recordatorio'
   | 'Plan de pago / revision humana'
@@ -104,6 +112,15 @@ export type DashboardData = PresenceMetrics & {
 }
 
 export type DebtorListItem = PresenceMetrics & {
+  // Dimensiones v1. Opcionales únicamente para compatibilidad con consumidores
+  // del DTO anterior; el mapper siempre las entrega, incluso si no pudo evaluar.
+  decision?: Decision | null
+  decisionInput?: DecisionInput | null
+  decisionAsOf?: RuleDatum<string>
+  decisionAsOfSource?: 'MANIFIESTO_LOTE' | 'FECHA_CALCULO'
+  decisionComputedAt?: string
+  rulesVersion?: string
+  decisionIssues?: DecisionDataIssue[]
   computedAt?: string | null
   temporalProvenance?: string
 
@@ -119,6 +136,7 @@ export type DebtorListItem = PresenceMetrics & {
   peopleNames: string[]
   hasContact: boolean | null
   contactCount: number | null
+  /** @deprecated Alias de decision.severidad; no representa riesgo social. */
   risk: RiskLevel | null
   riskScore: number | null
   debtCount: number | null
@@ -151,6 +169,8 @@ export type DebtorContactItem = {
 }
 
 export type DebtorDebtItem = PresenceMetrics & {
+  ruleInput?: DecisionObligation
+  decisionIssues?: DecisionDataIssue[]
   id: string
   originalAmount: number | null
   updatedAmount: number | null
@@ -221,6 +241,8 @@ export type DebtorPersonRelation = {
 }
 
 export type RawDebtorDataBundle = {
+  // Punto de integración del manifiesto. El lector actual no aporta este dato.
+  batch?: { as_of: string | null; source_updated_at?: string | null }
   debtors: RawRow[]
   debtorTypes: RawRow[]
   debts: RawRow[]
@@ -230,6 +252,13 @@ export type RawDebtorDataBundle = {
   debtorContacts: RawRow[]
   debtorProfiles: RawRow[]
   warnings: DataWarning[]
+}
+
+export type DecisionDataIssue = {
+  field: string
+  entityId?: string
+  presence: Exclude<DataPresence, 'OBSERVADO'>
+  reason: string
 }
 
 export type RawPersonDataBundle = {

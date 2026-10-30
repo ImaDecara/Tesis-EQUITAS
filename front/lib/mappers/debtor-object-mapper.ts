@@ -5,9 +5,10 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { aggregateData, currentAmount, daysSinceData, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
+import { aggregateData, daysSinceData, metric, numericData, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
-import { clampRiskScore, mapRiskLevel } from '@/lib/services/debtor-risk-calculator'
+import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
+import { amountInCents, evaluateDecisionRulesV1, RULES_VERSION, type DecisionInput, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import type {
   DebtorContactItem,
   DebtorDebtItem,
@@ -15,10 +16,11 @@ import type {
   DebtorPersonItem,
   DebtorPersonRelation,
   DebtorPriorityLevel,
+  DecisionDataIssue,
+  NumericData,
   MappedDebtorObjects,
   RawDebtorDataBundle,
   RawRow,
-  RiskLevel,
 } from '@/types/equitas-domain'
 
 function mapLabelById(rows: RawRow[], idCandidates: string[], labelCandidates: string[]) {
@@ -103,50 +105,87 @@ function inferContactChannel(contact: RawRow, value: string) {
   return 'Telefono'
 }
 
-function toPriorityLevel(score: number): DebtorPriorityLevel {
-  if (score >= 105) {
-    return 'ALTA'
-  }
-
-  if (score >= 70) {
-    return 'MEDIA'
-  }
-
-  return 'BAJA'
+function ruleNumber(data: NumericData): RuleDatum<number> {
+  return data.presence === 'OBSERVADO' && data.value !== null
+    ? { estado: 'OBSERVADO', valor: data.value }
+    : { estado: data.presence === 'OBSERVADO' ? 'INVALIDO' : data.presence, valor: null }
 }
 
-// El puntaje de prioridad combina severidad financiera y factibilidad de accion de cobranza.
-function calculatePriorityScore({
-  totalDebt,
-  overdueDays,
-  risk,
-  hasContact,
-  recommendationType,
-}: {
-  totalDebt: number
-  overdueDays: number
-  risk: RiskLevel
-  hasContact: boolean
-  recommendationType: string
-}) {
-  const debtScore = Math.min(totalDebt / 250000, 4) * 18
-  const overdueScore = Math.min(overdueDays / 30, 4) * 10
-  const riskScore = risk === 'ALTO' ? 30 : risk === 'MEDIO' ? 18 : 8
-  const contactScore = hasContact ? 10 : -6
-  const recommendationScore =
-    recommendationType === 'Llamado prioritario'
-      ? 20
-      : recommendationType === 'Plan de pago / revision humana'
-        ? 14
-        : recommendationType === 'Mensaje recordatorio'
-          ? 9
-          : 4
+function recordMissing<T>(field: string, datum: RuleDatum<T>, issues: DecisionDataIssue[], reason: string) {
+  if (datum.estado !== 'OBSERVADO') issues.push({ field, presence: datum.estado, reason })
+  return datum
+}
 
-  return Math.max(Math.round(debtScore + overdueScore + riskScore + contactScore + recommendationScore), 0)
+function ruleDate(value: unknown, field: string, issues: DecisionDataIssue[], absent: 'NO_INTEGRADO' | 'NO_INFORMADO_EN_ORIGEN' = 'NO_INFORMADO_EN_ORIGEN'): RuleDatum<string> {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (value == null || (typeof value === 'string' && !text)) {
+    return recordMissing<string>(field, { estado: absent, valor: null }, issues, 'FECHA_AUSENTE')
+  }
+  const date = new Date(`${text}T00:00:00.000Z`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || text.startsWith('0000') ||
+      !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
+    return recordMissing<string>(field, { estado: 'INVALIDO', valor: null }, issues, 'FECHA_INVALIDA')
+  }
+  return { estado: 'OBSERVADO', valor: text }
+}
+
+function ruleAmount(data: NumericData): NumericData {
+  if (data.value === null) return data
+  try {
+    amountInCents(data.value)
+    return data
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    return unavailable('INVALIDO', 'IMPORTE_NO_EXPRESABLE_EN_CENTAVOS_SEGUROS')
+  }
+}
+
+// Solo campos de origen explícitos: status y period heredados NO los sustituyen.
+function sourceDatum(row: RawRow, key: string): RuleDatum<string | number> {
+  const value = selectValueFromRow(row, [key])
+  if (value === undefined) return { estado: 'NO_INTEGRADO', valor: null }
+  if (value === null || value === '') return { estado: 'NO_INFORMADO_EN_ORIGEN', valor: null }
+  if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) {
+    return { estado: 'OBSERVADO', valor: value }
+  }
+  return { estado: 'INVALIDO', valor: null }
+}
+
+function rulePersonType(row: RawRow | undefined): DecisionInput['personas'][number]['tipo'] {
+  const value = row && selectValueFromRow(row, ['type', 'person_type'])
+  if (value === 'FISICA' || value === 'JURIDICA' || value === 'UNKNOWN') return { estado: 'OBSERVADO', valor: value }
+  // El lector no trae person_type: no se interpreta una FK ni se infiere por CUIT.
+  return { estado: value == null ? 'NO_INFORMADO_EN_ORIGEN' : 'NO_INTEGRADO', valor: null }
+}
+
+function decisionMetric(input: DecisionInput | null, value: number | null, issues: DecisionDataIssue[]): NumericData {
+  if (!input) {
+    if (issues.some(issue => issue.reason === 'LECTURA_FALLIDA')) return unavailable('NO_INTEGRADO')
+    return unavailable(issues.some(issue => issue.presence === 'INVALIDO') ? 'INVALIDO' : 'NO_INTEGRADO', 'DECISION_NO_EVALUABLE')
+  }
+  const missing = input.obligaciones.flatMap(item => [item.current_amount, item.due_date])
+    .filter(item => item.estado !== 'OBSERVADO').map(item => unavailable(item.estado))
+  const data = aggregateData(missing, 'max')
+  return value === null ? missing.length ? data : unavailable('INVALIDO', 'OBLIGACIONES_NO_EVALUABLES')
+    : { ...observed(value), missing: data.missing }
 }
 
 // Mapeador principal: transforma filas crudas en objetos listos para dashboard, listado y detalle.
-export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDebtorObjects {
+export function mapDebtorObjectsFromRawData(
+  raw: RawDebtorDataBundle,
+  options: { computedAt?: string } = {}
+): MappedDebtorObjects {
+  // Se captura el reloj una sola vez por lectura; con computedAt y manifiesto es reproducible.
+  const decisionComputedAt = options.computedAt ?? new Date().toISOString()
+  if (!/^\d{4}-\d{2}-\d{2}T.*Z$/.test(decisionComputedAt) || !Number.isFinite(Date.parse(decisionComputedAt))) {
+    throw new RangeError('computedAt debe ser una fecha-hora UTC válida')
+  }
+  const contextIssues: DecisionDataIssue[] = []
+  const decisionAsOfSource = raw.batch ? 'MANIFIESTO_LOTE' : 'FECHA_CALCULO'
+  const decisionAsOf = ruleDate(raw.batch ? raw.batch.as_of : decisionComputedAt.slice(0, 10), 'as_of', contextIssues)
+  const sourceUpdatedAt = ruleDate(raw.batch?.source_updated_at, 'source_updated_at', contextIssues, 'NO_INTEGRADO')
+  const cutoff = decisionAsOf.valor === null ? null : Date.parse(`${decisionAsOf.valor}T00:00:00.000Z`)
+
   const debtorTypeLabels = mapLabelById(
     raw.debtorTypes,
     ['id', 'debtor_type_id', 'type_id'],
@@ -185,10 +224,13 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     }
 
     const original = selectNumericData(debt, ['original_amount', 'amount_original', 'capital_amount', 'amount', 'monto_original'])
-    const updated = currentAmount(debt)
+    const updated = ruleAmount(Object.hasOwn(debt, 'current_amount') ? numericData(debt.current_amount) : unavailable('NO_INTEGRADO'))
     const originalAmount = original.value
     const updatedAmount = updated.value
-    const dueDate = selectTextFromRow(debt, ['due_date', 'expiration_date', 'vencimiento', 'maturity_date']) || null
+    const decisionIssues: DecisionDataIssue[] = []
+    const dueDatum = ruleDate(selectValueFromRow(debt, ['due_date', 'expiration_date', 'vencimiento', 'maturity_date']), 'due_date', decisionIssues)
+    const dueDate = dueDatum.valor
+    const amountDatum = recordMissing('current_amount', ruleNumber(updated), decisionIssues, updated.reason ?? 'IMPORTE_AUSENTE')
     const debtStatusId = stringifyUnknownValue(selectValueFromRow(debt, ['status', 'debt_status_id', 'status_id', 'debt_status']))
     const catalogFailed = readingFailed(raw.warnings, 'debt_status')
     const catalogStatus = debtStatusCatalog.get(debtStatusId)
@@ -215,6 +257,14 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
         ]) || 'No informado',
       status,
     }
+    debtItem.ruleInput = {
+      id: debtItem.id,
+      current_amount: amountDatum,
+      due_date: dueDatum,
+      estado_origen: recordMissing('estado_origen', sourceDatum(debt, 'estado_origen'), decisionIssues, 'ESTADO_ORIGEN_NO_EVALUABLE'),
+      periodo_fiscal: recordMissing('periodo_fiscal', sourceDatum(debt, 'periodo_fiscal'), decisionIssues, 'PERIODO_FISCAL_NO_EVALUABLE'),
+    }
+    debtItem.decisionIssues = decisionIssues.map(issue => ({ ...issue, entityId: debtItem.id }))
     if (statusPresence === 'OBSERVADO' && isDebtOverdue(catalogStatus?.key ?? '', status)) {
       overdueDebtItems.add(debtItem)
     }
@@ -224,7 +274,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     debtsByDebtor.set(debtorId, current)
   }
 
-  const personRelationsByDebtor = new Map<string, DebtorPersonRelation[]>()
+  const personRelationsByDebtor = new Map<string, (DebtorPersonRelation & { percentage: NumericData })[]>()
   for (const relation of raw.debtorPeople) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(relation, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -256,6 +306,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     const current = personRelationsByDebtor.get(debtorId) ?? []
     current.push({
       personId,
+      percentage: selectNumericData(relation, ['priority', 'priority_level', 'order']),
       priority:
         selectTextFromRow(relation, ['priority', 'priority_level', 'order']) || 'No informado',
       relation:
@@ -418,6 +469,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     const debts = debtsByDebtor.get(id) ?? []
     const people = peopleByDebtor.get(id) ?? []
     const profile = profileByDebtor.get(id)
+    const peopleFailed = readingFailed(raw.warnings, 'debtor_person')
     const contactsFailed = readingFailed(raw.warnings, 'debtor_contact', 'debtor_person')
     const contactMetric = contactsFailed ? unavailable() : observed(contactCountByDebtor.get(id) ?? 0)
     const contactCount = contactMetric.value
@@ -441,27 +493,56 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
     const overdueDebt = overdueMetric.value
     // Un estado faltante impide conocer el máximo; no es una falla de lectura del universo.
     const overdueDaysMetric = aggregateData(statusIncomplete ? missingStatuses
-      : overdueDebts.map(debt => daysSinceData(debt.dueDate)), 'max', debtFailed)
+      : overdueDebts.map(debt => debt.ruleInput!.due_date.estado === 'OBSERVADO'
+        ? daysSinceData(debt.dueDate, cutoff ?? NaN)
+        : unavailable(debt.ruleInput!.due_date.estado, 'FECHA_INVALIDA')), 'max', debtFailed || cutoff === null)
     const maxDaysOverdue = overdueDaysMetric.value
-    const providedRisk = selectNumericData(profile ?? {}, ['socioeconomic_risk_level', 'risk_level', 'risk', 'risk_segment'])
-    // El perfil ausente se registra como faltante; las fórmulas heredadas se conservan para datos observados.
-    const riskMetric = profileFailed || !profile ? unavailable() : providedRisk
-    const riskScore = riskMetric.value === null ? null : clampRiskScore(riskMetric.value)
-    const risk = riskScore === null ? null : mapRiskLevel(riskScore)
-    const recommendationResult = risk !== null && totalDebt !== null && overdueDebt !== null && hasContact !== null && (maxDaysOverdue !== null || overdueDaysMetric.presence === 'NO_APLICA')
-      ? generateDebtorRecommendation({ risk, hasContact, overdueDebt, totalDebt, overdueDays: maxDaysOverdue ?? 0 })
-      : { type: 'No disponible' as const, summary: 'No disponible', reason: 'Insumos no disponibles', isUrgent: false }
-    const priorityScore = risk !== null && totalDebt !== null && overdueDebt !== null && hasContact !== null && (maxDaysOverdue !== null || overdueDaysMetric.presence === 'NO_APLICA')
-      ? calculatePriorityScore({ totalDebt, overdueDays: maxDaysOverdue ?? 0, risk, hasContact, recommendationType: recommendationResult.type }) : null
-    const priorityLevel = priorityScore === null ? null : toPriorityLevel(priorityScore)
-    const priorityMetric = priorityScore === null
-      ? aggregateData([totalMetric, overdueMetric, contactMetric, riskMetric, overdueDaysMetric].filter(item => item.value === null && item.presence !== 'NO_APLICA'), 'max')
-      : observed(priorityScore)
+    const decisionIssues = [...contextIssues, ...debts.flatMap(debt => debt.decisionIssues ?? [])]
+    if (debtFailed) decisionIssues.push({ field: 'obligaciones', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    if (peopleFailed) decisionIssues.push({ field: 'personas', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    if (contactsFailed) decisionIssues.push({ field: 'contactos_activos', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    const relations = personRelationsByDebtor.get(id) ?? []
+    const input: DecisionInput | null = debtFailed || peopleFailed || decisionAsOf.valor === null ? null : {
+      id, as_of: decisionAsOf.valor, source_updated_at: sourceUpdatedAt,
+      obligaciones: debts.map(debt => debt.ruleInput!),
+      contactos_activos: ruleNumber(contactMetric),
+      personas: people.map(person => {
+        const relation = relations.find(item => item.personId === person.id)!
+        const percentage = relation.percentage
+        return {
+          tipo: readingFailed(raw.warnings, 'person') ? { estado: 'NO_INTEGRADO', valor: null } : rulePersonType(peopleById.get(person.id)),
+          porcentaje_declarado: recordMissing('porcentaje_declarado', ruleNumber(percentage), decisionIssues, percentage.reason ?? 'PORCENTAJE_AUSENTE'),
+        }
+      }),
+      // No existe fuente social integrada; nunca se infiere de deuda o contactos.
+      vulnerabilidad: { estado: 'NO_INFORMADO_EN_ORIGEN', valor: null },
+    }
+    let decision = null
+    if (input) {
+      try {
+        decision = evaluateDecisionRulesV1(input)
+      } catch (error) {
+        if (!(error instanceof RangeError || error instanceof TypeError)) throw error
+        decisionIssues.push({ field: 'decision', presence: 'INVALIDO', reason: 'ENTRADA_FUERA_DE_CONTRATO' })
+      }
+    }
+    const { risk, riskScore } = calculateDebtorRiskAssessment(decision)
+    const recommendationResult = generateDebtorRecommendation(decision)
+    const priorityScore = decision?.prioridad.valor ?? null
+    const priorityLevel = priorityScore === null ? null : decision!.severidad.banda as DebtorPriorityLevel
+    const priorityMetric = decisionMetric(decision ? input : null, priorityScore, decisionIssues)
     const rawComputedAt = selectTextFromRow(profile ?? {}, ['profile_generated_at']) || null
     const computedAt = !profileFailed && rawComputedAt && Number.isFinite(Date.parse(rawComputedAt)) ? rawComputedAt : null
-    const temporalProvenance = profile
-      ? `Calculado ${computedAt ? 'el ' + computedAt : 'en momento de cálculo desconocido'} (componente persistido); al día de la consulta (antigüedad recalculada); estado del catálogo persistido: momento de cálculo desconocido; corte no integrado`
-      : 'Calculado al día de la consulta (importes y antigüedad); perfil no integrado; estado del catálogo persistido: momento de cálculo desconocido; corte no integrado'
+    const decisionTime = decisionAsOfSource === 'MANIFIESTO_LOTE'
+      ? `Corte del manifiesto: ${decisionAsOf.valor ?? 'no disponible'}`
+      : `Fecha de cálculo usada: ${decisionAsOf.valor}; corte de origen no informado (corte no integrado)`
+    const overdueCount = decision?.severidad.cantidad_vencidas ?? 0
+    const overdueDateLabel = decisionAsOfSource === 'FECHA_CALCULO' ? 'fecha de cálculo usada' : 'fecha de corte'
+    const overdueReason = overdueCount > 0
+      ? ` ${decision?.severidad.estado === 'PARCIAL' ? 'al menos ' : ''}${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la ${overdueDateLabel} ${decisionAsOf.valor}.`
+      : ''
+    const contactReason = contactsFailed ? ' Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.' : ''
+    const temporalProvenance = `${decisionTime}; reglas v${RULES_VERSION}; decisión calculada el ${decisionComputedAt}. Importes del perfil: ${computedAt ?? 'momento de cálculo desconocido'}; estado del catálogo persistido: momento de cálculo desconocido.`
 
     const debtorTypeId = stringifyUnknownValue(
       selectValueFromRow(debtorRow, ['debtor_type_id', 'type_id', 'type'])
@@ -504,7 +585,14 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       status,
       totalDebt,
       overdueDebt,
-      metrics: { totalDebt: totalMetric, overdueDebt: overdueMetric, contactCount: contactMetric, riskScore: riskScore === null ? riskMetric : observed(riskScore), maxDaysOverdue: overdueDaysMetric, priorityScore: priorityMetric },
+      metrics: { totalDebt: totalMetric, overdueDebt: overdueMetric, contactCount: contactMetric, riskScore: priorityMetric, maxDaysOverdue: overdueDaysMetric, priorityScore: priorityMetric },
+      decision,
+      decisionInput: input,
+      decisionAsOf,
+      decisionAsOfSource,
+      decisionComputedAt,
+      rulesVersion: RULES_VERSION,
+      decisionIssues,
       computedAt,
       temporalProvenance,
       peopleCount: readingFailed(raw.warnings, 'debtor_person', 'person') ? null : people.length,
@@ -521,7 +609,7 @@ export function mapDebtorObjectsFromRawData(raw: RawDebtorDataBundle): MappedDeb
       priorityLevel,
       recommendation: recommendationResult.summary,
       recommendationType: recommendationResult.type,
-      recommendationReason: recommendationResult.reason,
+      recommendationReason: `${recommendationResult.reason}${overdueReason}${contactReason} ${decisionTime}; reglas v${RULES_VERSION}.`,
       isUrgentRecommendation: recommendationResult.isUrgent,
     })
   }

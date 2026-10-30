@@ -1,4 +1,6 @@
-import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
+import { comparePriority, type InterventionCode } from '@/lib/domain/decision-rules-v1'
+import { INTERVENTION_CODES, INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
+import { aggregateData, compareNullable, metric, readingFailed, unavailable } from '@/lib/data-presence'
 import type {
   ChartBucket,
   DataWarning,
@@ -7,11 +9,9 @@ import type {
   RecommendationKind,
 } from '@/types/equitas-domain'
 
+// El orden visual del catálogo no compara la prioridad de colas distintas.
 export const RECOMMENDATION_KINDS: RecommendationKind[] = [
-  'Llamado prioritario',
-  'Mensaje recordatorio',
-  'Plan de pago / revision humana',
-  'Seguimiento posterior',
+  ...INTERVENTION_CODES.map(code => INTERVENTION_LABELS[code]), 'No disponible',
 ]
 
 export const RECOMMENDATION_BADGE_VARIANT: Record<
@@ -19,6 +19,11 @@ export const RECOMMENDATION_BADGE_VARIANT: Record<
   'danger' | 'warning' | 'info' | 'success'
 > = {
   'No disponible': 'info',
+  'Mejorar datos': 'info',
+  'Revisión jurídica': 'warning',
+  'Contacto y plan': 'warning',
+  'Recordatorio': 'info',
+  'Seguimiento': 'success',
   'Llamado prioritario': 'danger',
   'Mensaje recordatorio': 'warning',
   'Plan de pago / revision humana': 'info',
@@ -29,22 +34,21 @@ export function normalizeText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
+function compareIds(a: DebtorListItem, b: DebtorListItem) {
+  return a.id === b.id ? 0 : a.id < b.id ? -1 : 1
+}
+
+/** Orden v1 dentro de una única intervención; no reinterpreta DTO heredados. */
+export function getInterventionCases(debtors: DebtorListItem[], code: InterventionCode) {
+  return debtors.filter(item => item.decision?.prioridad.cola === code).sort((a, b) =>
+    comparePriority({ id: a.id, decision: a.decision! }, { id: b.id, decision: b.decision! }))
+}
+
 export function sortByOperationalPriority(debtors: DebtorListItem[]) {
-  return [...debtors].sort((a, b) => {
-    if (b.priorityScore !== a.priorityScore) {
-      return compareNullable(a.priorityScore, b.priorityScore)
-    }
-
-    if (b.riskScore !== a.riskScore) {
-      return compareNullable(a.riskScore, b.riskScore)
-    }
-
-    if (b.totalDebt !== a.totalDebt) {
-      return compareNullable(a.totalDebt, b.totalDebt)
-    }
-
-    return compareNullable(a.maxDaysOverdue, b.maxDaysOverdue)
-  })
+  return [
+    ...INTERVENTION_CODES.flatMap(code => getInterventionCases(debtors, code)),
+    ...debtors.filter(item => !item.decision).sort(compareIds),
+  ]
 }
 
 export function getPriorityCases(debtors: DebtorListItem[]) {
@@ -56,7 +60,7 @@ export function getNoContactCases(debtors: DebtorListItem[]) {
 }
 
 export function getHighRiskCases(debtors: DebtorListItem[]) {
-  return sortByOperationalPriority(debtors.filter((debtor) => debtor.riskScore !== null && debtor.riskScore > 90))
+  return sortByOperationalPriority(debtors.filter((debtor) => debtor.decision?.severidad.banda === 'ALTA'))
 }
 
 export function getHighIndividualRiskPeople(people: PersonListItem[]) {
@@ -123,29 +127,37 @@ export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataW
   }
 }
 
-export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
-  return RECOMMENDATION_KINDS.map((recommendation) => {
-    const cases = debtors.filter((debtor) => debtor.recommendationType === recommendation)
-    const failed = readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debt_status', 'debtor_contact', 'debtor_person')
-    const unknownCases = debtors.filter(debtor => debtor.recommendationType === 'No disponible')
-    const countMetric = aggregateData(debtors.map(debtor => debtor.recommendationType === 'No disponible'
-      ? unavailable() : observed(debtor.recommendationType === recommendation ? 1 : 0)), 'sum', failed)
-    const metrics = {
-      totalDebt: aggregateData([...cases.map(debtor => metric(debtor, 'totalDebt')), ...unknownCases.map(() => unavailable())], 'sum', failed),
-      riskScore: aggregateData([...cases.map(debtor => metric(debtor, 'riskScore')), ...unknownCases.map(() => unavailable())], 'mean', failed),
-    }
-    const debtAssociated = metrics.totalDebt.value
-    const averageRisk = metrics.riskScore.value
-    const highlightedCases = sortByOperationalPriority(cases).slice(0, 3)
+// La pertenencia a una cola requiere estas lecturas, no perfiles ni catálogos históricos.
+export function recommendationQueuesUnknown(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
+  return readingFailed(warnings, 'debtor', 'debt', 'debtor_contact', 'debtor_person') ||
+    (debtors.length > 0 && debtors.every(item => !item.decision))
+}
 
+export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
+  const universeFailed = readingFailed(warnings, 'debtor')
+  const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
+  return [...INTERVENTION_CODES, null].map(code => {
+    const groupFailed = code === null ? universeFailed : queuesUnknown
+    const cases = groupFailed ? [] : code === null
+      ? debtors.filter(item => !item.decision || queuesUnknown).sort(compareIds) : getInterventionCases(debtors, code)
+    const metrics = {
+      totalDebt: aggregateData(cases.map(debtor => debtor.decision
+        ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.monto_actualizado_ars }
+        : unavailable()), 'sum', groupFailed),
+      riskScore: aggregateData(cases.map(debtor => debtor.decision
+        ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.valor }
+        : unavailable()), 'mean', groupFailed),
+    }
     return {
-      recommendation,
+      interventionCode: code,
+      recommendation: code === null ? 'No disponible' as const : INTERVENTION_LABELS[code],
       cases,
       metrics,
-      count: countMetric.value,
-      debtAssociated,
-      averageRisk,
-      highlightedCases,
+      // La categoría sin cola conocida conserva los objetos; nunca oculta sus filas.
+      count: groupFailed ? null : cases.length,
+      debtAssociated: metrics.totalDebt.value,
+      averageRisk: metrics.riskScore.value,
+      highlightedCases: cases.slice(0, 3),
     }
   })
 }

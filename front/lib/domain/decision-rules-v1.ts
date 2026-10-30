@@ -102,8 +102,15 @@ function safeInteger(value: number): number {
   return value
 }
 
-function cents(value: number): number {
-  return safeInteger(Math.round(finiteNumber(value) * 100))
+/** Centavos decimales exactos. También lo usa el adaptador para declarar INVALIDO. */
+export function amountInCents(value: number): number {
+  const { units, places } = decimalParts(value)
+  const scale = places - 2
+  const divisor = BigInt(10) ** BigInt(Math.max(scale, 0))
+  if (units % divisor !== BigInt(0)) {
+    throw new RangeError('El importe debe ser un número exacto de centavos')
+  }
+  return safeInteger(Number(units / divisor * BigInt(10) ** BigInt(Math.max(-scale, 0))))
 }
 
 function calendarDay(value: string): number {
@@ -144,6 +151,7 @@ export function evaluateSeverity(entry: Pick<DecisionInput, 'as_of' | 'obligacio
   let maxDays: number | null = null
   for (const obligation of obligations) {
     const amount = observed(obligation.current_amount)
+    const amountCents = amount === null ? null : amountInCents(amount)
     const dueValue = observed(obligation.due_date)
     const due = dueValue === null ? null : calendarDay(dueValue)
     let valid = true
@@ -161,8 +169,7 @@ export function evaluateSeverity(entry: Pick<DecisionInput, 'as_of' | 'obligacio
       reason('VENCIMIENTO_INCONSISTENTE', 'OBSERVADO')
       valid = false
     }
-    if (valid && amount !== null && due !== null && dueValue !== null) {
-      const amountCents = cents(amount)
+    if (valid && amountCents !== null && due !== null && dueValue !== null) {
       totalCents = safeInteger(totalCents + amountCents)
       evaluable += 1
       if (amountCents > 0 && due < cutoff) {
@@ -198,9 +205,9 @@ export function evaluateSeverity(entry: Pick<DecisionInput, 'as_of' | 'obligacio
     const value = overdue ? input! : 0
     const monetary = name === 'monto_actualizado_ars'
     const bands = monetary
-      ? definition.bandas.map((item) => ({ ...item, desde: cents(item.desde) }))
+      ? definition.bandas.map((item) => ({ ...item, desde: amountInCents(item.desde) }))
       : definition.bandas
-    const points = state === 'NO_DISPONIBLE' ? null : band(monetary ? cents(value) : value, bands).puntos
+    const points = state === 'NO_DISPONIBLE' ? null : band(monetary ? amountInCents(value) : value, bands).puntos
     return { factor: name, insumo: input, puntos: points, maximo: definition.peso_maximo }
   })
   if (state !== 'NO_DISPONIBLE') {
@@ -212,12 +219,14 @@ export function evaluateSeverity(entry: Pick<DecisionInput, 'as_of' | 'obligacio
 
 // Compara la suma decimal declarada, sin redondear porcentajes ni introducir
 // falsos positivos por IEEE-754 en 99,99/100,01. Equivale a Decimal(str(n)).
+function decimalParts(value: number) {
+  const [coefficient, exponent = '0'] = String(finiteNumber(value)).split('e')
+  const places = (coefficient.split('.')[1]?.length ?? 0) - Number(exponent)
+  return { units: BigInt(coefficient.replace('.', '')), places }
+}
+
 function percentagesOutsideTolerance(values: number[]): boolean {
-  const decimals = [...values, -100, rules.banderas.tolerancia_porcentajes].map((value) => {
-    const [coefficient, exponent = '0'] = String(finiteNumber(value)).split('e')
-    const places = (coefficient.split('.')[1]?.length ?? 0) - Number(exponent)
-    return { units: BigInt(coefficient.replace('.', '')), places }
-  })
+  const decimals = [...values, -100, rules.banderas.tolerancia_porcentajes].map(decimalParts)
   const scale = decimals.reduce((maximum, item) => Math.max(maximum, item.places), decimals[0].places)
   const units = decimals.map((item) => item.units * BigInt(10) ** BigInt(scale - item.places))
   const tolerance = units.pop()!
@@ -381,7 +390,7 @@ export function comparePriority(left: PrioritizedDecision, right: PrioritizedDec
     throw new RangeError('Las prioridades de colas distintas no se comparan')
   }
   const amount = (severity: Severity) => severity.monto_actualizado_ars === null
-    ? null : cents(severity.monto_actualizado_ars)
+    ? null : amountInCents(severity.monto_actualizado_ars)
   return compareNullable(a.prioridad.valor, b.prioridad.valor, true)
     || compareNullable(amount(a.severidad), amount(b.severidad), true)
     || compareNullable(a.severidad.vencimiento_mas_antiguo, b.severidad.vencimiento_mas_antiguo)

@@ -305,6 +305,32 @@ Valores que una página o un componente calcula y muestra sin que existan en un 
 | AU07 | Totales de control `Deuda_Actualizada`, `Deuda_Capital`, `Periodos_Deuda` | `NO_INTEGRADO` | Columnas de cabecera esperadas pero no cargadas (`back/ETL/inspect_tsv.py:28-31`); insumo del validador (ALIGN-024) |
 | AU08 | Domicilio como factor | `NO_APLICA` como factor | Se carga para identificación (`address`, `city`, `province`), pero está **prohibido** como factor de prioridad, segmentación o analítica (plan v2 §7.1) |
 
+### 7.12 Adaptación de reglas v1 — ALIGN-010
+
+Esta adenda registra el contrato implementado por ALIGN-010. Las filas históricas
+FO10–FO14 describen la base anterior: los nombres `risk`/`riskScore` de objetos
+pasan a ser alias de la **severidad v1** y `priorityScore` es la prioridad 0–100
+**dentro de la cola**, sin sumar contacto ni recomendación. El índice persistido
+no alimenta ninguna decisión. Los importes y estados históricos de FO01/FO02 y
+DE10 se conservan separados de los insumos evaluables de la decisión; nunca se
+usan para sustituir `current_amount`, `due_date`, `estado_origen` o `periodo_fiscal`.
+Ver [implementación y procedencia](reglas-decision-v1.md#17-adaptador-web--align-010)
+y [catálogo v1, adenda ALIGN-010](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1).
+
+El adaptador de **objetos** lee exclusivamente `current_amount`: si falta la
+clave, informa `NO_INTEGRADO`; no la sustituye por `updated_amount` ni otros
+alias. La compatibilidad con alias descrita en DE06 y §9 regla 2 queda para
+el mapeador de **personas**, que conserva el selector general de importes.
+
+| ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
+|---|---|---|---|---|---|---|---|
+| DV01 | `DebtorListItem.decision` | Intervención / prioridad | Salida completa de `evaluateDecisionRulesV1`; incluye severidad, banderas, vulnerabilidad no informada, intensidad, revisión, prioridad y explicación | puntos 0–100, códigos e intensidad 0–4 (máximo automático 2), **no %** | `decisionAsOf` | null ante lectura incompleta, corte no evaluable o entrada fuera de contrato; los importes individuales inválidos producen severidad parcial/no disponible según v1 | D |
+| DV02 | `DebtorListItem.decisionInput`, `DebtorDebtItem.ruleInput` | — (trazabilidad del adaptador) | Insumos normalizados con los cinco estados; `status`, `period`, `issue_date` y `last_collection_date` heredados nunca sustituyen a campos de origen | datos tipados con presencia | `decisionAsOf` | `decisionInput` null si no se puede construir una entrada completa de obligaciones/corte o falla la lectura de relaciones `debtor_person`; registra `personas: NO_INTEGRADO: LECTURA_FALLIDA`, sin enviar una lista vacía ficticia al núcleo. Un dato individual no observado conserva null y su estado | D |
+| DV03 | `DebtorListItem.decisionAsOf`, `DebtorListItem.decisionAsOfSource` | Corte del manifiesto / Fecha de cálculo usada | `RawDebtorDataBundle.batch.as_of`; si no hay manifiesto, fecha UTC de `decisionComputedAt` con aviso “corte de origen no informado” | fecha y procedencia | — | Un manifiesto presente con corte inválido o vacío bloquea la evaluación: no se sustituye silenciosamente | O/D |
+| DV04 | `DebtorListItem.decisionComputedAt` | Decisión calculada el | Una captura de reloj UTC por lectura; inyectable para reproducir | fecha-hora UTC | — | Fecha de cálculo, nunca evidencia del corte municipal ni del momento del perfil persistido | D |
+| DV05 | `DebtorListItem.rulesVersion` | Reglas v1.0.0 | `RULES_VERSION` del JSON compartido | versión | — | Siempre informada por el adaptador | D |
+| DV06 | `DebtorListItem.decisionIssues`, `DebtorDebtItem.decisionIssues` | Motivos de datos no evaluables | Campo, clave interna de obligación cuando corresponda, estado y código de motivo; sin valores personales crudos | lista de motivos | `decisionAsOf` | Lista vacía si no hay incidencias; fracciones de centavo → INVALIDO, nunca redondeo/cero | D |
+
 ## 8. Mapa de nombres heredados
 
 Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa fija su significado y el rótulo que corresponde en pantalla (ALIGN-012 lo aplica).

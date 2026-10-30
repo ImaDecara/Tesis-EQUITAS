@@ -54,16 +54,17 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     expect(buildDebtAgingSummary(mapped.debtors).metrics.overdueDebt).toEqual(incomplete.metrics?.overdueDebt)
   })
 
-  it('sin ningún estado observado devuelve no disponible con conteo, incluso con perfil', () => {
+  it('el estado de catálogo ausente deja mora histórica no disponible, pero no impide la decisión al corte', () => {
     const raw = buildPresenceRawData()
     raw.debts[0].status = 8
     raw.debts[0].current_amount = 70
     raw.debtorProfiles = [{ debtor: 901, socioeconomic_risk_level: 80 }]
     const mapped = mapDebtorObjectsFromRawData(raw)
     const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
-    for (const key of ['overdueCases', 'priorityCases', 'urgentRecommendationCases']) {
-      expect(dashboard.metrics?.[key]).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
-    }
+    expect(dashboard.metrics?.overdueCases).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
+    expect(dashboard.metrics?.priorityCases).toEqual({ value: 0, presence: 'OBSERVADO', missing: {} })
+    expect(dashboard.metrics?.urgentRecommendationCases).toEqual({ value: 1, presence: 'OBSERVADO', missing: {} })
+    expect(mapped.debtors[0].decision?.severidad.estado).toBe('COMPLETA')
     expect(buildDebtAgingSummary(mapped.debtors).metrics.overdueDebt).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
   })
 
@@ -73,7 +74,7 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
     const mapped = mapDebtorObjectsFromRawData(raw)
     const incomplete = mapped.debtors.find(debtor => debtor.id === '902')!
-    expect(incomplete).toMatchObject({ maxDaysOverdue: null, priorityScore: null, recommendationType: 'No disponible' })
+    expect(incomplete).toMatchObject({ maxDaysOverdue: null, priorityScore: 45, recommendationType: 'Revisión jurídica' })
     expect(incomplete.metrics?.overdueDebt.missing).toEqual({ NO_INFORMADO_EN_ORIGEN: 2 })
     const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
     expect(dashboard.metrics?.overdueCases).toMatchObject({ value: 1, missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
@@ -132,10 +133,10 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     expect(dashboard.metrics?.totalDebt).toMatchObject({ value: 100, missing: { INVALIDO: 1 } })
   })
 
-  it('usa updated_amount solamente si no existe current_amount y nunca capital', () => {
+  it('el adaptador no sustituye current_amount ausente por updated_amount ni capital', () => {
     const raw = buildPresenceRawData()
     delete raw.debts[0].current_amount
-    expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBe(0)
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.totalDebt).toMatchObject({ value: null, presence: 'NO_INTEGRADO' })
     delete raw.debts[0].updated_amount
     expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBeNull()
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 'ilegible' }]
@@ -203,11 +204,14 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     expect(result.priorityScore).toBeNull()
   })
 
-  it('no asigna riesgo al objeto sin perfil ni reemplaza riesgo cero', () => {
+  it('evalúa severidad del objeto sin perfil y conserva el faltante del índice de personas', () => {
     const raw = buildPresenceRawData()
     const mapped = mapDebtorObjectsFromRawData(raw)
-    expect(mapped.debtors[0]).toMatchObject({ risk: null, riskScore: null, priorityScore: null })
-    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRisk).toEqual([{ label: 'No disponible', value: 1 }])
+    expect(mapped.debtors[0]).toMatchObject({ risk: 'BAJO', riskScore: 0, priorityScore: 0 })
+    expect(mapped.debtors[0].decision?.severidad).toMatchObject({ estado: 'COMPLETA', monto_actualizado_ars: 0 })
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRisk).toEqual([
+      { label: 'ALTO', value: 0 }, { label: 'MEDIO', value: 0 }, { label: 'BAJO', value: 1 },
+    ])
     const peopleRaw = buildPresencePeopleData()
     peopleRaw.debtorProfilesDetail = []
     expect(mapPeopleFromRawData(peopleRaw).dashboard.individualRiskDistribution).toEqual([{ label: 'No disponible', value: 2 }])
