@@ -50,7 +50,7 @@ export async function loadAllTableRows(table: string, supabase: SupabaseClient |
       const response = await query
       if (response.error) return failedRead(table, response.error)
 
-      const page: unknown = response.data ?? []
+      const page: unknown = response.data
       if (!Array.isArray(page)) {
         return failedRead(table, { message: 'Respuesta de pagina invalida.', code: 'DATA_PAGINATION_INVALID' })
       }

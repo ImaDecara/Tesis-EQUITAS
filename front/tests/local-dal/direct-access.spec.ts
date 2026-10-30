@@ -44,7 +44,9 @@ for (const label of ['anonymous', 'none', 'inactive', 'multi'] as const) {
         const body = await response.text()
         for (const marker of markers) expect(body.includes(marker), `${label} ${route} RSC=${rsc}: ${marker}`).toBe(false)
         // Un 404 o una pagina vacia no acredita una denegacion de autorizacion.
-        expect(response.status() >= 500 || [401, 403].includes(response.status()) || /:E\{"digest"|Datos no disponibles|DataAccessError/.test(body), `${route}: respuesta de denegacion`).toBe(true)
+        // En HTML de produccion, Flight va dentro de un string JS con comillas escapadas.
+        const flight = body.replaceAll('\\"', '"')
+        expect(response.status() >= 500 || [401, 403].includes(response.status()) || /:E\{"digest"|Datos no disponibles|DataAccessError/.test(flight), `${route} RSC=${rsc} HTTP=${response.status()}: respuesta de denegacion`).toBe(true)
       }
     } finally { await auth?.client.auth.signOut() }
   })

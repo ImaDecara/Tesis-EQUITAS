@@ -230,6 +230,10 @@ Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores
 consulta conservan `DataWarning` y el tratamiento «no disponible» de ALIGN-011/012
 (contrato §4.1.6); no se convierten en un cero ni en un vacío exitoso. No hay caché
 de autorización entre solicitudes, clave de servicio ni secretos nuevos.
+En Server Components el error llega al límite `app/error.tsx`; una respuesta
+transmitida puede conservar HTTP 200 e incluir el registro de error de Flight,
+siempre sin cartera. Los futuros Route Handlers deben traducir `error.status`
+a un estado HTTP explícito (401/403/409/503), sin serializar el cliente de sesión.
 
 Puntos cubiertos: tablero `/`, objetos `/debtors`, detalle `/debtors/[debtorId]`,
 personas `/people`, colas `/priority-cases`, sin contacto `/no-contact`, mora
@@ -239,7 +243,11 @@ deben autorizar **dentro de cada entrada** y extender el lector con filtros de t
 para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
 insertarse después de autorizar y antes de entregar el DTO, sin datos personales.
 
-Validación actual: pruebas negativas y positivas con Auth/REST simulados, incluida
-la separación por municipio con políticas permisivas simuladas. La prueba HTTP
-HTML/RSC sobre Supabase local con `USING(true)` está pendiente de la liberación del
-stack por ALIGN-018; este registro no afirma que se haya ejecutado.
+Validación del 30/10: pruebas negativas y positivas con Auth/REST simulados y ocho
+pruebas directas HTML/RSC sobre Supabase local con `USING(true)`, tanto con Next dev
+como con compilación de producción. La precondición verifica que REST entrega
+ambas carteras al usuario sin membresía; la DAL deniega esa misma identidad en las
+nueve rutas. Los controles positivos comprueban separación A/B, detalle ajeno,
+personas y selección explícita, sin avisos de consulta fallida. Se restauraron las
+tres migraciones antes de liberar el lock. Evidencia depurada: paquete del plan,
+`execution/evidence/ALIGN-019/`. La revisión independiente sigue pendiente.

@@ -1,7 +1,8 @@
 # ALIGN-019: prueba directa local
 
 El 30/10 el orquestador autorizó el uso exclusivo temporal del stack mediante lock.
-La corrida con Next dev pasó los ocho casos; los resultados definitivos y los gates
+Las corridas con Next dev y con compilación de producción pasaron los ocho casos;
+los resultados definitivos y los gates
 están en `execution/evidence/ALIGN-019/` del paquete externo del plan.
 Esta suite es independiente de Vitest: usa Auth, REST y HTTP HTML/RSC reales.
 No se omite si falta configuración: falla antes de arrancar Next o crear clientes.
