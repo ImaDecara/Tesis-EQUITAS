@@ -954,7 +954,8 @@ a ALIGN-014. La implementación se describe en
 Los nombres del DTO anterior se mantienen para compatibilidad de pantallas,
 pero el adaptador ya no genera las cuatro recomendaciones heredadas. ALIGN-012
 renombra los rótulos y explicita “puntos”; las participaciones de objetos en una
-categoría siguen siendo porcentajes verdaderos. ALIGN-014 debe inicializar las
-nuevas categorías en su agregador de tablero y sustituir su orden global y sus
-dependencias heredadas de perfiles/estados. Las cifras y el orden del tablero
+categoría siguen siendo porcentajes verdaderos. ALIGN-010 inicializa las
+categorías del tablero desde el catálogo v1: cola vacía leída = 0; lectura
+fallida conserva `byRecommendation: []`. ALIGN-014 debe sustituir el orden
+global y las dependencias heredadas de perfiles/estados. Las demás cifras y el orden del tablero
 no se confunden con el contrato de `buildRecommendationSummary` de esta adenda.

@@ -107,10 +107,32 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
     configure(buildPresencePeopleData(), raw)
     const text = textFromReactTree(await HomePage())
-    expect(text).toContain('Empate: Seguimiento, Revisión jurídica concentra 50%')
+    expect(text).toContain('Empate: Revisión jurídica, Seguimiento concentra 50%')
     expect(text).not.toContain('Revisión jurídica, No disponible')
     expect(text).toContain('Prioridad: 1 NO_INFORMADO_EN_ORIGEN')
     expect(text).toContain('Recomendación urgente: 1 NO_INFORMADO_EN_ORIGEN')
+  })
+
+  it('una cola v1 vacía del tablero muestra 0 casos (0%) y no hay etiquetas heredadas', async () => {
+    const raw = buildPresenceRawData()
+    raw.batch = { as_of: '2026-09-30' }
+    const mapped = mapDebtorObjectsFromRawData(raw)
+    const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
+    expect(dashboard.byRecommendation).toEqual([
+      { label: 'Mejorar datos', value: 0 },
+      { label: 'Revisión jurídica', value: 0 },
+      { label: 'Contacto y plan', value: 0 },
+      { label: 'Recordatorio', value: 0 },
+      { label: 'Seguimiento', value: 1 },
+      { label: 'No disponible', value: 0 },
+    ])
+    getDashboardData.mockResolvedValue({ dashboard, warnings: [] })
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+0\s+casos\s*\(\s*0%\s*\)/)
+    raw.warnings = [{ table: 'debtor', message: 'Fallo sintético', needsSelectPolicy: false }]
+    const failed = mapDashboardMetricsFromDebtorObjects(mapDebtorObjectsFromRawData(raw))
+    expect(failed.byRecommendation).toEqual([])
+    getDashboardData.mockResolvedValue({ dashboard: failed, warnings: raw.warnings })
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+casos/)
   })
 
   it('declara un empate real solamente entre categorías de recomendación', async () => {

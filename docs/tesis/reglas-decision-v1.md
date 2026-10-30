@@ -287,8 +287,18 @@ el núcleo y entrega `decision`, `decisionInput`, `rulesVersion`, `decisionAsOf`
 `decisionAsOfSource`, `decisionComputedAt` y `decisionIssues`. Los estados se
 conservan: un dato mal formado lleva null, `INVALIDO` y motivo; uno ausente
 nunca se completa con capital, un alias de importe presente ni un perfil.
+El adaptador lee exclusivamente `current_amount`: clave ausente →
+`NO_INTEGRADO`; clave presente con null, undefined o vacío →
+`NO_INFORMADO_EN_ORIGEN`. No cambia el selector general de importes de otros
+consumidores.
 Una lectura fallida de `debt`/`debtor` impide construir la entrada/evaluar. Una
 lista vacía leída correctamente permite el cero derivado de v1.
+Si falla `debtor_person`, se registra `personas: NO_INTEGRADO: LECTURA_FALLIDA`
+en `decisionIssues`. Las banderas de tipo de persona y porcentajes no son
+evaluables: el núcleo requiere una lista completa y no admite una lista de
+presencia desconocida. Por eso `decisionInput` y `decision` quedan null, sin
+enviar `[]` como si no hubiera personas; `peopleCount` y prioridad también
+quedan null. Una lectura correcta sin relaciones sí permite `personas: []`.
 
 `RawDebtorDataBundle.batch` es el punto de entrada opcional del manifiesto
 (`as_of` y `source_updated_at`); el lector actual todavía no lo integra. Sin
@@ -316,6 +326,9 @@ los puntos. `isUrgentRecommendation` queda como alias de necesidad de revisión
 humana o jurídica, no como urgencia legal. El presentador usa las etiquetas y
 explicaciones del JSON y agrega “Evaluar con supervisor antes de gestionar”
 cuando hay revisión. No afirma exigibilidad ni propone escalamiento.
+Cuando hay obligaciones vencidas evaluables, el adaptador añade al motivo
+“N obligación(es) vencida(s) a la fecha de corte AAAA-MM-DD”, con concordancia
+singular/plural y la fecha usada; no modifica las frases del JSON congelado.
 
 Los [selectores](../../front/lib/equitas-view-selectors.ts) crean las cinco colas
 por código de intervención. El orden de presentación es el del catálogo del
@@ -331,8 +344,11 @@ La [adenda del catálogo](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y
 define unidades, poblaciones y límites. ALIGN-012 debe actualizar los rótulos
 heredados “riesgo”, “riesgo >90”, “Score” y “urgente”; ALIGN-014 conserva la
 responsabilidad de reemplazar los agregados y el orden global del tablero y
-los indicadores de mora basados en perfil/catálogo. Esos componentes no se
-modifican aquí. Los campos financieros históricos se mantienen separados y
+los indicadores de mora basados en perfil/catálogo. ALIGN-010 inicializa los
+conteos del tablero desde las cinco etiquetas v1 y “No disponible”: una cola
+vacía leída tiene 0; ante lectura fallida se conserva `byRecommendation: []`.
+Los demás agregados del tablero no se modifican aquí.
+Los campos financieros históricos se mantienen separados y
 no alimentan las decisiones ni las sumas de las colas v1.
 
 **Seguimiento Python (MENOR-2 de ALIGN-009):** el motor Python todavía redondea

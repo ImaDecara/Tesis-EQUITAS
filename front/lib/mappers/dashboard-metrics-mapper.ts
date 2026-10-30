@@ -1,4 +1,5 @@
 import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
+import { RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
 import type { DashboardData, DataWarning, DebtorListItem, NumericData } from '@/types/equitas-domain'
 
 type DashboardMapperInput = {
@@ -29,12 +30,7 @@ export function mapDashboardMetricsFromDebtorObjects({
     ['MEDIO', 0],
     ['BAJO', 0],
   ])
-  const byRecommendationMap = new Map<string, number>([
-    ['Llamado prioritario', 0],
-    ['Mensaje recordatorio', 0],
-    ['Plan de pago / revision humana', 0],
-    ['Seguimiento posterior', 0],
-  ])
+  const byRecommendationMap = new Map<string, number>(RECOMMENDATION_KINDS.map(kind => [kind, 0]))
 
   for (const debtor of debtors) {
     byDebtorTypeMap.set(debtor.type, (byDebtorTypeMap.get(debtor.type) ?? 0) + 1)

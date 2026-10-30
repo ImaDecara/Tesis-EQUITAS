@@ -167,6 +167,33 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(without.decision?.intervencion).toMatchObject({ codigo: 'MEJORAR_DATOS', intensidad: 0, canal_requerido: false })
     expect(withContact.decision?.intervencion.codigo).toBe('CONTACTO_PERSONAL_Y_PLAN')
     expect(without.decision?.mensaje_borrador).toBeNull()
+    expect(without.decision?.vulnerabilidad.valor).toBe('NO_INFORMADA')
+    expect(without.decision?.revision).toStrictEqual(withContact.decision?.revision)
+    // Conserva toda la decisión salvo las cinco diferencias permitidas por contacto.
+    expect({ ...without.decision!, banderas: without.decision!.banderas.filter(flag => flag !== 'SIN_CONTACTO_ACTIVO') }).toStrictEqual({
+      ...withContact.decision!,
+      intervencion: without.decision!.intervencion,
+      prioridad: { ...withContact.decision!.prioridad, cola: without.decision!.prioridad.cola },
+      explicacion: { ...withContact.decision!.explicacion, frase_contrastiva: without.decision!.explicacion.frase_contrastiva },
+      mensaje_borrador: without.decision!.mensaje_borrador,
+      banderas: withContact.decision!.banderas.filter(flag => flag !== 'SIN_CONTACTO_ACTIVO'),
+    })
+  })
+
+  it.each([
+    { amount: 1000000, rule: 'R4' },
+    { amount: 50000, rule: 'R5' },
+    { amount: 100, rule: 'R6' },
+  ])('el motivo de $rule explicita cantidad vencida y corte', ({ amount, rule }) => {
+    const raw = buildRawData()
+    raw.debts[0].current_amount = amount
+    raw.debts[0].due_date = '2026-01-01'
+    expect(mapOne(raw).decision?.intervencion.regla).toBe(rule)
+    expect(mapOne(raw).recommendationReason).toContain('1 obligación vencida a la fecha de corte 2026-09-30')
+    raw.debts.push({ ...raw.debts[0], id: 11 })
+    expect(mapOne(raw).recommendationReason).toContain('2 obligaciones vencidas a la fecha de corte 2026-09-30')
+    raw.debts.forEach(debt => { debt.due_date = '2026-09-30' })
+    expect(mapOne(raw).recommendationReason).not.toContain('obligaciones vencidas a la fecha de corte')
   })
 
   it('un contacto vacío, inactivo o de una relación inactiva no habilita comunicación', () => {
@@ -253,6 +280,16 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(debtor.priorityScore).toBeNull()
   })
 
+  it('una clave current_amount eliminada es NO_INTEGRADO aunque exista un alias', () => {
+    const raw = buildRawData()
+    delete raw.debts[0].current_amount
+    raw.debts[0].updated_amount = 500
+    const debtor = mapOne(raw)
+    expect(debtor.decisionInput?.obligaciones[0].current_amount).toEqual({ estado: 'NO_INTEGRADO', valor: null })
+    expect(debtor.decisionIssues).toContainEqual({ entityId: '10', field: 'current_amount', presence: 'NO_INTEGRADO', reason: 'IMPORTE_AUSENTE' })
+    expect(debtor.priorityScore).toBeNull()
+  })
+
   it('el cero observado y la lista vacía leída son ceros legítimos, el fallo de lectura no lo es', () => {
     const raw = buildRawData()
     raw.debts[0].current_amount = 0
@@ -278,6 +315,26 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(after.hasContact).toBeNull()
     expect(after.decision?.severidad).toStrictEqual(before.decision?.severidad)
     expect(after.decision?.intervencion.codigo).toBe('MEJORAR_DATOS')
+  })
+
+  it('una lectura de relaciones fallida no se evalúa como una lista sin personas', () => {
+    const raw = buildRawData()
+    raw.debtorPeople[0].priority = 60
+    expect(mapOne(raw).decision?.banderas).toEqual(expect.arrayContaining(['PORCENTAJES_NO_SUMAN_100', 'TIPO_PERSONA_DESCONOCIDO']))
+    raw.debtorPeople = []
+    raw.warnings = [{ table: 'debtor_person', message: 'Error sintético', needsSelectPolicy: false }]
+    const failed = mapOne(raw)
+    expect(failed.decisionIssues).toContainEqual({ field: 'personas', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    expect(failed.peopleCount).toBeNull()
+    expect(failed.decisionInput).toBeNull()
+    expect(failed.decision).toBeNull()
+    expect(failed.priorityScore).toBeNull()
+    raw.warnings = []
+    const empty = mapOne(raw)
+    expect(empty.peopleCount).toBe(0)
+    expect(empty.decisionInput?.personas).toEqual([])
+    expect(empty.decision).not.toBeNull()
+    expect(empty.decisionIssues?.some(issue => issue.field === 'personas')).toBe(false)
   })
 
   it('conserva el mínimo parcial, los motivos y la revisión humana', () => {

@@ -5,7 +5,7 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { aggregateData, currentAmount, daysSinceData, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
+import { aggregateData, daysSinceData, metric, numericData, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
 import { amountInCents, evaluateDecisionRulesV1, RULES_VERSION, type DecisionInput, type RuleDatum } from '@/lib/domain/decision-rules-v1'
@@ -221,7 +221,7 @@ export function mapDebtorObjectsFromRawData(
     }
 
     const original = selectNumericData(debt, ['original_amount', 'amount_original', 'capital_amount', 'amount', 'monto_original'])
-    const updated = ruleAmount(currentAmount(debt))
+    const updated = ruleAmount(Object.hasOwn(debt, 'current_amount') ? numericData(debt.current_amount) : unavailable('NO_INTEGRADO'))
     const originalAmount = original.value
     const updatedAmount = updated.value
     const decisionIssues: DecisionDataIssue[] = []
@@ -466,6 +466,7 @@ export function mapDebtorObjectsFromRawData(
     const debts = debtsByDebtor.get(id) ?? []
     const people = peopleByDebtor.get(id) ?? []
     const profile = profileByDebtor.get(id)
+    const peopleFailed = readingFailed(raw.warnings, 'debtor_person')
     const contactsFailed = readingFailed(raw.warnings, 'debtor_contact', 'debtor_person')
     const contactMetric = contactsFailed ? unavailable() : observed(contactCountByDebtor.get(id) ?? 0)
     const contactCount = contactMetric.value
@@ -495,9 +496,10 @@ export function mapDebtorObjectsFromRawData(
     const maxDaysOverdue = overdueDaysMetric.value
     const decisionIssues = [...contextIssues, ...debts.flatMap(debt => debt.decisionIssues ?? [])]
     if (debtFailed) decisionIssues.push({ field: 'obligaciones', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    if (peopleFailed) decisionIssues.push({ field: 'personas', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     if (contactsFailed) decisionIssues.push({ field: 'contactos_activos', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     const relations = personRelationsByDebtor.get(id) ?? []
-    const input: DecisionInput | null = debtFailed || decisionAsOf.valor === null ? null : {
+    const input: DecisionInput | null = debtFailed || peopleFailed || decisionAsOf.valor === null ? null : {
       id, as_of: decisionAsOf.valor, source_updated_at: sourceUpdatedAt,
       obligaciones: debts.map(debt => debt.ruleInput!),
       contactos_activos: ruleNumber(contactMetric),
@@ -531,6 +533,10 @@ export function mapDebtorObjectsFromRawData(
     const decisionTime = decisionAsOfSource === 'MANIFIESTO_LOTE'
       ? `Corte del manifiesto: ${decisionAsOf.valor ?? 'no disponible'}`
       : `Fecha de cálculo usada: ${decisionAsOf.valor}; corte de origen no informado (corte no integrado)`
+    const overdueCount = decision?.severidad.cantidad_vencidas ?? 0
+    const overdueReason = overdueCount > 0
+      ? ` ${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la fecha de corte ${decisionAsOf.valor}.`
+      : ''
     const temporalProvenance = `${decisionTime}; reglas v${RULES_VERSION}; decisión calculada el ${decisionComputedAt}. Importes del perfil: ${computedAt ?? 'momento de cálculo desconocido'}; estado del catálogo persistido: momento de cálculo desconocido.`
 
     const debtorTypeId = stringifyUnknownValue(
@@ -598,7 +604,7 @@ export function mapDebtorObjectsFromRawData(
       priorityLevel,
       recommendation: recommendationResult.summary,
       recommendationType: recommendationResult.type,
-      recommendationReason: `${recommendationResult.reason} ${decisionTime}; reglas v${RULES_VERSION}.`,
+      recommendationReason: `${recommendationResult.reason}${overdueReason} ${decisionTime}; reglas v${RULES_VERSION}.`,
       isUrgentRecommendation: recommendationResult.isUrgent,
     })
   }

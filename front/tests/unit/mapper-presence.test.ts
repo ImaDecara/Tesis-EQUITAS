@@ -133,10 +133,10 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     expect(dashboard.metrics?.totalDebt).toMatchObject({ value: 100, missing: { INVALIDO: 1 } })
   })
 
-  it('usa updated_amount solamente si no existe current_amount y nunca capital', () => {
+  it('el adaptador no sustituye current_amount ausente por updated_amount ni capital', () => {
     const raw = buildPresenceRawData()
     delete raw.debts[0].current_amount
-    expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBe(0)
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.totalDebt).toMatchObject({ value: null, presence: 'NO_INTEGRADO' })
     delete raw.debts[0].updated_amount
     expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBeNull()
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 'ilegible' }]
