@@ -1,0 +1,544 @@
+{
+  "id": "action-costs",
+  "version": "1.0.0",
+  "estado": "BORRADOR_PENDIENTE_VALIDACION",
+  "rotulo": "Borrador — pendiente de validación (ALIGN-034, compuerta antes de cerrar)",
+  "fecha": "2026-10-29",
+  "ticket": "ALIGN-034",
+  "plan": "2026-10-28-v2",
+  "documento": "docs/tesis/costos-acciones-v1.md",
+  "reglas_de_decision": "contracts/decision-rules.v1.json",
+  "escala_intensidad": "ALIGN-003: escala 0–4 aprobada por el usuario el 2026-10-29, intensa ≥ 3 con aprobación de supervisor; rige solo con datos sintéticos (ALIGN-004)",
+  "consumidores": ["ALIGN-035 (protocolo de simulación)", "ALIGN-036 (simulador)", "ALIGN-051 (resultados en la tesis)"],
+  "datos_personales": "Ninguno",
+  "datos_reales": "Ninguno: no hay costos, dotaciones ni tiempos del municipio (ALIGN-004). Todos los valores numéricos son supuestos del equipo",
+  "naturaleza": {
+    "que_es": "Tabla paramétrica de costos en horas-persona y de capacidad operativa por tipo de acción e intensidad, para comparar el valor esperado del recupero con el costo de la acción [P0148], [P0143] en una evaluación artificial (objetivos 4 y 8, [T02.R05], [T02.R09]).",
+    "que_no_es": "No son costos observados ni estimados con datos del municipio: ningún valor es un hallazgo. Los costos son valoraciones de las consecuencias que alguien debe adoptar [P0205]; por eso cada supuesto se valida antes de cerrar ALIGN-034.",
+    "riesgo": "Precisión aparente: un número con decimales parece medido. Cada supuesto lleva rango de sensibilidad y la simulación informa resultados por rango, no un único valor.",
+    "excluido": ["optimizador", "cifras sin fuente presentadas como observadas", "cifras en pesos sin fuente"],
+    "politica_de_cambios": "Toda modificación de valores, fuentes o estructura, y el registro de la validación, crean una versión nueva con su propio archivo; esta versión nunca se edita en silencio."
+  },
+  "validacion": {
+    "estado": "PENDIENTE",
+    "compuerta": "Compuerta antes de cerrar ALIGN-034: validación de los supuestos por directores o personal municipal",
+    "quien_puede_validar": ["directores de la tesis", "personal municipal que conozca la gestión de la mora"],
+    "como_se_registra": "Por parámetro: VALIDADO, AJUSTADO (valor nuevo con su fuente y fecha) u OBJETADO, con el rol de quien valida, la fecha y la referencia del registro (acta, correo o mensaje), sin otros datos personales",
+    "registro": []
+  },
+  "tipos_de_fuente": {
+    "NORMATIVA": "Ley, decreto o resolución vigente, citada con número, artículo y fecha de consulta",
+    "ORDENANZA": "Ordenanza fiscal o tarifaria del municipio, citada con número, artículo y ejercicio [P0123]",
+    "CONSULTA": "Dato informado por personal municipal o por los directores, con rol, fecha y referencia del registro",
+    "SUPUESTO_DEL_EQUIPO": "Valor elegido por el equipo sin observación; lleva rango y justificación y se valida antes de cerrar ALIGN-034"
+  },
+  "estados_de_parametro": {
+    "SUPUESTO": "Valor y rango elegidos por el equipo; fuente.tipo = SUPUESTO_DEL_EQUIPO",
+    "CON_FUENTE": "Valor tomado de una fuente verificable; fuente.tipo ∈ {NORMATIVA, ORDENANZA, CONSULTA}",
+    "PENDIENTE_FUENTE": "Sin cifra (base y rango null) hasta contar con la fuente indicada; nunca se reemplaza por 0"
+  },
+  "regla_de_valores": "Todo valor numérico tiene estado SUPUESTO o CON_FUENTE, con min ≤ base ≤ max y min ≥ 0. Los importes en pesos solo se cargan con fuente (nunca como supuesto). null significa 'sin cifra', no 0.",
+  "unidades": {
+    "horas_persona_por_caso": "Horas de trabajo de una persona del rol indicado por cada objeto tributario sobre el que se ejecuta la acción",
+    "horas_persona_por_mes": "Horas disponibles del rol en un mes, sumadas entre todas las personas del rol",
+    "horas_persona_por_mes_por_persona": "Horas que cada persona del rol dedica en un mes a la gestión de la mora",
+    "personas": "Cantidad de personas del rol",
+    "ars_por_hora_persona": "Pesos argentinos corrientes de la fecha de la fuente por hora-persona",
+    "ars_por_caso": "Pesos argentinos corrientes de la fecha de la fuente por objeto tributario",
+    "ars": "Pesos argentinos corrientes de la fecha de la fuente; la base de cálculo (monto fijo, porcentaje del monto reclamado u otra) la fija la fuente",
+    "meses": "Meses calendario"
+  },
+  "unidad_de_caso": "objeto tributario (contrato-dominio-v1 §2), la misma unidad de las reglas de decisión v1",
+  "roles": {
+    "operador": "Rol de ALIGN-003: decide intensidad ≤ 2, propone ≥ 3 y ejecuta las gestiones",
+    "supervisor": "Rol de ALIGN-003: aprueba u objeta las propuestas de intensidad ≥ 3",
+    "personal_juridico": "Quien corresponda para verificar estado jurídico y posible prescripción (lista de control de ALIGN-003); no es un rol de pantallas de EQUITAS"
+  },
+  "parametros": [
+    {
+      "id": "H_MEJORAR_DATOS",
+      "descripcion": "Buscar, verificar o completar en registros internos el contacto u otros datos del objeto, sin contacto con el contribuyente, y registrar el resultado",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.25,
+      "rango": [0.1, 0.75],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Consulta de uno o dos registros internos y anotación del resultado. El mínimo es una consulta rápida en un sistema único; el máximo, una búsqueda en varias fuentes internas sin éxito. La tesis respalda que mejorar los datos de contacto puede aumentar el cobro [P0257], pero no informa tiempos"
+    },
+    {
+      "id": "H_REVISION_JURIDICA",
+      "descripcion": "Verificar el estado jurídico y la posible prescripción de un objeto, con registro del resultado",
+      "unidad": "horas_persona_por_caso",
+      "rol": "personal_juridico",
+      "estado": "SUPUESTO",
+      "base": 0.5,
+      "rango": [0.25, 2.0],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Media hora con los antecedentes del objeto a mano; el máximo cubre objetos con muchas obligaciones o antecedentes dispersos. La tesis respalda que la verificación es necesaria antes de accionar, porque perseguir deuda prescripta es un gasto sin retorno [P0124], [P0148]; no informa tiempos"
+    },
+    {
+      "id": "H_SEGUIMIENTO_SIN_GESTION",
+      "descripcion": "Seguimiento sin gestión de un objeto sin vencidas al corte (regla R7): se reevalúa en el próximo corte",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.0,
+      "rango": [0.0, 0.05],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Sin tarea manual: el sistema reevalúa el objeto en el próximo corte. El máximo (3 minutos) contempla que alguien mire la cola a mano"
+    },
+    {
+      "id": "H_RECORDATORIO",
+      "descripcion": "Tomar el borrador del mensaje, adaptarlo, enviarlo fuera de EQUITAS por el canal disponible y registrar el envío (intensidad 1)",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.1,
+      "rango": [0.02, 0.25],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Unos 6 minutos por caso enviado de a uno. El mínimo (≈1 minuto) representa envíos agrupados de casos sin revisión obligatoria; el máximo, canales lentos o registro manual. La tesis respalda que la gestión extrajudicial tiene bajo costo unitario [P0081] y que existen canales automatizables de bajo costo [P0257]; no informa tiempos"
+    },
+    {
+      "id": "H_CONTACTO_PERSONAL_Y_PLAN",
+      "descripcion": "Preparar el caso, intentar el contacto personal (teléfono o presencial), ofrecer plan o asistencia y registrar el resultado (intensidad 2), se concrete o no el contacto",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.5,
+      "rango": [0.25, 1.5],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Media hora por caso incluidos los intentos fallidos; el máximo cubre varios intentos o atención presencial. Que cueste más que un recordatorio es un supuesto del equipo: la tesis solo informa que la visita personal fue más efectiva que la carta cuando el contacto se concretaba [P0257]"
+    },
+    {
+      "id": "H_FORMALIZAR_PLAN",
+      "descripcion": "Registrar la adhesión a un plan de pago cuando el contribuyente regulariza; se carga solo si ocurre la regularización",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.5,
+      "rango": [0.25, 1.0],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Media hora para cargar el plan y entregar la constancia. El régimen de planes lo fija la normativa local [P0086], [P0123], [P0134]; el tiempo es un supuesto"
+    },
+    {
+      "id": "H_REVISION_CASO",
+      "descripcion": "Revisión humana caso por caso cuando la sugerencia la exige (INDICIO_VULNERABILIDAD o SEVERIDAD_PARCIAL) o cuando la política simulada revisa el caso; se suma a la acción",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.25,
+      "rango": [0.1, 0.5],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Un cuarto de hora para leer la explicación y los datos y decidir. El mínimo es mayor que 0 a propósito: una revisión sin tiempo no es supervisión significativa [P0220]"
+    },
+    {
+      "id": "H_PROPUESTA_INTENSA",
+      "descripcion": "Preparar la propuesta de intensidad 3 o 4 y completar la lista de control de ALIGN-003 (situación del hogar consultada o 'no disponible', canal válido, alternativa asistida ofrecida)",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.5,
+      "rango": [0.25, 1.0],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Media hora para reunir los antecedentes y marcar la lista de control con casillas o códigos. La verificación del estado jurídico se cuenta aparte (H_REVISION_JURIDICA)"
+    },
+    {
+      "id": "H_APROBACION_SUPERVISOR",
+      "descripcion": "Leer la propuesta y la lista de control y aprobar u objetar con registro",
+      "unidad": "horas_persona_por_caso",
+      "rol": "supervisor",
+      "estado": "SUPUESTO",
+      "base": 0.25,
+      "rango": [0.1, 0.5],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Un cuarto de hora por propuesta. El mínimo es mayor que 0 por la misma razón que la revisión: quien aprueba necesita tiempo, información y autoridad para cambiar la decisión [P0220]"
+    },
+    {
+      "id": "H_EMISION_INTIMACION",
+      "descripcion": "Redactar o completar la intimación administrativa formal aprobada, emitirla por el medio que use el municipio y registrar la notificación",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 0.75,
+      "rango": [0.25, 2.0],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Tres cuartos de hora con modelo de intimación disponible; el máximo cubre redacción y notificación manuales. La forma y el medio de la intimación los fija la normativa local [P0082], [P0123]; el tiempo es un supuesto"
+    },
+    {
+      "id": "H_ARMADO_DERIVACION",
+      "descripcion": "Preparar la liquidación o boleta de deuda y el legajo para derivar el objeto a procuración; no incluye el trabajo de procuradores ni el proceso judicial",
+      "unidad": "horas_persona_por_caso",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 1.0,
+      "rango": [0.5, 3.0],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Una hora para emitir la liquidación que sirve de título [P0076] y armar el legajo para procuración [P0087]; el máximo cubre objetos con muchas obligaciones. Los costos del proceso judicial se listan aparte, sin cifras (via_judicial)"
+    },
+    {
+      "id": "N_OPERADORES",
+      "descripcion": "Personas con rol operador que dedican parte de su jornada a la gestión de la mora",
+      "unidad": "personas",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 2,
+      "rango": [1, 4],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Organismo con capacidad operativa limitada y estructura administrativa reducida [P0138], [P0178]. Valor ilustrativo, no la dotación de ningún municipio"
+    },
+    {
+      "id": "H_OPERADOR_MES",
+      "descripcion": "Horas que cada operador dedica por mes a la gestión de la mora",
+      "unidad": "horas_persona_por_mes_por_persona",
+      "rol": "operador",
+      "estado": "SUPUESTO",
+      "base": 60,
+      "rango": [20, 120],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Dedicación parcial (unas 14 horas por semana), porque la mora compite con otras tareas del área [P0178]. El rango va de una dedicación marginal (unas 5 horas por semana) a una mayoritaria (unas 28)"
+    },
+    {
+      "id": "H_SUPERVISOR_MES",
+      "descripcion": "Horas por mes del rol supervisor disponibles para revisar propuestas intensas, sumadas entre todas las personas del rol",
+      "unidad": "horas_persona_por_mes",
+      "rol": "supervisor",
+      "estado": "SUPUESTO",
+      "base": 8,
+      "rango": [2, 20],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Unas 2 horas por semana de una jefatura que además tiene otras funciones. Limita cuántas acciones intensas pueden aprobarse por mes"
+    },
+    {
+      "id": "H_JURIDICO_MES",
+      "descripcion": "Horas por mes de quien verifica estado jurídico y prescripción, disponibles para la gestión de la mora",
+      "unidad": "horas_persona_por_mes",
+      "rol": "personal_juridico",
+      "estado": "SUPUESTO",
+      "base": 8,
+      "rango": [2, 20],
+      "fuente": {"tipo": "SUPUESTO_DEL_EQUIPO", "referencia": "ALIGN-034, borrador sin consulta municipal", "fecha": "2026-10-29"},
+      "justificacion": "Unas 2 horas por semana de un área jurídica compartida con otras funciones. Limita juntas la cola de revisión jurídica (R3) y las verificaciones previas a acciones intensas"
+    },
+    {
+      "id": "ARS_VALOR_HORA_PERSONA",
+      "descripcion": "Costo de una hora-persona, por rol si difiere",
+      "unidad": "ars_por_hora_persona",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "CONSULTA: costo laboral o escala salarial del personal municipal, con fecha, informado por el municipio"
+    },
+    {
+      "id": "ARS_CANAL_RECORDATORIO",
+      "descripcion": "Costo directo del canal por recordatorio enviado (mensajería, correo postal u otro)",
+      "unidad": "ars_por_caso",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "CONSULTA: tarifa del canal que use el municipio, con fecha"
+    },
+    {
+      "id": "ARS_CANAL_CONTACTO_PERSONAL",
+      "descripcion": "Costo directo del contacto personal (llamadas o traslados), si lo hay",
+      "unidad": "ars_por_caso",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "CONSULTA: costo de telefonía o traslados del área, con fecha"
+    },
+    {
+      "id": "ARS_NOTIFICACION_INTIMACION",
+      "descripcion": "Costo directo del medio por el que se notifica la intimación administrativa",
+      "unidad": "ars_por_caso",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "ORDENANZA o CONSULTA: medio de notificación que fija o usa el municipio y su costo, con fecha [P0123]"
+    },
+    {
+      "id": "ARS_TASA_DE_JUSTICIA",
+      "descripcion": "Tasa de justicia de la ejecución fiscal [P0149]",
+      "unidad": "ars",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "NORMATIVA: norma provincial vigente que la fija, identificada por el área jurídica (la tesis nombra el componente, no la norma)"
+    },
+    {
+      "id": "ARS_APORTES_CAJA_Y_COLEGIO",
+      "descripcion": "Aportes a la caja previsional y al colegio profesional de los abogados intervinientes [P0149]",
+      "unidad": "ars",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "NORMATIVA: normas vigentes de esos aportes, identificadas por el área jurídica (la tesis nombra el componente, no la norma)"
+    },
+    {
+      "id": "ARS_HONORARIOS_LETRADOS_Y_PROCURADORES",
+      "descripcion": "Honorarios de los letrados y procuradores [P0149]; si la procuración es externa, suele pactarse como porcentaje de lo cobrado [P0092], [P0178]",
+      "unidad": "ars",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "NORMATIVA o CONSULTA: régimen arancelario vigente o contrato de procuración del municipio"
+    },
+    {
+      "id": "ARS_HONORARIOS_OTROS_PROFESIONALES",
+      "descripcion": "Según el caso, honorarios de martilleros, tasadores y demás profesionales que intervienen en el juicio [P0149]",
+      "unidad": "ars",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "NORMATIVA o CONSULTA: régimen vigente de cada profesional, identificado por el área jurídica"
+    },
+    {
+      "id": "ARS_MEDIDAS_CAUTELARES",
+      "descripcion": "Gastos de las medidas cautelares, según el caso [P0149]",
+      "unidad": "ars",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "NORMATIVA o CONSULTA: aranceles y gastos vigentes, identificados por el área jurídica o la procuración"
+    },
+    {
+      "id": "MESES_DURACION_PROCESO",
+      "descripcion": "Tiempos propios del proceso judicial, desde la derivación hasta su resolución [P0149]",
+      "unidad": "meses",
+      "rol": null,
+      "estado": "PENDIENTE_FUENTE",
+      "base": null,
+      "rango": null,
+      "fuente": null,
+      "fuente_requerida": "CONSULTA: duración informada por la procuración o el área jurídica del municipio, con fecha"
+    }
+  ],
+  "acciones": [
+    {
+      "id": "MEJORAR_DATOS",
+      "intensidad": 0,
+      "intervencion": "MEJORAR_DATOS",
+      "reglas": ["R1", "R2"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": false,
+      "componentes": [{"parametro": "H_MEJORAR_DATOS", "rol": "operador", "etapa": "EJECUCION"}],
+      "costos_directos": [],
+      "condicionales": []
+    },
+    {
+      "id": "REVISION_JURIDICA",
+      "intensidad": 0,
+      "intervencion": "REVISION_JURIDICA",
+      "reglas": ["R3"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": false,
+      "componentes": [{"parametro": "H_REVISION_JURIDICA", "rol": "personal_juridico", "etapa": "EJECUCION"}],
+      "costos_directos": [],
+      "condicionales": []
+    },
+    {
+      "id": "SEGUIMIENTO_SIN_GESTION",
+      "intensidad": 0,
+      "intervencion": "SEGUIMIENTO",
+      "reglas": ["R7"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": false,
+      "componentes": [{"parametro": "H_SEGUIMIENTO_SIN_GESTION", "rol": "operador", "etapa": "EJECUCION"}],
+      "costos_directos": [],
+      "condicionales": []
+    },
+    {
+      "id": "SEGUIMIENTO_RECORDATORIO",
+      "intensidad": 1,
+      "intervencion": "SEGUIMIENTO",
+      "reglas": ["R6"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": true,
+      "componentes": [{"parametro": "H_RECORDATORIO", "rol": "operador", "etapa": "EJECUCION"}],
+      "costos_directos": ["ARS_CANAL_RECORDATORIO"],
+      "condicionales": []
+    },
+    {
+      "id": "RECORDATORIO_INFORMATIVO",
+      "intensidad": 1,
+      "intervencion": "RECORDATORIO_INFORMATIVO",
+      "reglas": ["R5", "M1"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": true,
+      "componentes": [{"parametro": "H_RECORDATORIO", "rol": "operador", "etapa": "EJECUCION"}],
+      "costos_directos": ["ARS_CANAL_RECORDATORIO"],
+      "condicionales": []
+    },
+    {
+      "id": "CONTACTO_PERSONAL_Y_PLAN",
+      "intensidad": 2,
+      "intervencion": "CONTACTO_PERSONAL_Y_PLAN",
+      "reglas": ["R4"],
+      "intensa": false,
+      "sugerible_por_sistema": true,
+      "requiere_aprobacion_supervisor": false,
+      "requiere_canal": true,
+      "componentes": [{"parametro": "H_CONTACTO_PERSONAL_Y_PLAN", "rol": "operador", "etapa": "EJECUCION"}],
+      "costos_directos": ["ARS_CANAL_CONTACTO_PERSONAL"],
+      "condicionales": [{"evento": "REGULARIZACION", "parametro": "H_FORMALIZAR_PLAN", "rol": "operador"}]
+    },
+    {
+      "id": "INTIMACION_ADMINISTRATIVA",
+      "intensidad": 3,
+      "intervencion": null,
+      "reglas": [],
+      "intensa": true,
+      "sugerible_por_sistema": false,
+      "requiere_aprobacion_supervisor": true,
+      "requiere_canal": true,
+      "componentes": [
+        {"parametro": "H_PROPUESTA_INTENSA", "rol": "operador", "etapa": "PROPUESTA"},
+        {"parametro": "H_REVISION_JURIDICA", "rol": "personal_juridico", "etapa": "PROPUESTA"},
+        {"parametro": "H_APROBACION_SUPERVISOR", "rol": "supervisor", "etapa": "APROBACION"},
+        {"parametro": "H_EMISION_INTIMACION", "rol": "operador", "etapa": "EJECUCION"}
+      ],
+      "costos_directos": ["ARS_NOTIFICACION_INTIMACION"],
+      "condicionales": []
+    },
+    {
+      "id": "DERIVACION_PROCURACION",
+      "intensidad": 4,
+      "intervencion": null,
+      "reglas": [],
+      "intensa": true,
+      "sugerible_por_sistema": false,
+      "requiere_aprobacion_supervisor": true,
+      "requiere_canal": true,
+      "componentes": [
+        {"parametro": "H_PROPUESTA_INTENSA", "rol": "operador", "etapa": "PROPUESTA"},
+        {"parametro": "H_REVISION_JURIDICA", "rol": "personal_juridico", "etapa": "PROPUESTA"},
+        {"parametro": "H_APROBACION_SUPERVISOR", "rol": "supervisor", "etapa": "APROBACION"},
+        {"parametro": "H_ARMADO_DERIVACION", "rol": "operador", "etapa": "EJECUCION"}
+      ],
+      "costos_directos": [],
+      "condicionales": [],
+      "via_judicial": true
+    }
+  ],
+  "nota_acciones_intensas": "Las reglas v1 nunca sugieren 3 ni 4 (decision-rules.v1.json, escala_intensidad). INTIMACION_ADMINISTRATIVA y DERIVACION_PROCURACION son identificadores propios de este contrato para costear las propuestas humanas; ALIGN-018/021 pueden adoptarlos o mapearlos",
+  "revision_humana": {
+    "parametro": "H_REVISION_CASO",
+    "rol": "operador",
+    "motivos": ["INDICIO_VULNERABILIDAD", "SEVERIDAD_PARCIAL"],
+    "regla": "Se suma al costo de la acción sugerida cuando requiere_revision_humana es true, y a cada caso que una política simulada someta a revisión (por ejemplo, P2 de ALIGN-035)",
+    "combinaciones": "Con INDICIO_VULNERABILIDAD, M1 lleva R4 a RECORDATORIO_INFORMATIVO (intensidad 1); CONTACTO_PERSONAL_Y_PLAN con revisión obligatoria solo ocurre por SEVERIDAD_PARCIAL con el mínimo en banda ALTA (verificado con services/decision_rules_v1.py)"
+  },
+  "etapas": {
+    "PROPUESTA": "Se carga al proponer la acción intensa",
+    "APROBACION": "Se carga al decidir el supervisor, apruebe u objete",
+    "EJECUCION": "Se carga al ejecutar la acción; en las intensas, solo si el supervisor aprueba",
+    "regla_objecion": "Una propuesta intensa objetada consume las etapas PROPUESTA y APROBACION, no la de EJECUCION ni sus costos directos"
+  },
+  "capacidad": {
+    "periodo": "mes",
+    "fondos": [
+      {"rol": "operador", "formula": ["N_OPERADORES", "H_OPERADOR_MES"], "unidad": "horas_persona_por_mes"},
+      {"rol": "supervisor", "formula": ["H_SUPERVISOR_MES"], "unidad": "horas_persona_por_mes"},
+      {"rol": "personal_juridico", "formula": ["H_JURIDICO_MES"], "unidad": "horas_persona_por_mes"}
+    ],
+    "regla_formula": "La capacidad del fondo es el producto de los parámetros de su fórmula",
+    "reglas": [
+      "Cada componente consume horas del fondo de su rol en el mes en que ocurre su etapa",
+      "Una acción solo se ejecuta si todos los fondos que necesita tienen horas suficientes en el mes; si no, queda para el mes siguiente",
+      "Las horas no usadas en un mes no se acumulan (supuesto del equipo)",
+      "Igual capacidad: todas las políticas comparadas usan los mismos fondos y los mismos valores en cada corrida"
+    ],
+    "fundamento": "La tesis describe un antecedente que incorporó la capacidad de cada organización en horas de trabajo como restricción que debía respetarse en todo momento [P0265]; los valores son supuestos"
+  },
+  "via_judicial": {
+    "fuente": "[P0149]",
+    "regla": "La derivación a procuración (intensidad 4) carga horas municipales con H_ARMADO_DERIVACION. Los costos del proceso judicial se listan por componente y no tienen cifras: ninguna fuente verificable las da en esta versión",
+    "componentes": [
+      {"id": "TASA_DE_JUSTICIA", "parametro": "ARS_TASA_DE_JUSTICIA", "texto_tesis": "tasa de justicia"},
+      {"id": "APORTES_CAJA_Y_COLEGIO", "parametro": "ARS_APORTES_CAJA_Y_COLEGIO", "texto_tesis": "aportes a la caja previsional y al colegio profesional de los abogados intervinientes"},
+      {"id": "HONORARIOS_LETRADOS_Y_PROCURADORES", "parametro": "ARS_HONORARIOS_LETRADOS_Y_PROCURADORES", "texto_tesis": "honorarios de los letrados y procuradores"},
+      {"id": "HONORARIOS_OTROS_PROFESIONALES", "parametro": "ARS_HONORARIOS_OTROS_PROFESIONALES", "texto_tesis": "según el caso, honorarios de martilleros, tasadores y demás profesionales que intervienen en el juicio"},
+      {"id": "MEDIDAS_CAUTELARES", "parametro": "ARS_MEDIDAS_CAUTELARES", "texto_tesis": "gastos de las medidas cautelares"},
+      {"id": "TIEMPOS_DEL_PROCESO", "parametro": "MESES_DURACION_PROCESO", "texto_tesis": "tiempos propios del proceso"}
+    ],
+    "quien_los_soporta": "No se determina en v1. La tesis advierte que pueden volver deficitario el recupero para el organismo [P0149] y que, si el caso escala, se agregan a la deuda que se le reclama al contribuyente [P0181]. La distribución depende de la normativa procesal y del resultado del proceso",
+    "uso": "Mientras sus parámetros estén PENDIENTE_FUENTE, la simulación informa estos costos como 'no estimados', nunca como 0"
+  },
+  "normativa_citada_por_la_tesis": {
+    "ambito": "Córdoba es el ámbito de referencia de la tesis [P0134]; la normativa aplicable es la del municipio que use la herramienta, que debe ser paramétrica [P0136]. No se asume que la cartera sintética represente a un municipio concreto",
+    "normas": [
+      {"norma": "Ley provincial 9024 (Córdoba)", "segun_la_tesis": "Regula la ejecución fiscal por la vía del juicio ejecutivo; la liquidación de deuda expedida por funcionario autorizado es título suficiente", "cita": ["[P0076]", "[P0080]", "[P0134]"], "verificar": ["H_ARMADO_DERIVACION", "via_judicial"]},
+      {"norma": "Código Tributario Provincial, Ley 6006 (t. o. 2023)", "segun_la_tesis": "Rige la ejecución fiscal en conjunto con la Ley 9024", "cita": ["[P0080]", "[P0134]"], "verificar": ["via_judicial"]},
+      {"norma": "Código Procesal Civil y Comercial de Córdoba, Ley 8465", "segun_la_tesis": "Se aplica supletoriamente a la ejecución fiscal", "cita": ["[P0080]", "[P0134]"], "verificar": ["via_judicial"]},
+      {"norma": "Código Tributario de la ciudad de Córdoba, Ordenanza 10.363, y ordenanza tarifaria anual", "segun_la_tesis": "Definen los tributos, sus accesorios por mora y los regímenes de facilidades; las ordenanzas fiscal y tarifaria son la fuente de los parámetros locales (intereses, facilidades de pago, procedimiento de cobro, valores de cada ejercicio)", "cita": ["[P0123]", "[P0134]"], "verificar": ["H_FORMALIZAR_PLAN", "H_EMISION_INTIMACION", "ARS_NOTIFICACION_INTIMACION"]}
+    ],
+    "regla": "Esta versión no cita normas que la tesis no cite. Las normas que fijen tasa de justicia, aportes y honorarios se identifican en la validación (fuente_requerida de cada parámetro)"
+  },
+  "orden_de_costos": {
+    "regla": "Con valores base, el total de horas-persona por caso no decrece con la intensidad entre las acciones con contacto: RECORDATORIO_INFORMATIVO ≤ CONTACTO_PERSONAL_Y_PLAN ≤ INTIMACION_ADMINISTRATIVA ≤ DERIVACION_PROCURACION",
+    "acciones": ["RECORDATORIO_INFORMATIVO", "CONTACTO_PERSONAL_Y_PLAN", "INTIMACION_ADMINISTRATIVA", "DERIVACION_PROCURACION"],
+    "fundamento": "Que la gestión extrajudicial cueste menos que la judicial lo dice la tesis [P0080], [P0081]; el orden entre los niveles 1, 2 y 3 es un supuesto del equipo. Las horas de la derivación no incluyen el proceso judicial, que la tesis señala como la etapa más costosa [P0080]"
+  },
+  "uso_en_simulacion": {
+    "independencia": "Este contrato no depende del mundo sintético de ALIGN-048: costos y capacidad se aplican a cualquier población y modelo de pago que fije ALIGN-035. Una capacidad de gestiones que use el generador del historial sintético es un parámetro de ese generador y no sustituye a esta",
+    "carga": "Los costos de una acción se cargan al ejecutarla, con independencia del resultado; solo H_FORMALIZAR_PLAN depende de que ocurra una regularización. Cuánto cuenta una regularización como recupero lo declara ALIGN-035",
+    "unidad_de_costo": "Horas-persona por rol. Mientras los parámetros en pesos estén PENDIENTE_FUENTE, la simulación informa costos en horas-persona y eficiencia como recupero por hora-persona, y no informa recupero neto en pesos",
+    "alternativa_asistida": "La lista de control exige haber ofrecido una alternativa asistida antes de una acción intensa; su costo es el de la acción que la ofreció y no se duplica",
+    "revision_juridica_previa": "Si el objeto ya tuvo una revisión jurídica dentro del horizonte, ALIGN-035 declara si se reutiliza o se repite",
+    "sensibilidad": "Un parámetro por vez en {min, base, max} con los demás en su base; para Monte Carlo se sugiere triangular(min, base, max). Los parámetros PENDIENTE_FUENTE no se muestrean"
+  },
+  "ejemplo_calculado": {
+    "descripcion": "Totales calculados a mano con los valores base, y mínimos y máximos con todos los componentes en su extremo. La prueba quality/tests/test_action_costs_contract.py los recalcula",
+    "acciones": {
+      "MEJORAR_DATOS": {"base_por_rol": {"operador": 0.25}, "base_total": 0.25, "min_total": 0.1, "max_total": 0.75},
+      "REVISION_JURIDICA": {"base_por_rol": {"personal_juridico": 0.5}, "base_total": 0.5, "min_total": 0.25, "max_total": 2.0},
+      "SEGUIMIENTO_SIN_GESTION": {"base_por_rol": {"operador": 0.0}, "base_total": 0.0, "min_total": 0.0, "max_total": 0.05},
+      "SEGUIMIENTO_RECORDATORIO": {"base_por_rol": {"operador": 0.1}, "base_total": 0.1, "min_total": 0.02, "max_total": 0.25},
+      "RECORDATORIO_INFORMATIVO": {"base_por_rol": {"operador": 0.1}, "base_total": 0.1, "min_total": 0.02, "max_total": 0.25},
+      "CONTACTO_PERSONAL_Y_PLAN": {"base_por_rol": {"operador": 0.5}, "base_total": 0.5, "min_total": 0.25, "max_total": 1.5},
+      "INTIMACION_ADMINISTRATIVA": {"base_por_rol": {"operador": 1.25, "personal_juridico": 0.5, "supervisor": 0.25}, "base_total": 2.0, "min_total": 0.85, "max_total": 5.5},
+      "DERIVACION_PROCURACION": {"base_por_rol": {"operador": 1.5, "personal_juridico": 0.5, "supervisor": 0.25}, "base_total": 2.25, "min_total": 1.1, "max_total": 6.5}
+    },
+    "propuesta_intensa_objetada": {"base_por_rol": {"operador": 0.5, "personal_juridico": 0.5, "supervisor": 0.25}, "base_total": 1.25},
+    "capacidad_base": {"operador": 120, "supervisor": 8, "personal_juridico": 8},
+    "equivalencias_base": {
+      "recordatorios_por_mes_con_todo_el_fondo_operador": 1200,
+      "contactos_personales_por_mes_con_todo_el_fondo_operador": 240,
+      "aprobaciones_por_mes_con_todo_el_fondo_supervisor": 32,
+      "verificaciones_juridicas_por_mes_con_todo_el_fondo_juridico": 16
+    }
+  },
+  "fuentes": [
+    {"id": "TESIS", "tipo": "Texto de la tesis (respalda estructura y componentes, no valores)", "referencia": "TesisEquitas-UltimaVersion.docx, sha256 1e07177acd13b9a1aa51be004dcb752faafdb08fe68848e632606689d2994adb; bloques [P####]/[T##.R##] de la extracción descrita en SOURCES/TESIS-SINTESIS.md del plan", "fecha": "2026-10-22"},
+    {"id": "ALIGN-003", "tipo": "Decisión del usuario registrada en el plan", "referencia": "Escala de intensidad 0–4, intensa ≥ 3 con aprobación de supervisor, roles y lista de control (evidencia ALIGN-003 del plan 2026-10-28-v2)", "fecha": "2026-10-29"},
+    {"id": "REGLAS_V1", "tipo": "Contrato del repositorio", "referencia": "contracts/decision-rules.v1.json (ALIGN-008): intervenciones, reglas R1–R7, M1 y motivos de revisión", "fecha": "2026-10-29"}
+  ]
+}
