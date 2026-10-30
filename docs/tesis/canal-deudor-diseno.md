@@ -12,7 +12,7 @@
 | Base | `bc0fd54` (integración de la noche 2: reglas v1, contrato de dominio, cartera sintética) |
 | Decisiones que rigen | ALIGN-002 (chat web por reglas con derivación a operador, imprescindible; consulta de cuenta y WhatsApp, evolución), ALIGN-003 (escala 0–4, roles `operador` y `supervisor`), ALIGN-004 (ningún dato real) |
 | Consumidores | ALIGN-065 (chat web y solicitud), ALIGN-066 (cola, devolución y registro), ALIGN-071 (verificación integrada); ALIGN-067 y 068 solo como condiciones de entrada (§2) |
-| Datos personales | Ninguno. Los ejemplos de formato son sintéticos y usan dominios reservados (`example.com`) |
+| Datos personales | Ninguno. Los ejemplos son sintéticos: dominios reservados (`example.com`, `example.org`), teléfonos con ceros o con el código 555, que no es un código de área argentino, y vectores del alias de `gmail.com` con una parte local de dos letras, por debajo del mínimo de seis de ese proveedor |
 
 ## 1. Propósito y decisión que mejora
 
@@ -111,12 +111,12 @@ stateDiagram-v2
 | `INFO_ATENCION` | INFO | `CAN-INFO-ATENCION-v1` | «Hablar con una persona» → `CONTACTO_AVISO`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
 | `INFO_ESTADO_CUENTA` | INFO | `CAN-INFO-ESTADO-CUENTA-v1`, `CAN-INFO-ESTADO-CUENTA-OFICIAL-v1` | «Hablar con una persona» → `CONTACTO_AVISO`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
 | `INFO_DERECHOS` | INFO | `CAN-INFO-DERECHOS-v1`, `CAN-INFO-RECLAMOS-v1` | «Hablar con una persona» → `CONTACTO_AVISO`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
-| `INFO_PRIVACIDAD` | INFO | `CAN-PRIVACIDAD-RESUMEN-v1`, `CAN-PRIVACIDAD-DETALLE-v1`, `CAN-PRIVACIDAD-RETENCION-v1`, `CAN-PRIVACIDAD-DERECHOS-v1` | «Hablar con una persona» → `CONTACTO_AVISO`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
-| `CONTACTO_AVISO` | AVISO | `CAN-CONTACTO-INTRO-v1`, `CAN-CONTACTO-QUE-NO-v1`, `CAN-PRIVACIDAD-DETALLE-v1`, `CAN-PRIVACIDAD-RETENCION-v1` | «Continuar» → `CONTACTO_FORM`; «Volver al menú» → `MENU` |
+| `INFO_PRIVACIDAD` | INFO | `CAN-PRIVACIDAD-RESUMEN-v1`, `CAN-PRIVACIDAD-DETALLE-v1`, `CAN-PRIVACIDAD-RETENCION-v1`, `CAN-PRIVACIDAD-DERECHOS-v1`, `CAN-PRIVACIDAD-VINCULO-v1` | «Hablar con una persona» → `CONTACTO_AVISO`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
+| `CONTACTO_AVISO` | AVISO | `CAN-CONTACTO-INTRO-v1`, `CAN-CONTACTO-QUE-NO-v1`, `CAN-PRIVACIDAD-DETALLE-v1`, `CAN-PRIVACIDAD-RETENCION-v1`, `CAN-PRIVACIDAD-VINCULO-v1` | «Continuar» → `CONTACTO_FORM`; «Volver al menú» → `MENU` |
 | `CONTACTO_FORM` | FORMULARIO | `CAN-FORM-OBLIGATORIOS-v1` | «Enviar solicitud» → RECIBIDA: `CONTACTO_CONFIRMACION`, INVALIDA: `CONTACTO_FORM`, LIMITE: `CONTACTO_LIMITE`, ERROR: `CONTACTO_ERROR`; «Cancelar y volver al menú» → `MENU` |
-| `CONTACTO_CONFIRMACION` | RESULTADO | `CAN-CONFIRMACION-v1`, `CAN-CONFIRMACION-TIEMPO-v1`, `CAN-AVISO-FRAUDE-v1` | «Volver al menú» → `MENU`; «Terminar» → `FIN` |
-| `CONTACTO_LIMITE` | RESULTADO | `CAN-LIMITE-v1` | «Volver al menú» → `MENU`; «Terminar» → `FIN` |
-| `CONTACTO_ERROR` | RESULTADO | `CAN-ERROR-ENVIO-v1` | «Intentar de nuevo» → `CONTACTO_FORM`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
+| `CONTACTO_CONFIRMACION` | RESULTADO | `CAN-CONFIRMACION-v1`, `CAN-CONFIRMACION-TIEMPO-v1`, `CAN-AVISO-FRAUDE-v1`, `CAN-INFO-ATENCION-v1` | «Volver al menú» → `MENU`; «Terminar» → `FIN` |
+| `CONTACTO_LIMITE` | RESULTADO | `CAN-LIMITE-v1`, `CAN-INFO-ATENCION-v1` | «Volver al menú» → `MENU`; «Terminar» → `FIN` |
+| `CONTACTO_ERROR` | RESULTADO | `CAN-ERROR-ENVIO-v1`, `CAN-INFO-ATENCION-v1` | «Intentar de nuevo» → `CONTACTO_FORM`; «Volver al menú» → `MENU`; «Terminar» → `FIN` |
 | `FIN` | FIN | `CAN-FIN-v1` | «Empezar de nuevo» → `INICIO` |
 
 Propiedades verificadas por la prueba: todos los estados son alcanzables desde `INICIO`; desde cualquiera se llega a `FIN` y `FIN` permite empezar de nuevo (no hay callejones); todo menú y todo estado informativo ofrece «Hablar con una persona» en un paso; solo el formulario envía datos.
@@ -155,7 +155,7 @@ La columna «Validación previa» marca los textos que, además de la aprobació
 | `CAN-INFO-PAGOS-v1` | Mensaje · `INFO_PAGOS` | Los medios de pago oficiales están informados en {sitio_oficial} y en {direccion_oficial}. Este chat no recibe pagos ni genera boletas. | Municipal |
 | `CAN-AVISO-FRAUDE-v1` | Mensaje · `INFO_PAGOS`, `CONTACTO_CONFIRMACION` | Ni este chat ni la persona que responda tu consulta te van a pedir claves, datos de tarjetas ni pagos. Si alguien te los pide en nombre del municipio, no respondas y llamá al {telefono_oficial}. | — |
 | `CAN-INFO-PLANES-v1` | Mensaje · `INFO_PLANES` | {nombre_organismo} define si ofrece planes de pago y con qué condiciones. Este chat no puede otorgar planes ni calcular cuotas. Si querés que una persona te explique las opciones, elegí «Hablar con una persona». | Municipal |
-| `CAN-INFO-ATENCION-v1` | Mensaje · `INFO_ATENCION` | Podés hacer consultas en persona en {direccion_oficial}, en el horario {horario_atencion}. También podés llamar al {telefono_oficial} o escribir a {correo_oficial}. | — |
+| `CAN-INFO-ATENCION-v1` | Mensaje · `INFO_ATENCION`, `CONTACTO_CONFIRMACION`, `CONTACTO_LIMITE`, `CONTACTO_ERROR` | Podés hacer consultas en persona en {direccion_oficial}, en el horario {horario_atencion}. También podés llamar al {telefono_oficial} o escribir a {correo_oficial}. | — |
 | `CAN-INFO-ESTADO-CUENTA-v1` | Mensaje · `INFO_ESTADO_CUENTA` | Este chat no muestra el estado de ninguna cuenta y no confirma si una persona o un bien tiene pagos pendientes. Es así porque por este medio no podemos saber quién pregunta. | — |
 | `CAN-INFO-ESTADO-CUENTA-OFICIAL-v1` | Mensaje · `INFO_ESTADO_CUENTA` | Para conocer tu situación, acercate a {direccion_oficial} con tu documento, en el horario {horario_atencion}. También podés pedir que una persona te contacte. | Municipal |
 | `CAN-INFO-DERECHOS-v1` | Mensaje · `INFO_DERECHOS` | Tenés derecho a un trato respetuoso y a recibir información clara sobre tus obligaciones con el municipio. | Jurídica |
@@ -163,6 +163,7 @@ La columna «Validación previa» marca los textos que, además de la aprobació
 | `CAN-PRIVACIDAD-RESUMEN-v1` | Mensaje · `INFO_PRIVACIDAD` | Este chat no guarda lo que elegís en el menú. Solo guarda datos si pedís que una persona te contacte. | Jurídica |
 | `CAN-PRIVACIDAD-DETALLE-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | En ese caso, {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos. | Jurídica |
 | `CAN-PRIVACIDAD-RETENCION-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | Tu nombre, tu contacto y la referencia que escribas se borran a los {dias_retencion} días de la solicitud, aunque no se haya podido responder. | Jurídica |
+| `CAN-PRIVACIDAD-VINCULO-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | Si te identificás por un medio oficial, una persona del área puede vincular tu consulta con tu caso. Ese vínculo queda en un registro de auditoría, con sus propias reglas de acceso y conservación. | Jurídica |
 | `CAN-PRIVACIDAD-DERECHOS-v1` | Mensaje · `INFO_PRIVACIDAD` | Podés pedir ver, corregir o borrar tus datos antes de ese plazo en {direccion_oficial} o por {correo_oficial}. | Jurídica |
 | `CAN-CONTACTO-INTRO-v1` | Mensaje · `CONTACTO_AVISO` | Dejanos un medio de contacto y una persona del área va a revisar tu pedido. Te va a responder por el medio que elijas. | — |
 | `CAN-CONTACTO-QUE-NO-v1` | Mensaje · `CONTACTO_AVISO` | Por seguridad, la respuesta no va a incluir información de cuentas. Para eso hace falta que te identifiques por un medio oficial. | — |
@@ -229,7 +230,7 @@ Los usa la persona operadora para preparar la devolución manual (ALIGN-066). `{
 | `referencia` | Texto, `autocomplete=off` | No | Sí | `REFERENCIA`: 1–30 ASCII, letras sin tilde, dígitos, espacio, `-`, `/`, `.` | Orientar a la persona operadora **después** de una identificación oficial; **nunca** se consulta contra la base |
 | `consentimiento` | Casilla, **sin marcar** al inicio | Sí | No | Debe estar marcada | Constancia de la versión del aviso aceptada |
 
-Normalización común: Unicode NFC, recorte de espacios y espacios repetidos reducidos a uno; un carácter de control o de formato invalida el campo; todo se guarda y se muestra como **texto plano**. El contrato trae vectores válidos e inválidos por formato (`solicitud_contacto.formatos`), que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar en sus pruebas.
+Normalización común: Unicode NFC, recorte de espacios y espacios repetidos reducidos a uno; un carácter de control o de formato invalida el campo; todo se guarda y se muestra como **texto plano**. Esta forma normalizada es la que se guarda y ve la persona operadora. El contrato trae vectores válidos e inválidos por formato (`solicitud_contacto.formatos`), que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar en sus pruebas.
 
 **Campos prohibidos** (no existen en el formulario): documento, DNI, CUIT, domicilio, fecha de nacimiento, mensaje o comentario libre, adjuntos, situación del hogar, ingresos e importes. El campo trampa `sitio_web` está oculto a personas y lectores de pantalla.
 
@@ -251,15 +252,66 @@ Ningún motivo revela la situación económica o social de la persona (por ejemp
 
 Agrega: `id` (UUID aleatorio, seudónimo de la solicitud), `tenant` (resuelto desde la ruta, nunca del cuerpo), `origen=CHAT_WEB`, `estado=NUEVA`, `creada_at`, `version_flujo`, `consentimiento_texto_id`, `consentimiento_at`, `purga_programada_at = creada_at + dias_retencion` y `purgada_at`.
 
-No se guarda: IP en claro, agente de usuario, cookies o identificadores de sesión, navegación por el menú, huella del dispositivo, ubicación ni el cuerpo de la solicitud en registros del servidor.
+No se guarda: IP en claro, clave canónica del contacto en claro (§7.5), agente de usuario, cookies o identificadores de sesión, navegación por el menú, huella del dispositivo, ubicación ni el cuerpo de la solicitud en registros del servidor.
 
 ### 7.4 Consentimiento
 
-La casilla `CAN-CAMPO-CONSENTIMIENTO-v1` no viene marcada; sin ella el envío es `INVALIDA` con `CAN-ERROR-CONSENTIMIENTO-v1`, que ofrece el teléfono oficial como alternativa. Antes del formulario, `CONTACTO_AVISO` muestra qué pasa con la solicitud, que la respuesta no incluirá información de cuentas, quién ve los datos y cuándo se borran. El aviso completo (`INFO_PRIVACIDAD`) cubre responsable, finalidad, quién accede, conservación, no cesión ni envíos automáticos y cómo pedir ver, corregir o borrar los datos, según los principios de finalidad y minimización de la Ley 25.326 `[P0235]`; su redacción final requiere validación jurídica (ALIGN-042).
+La casilla `CAN-CAMPO-CONSENTIMIENTO-v1` no viene marcada; sin ella el envío es `INVALIDA` con `CAN-ERROR-CONSENTIMIENTO-v1`, que ofrece el teléfono oficial como alternativa. Antes del formulario, `CONTACTO_AVISO` muestra qué pasa con la solicitud, que la respuesta no incluirá información de cuentas, quién ve los datos, cuándo se borran y qué pasa si la consulta se vincula con un caso. El aviso completo (`INFO_PRIVACIDAD`) cubre responsable, finalidad, quién accede, conservación, no cesión ni envíos automáticos y cómo pedir ver, corregir o borrar los datos, según los principios de finalidad y minimización de la Ley 25.326 `[P0235]`; su redacción final requiere validación jurídica (ALIGN-042).
+
+### 7.5 Clave canónica del contacto
+
+La normalización común conserva espacios, guiones y paréntesis: es la presentación que ve la persona operadora, y no sirve para reconocer a un mismo destinatario. El límite por contacto y la deduplicación usan otra cosa: una **clave canónica por medio**, derivada del contacto ya validado (`solicitud_contacto.clave_canonica`). La clave nunca se muestra ni se guarda en claro: solo su HMAC, en contadores de 24 horas.
+
+**Teléfono** (forma `+<prefijo de país><dígitos>`, Argentina por el ámbito del plan):
+
+1. Quitar espacios, guiones y paréntesis; queda un + opcional y dígitos.
+2. Con +: los dígitos ya llevan el prefijo de país. Con 00 seguido de un dígito distinto de 0: se quita el 00 y los dígitos llevan el prefijo. Sin ninguno de los dos, si empiezan con 54 y tienen al menos 12 dígitos, también lo llevan. En otro caso se antepone 54.
+3. Si el prefijo no es 54, la clave es + y los dígitos.
+4. Con prefijo 54, sobre los dígitos nacionales: quitar un 0 inicial (prefijo troncal) si hay más de 10; después, quitar un 9 inicial (marca de celular) si hay más de 10; después, si hay exactamente 12, quitar el primer 15 que empiece en la posición 2, 3 o 4 contando desde 0 (el 15 sigue al código de área, de 2 a 4 dígitos).
+5. La clave es +54 y los dígitos nacionales resultantes.
+
+**Correo** (forma `<parte local>@<dominio>` en minúsculas):
+
+1. Pasar a minúsculas (el formato solo admite ASCII).
+2. Reemplazar el dominio por su equivalente, si tiene.
+3. Quitar de la parte local desde el primer + (etiqueta), salvo que el + esté al inicio.
+4. En los dominios sin puntos, quitar los puntos de la parte local.
+
+Vectores del contrato, que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar:
+
+| Medio | Clave | Formas equivalentes |
+|---|---|---|
+| Teléfono | `+540000000000` | `+54 000 000-0000`, `+54(000)0000000`, `+54-000-000-0000`, `+54 000 000 0000`, `(000) 0000-0000` |
+| Teléfono | `+545550000000` | `+54 555 000-0000`, `+54 9 555 000 0000`, `+54 0 555 000 0000`, `+54 555 15 000 0000`, `54 555 000 0000`, `0054 555 000 0000`, `555 000 0000`, `0555 000 0000`, `0555 15 000 0000`, `555 15 000 0000` |
+| Teléfono | `+34555000000` | `+34 555 000 000`, `0034 555 000 000` |
+| Correo | `persona@example.com` | `persona@example.com`, `PERSONA@EXAMPLE.COM`, `Persona+chat@Example.com`, `persona+otra@example.com` |
+| Correo | `ab@gmail.com` | `a.b@gmail.com`, `ab@googlemail.com`, `A.B+chat@GMAIL.COM` |
+
+Pares que **no** deben unirse:
+
+| Medio | Contacto | Contacto |
+|---|---|---|
+| Teléfono | `+54 555 000 0000` | `+54 555 000 0001` |
+| Teléfono | `+54 555 000 0000` | `+54 555 150 0000` |
+| Teléfono | `+54 555 000 0000` | `+34 555 000 0000` |
+| Teléfono | `+54 555 000 0000` | `5550 0000` |
+| Correo | `persona@example.com` | `persona@example.org` |
+| Correo | `persona@example.com` | `per.sona@example.com` |
+| Correo | `+a@example.com` | `+b@example.com` |
+
+Escenarios exigidos a ALIGN-065 y ALIGN-071 (`escenarios_equivalencia`):
+
+| Escenario | Qué prueba | Resultados | Solicitudes creadas |
+|---|---|---|---|
+| `ESC-TEL-MISMO-MOTIVO` | Cuatro formas del mismo teléfono con el mismo motivo se deduplican. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 1 |
+| `ESC-TEL-MOTIVOS-DISTINTOS` | Cuatro formas del mismo teléfono con motivos distintos comparten el límite de 3. | RECIBIDA, RECIBIDA, RECIBIDA, LIMITE | 3 |
+| `ESC-CORREO-MOTIVOS-DISTINTOS` | Cuatro formas del mismo correo con motivos distintos comparten el límite de 3. | RECIBIDA, RECIBIDA, RECIBIDA, LIMITE | 3 |
+
+**Limitaciones.** No se unifican un teléfono sin código de área con el mismo número con código, números extranjeros escritos sin `+` ni `00`, alias de otros proveedores de correo ni dominios que aceptan cualquier dirección. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre `ABUSO`.
 
 ## 8. No revelación: respuesta idéntica
 
-El servidor evalúa el envío en este orden (`orden_de_evaluacion`): tamaño (más de 4096 bytes → `ERROR`), campo trampa (con valor → `RECIBIDA` sin guardar), límites (→ `LIMITE`), formato (→ `INVALIDA` con `{campo, codigo}`), duplicado de 24 h (→ `RECIBIDA` sin crear otra) y guardado (→ `RECIBIDA` o `ERROR`).
+El servidor evalúa el envío en este orden (`orden_de_evaluacion`): tamaño (más de 4096 bytes → `ERROR`), campo trampa (con valor → `RECIBIDA` sin guardar), límites por IP y por municipio (→ `LIMITE`), formato (→ `INVALIDA` con `{campo, codigo}`), duplicado por clave canónica y motivo en 24 h (→ `RECIBIDA` sin crear otra ni contar para el límite por contacto), límite por contacto sobre la clave canónica (→ `LIMITE`) y guardado (→ `RECIBIDA` o `ERROR`). El límite por contacto va después del formato porque solo un contacto válido tiene clave canónica.
 
 | Resultado | Cuerpo | Cuándo | Estado del chat |
 |---|---|---|---|
@@ -268,7 +320,7 @@ El servidor evalúa el envío en este orden (`orden_de_evaluacion`): tamaño (m�
 | `LIMITE` | `{"resultado": "LIMITE"}` | Algún límite superado | `CONTACTO_LIMITE` |
 | `ERROR` | `{"resultado": "ERROR"}` | Cuerpo demasiado grande o falla del servidor | `CONTACTO_ERROR` |
 
-Garantías (`garantias_no_revelacion`): no consulta tablas de la cartera; no valida la referencia contra la base; no devuelve los datos enviados ni un número de solicitud; misma respuesta para cualquier referencia; mismo cuerpo para una solicitud válida, duplicada o con campo trampa; los errores dependen solo del formato; el aviso de límite no dice qué límite se superó (si dijera «este contacto ya pidió», revelaría que alguien usó ese contacto). Como no hay lectura de la cartera, el tiempo de respuesta tampoco depende de la referencia.
+Garantías (`garantias_no_revelacion`): no consulta tablas de la cartera; no valida la referencia contra la base; no devuelve los datos enviados ni un número de solicitud; misma respuesta para cualquier referencia; mismo cuerpo para una solicitud válida, duplicada o con campo trampa; los errores dependen solo del formato; el aviso de límite no dice qué límite se superó (si dijera «este contacto ya pidió», revelaría que alguien usó ese contacto). Queda una inferencia residual: quien reciba `LIMITE` en su primer envío desde una conexión nueva puede suponer que ese contacto ya se usó; no dice nada sobre deudas ni cuentas. Como no hay lectura de la cartera, el tiempo de respuesta tampoco depende de la referencia.
 
 ## 9. Derivación a una persona (ALIGN-066)
 
@@ -323,7 +375,7 @@ La regla central es `RO-02`: la persona que responde **tampoco** da información
 ## 10. Registro de interacciones
 
 - **Qué se registra** (append-only, ALIGN-066): eventos `ASIGNACION`, `LIBERACION`, `PREPARACION` (con el id de la plantilla), `INTENTO` (medio y resultado `CONTESTO`, `NO_CONTESTO`, `CONTACTO_INVALIDO` o `CONTACTO_NO_CORRESPONDE`), `RESPUESTA_REALIZADA`, `CIERRE` (motivo), `VINCULACION_CASO` y `PURGA`, cada uno con `solicitud_id`, `tenant`, actor, fecha y medio.
-- **Qué no se registra:** nombre, contacto, referencia ni el contenido de la respuesta. La referencia a la persona es seudónima (`solicitud_id`) y, tras la purga, ya no permite llegar a ella.
+- **Qué no se registra:** nombre, contacto, referencia ni el contenido de la respuesta. El registro es **seudónimo, no anónimo**: usa `solicitud_id`, y si la solicitud se vinculó con un caso ese id sigue permitiendo llegar a la persona a quien acceda al vínculo y al caso (§11).
 - **Indicadores:** solo `RESPUESTA_REALIZADA` cuenta como respuesta; guardar o preparar una plantilla no inicia ni cierra ningún indicador. Se rotulan «Eventos declarados por la persona operadora; no prueban que el mensaje haya sido entregado ni leído» (`[P0195]`).
 - **Navegación del chat:** no se registra por persona ni por sesión (D13).
 - **Registros del servidor:** sin cuerpos de solicitudes ni IP; errores con códigos.
@@ -334,27 +386,27 @@ La regla central es `RO-02`: la persona que responde **tampoco** da información
 |---|---|---|
 | `nombre`, `contacto`, `referencia` de la solicitud | **90 días** desde `creada_at` por defecto (configurable entre 30 y 90; nunca más sin una versión nueva), en cualquier estado | Tarea programada al menos diaria: pasan a nulo y se registra `purgada_at` y el evento `PURGA` |
 | Mismos campos con cierre `SUPRESION_SOLICITADA` o `CONTACTO_NO_CORRESPONDE` | Hasta el cierre | Purga inmediata al cerrar |
-| Datos no personales de la solicitud (id, tenant, motivo, medio elegido, estados, fechas, versiones) | Indefinida, para indicadores agregados | — |
-| Registro de interacciones | Indefinida; no contiene datos personales | — |
+| Resto de la solicitud (id, tenant, motivo, medio elegido, estados, fechas, versiones) | Indefinida, para indicadores agregados | — |
+| Registro de interacciones | Indefinida; sin nombre, contacto ni referencia; seudónimo (§10) | — |
 | Contadores antiabuso (HMAC de IP y de contacto) | 24 horas | Vencimiento por ventana |
-| Vínculo solicitud ↔ caso (si una persona lo hizo tras identificar) | Política de auditoría de ALIGN-069 | La purga del canal se aplica igual |
+| Vínculo `solicitud_id` ↔ caso (si una persona lo hizo tras identificar) | Dato seudónimo en la auditoría de ALIGN-069, con el acceso y la retención que declara ese ticket | La purga suprime los campos directos de la solicitud, pero no borra ese vínculo |
 
-Verificación exigida a ALIGN-065: con reloj simulado, a `creada_at + 90 días + 1 s` no queda ningún campo personal. Limitación: las copias de seguridad, si existieran, conservarían datos más tiempo; en la base local sintética de este plan no hay copias, y para un municipio real lo resuelve ALIGN-050.
+**Alcance de la purga:** elimina los campos directos (`nombre`, `contacto`, `referencia`); no convierte en anónimo lo que queda vinculado. Verificación exigida a ALIGN-065: con reloj simulado, a `creada_at + 90 días + 1 s` no queda ninguno de esos campos. Limitación: las copias de seguridad, si existieran, conservarían datos más tiempo; en la base local sintética de este plan no hay copias, y para un municipio real lo resuelve ALIGN-050.
 
 ## 12. Abuso y límites
 
 | Control | Valor por defecto | Qué previene |
 |---|---|---|
 | Por IP (HMAC-SHA-256 con secreto de servidor) | 5 por hora y 20 por día | Bots e inundación de la cola |
-| Por contacto (HMAC del contacto normalizado) | 3 por día | Acoso a un tercero cuyo teléfono o correo alguien escribe repetidamente |
+| Por contacto (HMAC de la clave canónica, §7.5) | 3 solicitudes creadas por día | Acoso a un tercero cuyo teléfono o correo alguien escribe repetidamente, de una o de varias formas |
 | Por municipio | 200 por día | Saturar a los operadores |
-| Duplicado (mismo contacto y motivo) | 24 horas | Solicitudes repetidas en la cola |
+| Duplicado (misma clave canónica y motivo) | 24 horas | Solicitudes repetidas en la cola |
 | Campo trampa | Respuesta `RECIBIDA` sin guardar | Bots simples sin darles señal |
 | Tamaño y longitudes | Cuerpo ≤ 4096 bytes; campos según §7.1 | Abuso de almacenamiento e inyección |
 | Texto plano | Sin HTML, sin caracteres de control | Inyección en la cola del operador |
 | Captcha de terceros | **No** | Enviar datos a un tercero y excluir a personas con discapacidad |
 
-Los envíos inválidos también cuentan para los límites (evita sondear formatos). El secreto del HMAC vive en el servidor por entorno, nunca en el navegador ni en el repositorio.
+Los envíos inválidos también cuentan para los límites por IP y por municipio (evita sondear formatos). El secreto del HMAC vive en el servidor por entorno, nunca en el navegador ni en el repositorio.
 
 ## 13. Accesibilidad y lenguaje claro
 
@@ -376,20 +428,20 @@ Los envíos inválidos también cuentan para los límites (evita sondear formato
 | `SIN_CAPTCHA` | Sin desafíos visuales ni auditivos; el antiabuso es invisible para la persona. |
 | `ALTERNATIVA_HUMANA` | Teléfono y atención presencial visibles en los avisos de límite, error y confirmación. |
 
-**Lenguaje claro** (comprobado por la prueba sobre cada texto): oraciones de hasta 25 palabras; largos máximos por tipo (opción y motivo ≤ 40 caracteres, mensaje ≤ 300); sin términos culpabilizantes, amenazantes o técnicos (moroso, deudor, incumplimiento, embargo, juicio, intimación, sanción, multa, último aviso, urgente, prescripción, puntaje, riesgo, probabilidad, vulnerabilidad, prioridad, saldo, importe, monto, «tu deuda»); sin promesas (garantizar, asegurar, descuentos, condonaciones, quitas, bonificaciones, «sin interés», plazos como «en 48 horas»); sin mayúsculas sostenidas salvo DNI y CUIT; sin URL ni teléfonos literales (solo los marcadores del municipio). Tratamiento: **voseo** (pregunta 1 de §17). La comprensión real con personas no técnicas no se evaluó (`[P0246]`): queda para la prueba formativa (ALIGN-038).
+**Lenguaje claro** (control automático **parcial** sobre cada texto): oraciones de hasta 25 palabras; largos máximos por tipo (opción y motivo ≤ 40 caracteres, mensaje ≤ 300); sin términos culpabilizantes, amenazantes o técnicos (moroso, deudor, incumplimiento, embargo, juicio, intimación, sanción, multa, último aviso, urgente, prescripción, puntaje, riesgo, probabilidad, vulnerabilidad, prioridad, saldo, importe, monto, «tu deuda»); sin promesas (garantizar, asegurar, descuentos, condonaciones, quitas, bonificaciones, «sin interés», plazos como «en 48 horas»); sin mayúsculas sostenidas salvo DNI y CUIT; sin afirmaciones sobre la situación de una persona o de un bien («tenés pagos», «no tenés pagos», «tenés que pagar», «estás al día», «encontramos»); sin importes literales (símbolo o nombre de moneda, números con decimales) y sin dígitos fuera de los mensajes de error; sin URL ni teléfonos literales (solo los marcadores del municipio). Estas listas detectan errores conocidos, pero **no demuestran la no revelación**: cada versión aprobada exige la **revisión semántica humana** de todos sus textos. Tratamiento: **voseo** (pregunta 1 de §17). La comprensión real con personas no técnicas no se evaluó (`[P0246]`): queda para la prueba formativa (ALIGN-038).
 
 ## 14. Análisis de riesgo
 
 | ID | Riesgo | Escenario | Controles del diseño | Verificación | Residual |
 |---|---|---|---|---|---|
-| RC-01 | Exposición de deuda a terceros | Alguien pregunta por la cuenta de otra persona | El canal no lee la cartera (`NO_CONSULTA_CARTERA`); textos sin marcadores de cuenta | 065: ningún endpoint devuelve información de cuenta; prueba de este contrato sobre marcadores | Bajo |
+| RC-01 | Exposición de deuda a terceros | Alguien pregunta por la cuenta de otra persona | El canal no lee la cartera (`NO_CONSULTA_CARTERA`); textos sin marcadores de cuenta ni afirmaciones sobre deudas | 065: ningún endpoint devuelve información de cuenta; prueba de este contrato (control parcial); revisión semántica humana de cada versión | Bajo |
 | RC-02 | Oráculo de existencia | Probar referencias y comparar respuestas, errores o tiempos | Referencia no verificada; respuesta idéntica; errores solo de formato; sin lectura de la base | 065: misma respuesta para referencias existentes e inexistentes | Bajo |
 | RC-03 | Exposición en la devolución | El contacto escrito pertenece a otra persona y el operador le habla de una deuda | `RO-02`, `RO-03`, guion `OPE-GUION-LLAMADA-v1`, plantillas sin datos de cuenta, cierre `CONTACTO_NO_CORRESPONDE` con purga | 066: E2E con destinatario sintético; capacitación del operador | Medio: depende de que la persona cumpla las reglas |
 | RC-04 | Suplantación o fraude | Terceros imitan al municipio y piden pagos o claves | `CAN-AVISO-FRAUDE-v1`, `OPE-GUION-FRAUDE-v1`; sin enlaces de pago; el chat no pide claves | Prueba de lenguaje; revisión de textos | Medio (externo) |
-| RC-05 | Acoso a un tercero | Alguien carga el teléfono de otra persona muchas veces | Límite por contacto, duplicados, primera pregunta del guion, cierre con purga, motivo `ABUSO` | 065: límite efectivo | Bajo |
+| RC-05 | Acoso a un tercero | Alguien carga el teléfono de otra persona muchas veces, también escrito de formas distintas | Clave canónica por medio (§7.5) para el límite por contacto y los duplicados, primera pregunta del guion, cierre con purga, motivo `ABUSO` | 065 y 071: escenarios `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` | Bajo; las formas no unificables de §7.5 dependen de los otros límites |
 | RC-06 | Inundación o denegación | Bots llenan la cola | Límites por IP y municipio, campo trampa, tamaño máximo | 065 y 071: abuso | Bajo |
 | RC-07 | Recolección excesiva o sensible | La persona escribe DNI, salud o su situación económica | Sin texto libre; patrones cerrados; avisos «no escribas tu DNI»; motivos sin situación social | Prueba de este contrato (campos mínimos y prohibidos) | Bajo: la referencia podría contener un número sensible; se purga a los 90 días |
-| RC-08 | Retención excesiva | Contactos guardados indefinidamente | Purga a 90 días en cualquier estado, purga inmediata en supresión, contadores de 24 h, registro sin datos personales | 065: reloj simulado; 071: purga verificada | Bajo (copias de seguridad: ALIGN-050) |
+| RC-08 | Retención excesiva | Contactos guardados indefinidamente | Purga de los campos directos a 90 días en cualquier estado, purga inmediata en supresión, contadores de 24 h, registro sin campos directos | 065: reloj simulado; 071: purga verificada | Bajo (copias de seguridad: ALIGN-050). El registro y el vínculo con un caso siguen siendo seudónimos |
 | RC-09 | Acceso indebido | `anon` lee la cola u operadores de otro municipio la ven | Función de servidor sin `INSERT`/`SELECT` directos; RLS por municipio y rol; supervisor sin contacto en claro | 065: Data API; 066: permisos | Bajo |
 | RC-10 | Inyección en la cola | Un campo con HTML o caracteres de control se ejecuta al mostrarlo | Texto plano, normalización, patrones, longitudes | 065 y 066: escape al mostrar | Bajo |
 | RC-11 | Promesas o información incorrecta | El chat promete un plan o informa un horario desactualizado | Catálogo aprobado; promesas prohibidas; configuración del municipio obligatoria y validada; marcas de validación municipal | Prueba de lenguaje; aprobación | Medio: los datos del municipio pueden quedar viejos |
@@ -399,7 +451,7 @@ Los envíos inválidos también cuentan para los límites (evita sondear formato
 | RC-15 | Uso del canal para cobranza | El canal se usa para intimar o para marcar «contactables» que suben prioridad | `NO_EJECUTA_INTERVENCIONES`, `NO_ALIMENTA_REGLAS_NI_MODELOS`, `RO-05`; sin acceso de reglas ni analítica | Prueba de este contrato; 066: permisos | Bajo |
 | RC-16 | Indicadores engañosos | Se presentan eventos declarados como entregas | Rótulo obligatorio; solo `RESPUESTA_REALIZADA` cuenta | 066: guardar una plantilla no inicia el indicador | Bajo |
 | RC-17 | Tercero que procesa datos | Captcha, analítica o mensajería externa | `NO_USA_TERCEROS`; WhatsApp solo en fase 3 con análisis de transferencia | Revisión de 065 | Bajo |
-| RC-18 | Vinculación errónea con un caso | Se asocia la solicitud a otra persona | Solo manual, tras identificación oficial, auditada (`RO-06`) | 066 y 069 | Medio (humano) |
+| RC-18 | Vinculación errónea con un caso o reidentificación | Se asocia la solicitud a otra persona, o alguien con acceso al vínculo y al caso reidentifica a quien consultó después de la purga | Solo manual, tras identificación oficial, auditada (`RO-06`); `CAN-PRIVACIDAD-VINCULO-v1` lo informa; vínculo seudónimo con el acceso y la retención de ALIGN-069 | 066 y 069 | Medio (humano) |
 | RC-19 | Datos personales en registros técnicos | El servidor guarda cuerpos o IP | `no_se_guarda`; IP solo como HMAC; errores con códigos | 065 y 071: revisión de registros | Bajo |
 | RC-20 | Configuración del municipio falsa o incompleta | Un teléfono oficial equivocado deriva llamadas a un tercero | Configuración obligatoria con formato; sin ella la ruta no se publica | 065 | Medio: requiere control humano de los valores |
 
@@ -407,9 +459,9 @@ Los envíos inválidos también cuentan para los límites (evita sondear formato
 
 | Ticket | Debe |
 |---|---|
-| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; función de servidor de envío con el orden y las respuestas de §8; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
-| ALIGN-066 | Cola con los estados, transiciones y motivos de cierre de §9.1; purga inmediata para `SUPRESION_SOLICITADA` y `CONTACTO_NO_CORRESPONDE` (reutilizando la función de purga de 065); plantillas `OPE-*` del catálogo; eventos de §10 sin datos personales; solo `RESPUESTA_REALIZADA` cuenta como respuesta; acceso de §9.3; vinculación manual auditada con ALIGN-069 |
-| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12), permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
+| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; clave canónica de §7.5 con sus vectores `equivalencias` y `distintos`, separada del contacto que ve el operador; función de servidor de envío con el orden y las respuestas de §8; pruebas ejecutables de los escenarios `ESC-TEL-MISMO-MOTIVO`, `ESC-TEL-MOTIVOS-DISTINTOS` y `ESC-CORREO-MOTIVOS-DISTINTOS`; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
+| ALIGN-066 | Cola con los estados, transiciones y motivos de cierre de §9.1; purga inmediata para `SUPRESION_SOLICITADA` y `CONTACTO_NO_CORRESPONDE` (reutilizando la función de purga de 065); plantillas `OPE-*` del catálogo; mostrar el contacto normalizado, nunca la clave canónica; eventos de §10 sin nombre, contacto ni referencia; solo `RESPUESTA_REALIZADA` cuenta como respuesta; acceso de §9.3; vinculación manual auditada con ALIGN-069 |
+| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12) incluidos los escenarios `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` contra el endpoint, permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
 
 ## 16. Decisiones de interpretación (lectura más acotada)
 
@@ -431,6 +483,9 @@ Los envíos inválidos también cuentan para los límites (evita sondear formato
 | D14 | Antiabuso sin terceros | Sin captcha externo; límites con HMAC |
 | D15 | Duplicados | Mismo contacto y motivo en 24 h no crea otra solicitud y responde igual |
 | D16 | Patrones del esquema | Sintaxis ECMA-262 portable (sin `.`, `\d`, `\w`, `\b`); la prueba traduce el `$` final a `\Z` porque en Python `$` también acepta un salto de línea final |
+| D17 | «Mismo contacto» | Misma clave canónica por medio (§7.5), no el texto escrito. El límite cuenta solicitudes creadas: los duplicados responden igual y no consumen el límite |
+| D18 | Alcance de la purga | Elimina los campos directos; el registro y el vínculo con un caso se describen como seudónimos, no como anónimos |
+| D19 | Controles de lenguaje | Son una comprobación parcial; no reemplazan la revisión semántica humana de cada versión aprobada |
 
 ## 17. Aprobación
 
@@ -443,7 +498,7 @@ Este documento y el catálogo se aprueban juntos, por versión y hash del archiv
 5. ¿Confirmación sin número de solicitud?
 6. ¿Límites antiabuso (5/h y 20/día por IP, 3/día por contacto, 200/día por municipio)?
 7. ¿Supervisor sin acceso a contactos en claro?
-8. ¿Aprueban el catálogo completo (§6) para la demo sintética, sabiendo que los textos marcados requieren validación jurídica o municipal antes de un uso real?
+8. ¿Aprueban el catálogo completo (§6), tras su revisión semántica, para la demo sintética, sabiendo que los textos marcados requieren validación jurídica o municipal antes de un uso real?
 
 Al aprobar, un commit nuevo cambia `estado` a `APROBADO` y completa `aprobacion` (quiénes, fecha, referencia y sha256 del archivo aprobado) sin tocar textos, estados ni parámetros, y retira este aviso de borrador; la prueba exige que ambas cosas vayan juntas. Cualquier corrección de texto pedida en la aprobación se hace antes, en esta misma versión `1.0.0`, porque todavía no tiene consumidores.
 
@@ -452,3 +507,4 @@ Al aprobar, un commit nuevo cambia `estado` a `APROBADO` y completa `aprobacion`
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0.0 (borrador) | 30/10/2026 | Versión inicial para aprobación (ALIGN-047). Sin consumidores |
+| 1.0.0 (borrador, corrección 1) | 30/10/2026 | Sin consumidores, se corrige la misma versión tras la revisión independiente: clave canónica del contacto con vectores y escenarios (B1), afirmaciones e importes literales en el control de lenguaje, descrito como parcial (M1), igualdad JSON en el validador de la prueba (M2), alcance de la purga y texto `CAN-PRIVACIDAD-VINCULO-v1` (M3) y atención presencial en los resultados (M4) |

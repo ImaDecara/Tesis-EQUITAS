@@ -48,6 +48,17 @@ def ecma_pattern(pattern: str) -> re.Pattern:
     return re.compile(pattern[:-1] + r'\Z')
 
 
+def json_equal(left, right) -> bool:
+    """Igualdad de valores JSON: a diferencia de Python, false no es 0 y true no es 1."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return left is right
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(map(json_equal, left, right))
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(json_equal(left[key], right[key]) for key in left)
+    return left == right
+
+
 def schema_errors(value, schema: dict, root: dict, path: str = '$') -> list[str]:
     """Validador del subconjunto de JSON Schema 2020-12 que usa el esquema (KEYWORDS)."""
     if '$ref' in schema:
@@ -62,9 +73,9 @@ def schema_errors(value, schema: dict, root: dict, path: str = '$') -> list[str]
                  else isinstance(value, TYPES[name]) for name in allowed)
         if not ok:
             return [f'{path}: tipo {type(value).__name__} no es {allowed}']
-    if 'const' in schema and value != schema['const']:
+    if 'const' in schema and not json_equal(value, schema['const']):
         errors.append(f'{path}: {value!r} distinto de {schema["const"]!r}')
-    if 'enum' in schema and value not in schema['enum']:
+    if 'enum' in schema and not any(json_equal(value, item) for item in schema['enum']):
         errors.append(f'{path}: {value!r} fuera de {schema["enum"]}')
     if isinstance(value, str):
         if len(value) < schema.get('minLength', 0) or len(value) > schema.get('maxLength', len(value)):
@@ -77,7 +88,8 @@ def schema_errors(value, schema: dict, root: dict, path: str = '$') -> list[str]
     if isinstance(value, list):
         if len(value) < schema.get('minItems', 0) or len(value) > schema.get('maxItems', len(value)):
             errors.append(f'{path}: {len(value)} elementos fuera de rango')
-        if schema.get('uniqueItems') and len({json.dumps(item, sort_keys=True) for item in value}) != len(value):
+        if schema.get('uniqueItems') and any(json_equal(item, other) for i, item in enumerate(value)
+                                             for other in value[i + 1:]):
             errors.append(f'{path}: elementos repetidos')
         for index, item in enumerate(value):
             errors += schema_errors(item, schema.get('items', {}), root, f'{path}[{index}]')
@@ -89,6 +101,8 @@ def schema_errors(value, schema: dict, root: dict, path: str = '$') -> list[str]
                 errors += schema_errors(item, properties[name], root, f'{path}.{name}')
             elif schema.get('additionalProperties', True) is False:
                 errors.append(f'{path}: propiedad no permitida {name}')
+            elif isinstance(schema.get('additionalProperties'), dict):
+                errors += schema_errors(item, schema['additionalProperties'], root, f'{path}.{name}')
     return errors
 
 
@@ -154,6 +168,88 @@ def valid_referencia(value: str) -> bool:
             and all(ch.isalnum() or ch in ' -/.' for ch in value) and any(ch.isalnum() for ch in value))
 
 
+def canonical_phone(value: str, rule: dict) -> str:
+    """Clave canónica de un teléfono válido (solicitud_contacto.clave_canonica.TELEFONO)."""
+    compact = re.sub(r'[ ()-]', '', normalize(value))
+    digits = compact.removeprefix('+')
+    prefix, national_length = rule['prefijo_pais'], rule['digitos_nacionales']
+    if compact.startswith('+'):
+        international = digits
+    elif digits.startswith('00') and digits[2:3] != '0':
+        international = digits[2:]
+    elif digits.startswith(prefix) and len(digits) >= len(prefix) + national_length:
+        international = digits
+    else:
+        international = prefix + digits
+    if not international.startswith(prefix):
+        return f'+{international}'
+    national = international[len(prefix):]
+    for mark in ('0', '9'):
+        if len(national) > national_length and national.startswith(mark):
+            national = national[1:]
+    if len(national) == national_length + 2:
+        for position in rule['posiciones_15']:
+            if national[position:position + 2] == '15':
+                national = national[:position] + national[position + 2:]
+                break
+    return f'+{prefix}{national}'
+
+
+def canonical_email(value: str, rule: dict) -> str:
+    """Clave canónica de un correo válido (solicitud_contacto.clave_canonica.EMAIL)."""
+    local, domain = normalize(value).lower().split('@')
+    domain = {item['dominio']: item['equivale_a'] for item in rule['dominios_equivalentes']}.get(domain, domain)
+    local = local.split('+', 1)[0] or local
+    if domain in rule['dominios_sin_puntos']:
+        local = local.replace('.', '') or local
+    return f'{local}@{domain}'
+
+
+CANONICAL = {'TELEFONO': canonical_phone, 'EMAIL': canonical_email}
+
+
+def submit_all(scenario: dict, keys: dict, limit: int) -> tuple[list[str], int]:
+    """Modelo de referencia de los pasos DUPLICADO, LIMITE_CONTACTO y GUARDAR sobre envíos válidos."""
+    rule = keys[scenario['medio']]
+    created, results = set(), []
+    for item in scenario['envios']:
+        key = CANONICAL[scenario['medio']](item['contacto'], rule)
+        if (key, item['motivo']) in created:
+            results.append('RECIBIDA')
+        elif sum(existing == key for existing, _ in created) >= limit:
+            results.append('LIMITE')
+        else:
+            created.add((key, item['motivo']))
+            results.append('RECIBIDA')
+    return results, len(created)
+
+
+def language_violations(text: str, kind: str, rules: dict) -> list[str]:
+    """Control parcial de un texto: detecta errores conocidos; no reemplaza la revisión semántica humana."""
+    found = []
+    plain = fold(text)
+    if len(text) > rules['max_caracteres'][kind]:
+        found.append('largo')
+    found += [f'oración larga: {sentence}' for sentence in re.split(r'(?<=[.!?])\s+', text)
+              if len(sentence.split()) > rules['max_palabras_por_oracion']]
+    for name in ('terminos_prohibidos', 'promesas_prohibidas', 'afirmaciones_prohibidas'):
+        found += [f'{name}: {term}' for term in rules[name] if fold(term) in plain]
+    if any(unicodedata.category(ch) in CONTROL for ch in text):
+        found.append('carácter de control')
+    if re.search(r'\b\d+\s*(horas|hs|dias)\b', plain):
+        found.append('plazo prometido')
+    if re.search(r'https?://|www\.|\d[\d \-]{5,}\d', text):
+        found.append('URL o teléfono literal')
+    if re.search(r'\$|\bars\b|\bpesos?\b|\d[\d.]*,\d+|\d+\.\d+', plain):
+        found.append('importe literal')
+    if kind not in rules['tipos_con_digitos'] and re.search(r'\d', text):
+        found.append('dígito fuera de un mensaje de error')
+    shouting = set(re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', text)) - set(rules['siglas_permitidas'])
+    if shouting:
+        found.append(f'mayúsculas: {sorted(shouting)}')
+    return found
+
+
 VALIDATORS = {'NOMBRE': valid_nombre, 'TELEFONO': valid_telefono, 'EMAIL': valid_email, 'REFERENCIA': valid_referencia}
 
 
@@ -212,6 +308,22 @@ class ChannelFlowContract(unittest.TestCase):
     def test_contract_matches_schema(self):
         self.assertEqual(schema_errors(self.contract, self.schema, self.schema), [])
 
+    def test_schema_validator_distinguishes_booleans_from_numbers(self):
+        rejected = [(0, {'const': False}), (1, {'const': True}), (False, {'const': 0}), (True, {'const': 1}),
+                    (0, {'enum': [False]}), (1, {'enum': [True]}), (False, {'enum': [0]}), (True, {'enum': [1]}),
+                    ([0], {'const': [False]}), ({'a': 1}, {'const': {'a': True}}), (1, {'type': 'boolean'}),
+                    (True, {'type': 'integer'})]
+        for value, schema in rejected:
+            with self.subTest(value=value, schema=schema):
+                self.assertNotEqual(schema_errors(value, schema, schema), [])
+        accepted = [(False, {'const': False}), (True, {'const': True}), (0, {'const': 0}), (1, {'enum': [1]}),
+                    (False, {'enum': [False]}), ([False], {'const': [False]}), ({'a': True}, {'const': {'a': True}}),
+                    ([0, False], {'uniqueItems': True}), ([1, True], {'uniqueItems': True})]
+        for value, schema in accepted:
+            with self.subTest(value=value, schema=schema):
+                self.assertEqual(schema_errors(value, schema, schema), [])
+        self.assertNotEqual(schema_errors([1, 1], {'uniqueItems': True}, {}), [])
+
     def test_schema_rejects_unsafe_mutations(self):
         def mutated(change):
             data = copy.deepcopy(self.contract)
@@ -226,6 +338,13 @@ class ChannelFlowContract(unittest.TestCase):
             'retención de 120 días': lambda d: d['retencion'].update(dias_por_defecto=120),
             'consulta la cartera': lambda d: d['solicitud_contacto']['garantias_no_revelacion'].update(
                 consulta_tablas_de_cartera=True),
+            'consulta la cartera como 0': lambda d: d['solicitud_contacto']['garantias_no_revelacion'].update(
+                consulta_tablas_de_cartera=0),
+            'misma respuesta como 1': lambda d: d['solicitud_contacto']['garantias_no_revelacion'].update(
+                misma_respuesta_para_cualquier_referencia=1),
+            'sin revisión semántica humana': lambda d: d['lenguaje'].update(revision_semantica_humana=False),
+            'límite sin unidad de cuenta': lambda d: d['antiabuso']['limites'][2].pop('cuenta'),
+            'sin clave canónica': lambda d: d['solicitud_contacto'].pop('clave_canonica'),
             'captcha de terceros': lambda d: d['antiabuso'].update(captcha_de_terceros=True),
             'contacto verificado': lambda d: d['solicitud_contacto']['campos'][2].update(verificado=True),
             'consentimiento premarcado': lambda d: d['solicitud_contacto']['campos'][5].update(valor_inicial=True),
@@ -306,15 +425,15 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertEqual(set(responses['RECIBIDA']['cuando']), {'VALIDA', 'DUPLICADA_24H', 'CAMPO_TRAMPA_CON_VALOR'})
         self.assertEqual(responses['LIMITE']['cuerpo'], {'resultado': 'LIMITE'})
         self.assertEqual(responses['ERROR']['cuerpo'], {'resultado': 'ERROR'})
-        self.assertTrue(all(value for key, value in self.form['garantias_no_revelacion'].items()
-                            if key.startswith(('misma', 'mismo', 'errores', 'limite'))))
-        self.assertFalse(any(value for key, value in self.form['garantias_no_revelacion'].items()
-                             if key.startswith(('consulta', 'valida', 'devuelve'))))
+        for key, value in self.form['garantias_no_revelacion'].items():
+            self.assertIs(value, not key.startswith(('consulta', 'valida', 'devuelve')), key)
         municipal = set(self.contract['marcadores']['municipio'])
         for state_id in ('CONTACTO_CONFIRMACION', 'CONTACTO_LIMITE', 'CONTACTO_ERROR'):
             texts = [self.texts[ref]['texto'] for ref in self.states[state_id]['textos']]
-            self.assertTrue(set(PLACEHOLDER.findall(' '.join(texts))) <= municipal, state_id)
-            self.assertTrue(any('{telefono_oficial}' in text for text in texts), state_id)
+            marks = set(PLACEHOLDER.findall(' '.join(texts)))
+            self.assertTrue(marks <= municipal, state_id)
+            # ALTERNATIVA_HUMANA: teléfono y atención presencial visibles en los tres resultados.
+            self.assertTrue({'telefono_oficial', 'direccion_oficial'} <= marks, state_id)
 
     def test_placeholders_are_declared_per_audience(self):
         marks = self.contract['marcadores']
@@ -331,20 +450,26 @@ class ChannelFlowContract(unittest.TestCase):
 
     def test_plain_dignified_language(self):
         rules = self.contract['lenguaje']
-        banned = [fold(term) for term in rules['terminos_prohibidos'] + rules['promesas_prohibidas']]
         for text_id, item in self.texts.items():
-            text = item['texto']
-            plain = fold(text)
             with self.subTest(text_id):
-                self.assertLessEqual(len(text), rules['max_caracteres'][item['tipo']])
-                for sentence in re.split(r'(?<=[.!?])\s+', text):
-                    self.assertLessEqual(len(sentence.split()), rules['max_palabras_por_oracion'], sentence)
-                self.assertEqual([term for term in banned if term in plain], [])
-                self.assertFalse(any(unicodedata.category(ch) in CONTROL for ch in text))
-                self.assertIsNone(re.search(r'\b\d+\s*(horas|hs|dias)\b', plain))
-                self.assertIsNone(re.search(r'https?://|www\.|\d[\d \-]{5,}\d', text))
-                shouting = set(re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', text)) - set(rules['siglas_permitidas'])
-                self.assertEqual(shouting, set())
+                self.assertEqual(language_violations(item['texto'], item['tipo'], rules), [])
+
+    def test_language_control_rejects_debt_affirmations_and_literal_amounts(self):
+        rules = self.contract['lenguaje']
+        counterexamples = ['Tenés pagos pendientes.', 'No tenés pagos pendientes.', 'Tenés que pagar $ 123,45.',
+                           'Tu deuda es de 123 pesos.', 'Hay una deuda en esa cuenta.', 'Estás al día.',
+                           'No encontramos esa referencia.', 'La cuenta tiene pagos.']
+        amounts = ['El total es $ 123,45.', 'Son 123 pesos.', 'Son 123,45.', 'Son 1.234,50.', 'Son ARS 500.',
+                   'Corresponden 500.']
+        for kind in ('MENSAJE', 'PLANTILLA', 'GUION'):
+            for text in counterexamples + amounts:
+                with self.subTest(kind=kind, text=text):
+                    self.assertNotEqual(language_violations(text, kind, rules), [])
+        for text in ('El total es $ 123,45.', 'Son 123 pesos.', 'Son 1.234,50.'):
+            self.assertIn('importe literal', language_violations(text, 'ERROR', rules))
+        self.assertEqual(language_violations('Escribí entre 8 y 15 números.', 'ERROR', rules), [])
+        self.assertIn('parcial', rules['alcance_de_los_controles'])
+        self.assertIs(rules['revision_semantica_humana'], True)
 
     def test_contact_form_collects_only_minimal_data(self):
         fields = {field['id']: field for field in self.form['campos']}
@@ -381,6 +506,42 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertTrue(valid_telefono('0 ' * 13))
         self.assertFalse(valid_telefono('0 ' * 14))
 
+    def test_canonical_contact_key_unifies_equivalent_forms(self):
+        keys = self.form['clave_canonica']
+        for medium, rule in ((name, keys[name]) for name in CANONICAL):
+            canonical = CANONICAL[medium]
+            for group in rule['equivalencias']:
+                for form in group['formas']:
+                    with self.subTest(medium=medium, form=form):
+                        self.assertTrue(VALIDATORS[medium](form), 'la forma debe ser válida')
+                        self.assertEqual(canonical(form, rule), group['clave'])
+            for left, right in rule['distintos']:
+                with self.subTest(medium=medium, left=left, right=right):
+                    self.assertTrue(VALIDATORS[medium](left) and VALIDATORS[medium](right))
+                    self.assertNotEqual(canonical(left, rule), canonical(right, rule))
+        # La normalización común conserva la presentación que ve el operador: por eso hace falta otra clave.
+        reported = keys['TELEFONO']['equivalencias'][0]['formas'][:4]
+        self.assertEqual(len({normalize(form) for form in reported}), 4)
+        self.assertEqual(len({canonical_phone(form, keys['TELEFONO']) for form in reported}), 1)
+
+    def test_equivalent_forms_share_deduplication_and_limit(self):
+        limit = next(item for item in self.contract['antiabuso']['limites'] if item['clave'] == 'CONTACTO')
+        self.assertEqual((limit['maximo'], limit['ventana_horas'], limit['cuenta']), (3, 24, 'SOLICITUDES_CREADAS'))
+        motives = {item['codigo'] for item in self.form['motivos']}
+        scenarios = {item['id']: item for item in self.form['escenarios_equivalencia']}
+        self.assertTrue({'ESC-TEL-MISMO-MOTIVO', 'ESC-TEL-MOTIVOS-DISTINTOS'} <= set(scenarios))
+        for scenario in scenarios.values():
+            with self.subTest(scenario['id']):
+                self.assertTrue({item['motivo'] for item in scenario['envios']} <= motives)
+                self.assertTrue(all(VALIDATORS[scenario['medio']](item['contacto']) for item in scenario['envios']))
+                results, created = submit_all(scenario, self.form['clave_canonica'], limit['maximo'])
+                self.assertEqual(results, scenario['resultados'])
+                self.assertEqual(created, scenario['solicitudes_creadas'])
+        steps = [step.split(':')[0] for step in self.form['orden_de_evaluacion']]
+        self.assertEqual(steps, ['TAMANO', 'CAMPO_TRAMPA', 'LIMITES_IP_MUNICIPIO', 'FORMATO', 'DUPLICADO',
+                                 'LIMITE_CONTACTO', 'GUARDAR'])
+        self.assertIn('clave canónica', self.contract['antiabuso']['seudonimo'])
+
     def test_channel_never_reveals_decides_or_intervenes(self):
         codes = [item['codigo'] for item in self.contract['el_canal_no_hace']]
         self.assertEqual(len(codes), len(set(codes)))
@@ -398,6 +559,20 @@ class ChannelFlowContract(unittest.TestCase):
         closures = {item['codigo'] for item in self.contract['derivacion']['motivos_cierre']}
         self.assertTrue(set(retention['purga_inmediata_por_cierre']) <= closures)
         self.assertLessEqual(self.contract['antiabuso']['retencion_contadores_horas'], 24)
+
+    def test_purge_claims_only_direct_fields_and_linked_record_is_pseudonymous(self):
+        retention = self.contract['retencion']
+        self.assertIn('campos directos', retention['accion'])
+        self.assertIn('seudónimo', retention['registro_de_interacciones'])
+        self.assertIn('no anónimo', retention['registro_de_interacciones'])
+        self.assertIn('seudónimo', retention['vinculacion_con_caso'])
+        self.assertIn('ALIGN-069', retention['vinculacion_con_caso'])
+        self.assertIn('no borra ese vínculo', retention['vinculacion_con_caso'])
+        for state_id in ('INFO_PRIVACIDAD', 'CONTACTO_AVISO'):
+            self.assertIn('CAN-PRIVACIDAD-VINCULO-v1', self.states[state_id]['textos'], state_id)
+        for text in (self.document, retention['registro_de_interacciones']):
+            self.assertNotIn('ya no permite llegar', text)
+        self.assertIn('no borra ese vínculo', self.document)
 
     def test_operator_handoff_and_log(self):
         handoff = self.contract['derivacion']
@@ -430,7 +605,8 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertEqual(rows, {text_id: item['texto'] for text_id, item in self.texts.items()})
         codes = [*self.states, *(item['codigo'] for item in self.contract['el_canal_no_hace']),
                  *(item['codigo'] for item in self.contract['derivacion']['reglas_operador']),
-                 *(item['codigo'] for item in self.form['motivos'])]
+                 *(item['codigo'] for item in self.form['motivos']),
+                 *(item['id'] for item in self.form['escenarios_equivalencia'])]
         self.assertEqual([code for code in codes if f'`{code}`' not in self.document], [])
         for path in ('contracts/channel-flow.v1.json', 'contracts/channel-flow.v1.schema.json',
                      'quality/tests/test_channel_flow.py'):

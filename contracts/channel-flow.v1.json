@@ -13,7 +13,7 @@
     "descripcion": "Flujo guiado por reglas con textos fijos y botones. Sin escritura libre fuera del formulario de contacto, sin modelos de lenguaje y sin acceso a datos de la cartera.",
     "politica_de_cambios": "Todo cambio de un texto, un estado, un campo o un parámetro crea una versión nueva del catálogo (1.1.0, 2.0.0) y un identificador de texto nuevo (-v2); esta versión nunca se edita en silencio. Cada versión requiere la aprobación del usuario y del director antes de publicarse.",
     "aprobacion_requerida": "Usuario y director (compuerta antes de cerrar ALIGN-047). Los textos marcados JURIDICA o MUNICIPAL requieren además validación jurídica o del municipio antes de cualquier uso con un municipio real.",
-    "datos_personales": "Ninguno. Los ejemplos de formato usan valores sintéticos y dominios reservados (example.com)."
+    "datos_personales": "Ninguno. Los ejemplos de formato usan valores sintéticos y dominios reservados (example.com, example.org). Los teléfonos usan ceros o el código 555, que no es un código de área argentino. Los vectores del alias de gmail.com usan una parte local de dos letras, por debajo del mínimo de seis de ese proveedor."
   },
   "el_canal_no_hace": [
     {"codigo": "NO_INFORMA_DEUDA", "descripcion": "No muestra deudas, importes, vencimientos, planes vigentes ni el estado de ninguna cuenta, con o sin referencia."},
@@ -60,6 +60,10 @@
     "siglas_permitidas": ["DNI", "CUIT"],
     "terminos_prohibidos": ["moros", "deudor", "incumpl", "embarg", "juicio", "judicial", "intima", "sancion", "multa", "ultimo aviso", "urgente", "inmediat", "prescrip", "puntaje", "riesgo", "probabilidad", "vulnerab", "prioridad", "tu deuda", "su deuda", "debes", "adeud", "saldo", "importe", "monto"],
     "promesas_prohibidas": ["garantiz", "aseguramos", "descuento", "condon", "quita", "bonific", "sin interes", "te otorgamos", "aprobamos tu"],
+    "afirmaciones_prohibidas": ["tenes pagos", "tenes deuda", "tenes una deuda", "tenes cuotas", "tenes boletas", "tenes que pagar", "tenes que abonar", "no debes", "estas al dia", "esta al dia", "hay pagos pendientes", "hay deuda", "hay una deuda", "registra pagos", "registra deuda", "registramos", "figuras", "figura con", "tu cuenta", "tu bien", "la cuenta tiene", "el bien tiene", "encontramos", "no existe", "a pagar"],
+    "tipos_con_digitos": ["ERROR"],
+    "alcance_de_los_controles": "Comprobación parcial: las listas de términos y afirmaciones y el control de importes literales detectan errores conocidos, pero una lista de palabras no demuestra la no revelación. Cada versión aprobada exige la revisión semántica humana de todos sus textos.",
+    "revision_semantica_humana": true,
     "sin_urls_ni_telefonos_literales": true
   },
   "textos": [
@@ -95,6 +99,7 @@
     {"id": "CAN-PRIVACIDAD-RESUMEN-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Este chat no guarda lo que elegís en el menú. Solo guarda datos si pedís que una persona te contacte.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-DETALLE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "En ese caso, {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-RETENCION-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Tu nombre, tu contacto y la referencia que escribas se borran a los {dias_retencion} días de la solicitud, aunque no se haya podido responder.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-PRIVACIDAD-VINCULO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Si te identificás por un medio oficial, una persona del área puede vincular tu consulta con tu caso. Ese vínculo queda en un registro de auditoría, con sus propias reglas de acceso y conservación.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Podés pedir ver, corregir o borrar tus datos antes de ese plazo en {direccion_oficial} o por {correo_oficial}.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-CONTACTO-INTRO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Dejanos un medio de contacto y una persona del área va a revisar tu pedido. Te va a responder por el medio que elijas.", "requiere_validacion": []},
     {"id": "CAN-CONTACTO-QUE-NO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Por seguridad, la respuesta no va a incluir información de cuentas. Para eso hace falta que te identifiques por un medio oficial.", "requiere_validacion": []},
@@ -196,12 +201,12 @@
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
         {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
       ]},
-      {"id": "INFO_PRIVACIDAD", "tipo": "INFO", "textos": ["CAN-PRIVACIDAD-RESUMEN-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1", "CAN-PRIVACIDAD-DERECHOS-v1"], "opciones": [
+      {"id": "INFO_PRIVACIDAD", "tipo": "INFO", "textos": ["CAN-PRIVACIDAD-RESUMEN-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1", "CAN-PRIVACIDAD-DERECHOS-v1", "CAN-PRIVACIDAD-VINCULO-v1"], "opciones": [
         {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
         {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
       ]},
-      {"id": "CONTACTO_AVISO", "tipo": "AVISO", "textos": ["CAN-CONTACTO-INTRO-v1", "CAN-CONTACTO-QUE-NO-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1"], "opciones": [
+      {"id": "CONTACTO_AVISO", "tipo": "AVISO", "textos": ["CAN-CONTACTO-INTRO-v1", "CAN-CONTACTO-QUE-NO-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1", "CAN-PRIVACIDAD-VINCULO-v1"], "opciones": [
         {"texto": "CAN-OPC-CONTINUAR-v1", "destino": "CONTACTO_FORM"},
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"}
       ]},
@@ -213,15 +218,15 @@
         "LIMITE": "CONTACTO_LIMITE",
         "ERROR": "CONTACTO_ERROR"
       }}},
-      {"id": "CONTACTO_CONFIRMACION", "tipo": "RESULTADO", "textos": ["CAN-CONFIRMACION-v1", "CAN-CONFIRMACION-TIEMPO-v1", "CAN-AVISO-FRAUDE-v1"], "opciones": [
+      {"id": "CONTACTO_CONFIRMACION", "tipo": "RESULTADO", "textos": ["CAN-CONFIRMACION-v1", "CAN-CONFIRMACION-TIEMPO-v1", "CAN-AVISO-FRAUDE-v1", "CAN-INFO-ATENCION-v1"], "opciones": [
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
         {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
       ]},
-      {"id": "CONTACTO_LIMITE", "tipo": "RESULTADO", "textos": ["CAN-LIMITE-v1"], "opciones": [
+      {"id": "CONTACTO_LIMITE", "tipo": "RESULTADO", "textos": ["CAN-LIMITE-v1", "CAN-INFO-ATENCION-v1"], "opciones": [
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
         {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
       ]},
-      {"id": "CONTACTO_ERROR", "tipo": "RESULTADO", "textos": ["CAN-ERROR-ENVIO-v1"], "opciones": [
+      {"id": "CONTACTO_ERROR", "tipo": "RESULTADO", "textos": ["CAN-ERROR-ENVIO-v1", "CAN-INFO-ATENCION-v1"], "opciones": [
         {"texto": "CAN-OPC-REINTENTAR-v1", "destino": "CONTACTO_FORM"},
         {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
         {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
@@ -256,7 +261,75 @@
       {"codigo": "DATOS_PERSONALES", "texto": "CAN-MOTIVO-DATOS-PERSONALES-v1", "plantilla_correo": "OPE-CORREO-DATOS-PERSONALES-v1"},
       {"codigo": "OTRO", "texto": "CAN-MOTIVO-OTRO-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"}
     ],
-    "normalizacion": "Antes de validar: forma Unicode NFC, sin espacios al inicio ni al final y espacios internos repetidos reducidos a uno. Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida el campo con FORMATO. Todo se guarda y se muestra como texto plano, nunca como HTML.",
+    "normalizacion": "Antes de validar: forma Unicode NFC, sin espacios al inicio ni al final y espacios internos repetidos reducidos a uno. Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida el campo con FORMATO. Todo se guarda y se muestra como texto plano, nunca como HTML. La persona operadora ve el contacto en esta forma normalizada; la clave canónica es otra cosa y no se muestra.",
+    "clave_canonica": {
+      "uso": "Se deriva del contacto ya validado y solo sirve para el límite por contacto y la deduplicación. Nunca se muestra ni se guarda en claro: solo su HMAC, en contadores de 24 horas. No reemplaza al contacto normalizado que ve la persona operadora.",
+      "TELEFONO": {
+        "prefijo_pais": "54",
+        "digitos_nacionales": 10,
+        "posiciones_15": [2, 3, 4],
+        "forma": "+<prefijo de país><dígitos>",
+        "pasos": [
+          "Quitar espacios, guiones y paréntesis; queda un + opcional y dígitos.",
+          "Con +: los dígitos ya llevan el prefijo de país. Con 00 seguido de un dígito distinto de 0: se quita el 00 y los dígitos llevan el prefijo. Sin ninguno de los dos, si empiezan con 54 y tienen al menos 12 dígitos, también lo llevan. En otro caso se antepone 54.",
+          "Si el prefijo no es 54, la clave es + y los dígitos.",
+          "Con prefijo 54, sobre los dígitos nacionales: quitar un 0 inicial (prefijo troncal) si hay más de 10; después, quitar un 9 inicial (marca de celular) si hay más de 10; después, si hay exactamente 12, quitar el primer 15 que empiece en la posición 2, 3 o 4 contando desde 0 (el 15 sigue al código de área, de 2 a 4 dígitos).",
+          "La clave es +54 y los dígitos nacionales resultantes."
+        ],
+        "equivalencias": [
+          {"clave": "+540000000000", "formas": ["+54 000 000-0000", "+54(000)0000000", "+54-000-000-0000", "+54 000 000 0000", "(000) 0000-0000"]},
+          {"clave": "+545550000000", "formas": ["+54 555 000-0000", "+54 9 555 000 0000", "+54 0 555 000 0000", "+54 555 15 000 0000", "54 555 000 0000", "0054 555 000 0000", "555 000 0000", "0555 000 0000", "0555 15 000 0000", "555 15 000 0000"]},
+          {"clave": "+34555000000", "formas": ["+34 555 000 000", "0034 555 000 000"]}
+        ],
+        "distintos": [
+          ["+54 555 000 0000", "+54 555 000 0001"],
+          ["+54 555 000 0000", "+54 555 150 0000"],
+          ["+54 555 000 0000", "+34 555 000 0000"],
+          ["+54 555 000 0000", "5550 0000"]
+        ]
+      },
+      "EMAIL": {
+        "dominios_equivalentes": [{"dominio": "googlemail.com", "equivale_a": "gmail.com"}],
+        "dominios_sin_puntos": ["gmail.com"],
+        "forma": "<parte local>@<dominio> en minúsculas",
+        "pasos": [
+          "Pasar a minúsculas (el formato solo admite ASCII).",
+          "Reemplazar el dominio por su equivalente, si tiene.",
+          "Quitar de la parte local desde el primer + (etiqueta), salvo que el + esté al inicio.",
+          "En los dominios sin puntos, quitar los puntos de la parte local."
+        ],
+        "equivalencias": [
+          {"clave": "persona@example.com", "formas": ["persona@example.com", "PERSONA@EXAMPLE.COM", "Persona+chat@Example.com", "persona+otra@example.com"]},
+          {"clave": "ab@gmail.com", "formas": ["a.b@gmail.com", "ab@googlemail.com", "A.B+chat@GMAIL.COM"]}
+        ],
+        "distintos": [
+          ["persona@example.com", "persona@example.org"],
+          ["persona@example.com", "per.sona@example.com"],
+          ["+a@example.com", "+b@example.com"]
+        ]
+      },
+      "limitaciones": "No se unifican un teléfono sin código de área con el mismo número con código, números extranjeros escritos sin + ni 00, alias de otros proveedores de correo ni dominios que aceptan cualquier dirección. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO."
+    },
+    "escenarios_equivalencia": [
+      {"id": "ESC-TEL-MISMO-MOTIVO", "descripcion": "Cuatro formas del mismo teléfono con el mismo motivo se deduplican.", "medio": "TELEFONO", "envios": [
+        {"contacto": "+54 000 000-0000", "motivo": "PLAN_PAGOS"},
+        {"contacto": "+54(000)0000000", "motivo": "PLAN_PAGOS"},
+        {"contacto": "+54-000-000-0000", "motivo": "PLAN_PAGOS"},
+        {"contacto": "+54 000 000 0000", "motivo": "PLAN_PAGOS"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "RECIBIDA"], "solicitudes_creadas": 1},
+      {"id": "ESC-TEL-MOTIVOS-DISTINTOS", "descripcion": "Cuatro formas del mismo teléfono con motivos distintos comparten el límite de 3.", "medio": "TELEFONO", "envios": [
+        {"contacto": "+54 000 000-0000", "motivo": "INFO_GENERAL"},
+        {"contacto": "+54(000)0000000", "motivo": "MEDIOS_PAGO"},
+        {"contacto": "+54-000-000-0000", "motivo": "PLAN_PAGOS"},
+        {"contacto": "+54 000 000 0000", "motivo": "RECLAMO"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "LIMITE"], "solicitudes_creadas": 3},
+      {"id": "ESC-CORREO-MOTIVOS-DISTINTOS", "descripcion": "Cuatro formas del mismo correo con motivos distintos comparten el límite de 3.", "medio": "EMAIL", "envios": [
+        {"contacto": "persona@example.com", "motivo": "INFO_GENERAL"},
+        {"contacto": "PERSONA@EXAMPLE.COM", "motivo": "MEDIOS_PAGO"},
+        {"contacto": "Persona+chat@Example.com", "motivo": "PLAN_PAGOS"},
+        {"contacto": "persona+otra@example.com", "motivo": "RECLAMO"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "LIMITE"], "solicitudes_creadas": 3}
+    ],
     "formatos": {
       "NOMBRE": {"regla": "1 a 80 caracteres: letras Unicode (con sus tildes), espacio, punto, apóstrofo (' o ’) o guion; al menos una letra.", "error": "CAN-ERROR-NOMBRE-v1", "validos": ["Ana", "José María", "M. de la Fuente", "D'Alessandro"], "invalidos": ["Ana3", "<b>Ana</b>", "Ana\u0000", "!!!", "--"]},
       "TELEFONO": {"regla": "Hasta 25 caracteres: dígitos, espacio, guion y paréntesis, con un + opcional solo al inicio; entre 8 y 15 dígitos en total. No se verifica que exista.", "error": "CAN-ERROR-TELEFONO-v1", "validos": ["+54 000 000-0000", "(000) 0000-0000", "00000000"], "invalidos": ["0000000", "0000000000000000", "000-ABC-0000", "00+000000000", "+54 000\n0000"]},
@@ -282,13 +355,14 @@
       {"campo": "purga_programada_at", "descripcion": "creada_at + dias_retencion."},
       {"campo": "purgada_at", "descripcion": "Nulo hasta que la purga suprime los campos personales."}
     ],
-    "no_se_guarda": ["IP en claro", "agente de usuario", "cookies o identificadores de sesión", "navegación por el menú", "huella del dispositivo", "ubicación", "cuerpo de la solicitud en registros del servidor"],
+    "no_se_guarda": ["IP en claro", "clave canónica del contacto en claro", "agente de usuario", "cookies o identificadores de sesión", "navegación por el menú", "huella del dispositivo", "ubicación", "cuerpo de la solicitud en registros del servidor"],
     "orden_de_evaluacion": [
       "TAMANO: cuerpo de más de 4096 bytes → ERROR, sin procesar ni guardar.",
       "CAMPO_TRAMPA: con valor → RECIBIDA, sin guardar.",
-      "LIMITES: algún límite de antiabuso superado → LIMITE, sin guardar (cuenta también los envíos inválidos).",
+      "LIMITES_IP_MUNICIPIO: cuentan todos los envíos, también los inválidos; algún límite superado → LIMITE, sin guardar.",
       "FORMATO: algún campo inválido → INVALIDA con la lista de errores por campo, sin guardar.",
-      "DUPLICADO: mismo contacto y motivo en las últimas 24 horas en el mismo municipio → RECIBIDA, sin crear otra solicitud.",
+      "DUPLICADO: misma clave canónica y motivo en las últimas 24 horas en el mismo municipio → RECIBIDA, sin crear otra solicitud ni contar para el límite por contacto.",
+      "LIMITE_CONTACTO: 3 solicitudes creadas con la misma clave canónica en las últimas 24 horas en el mismo municipio → LIMITE, sin guardar.",
       "GUARDAR: inserción mediante la función de servidor → RECIBIDA; si falla → ERROR."
     ],
     "respuestas_envio": {
@@ -309,12 +383,12 @@
     }
   },
   "antiabuso": {
-    "seudonimo": "HMAC-SHA-256 con un secreto de servidor por entorno, nunca en el navegador ni en el repositorio. Se aplica a la IP y al contacto normalizado; la IP en claro no se guarda ni se registra.",
+    "seudonimo": "HMAC-SHA-256 con un secreto de servidor por entorno, nunca en el navegador ni en el repositorio. Se aplica a la IP y a la clave canónica del contacto (solicitud_contacto.clave_canonica); los duplicados se reconocen con el HMAC de esa clave junto con el motivo. La IP en claro no se guarda ni se registra.",
     "limites": [
-      {"clave": "IP", "ventana_horas": 1, "maximo": 5},
-      {"clave": "IP", "ventana_horas": 24, "maximo": 20},
-      {"clave": "CONTACTO", "ventana_horas": 24, "maximo": 3},
-      {"clave": "MUNICIPIO", "ventana_horas": 24, "maximo": 200}
+      {"clave": "IP", "cuenta": "ENVIOS", "ventana_horas": 1, "maximo": 5},
+      {"clave": "IP", "cuenta": "ENVIOS", "ventana_horas": 24, "maximo": 20},
+      {"clave": "CONTACTO", "cuenta": "SOLICITUDES_CREADAS", "ventana_horas": 24, "maximo": 3},
+      {"clave": "MUNICIPIO", "cuenta": "ENVIOS", "ventana_horas": 24, "maximo": 200}
     ],
     "retencion_contadores_horas": 24,
     "duplicado_ventana_horas": 24,
@@ -327,13 +401,13 @@
     "dias_maximo": 90,
     "desde": "creada_at",
     "campos_personales": ["nombre", "contacto", "referencia"],
-    "accion": "SUPRIMIR: los campos personales pasan a nulo y se registra purgada_at; la solicitud queda solo con datos no personales.",
+    "accion": "SUPRIMIR: nombre, contacto y referencia pasan a nulo y se registra purgada_at. La purga elimina esos campos directos; no anonimiza por sí sola lo que queda vinculado.",
     "se_conserva": ["id", "tenant", "origen", "motivo", "medio_preferido", "estado", "motivo_cierre", "creada_at", "cerrada_at", "version_flujo", "consentimiento_texto_id", "consentimiento_at", "purgada_at"],
     "frecuencia_minima": "Diaria, como tarea programada documentada; con reloj simulado, a creada_at + dias_retencion + 1 segundo no queda ningún campo personal.",
     "aplica_en_cualquier_estado": true,
     "purga_inmediata_por_cierre": ["SUPRESION_SOLICITADA", "CONTACTO_NO_CORRESPONDE"],
-    "registro_de_interacciones": "No contiene campos personales; queda referido al id de la solicitud, que tras la purga ya no permite llegar a la persona.",
-    "vinculacion_con_caso": "Si una persona operadora vinculó la solicitud con un caso tras una identificación oficial, el vínculo (id de solicitud e id de caso) vive en la auditoría de ALIGN-069 con su propia política; la purga del canal se aplica igual."
+    "registro_de_interacciones": "No contiene nombre, contacto ni referencia: usa el id de la solicitud como seudónimo. Es un registro seudónimo, no anónimo: si la solicitud se vinculó con un caso, ese id sigue permitiendo llegar a la persona a quien acceda al vínculo y al caso.",
+    "vinculacion_con_caso": "Si una persona operadora vinculó la solicitud con un caso tras una identificación oficial, el vínculo (id de solicitud e id de caso) es un dato seudónimo en la auditoría de ALIGN-069 y se rige por el acceso y la retención que declara ese ticket. La purga suprime los campos directos de la solicitud, pero no borra ese vínculo."
   },
   "derivacion": {
     "estados_cola": ["NUEVA", "EN_CURSO", "RESUELTA", "DESCARTADA"],

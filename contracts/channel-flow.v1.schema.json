@@ -88,7 +88,7 @@
     "lenguaje": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tratamiento", "max_palabras_por_oracion", "max_caracteres", "siglas_permitidas", "terminos_prohibidos", "promesas_prohibidas", "sin_urls_ni_telefonos_literales"],
+      "required": ["tratamiento", "max_palabras_por_oracion", "max_caracteres", "siglas_permitidas", "terminos_prohibidos", "promesas_prohibidas", "afirmaciones_prohibidas", "tipos_con_digitos", "alcance_de_los_controles", "revision_semantica_humana", "sin_urls_ni_telefonos_literales"],
       "properties": {
         "tratamiento": {"enum": ["VOSEO", "USTED"]},
         "max_palabras_por_oracion": {"type": "integer", "minimum": 10, "maximum": 30},
@@ -111,6 +111,10 @@
         "siglas_permitidas": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z]{2,6}$"}},
         "terminos_prohibidos": {"$ref": "#/$defs/lista_terminos"},
         "promesas_prohibidas": {"$ref": "#/$defs/lista_terminos"},
+        "afirmaciones_prohibidas": {"$ref": "#/$defs/lista_terminos"},
+        "tipos_con_digitos": {"type": "array", "uniqueItems": true, "items": {"enum": ["ERROR"]}},
+        "alcance_de_los_controles": {"$ref": "#/$defs/texto_no_vacio"},
+        "revision_semantica_humana": {"const": true},
         "sin_urls_ni_telefonos_literales": {"const": true}
       }
     },
@@ -188,7 +192,7 @@
     "solicitud_contacto": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["campos", "campo_trampa", "campos_prohibidos", "medios_contacto", "motivos", "normalizacion", "formatos", "errores", "datos_de_servidor", "no_se_guarda", "orden_de_evaluacion", "respuestas_envio", "garantias_no_revelacion"],
+      "required": ["campos", "campo_trampa", "campos_prohibidos", "medios_contacto", "motivos", "normalizacion", "clave_canonica", "escenarios_equivalencia", "formatos", "errores", "datos_de_servidor", "no_se_guarda", "orden_de_evaluacion", "respuestas_envio", "garantias_no_revelacion"],
       "properties": {
         "campos": {
           "type": "array",
@@ -256,6 +260,82 @@
           }
         },
         "normalizacion": {"$ref": "#/$defs/texto_no_vacio"},
+        "clave_canonica": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["uso", "TELEFONO", "EMAIL", "limitaciones"],
+          "properties": {
+            "uso": {"$ref": "#/$defs/texto_no_vacio"},
+            "limitaciones": {"$ref": "#/$defs/texto_no_vacio"},
+            "TELEFONO": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["prefijo_pais", "digitos_nacionales", "posiciones_15", "forma", "pasos", "equivalencias", "distintos"],
+              "properties": {
+                "prefijo_pais": {"const": "54"},
+                "digitos_nacionales": {"const": 10},
+                "posiciones_15": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 4}},
+                "forma": {"$ref": "#/$defs/texto_no_vacio"},
+                "pasos": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}},
+                "equivalencias": {"$ref": "#/$defs/equivalencias"},
+                "distintos": {"$ref": "#/$defs/pares_distintos"}
+              }
+            },
+            "EMAIL": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["dominios_equivalentes", "dominios_sin_puntos", "forma", "pasos", "equivalencias", "distintos"],
+              "properties": {
+                "dominios_equivalentes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["dominio", "equivale_a"],
+                    "properties": {
+                      "dominio": {"$ref": "#/$defs/texto_no_vacio"},
+                      "equivale_a": {"$ref": "#/$defs/texto_no_vacio"}
+                    }
+                  }
+                },
+                "dominios_sin_puntos": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/texto_no_vacio"}},
+                "forma": {"$ref": "#/$defs/texto_no_vacio"},
+                "pasos": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}},
+                "equivalencias": {"$ref": "#/$defs/equivalencias"},
+                "distintos": {"$ref": "#/$defs/pares_distintos"}
+              }
+            }
+          }
+        },
+        "escenarios_equivalencia": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "descripcion", "medio", "envios", "resultados", "solicitudes_creadas"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^ESC-[A-Z0-9]+(-[A-Z0-9]+)*$"},
+              "descripcion": {"$ref": "#/$defs/texto_no_vacio"},
+              "medio": {"enum": ["TELEFONO", "EMAIL"]},
+              "envios": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["contacto", "motivo"],
+                  "properties": {
+                    "contacto": {"$ref": "#/$defs/texto_no_vacio"},
+                    "motivo": {"$ref": "#/$defs/codigo"}
+                  }
+                }
+              },
+              "resultados": {"type": "array", "minItems": 2, "items": {"enum": ["RECIBIDA", "LIMITE"]}},
+              "solicitudes_creadas": {"type": "integer", "minimum": 1, "maximum": 3}
+            }
+          }
+        },
         "formatos": {
           "type": "object",
           "additionalProperties": false,
@@ -334,9 +414,10 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["clave", "ventana_horas", "maximo"],
+            "required": ["clave", "cuenta", "ventana_horas", "maximo"],
             "properties": {
               "clave": {"enum": ["IP", "CONTACTO", "MUNICIPIO"]},
+              "cuenta": {"enum": ["ENVIOS", "SOLICITUDES_CREADAS"]},
               "ventana_horas": {"type": "integer", "minimum": 1, "maximum": 24},
               "maximo": {"$ref": "#/$defs/entero_positivo"}
             }
@@ -495,6 +576,24 @@
     "entero_positivo": {"type": "integer", "minimum": 1},
     "lista_claves": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/clave"}},
     "lista_terminos": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z ]*[a-z]$"}},
+    "equivalencias": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["clave", "formas"],
+        "properties": {
+          "clave": {"$ref": "#/$defs/texto_no_vacio"},
+          "formas": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/texto_no_vacio"}}
+        }
+      }
+    },
+    "pares_distintos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/texto_no_vacio"}}
+    },
     "formato": {
       "type": "object",
       "additionalProperties": false,
