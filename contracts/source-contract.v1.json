@@ -1,0 +1,466 @@
+{
+  "version": "source-contract.v1",
+  "estado": "PROVISIONAL: homologar con el custodio en ALIGN-046 antes de uso real",
+  "dominio": "docs/tesis/contrato-dominio-v1.md",
+  "formatos": {
+    "fechas": {
+      "dd/mm/aaaa": "%d/%m/%Y",
+      "aaaa-mm-dd": "%Y-%m-%d"
+    },
+    "codificaciones": [
+      "utf-8",
+      "utf-8-sig",
+      "cp1252"
+    ],
+    "separadores_decimales": [
+      ",",
+      "."
+    ],
+    "fechas_centinela": [
+      "0000-00-00",
+      "00/00/0000"
+    ],
+    "dias_centinela_iso": [
+      "1900-01-01",
+      "2999-01-01",
+      "9999-12-31"
+    ],
+    "separadores_adaptadores": [
+      "\\t",
+      ",",
+      ";",
+      null
+    ],
+    "lector_rutas_v1": "Solo TSV; CSV/XLSX mediante adaptadores que entregan SourceTable.",
+    "separadores_miles": [
+      "",
+      ",",
+      "."
+    ],
+    "normalizacion_tsv": "BOM UTF-8 opcional; recortar encabezados; ignorar líneas vacías sin delimitadores conservando números de línea físicos."
+  },
+  "limites": {
+    "bytes": 25000000,
+    "filas": 300000,
+    "columnas": 60,
+    "celda": 32767
+  },
+  "claves": {
+    "objeto": [
+      "municipio",
+      "Bien_Tipo_Id",
+      "Cuenta"
+    ],
+    "obligacion": [
+      "municipio",
+      "Bien_Tipo_Id",
+      "Cuenta",
+      "DEUD_id"
+    ],
+    "relacion": [
+      "municipio",
+      "Bien_Tipo_Id",
+      "Cuenta",
+      "Destinatario_Id"
+    ],
+    "enlace": "ClaveAgrupacion",
+    "bigint_max": "9223372036854775807"
+  },
+  "catalogos": {
+    "por_lote": [
+      "Bien_Tipo_Id",
+      "Tipo_Ingreso_Id",
+      "NOTD_ESTA_id",
+      "NOTD_SITU_id"
+    ],
+    "estados_obligacion": [
+      "PENDIENTE",
+      "PAGADA",
+      "ANULADA",
+      "SUSPENDIDA",
+      "UNKNOWN"
+    ],
+    "Estado": {
+      "Activo": "ACTIVO",
+      "Inactivo": "INACTIVO"
+    },
+    "tipos_ingreso_mapeados_etl_v0": [
+      "1",
+      "100",
+      "101",
+      "102",
+      "109",
+      "800",
+      "801",
+      "802"
+    ],
+    "normalizacion_estado_objeto": "casefold"
+  },
+  "contactos": {
+    "columnas": [
+      "Destinatario_Email",
+      "Destinatario_Telefono",
+      "Destinatario_Celular"
+    ],
+    "marcadores": [
+      "0",
+      "-",
+      "NO POSEE"
+    ],
+    "vigencia_real_ausente": "NO_INTEGRADO",
+    "utilizable_significa": "Formato aceptable y no dado de baja; nunca verificado ni consentido."
+  },
+  "consistencias": {
+    "tolerancia_importe": "0.05",
+    "porcentaje_total": "100",
+    "cuarentena_max_objetos_pct": "5",
+    "cuarentena_max_importe_pct": "5",
+    "unidad_cuarentena": "objeto completo",
+    "estado_previo": "Conservar y marcar actualización pendiente; dry-run no escribe.",
+    "campos_comunes_cabecera": [
+      "Bien_Tipo_Id",
+      "Cuenta",
+      "Identificador",
+      "Bien_Tipo",
+      "Estado",
+      "Deuda_Actualizada",
+      "Deuda_Capital",
+      "Fecha_Actualizacion",
+      "Periodos_Deuda"
+    ]
+  },
+  "archivos": {
+    "cabecera": {
+      "columnas": {
+        "ClaveAgrupacion": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "Bien_Tipo_Id": {
+          "requerida": true,
+          "tipo": "catalogo"
+        },
+        "Bien_Tipo": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "Cuenta": {
+          "requerida": true,
+          "tipo": "cuenta"
+        },
+        "Identificador": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "Destinatario_Id": {
+          "requerida": true,
+          "tipo": "id"
+        },
+        "Destinatario": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "Destinatario_CUIT": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "Deuda_Actualizada": {
+          "requerida": true,
+          "tipo": "importe"
+        },
+        "Bien_Descripcion": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Estado": {
+          "requerida": false,
+          "tipo": "estado_objeto"
+        },
+        "Tipo_Ingreso_Id": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Tipo": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Porcentaje": {
+          "requerida": false,
+          "tipo": "porcentaje"
+        },
+        "Destinatario_Telefono": {
+          "requerida": false,
+          "tipo": "contacto"
+        },
+        "Destinatario_Celular": {
+          "requerida": false,
+          "tipo": "contacto"
+        },
+        "Destinatario_Email": {
+          "requerida": false,
+          "tipo": "contacto"
+        },
+        "Destinatario_Calle": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Numeracion": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Piso": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Depto": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Localidad": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_CP": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Destinatario_Provincia": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "Deuda_Capital": {
+          "requerida": false,
+          "tipo": "importe"
+        },
+        "Periodos_Deuda": {
+          "requerida": false,
+          "tipo": "entero"
+        },
+        "Fecha_Actualizacion": {
+          "requerida": false,
+          "tipo": "fecha"
+        }
+      }
+    },
+    "detalle": {
+      "columnas": {
+        "ClaveAgrupacion": {
+          "requerida": true,
+          "tipo": "texto"
+        },
+        "DEUD_id": {
+          "requerida": true,
+          "tipo": "id"
+        },
+        "NOTD_capital": {
+          "requerida": true,
+          "tipo": "importe"
+        },
+        "NOTD_totalActualizado": {
+          "requerida": true,
+          "tipo": "importe"
+        },
+        "NOTD_vencimiento": {
+          "requerida": true,
+          "tipo": "fecha"
+        },
+        "Tipo_Ingreso_Id": {
+          "requerida": true,
+          "tipo": "catalogo"
+        },
+        "Bien_Tipo_Id": {
+          "requerida": false,
+          "tipo": "catalogo"
+        },
+        "Cuenta": {
+          "requerida": false,
+          "tipo": "cuenta"
+        },
+        "Detalle_Deuda": {
+          "requerida": false,
+          "tipo": "texto"
+        },
+        "NOTD_intereses": {
+          "requerida": false,
+          "tipo": "importe"
+        },
+        "NOTD_honorarios": {
+          "requerida": false,
+          "tipo": "importe"
+        },
+        "NOTD_ESTA_id": {
+          "requerida": false,
+          "tipo": "estado_obligacion"
+        },
+        "NOTD_SITU_id": {
+          "requerida": false,
+          "tipo": "estado_obligacion"
+        }
+      }
+    }
+  },
+  "codigos": {
+    "DUPLICADO_IDENTICO": {
+      "efecto": "ALERTA",
+      "descripcion": "Fila repetida idéntica: se excluye solo la repetición."
+    },
+    "ESTADO_ORIGEN_NO_INFORMADO": {
+      "efecto": "ALERTA",
+      "descripcion": "UNKNOWN; no se infiere por vencimiento."
+    },
+    "CONTACTO_PLACEHOLDER": {
+      "efecto": "ALERTA",
+      "descripcion": "Marcador de ausencia: contacto inválido."
+    },
+    "CONTACTO_FORMATO_INVALIDO": {
+      "efecto": "ALERTA",
+      "descripcion": "Formato de contacto no utilizable."
+    },
+    "CONTACTO_INACTIVO": {
+      "efecto": "ALERTA",
+      "descripcion": "Baja explícita; valor observado no utilizable."
+    },
+    "CUENTA_NO_CANONICA": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Cuenta distinta de su representación decimal canónica bigint no negativa."
+    },
+    "IDENTIFICADOR_INVALIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Identificador obligatorio vacío, no canónico o fuera de bigint."
+    },
+    "CAMPO_OBLIGATORIO_VACIO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Valor obligatorio ausente."
+    },
+    "IMPORTE_VACIO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Importe obligatorio no informado."
+    },
+    "IMPORTE_NO_NUMERICO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Importe fuera del formato decimal declarado para el lote."
+    },
+    "IMPORTE_NEGATIVO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Importe negativo fuera del contrato de deuda v1."
+    },
+    "IMPORTE_FUERA_DE_RANGO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Importe fuera de numeric(18,2)."
+    },
+    "FECHA_VACIA": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Vencimiento obligatorio no informado."
+    },
+    "FECHA_CENTINELA": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Fecha centinela declarada: no informada, nunca fecha real.",
+      "efecto_opcional": "ALERTA"
+    },
+    "FECHA_FORMATO_INVALIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Fecha fuera del único formato declarado."
+    },
+    "FECHA_IMPOSIBLE": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Día/mes/año inexistente."
+    },
+    "ESTADO_ORIGEN_DESCONOCIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Código presente fuera del catálogo del lote."
+    },
+    "ESTADOS_ORIGEN_CONFLICTIVOS": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Los dos estados de origen informados se contradicen."
+    },
+    "ESTADO_OBJETO_DESCONOCIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Estado del objeto presente fuera del catálogo."
+    },
+    "TIPO_BIEN_FUERA_DE_CATALOGO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Tipo de objeto presente fuera del catálogo."
+    },
+    "TIPO_INGRESO_FUERA_DE_CATALOGO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Tributo presente fuera del catálogo."
+    },
+    "DUPLICADO_CONFLICTIVO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Misma clave con contenido diferente; ninguna versión se publica."
+    },
+    "DETALLE_SIN_CABECERA": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Detalle sin objeto identificable en la cabecera.",
+      "bloquea_lote": true
+    },
+    "CLAVE_AGRUPACION_AMBIGUA": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Una clave de relación apunta a más de un objeto.",
+      "bloquea_lote": true
+    },
+    "CABECERAS_INCONSISTENTES": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Las relaciones de un objeto contradicen sus datos comunes."
+    },
+    "CUENTA_DETALLE_DIFERENTE": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Cuenta del detalle distinta de la cabecera."
+    },
+    "TIPO_BIEN_DETALLE_DIFERENTE": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Tipo de objeto del detalle distinto de la cabecera."
+    },
+    "CONCILIACION_DIFERENTE": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Control actualizado y suma de obligaciones difieren más de la tolerancia."
+    },
+    "PORCENTAJE_INVALIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Porcentaje informado fuera de 0–100 o ilegible."
+    },
+    "ENTERO_INVALIDO": {
+      "efecto": "CUARENTENA",
+      "descripcion": "Conteo informado no entero no negativo."
+    },
+    "ARCHIVO_NO_LEIBLE": {
+      "efecto": "BLOQUEO",
+      "descripcion": "Archivo ausente, inaccesible o texto no decodificable."
+    },
+    "ESTRUCTURA_INVALIDA": {
+      "efecto": "BLOQUEO",
+      "descripcion": "Encabezado repetido/vacío o fila con ancho distinto."
+    },
+    "COLUMNA_OBLIGATORIA_AUSENTE": {
+      "efecto": "BLOQUEO",
+      "descripcion": "Falta una columna obligatoria después del mapeo."
+    },
+    "LIMITE_ARCHIVO_EXCEDIDO": {
+      "efecto": "BLOQUEO",
+      "descripcion": "Límite de bytes, filas, columnas o celda excedido."
+    }
+  },
+  "banderas": [
+    "CONTACTO_NO_UTILIZABLE",
+    "SIN_CONTACTO_UTILIZABLE",
+    "CONTACTO_INACTIVO",
+    "MULTIPLES_PERSONAS",
+    "PORCENTAJES_NO_SUMAN_100",
+    "PORCENTAJE_FALTANTE",
+    "OBJETO_INACTIVO_EN_ORIGEN",
+    "ESTADO_OBJETO_NO_INFORMADO",
+    "TIPO_INGRESO_SIN_MAPEO_EN_ETL",
+    "CABECERA_SIN_DETALLE",
+    "DUPLICADO_IDENTICO"
+  ],
+  "codigos_resumen": {
+    "SIN_OBSERVACIONES": "Fila candidata sin alertas.",
+    "OBJETO_CON_ALERTAS": "Fila candidata de un objeto con banderas.",
+    "OBJETO_EN_CUARENTENA": "Fila válida excluida por la invalidez de otra fila de su objeto.",
+    "LOTE_ESTRUCTURA_INVALIDA": "Fila excluida por un bloqueo de estructura del lote.",
+    "CUARENTENA_EXCEDE_OBJETOS": "Más del límite porcentual de objetos en cuarentena.",
+    "CUARENTENA_EXCEDE_IMPORTE": "Más del límite porcentual del importe observado en cuarentena.",
+    "CUARENTENA_IMPORTE_NO_EVALUABLE": "Faltan importes: no se puede certificar el límite porcentual.",
+    "LOTE_VACIO": "No hay objetos para validar; porcentajes NO_APLICA."
+  }
+}
