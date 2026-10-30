@@ -254,8 +254,22 @@ Un error de lectura de obligaciones no debe convertirse en `[]`; el adaptador
 debe detener la evaluación. Los valores mal formados se rechazan: el adaptador
 declara `INVALIDO` con valor null. Los importes y sus sumas deben caber en
 centavos enteros seguros de JavaScript; un desbordamiento se rechaza en lugar
-de redondear silenciosamente. La ausencia del corte municipal se rotula en el
+de redondear silenciosamente. Desde ALIGN-010, `amountInCents` deriva los centavos
+de `String(value)` con aritmética decimal entera: una fracción de centavo (por
+ejemplo, `1.005`) produce `RangeError`, incluso si otro dato de la obligación
+no es evaluable. El adaptador la declara `INVALIDO` con motivo antes de evaluar.
+`[0.29, 49999.71]` suma exactamente 50 000 ARS y aporta 20 puntos de monto.
+La ausencia del corte municipal se rotula en el
 consumidor según el contrato §5.1; este núcleo no inventa un corte.
+
+**Resolución de módulos en Next (ALIGN-010).** Turbopack no resuelve archivos
+fuera de su raíz. `front/next.config.ts` usa
+`turbopack.root: path.join(__dirname, '..')` para importar el único JSON de
+`contracts/` también desde las páginas existentes a través del mapper. No se
+copia el contrato a `front/`. El despliegue debe incluir esa raíz del repositorio.
+La suite fija `America/New_York` y restaura el huso para probar los cambios de
+horario de verano; cubre actualización de origen igual al corte, ausente y
+posterior. Los 43 casos, 14 pares y 5 ordenamientos golden siguen intactos.
 
 La instrucción de ejecución de ALIGN-009 confirma la aprobación de la escala
 0–4 por el usuario en ALIGN-003 (29/10/2026): intensa desde 3, máximo automático
