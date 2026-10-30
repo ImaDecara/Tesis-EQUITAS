@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "source-mapping.schema.json",
-  "title": "Perfil de origen EQUITAS v1 (TSV/CSV)",
+  "title": "Perfil de origen EQUITAS v1 (TSV/CSV/XLSX)",
   "description": "Configuración declarativa. Las restricciones cruzadas y los nombres canónicos se verifican además con source-contract.v1.",
   "type": "object",
   "additionalProperties": false,
@@ -17,14 +17,42 @@
       "additionalProperties": false,
       "required": ["separador", "codificacion", "decimal", "miles", "fecha"],
       "properties": {
-        "tipo": {"enum": ["tsv", "csv"]},
-        "separador": {"enum": ["\\t", "\t", ",", ";"]},
+        "tipo": {"enum": ["tsv", "csv", "xlsx"]},
+        "separador": {"enum": ["\\t", "\t", ",", ";", null]},
         "codificacion": {"enum": ["utf-8", "utf-8-sig", "cp1252"]},
         "decimal": {"enum": [",", "."]},
         "miles": {"enum": ["", ",", "."]},
         "fecha": {"enum": ["dd/mm/aaaa", "aaaa-mm-dd"]},
-        "fin_de_linea": {"enum": ["LF", "CRLF"]}
-      }
+        "fin_de_linea": {"enum": ["LF", "CRLF"]},
+        "hojas": {
+          "description": "Solo XLSX: hoja de cada archivo lógico. Las demás se listan e ignoran.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cabecera", "detalle"],
+          "properties": {
+            "cabecera": {"$ref": "#/definitions/texto"},
+            "detalle": {"$ref": "#/definitions/texto"}
+          }
+        },
+        "fecha_serial": {
+          "description": "Solo XLSX: sistema de fechas del libro. Sin declararlo, una celda de fecha se rechaza.",
+          "enum": ["1900", "1904"]
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["tipo", "hojas"],
+          "properties": {"tipo": {"const": "xlsx"}, "separador": {"const": null}}
+        },
+        {
+          "properties": {
+            "tipo": {"enum": ["tsv", "csv"]},
+            "separador": {"enum": ["\\t", "\t", ",", ";"]},
+            "hojas": false,
+            "fecha_serial": false
+          }
+        }
+      ]
     },
     "columnas": {
       "description": "Campo canónico -> nombre físico; identidad para campos omitidos. Los alias deben ser únicos, incluidos los implícitos.",

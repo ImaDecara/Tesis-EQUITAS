@@ -119,9 +119,9 @@ def test_bad_source_is_rejected_with_a_safe_code(tmp_path, payload, code):
 
 def test_unsupported_format_is_rejected_before_reading(tmp_path):
     mapping = load_mapping(FIXTURE)
-    mapping['formato']['tipo'] = 'xlsx'
+    mapping['formato']['tipo'] = 'ods'
     with pytest.raises(extract.ValidationError, match='FORMATO_NO_SOPORTADO'):
-        extract.read_source_tables(dict.fromkeys(KINDS, tmp_path / 'input.xlsx'), mapping)
+        extract.read_source_tables(dict.fromkeys(KINDS, tmp_path / 'input.ods'), mapping)
 
 
 def test_profile_schema_is_versioned_and_used_by_the_reader():
@@ -291,14 +291,15 @@ def test_bad_csv_row_is_rejected_without_partial_tables(tmp_path, mutation):
         extract.read_source_tables(files, mapping)
 
 
-@pytest.mark.parametrize('limit', ['bytes', 'filas', 'columnas', 'celda'])
-def test_profile_reader_enforces_contract_limits(tmp_path, limit):
+@pytest.mark.parametrize(('limit', 'code'), [('bytes', 'LIMITE_ARCHIVO_EXCEDIDO'), ('filas', 'LIMITE_ARCHIVO_EXCEDIDO'),
+                                              ('columnas', 'LIMITE_ARCHIVO_EXCEDIDO'), ('celda', 'CELDA_EXCEDE_LIMITE')])
+def test_profile_reader_enforces_contract_limits(tmp_path, limit, code):
     records = first_rows()
     records['cabecera'].append(records['cabecera'][0].copy())
     files = write_records(tmp_path, records)
     contract = load_contract()
     contract['limites'][limit] = 1
-    with pytest.raises(extract.ValidationError, match='LIMITE_ARCHIVO_EXCEDIDO'):
+    with pytest.raises(extract.ValidationError, match=code):
         extract.read_source_tables(files, load_mapping(FIXTURE), contract=contract)
 
 
@@ -316,6 +317,7 @@ def test_bom_trimmed_headers_blank_lines_and_crlf_keep_physical_locations(tmp_pa
 
 def test_file_extension_missing_file_and_wrong_batch_shape_fail_safely(tmp_path):
     mapping = load_mapping(FIXTURE)
+    (tmp_path / 'sheet.xlsx').write_bytes(b'PK\x03\x04 libro con perfil de texto')
     for path, code in ((tmp_path / 'missing.tsv', 'ARCHIVO_NO_LEIBLE'),
                        (tmp_path / 'sheet.xlsx', 'FORMATO_NO_SOPORTADO'),
                        (tmp_path / 'dir.tsv', 'ARCHIVO_NO_LEIBLE')):
@@ -390,5 +392,5 @@ def test_transformation_expansion_cannot_exceed_the_cell_limit(tmp_path):
     ]}}
     contract = load_contract()
     contract['limites']['celda'] = 100
-    with pytest.raises(extract.ValidationError, match='LIMITE_ARCHIVO_EXCEDIDO'):
+    with pytest.raises(extract.ValidationError, match='CELDA_EXCEDE_LIMITE'):
         extract.read_source_tables(write_records(tmp_path, records), mapping, contract=contract)
