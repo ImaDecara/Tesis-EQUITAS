@@ -229,3 +229,37 @@ El oráculo de decisión de cada caso se escribió a mano y se contrastó con un
 |---|---|---|
 | 1.0.0 | 29/10/2026 | Versión inicial (ALIGN-008). Provisional hasta la aprobación de la política, de ALIGN-003 y del umbral jurídico. Cualquier cambio de parámetros, reglas o textos crea una versión nueva con sus propios casos golden; esta versión no se edita en silencio |
 | 1.0.0 (corrección de revisión 1) | 29/10/2026 | Antes de su primera integración y sin consumidores, la versión inicial incorpora los cambios pedidos por la revisión independiente: monto actualizado del objeto como insumo (D1), explicaciones parciales sin afirmaciones no justificadas y detalle de no evaluables (D13), casos G42 y G43. El borrador revisado (`e009951`) no se usó en ninguna integración |
+
+## 16. Implementación TypeScript — ALIGN-009
+
+El [núcleo puro TypeScript](../../front/lib/domain/decision-rules-v1.ts) importa
+estáticamente el JSON v1. `evaluateDecisionRulesV1(input)` recibe un
+`DecisionInput` con corte `as_of` obligatorio y devuelve el objeto completo del
+golden, con la misma estructura que el [motor Python](../../back/services/decision_rules_v1.py).
+No lee fuentes externas, no usa el reloj del sistema y no modifica la entrada.
+Bandas, puntos, orden de reglas, intensidades, umbrales, mensajes y textos se
+obtienen del JSON; la semántica de las condiciones y del modificador M1 se
+implementa según §3–9. No cambia la política ni su versión.
+
+También expone `evaluateSeverity`, `evaluateFlags`, `suggestIntervention`,
+`calculatePriority` y `explainDecision`. `comparePriority` compara pares
+`{ id, decision }` únicamente dentro de la misma cola (rechaza colas distintas),
+con los desempates de §8 y los valores null al final. La
+[suite TypeScript](../../front/tests/unit/decision-rules-v1.test.ts) verifica los
+43 objetos completos, 14 pares, 5 ordenamientos, límites, presencia y determinismo.
+
+Para ALIGN-010: adaptar las lecturas al tipo `RuleDatum<T>`, que reutiliza
+`DataPresence`, y conservar `id`, `as_of` y `RULES_VERSION` junto al resultado.
+Un error de lectura de obligaciones no debe convertirse en `[]`; el adaptador
+debe detener la evaluación. Los valores mal formados se rechazan: el adaptador
+declara `INVALIDO` con valor null. Los importes y sus sumas deben caber en
+centavos enteros seguros de JavaScript; un desbordamiento se rechaza en lugar
+de redondear silenciosamente. La ausencia del corte municipal se rotula en el
+consumidor según el contrato §5.1; este núcleo no inventa un corte.
+
+La instrucción de ejecución de ALIGN-009 confirma la aprobación de la escala
+0–4 por el usuario en ALIGN-003 (29/10/2026): intensa desde 3, máximo automático
+2. Las menciones a aprobación pendiente de la escala en §7/§14 y en los
+metadatos del JSON describen el estado de su especificación congelada; esta
+implementación no modifica ese archivo. La aprobación de la política completa
+y del umbral jurídico sigue siendo una condición separada.
