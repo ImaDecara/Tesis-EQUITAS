@@ -240,6 +240,14 @@ begin
   update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_operador;
   perform pg_temp.expect('aprobacion por el mismo proponente', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop)));
   update public.tenant_user set role = 920002 where tenant = t_a and "user" = u_operador;
+  update public.tenant_user set status = true where tenant = t_a and "user" = u_inactivo;
+  perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_inactivo, t_a, d_a, 'MODIFICA', intensa), true);
+  prop2 := current_setting('a018.id')::bigint;
+  perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa || format(', p_supersedes => %s', prop2)), true);
+  prop3 := current_setting('a018.id')::bigint;
+  update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_inactivo;
+  perform pg_temp.expect('aprobacion por proponente de una version anterior', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_inactivo, t_a, prop3)));
+  update public.tenant_user set role = 920002, status = false where tenant = t_a and "user" = u_inactivo;
   perform pg_temp.expect('APRUEBA sin lista', invalid_ap || 'case_review_approval_requires_checklist', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'APRUEBA', 'p_reason_code => ''X''')));
   perform pg_temp.expect('APRUEBA con lista incompleta', invalid_ap || 'case_review_approval_requires_checklist', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'APRUEBA', 'p_checklist => ''{"canal_valido":true}''')));
   perform pg_temp.expect('aprobacion con texto en la lista', invalid_ap || 'case_review_checklist_shape', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', 'p_reason_code => ''X'', p_checklist => ''{"situacion_hogar":"sin ingresos"}''')));

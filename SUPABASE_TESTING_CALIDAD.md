@@ -155,7 +155,7 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
 | Función | Quién actúa | Rechazos (mensaje estable, sin valores) |
 | --- | --- | --- |
 | `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW:<restricción>` |
-| `record_case_review_approval` | `supervisor` activo del tenant y distinto del proponente | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
+| `record_case_review_approval` | `supervisor` activo del tenant, distinto de quien propuso esa versión o una anterior de la cadena | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
 | `read_case_review_reason_text` | `operador` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT` |
 | `record_import_batch` | `importador`, `importador_sistema` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_IMPORT_BATCH:<restricción>` |
 
@@ -234,7 +234,7 @@ npx --yes supabase@2.108.0 db reset
 
 `case-review-checks.sql` y `http-check` terminan en `FALLAS|0` y salen con error si un caso falla. Publican solo códigos y conteos.
 
-**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 232 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 232 pruebas por rol y 100 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
+**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 233 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 233 pruebas por rol y 100 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
 
 ### Reversión
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """ALIGN-018. Herramientas locales de la credencial de servidor y prueba HTTP real. Solo stdlib.
 
 mint-jwt   emite el JWT server-only de un rol de servidor en /tmp/equitas-local-db/ (0600). No lo imprime.

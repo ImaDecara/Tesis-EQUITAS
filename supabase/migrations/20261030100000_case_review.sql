@@ -308,7 +308,15 @@ begin
   select * into v_review from public.case_review r where r.id = p_case_review and r.tenant = p_tenant;
   if not found then raise exception 'REVIEW_NOT_IN_TENANT'; end if;
   perform pg_advisory_xact_lock(hashtextextended(format('case_review:%s:%s', p_tenant, v_review.debtor), 0));
-  if v_review.reviewer = p_approver_user then raise exception 'APPROVER_IS_PROPONENT'; end if;
+  -- Distinto de quien propuso esta version o una anterior de la misma cadena.
+  if exists(
+    with recursive chain as (
+      select r.reviewer, r.supersedes from public.case_review r where r.id = p_case_review
+      union all
+      select r.reviewer, r.supersedes from public.case_review r join chain c on r.id = c.supersedes
+    )
+    select 1 from chain c where c.reviewer = p_approver_user
+  ) then raise exception 'APPROVER_IS_PROPONENT'; end if;
   if coalesce(v_review.decided_intensity, 0) < 3 then raise exception 'APPROVAL_NOT_REQUIRED'; end if;
   select * into v_existing from public.case_review_approval a where a.tenant = p_tenant and a.idempotency_key = p_idempotency_key;
   if found then
