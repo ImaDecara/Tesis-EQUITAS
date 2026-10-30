@@ -273,6 +273,9 @@ begin
   perform pg_temp.expect('lote con estado fuera de lista', invalid_b || 'import_batch_status_valid', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'OTRO')));
   perform pg_temp.expect('lote con hash invalido', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, '{"cabecera":"abc"}')));
   perform pg_temp.expect('lote sin hashes', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, '{}')));
+  perform pg_temp.expect('lote con hashes escalares', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, '"bbbb"')));
+  perform pg_temp.expect('lote con hashes en lista', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, '["bbbb"]')));
+  perform pg_temp.expect('lote con conteos escalares', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''5''')));
   perform pg_temp.expect('lote con ruta de archivo como clave', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, '{"/tmp/juan.tsv":"bbbb"}')));
   perform pg_temp.expect('lote con texto en conteos', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":{"nota":"texto"}}''')));
   perform pg_temp.expect('lote con conteo negativo', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":-1}''')));

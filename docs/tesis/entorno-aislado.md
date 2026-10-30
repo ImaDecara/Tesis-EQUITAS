@@ -5,7 +5,7 @@
 | Ticket | ALIGN-016, plan `2026-10-28-v2` (M2) |
 | Estado | Verificado en la máquina del equipo (macOS arm64, Docker Desktop) el 29/10/2026; pendiente de la revisión independiente de otro proveedor exigida por el ticket |
 | Versión fijada de la CLI | **Supabase CLI `2.108.0`** (`npx --yes supabase@2.108.0 …`), la misma con la que E06 creó las migraciones |
-| Configuración usada | [`supabase/config.toml`](../../supabase/config.toml) y las dos migraciones de [`supabase/migrations/`](../../supabase/migrations/), sin cambios |
+| Configuración usada | [`supabase/config.toml`](../../supabase/config.toml) y las migraciones de [`supabase/migrations/`](../../supabase/migrations/) |
 | Documentos relacionados | [Supabase de testing y autorización (E06)](../../SUPABASE_TESTING_CALIDAD.md), [ejecución segura del ETL](../../back/ETL/README.md) (ALIGN-025), [ADR-001](adr-001-reglas-y-capas.md) |
 | Exclusiones | No toca el proyecto original ni el de testing; no modifica fixtures e06 ni migraciones |
 
@@ -115,15 +115,16 @@ mkdir -p /tmp/equitas-local-db && chmod 700 /tmp/equitas-local-db
 npx --yes supabase@2.108.0 db reset
 ```
 
-Borra la base local, la recrea y aplica **en orden** las dos migraciones existentes:
-
-1. `20261021220156_equitas_testing_schema.sql` (exige `public` vacío; crea las 23 tablas).
-2. `20261021221030_active_membership_rls.sql` (23 políticas por membresía activa y 14 índices).
+Borra la base local, la recrea y aplica **en orden** todas las migraciones de
+`supabase/migrations/`; el orden lo da el timestamp del nombre de cada archivo.
+La primera, `20261021220156_equitas_testing_schema.sql`, exige `public` vacío. Qué
+agrega cada una está en [`SUPABASE_TESTING_CALIDAD.md`](../../SUPABASE_TESTING_CALIDAD.md).
 
 El seed está deshabilitado (`[db.seed] enabled = false`): la base queda **sin filas** y
 sin usuarios de Auth. Las cuentas y datos sintéticos los crea cada ticket (por
-ejemplo, ALIGN-018) y desaparecen con el siguiente `db reset`. Un segundo `db reset`
-da el mismo resultado: esa es la prueba de reproducibilidad.
+ejemplo, ALIGN-018 con `database/testing/case-review-*.sql`) y desaparecen con el
+siguiente `db reset`. Un segundo `db reset` da el mismo resultado: esa es la prueba
+de reproducibilidad.
 
 Para ensayar solo la primera migración (23 políticas `USING(true)` que reproducen el
 original, como pide ALIGN-019):
@@ -137,15 +138,16 @@ Ese estado es transitorio: al terminar, volver a `db reset` sin `--version`.
 ### 3.4 Verificar
 
 ```sh
-npx --yes supabase@2.108.0 migration list --local
+npx --yes supabase@2.108.0 migration list --local                                # una fila por archivo de supabase/migrations/
 docker exec supabase_db_equitas-tp-testing psql -U postgres -d postgres -Atc \
-  "select count(*) from pg_tables where schemaname='public';"                    # 23
+  "select count(*) from pg_tables where schemaname='public' and not rowsecurity;" # 0
 docker exec supabase_db_equitas-tp-testing psql -U postgres -d postgres -Atc \
-  "select count(*) from pg_tables where schemaname='public' and rowsecurity;"    # 23
-docker exec supabase_db_equitas-tp-testing psql -U postgres -d postgres -Atc \
-  "select count(*) from pg_policies where schemaname='public' and qual='true';"  # 0
+  "select count(*) from pg_policies where schemaname='public' and qual='true';"   # 0
 ```
 
+- Estos esperados no cambian al sumar migraciones. Los conteos detallados por ticket
+  están en `database/testing/etl-compat-verify.sql` y `case-review-verify.sql`, con
+  sus esperados en [`SUPABASE_TESTING_CALIDAD.md`](../../SUPABASE_TESTING_CALIDAD.md).
 - `psql` no está instalado en la máquina; se usa el del contenedor.
 - `migration list` siempre con `--local`. Con `--local`, la columna "Remote" muestra
   las versiones registradas en la base local, no en la nube.
@@ -182,6 +184,11 @@ de seguir.
 - Para pruebas de aplicación y de RLS se usa la clave publicable o `anon`. La de
   servicio solo para cargas locales del ETL (`EQUITAS_TARGET_ENV=local`, ver §4) y
   siempre contra `http://127.0.0.1:54321`.
+- Las escrituras de revisión y de lote usan un JWT propio de los roles de servidor
+  de ALIGN-018, no la clave de servicio. Se emite con
+  `database/testing/case_review_local.py mint-jwt` en esta misma carpeta y con el mismo
+  trato. Las contraseñas de las cuentas sintéticas tampoco salen de ella
+  (`case-review-credentials.psv`).
 
 Servicios locales: API `http://127.0.0.1:54321` (REST `/rest/v1`, Auth `/auth/v1`),
 base `127.0.0.1:54322`, Studio `http://127.0.0.1:54323`, Mailpit
@@ -221,6 +228,8 @@ Coherencia con lo implementado (comprobado, §7):
 - Un runner nuevo valida el destino **antes** de la primera solicitud y con la misma
   regla: host exacto de la lista, sin credenciales en la URL, y rechazo del original en
   cualquier valor de configuración.
+  `database/testing/case_review_local.py` (ALIGN-018) la aplica y rechaza cualquier
+  valor de configuración que nombre un proyecto remoto.
 
 ## 5. Uso compartido entre tickets
 

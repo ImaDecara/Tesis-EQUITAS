@@ -106,6 +106,8 @@ cd back && EQUITAS_TARGET_ENV=local SUPABASE_URL=http://127.0.0.1:54321 \
 | `debt_updated_distinto_current` | 0 | 0 |
 | `filas_total` | 0 | 30 tras los catálogos (29 filas + el tenant 1); con el ETL, según el lote |
 
+Los valores de la tabla corresponden a la base hasta ALIGN-017. Con `20261030100000_case_review` (ALIGN-018) este verificador suma las tablas nuevas: `migraciones` agrega esa versión; `tablas_public`, `tablas_con_rls` y `politicas` pasan a 26; `tablas_identity_always` a 3; y `politicas_md5` y `grants_tablas_md5` cambian porque recorren todo `public`. Para comparar las 23 tablas de E06 se usa `politicas_23_md5` y `grants_23_md5` de `case-review-verify.sql`.
+
 **Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-017/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. e06 cargó y su limpieza dejó 0 filas; `updated_amount` coincidió en sus deudas. Con e06 cargado, el script de catálogos falló sin cambios; con los catálogos cargados, `fixtures.sql` falló en `currency_code_key` y se revirtió. El ETL actual sobre `sintetico-v1` completo se detuvo en el objeto con `Bien_Tipo_Id 9` (`debtor_type_fkey`): ese caso fuera de catálogo debe quedar en cuarentena antes de cargar (ALIGN-024/026), y el ETL actual deja una carga parcial. Sin esa fila (1 de cabecera y 1 de detalle), cargó 477 filas, 159 de ellas deudas con `updated_amount = current_amount`. Los payloads del ETL no llevan `id` ni `updated_amount` (`back/ETL/transform.py:312-741`), y `secuencias_sin_superar_maximo` quedó en 0: los IDs explícitos no avanzan la secuencia (con e06 da 14), así que fue la identidad la que generó los IDs. Repetido, no duplicó filas. En una base con e06 y las dos migraciones anteriores, la migración dejó las secuencias sobre el máximo (siguiente `province` 910002, `tenant` 910003). Una inserción explícita en `updated_amount`, `authenticated` insertando y `anon` con `nextval` fallaron.
 
 ### Reversión
@@ -124,6 +126,131 @@ begin
   end loop;
 end $$;
 delete from supabase_migrations.schema_migrations where version = '20261030090000';
+commit;
+notify pgrst, 'reload schema';
+```
+
+## Revisión humana, aprobación y lote (ALIGN-018, solo base local)
+
+`supabase/migrations/20261030100000_case_review.sql` se aplica **solo en la base local** con `db reset`: nunca en el original ni en el proyecto testing. Registra quién decidió qué, cuándo, con qué información y por qué. El diccionario de columnas está en [`docs/tesis/contrato-dominio-v1.md`](docs/tesis/contrato-dominio-v1.md) §13; la escala y los roles, en la decisión de ALIGN-003.
+
+| Tabla | Registra | Lectura |
+| --- | --- | --- |
+| `case_review` | Tenant, objeto, versión de reglas, corte, hash de insumos, sugerencia, decisión, motivo, lista de control, revisor, rol, fecha de servidor, `supersedes` | `authenticated` con membresía activa, sin `reason_text` |
+| `case_review_approval` | Aprobación u objeción de un supervisor sobre una decisión de intensidad ≥3 | `authenticated` con membresía activa |
+| `import_batch` | Origen, hashes, corte, `source_updated_at`, versión de reglas, conteos y estado | `authenticated` con membresía activa |
+
+Las tres son append-only: una corrección o un cambio de estado es una fila nueva con `supersedes`, y cada fila se reemplaza una sola vez. `anon` y `authenticated` solo tienen `SELECT` (`anon` no tiene política: cero filas); `service_role` tampoco escribe. Un trigger frena además `UPDATE`, `DELETE` y `TRUNCATE` del dueño de las tablas. `import_batch` ya admite los siete estados de ALIGN-032.
+
+### Canal de escritura
+
+| Rol | Atributos | Puede |
+| --- | --- | --- |
+| `equitas_review_server` | `NOLOGIN`, sin `BYPASSRLS`; `authenticator` lo asume con un JWT server-only | `EXECUTE` de `record_case_review`, `record_case_review_approval` y `read_case_review_reason_text`. No lee ni escribe tablas |
+| `equitas_import_server` | Igual | `EXECUTE` de `record_import_batch`. No lee ni escribe tablas |
+| `equitas_write_definer` | `NOLOGIN`, `BYPASSRLS`, ningún JWT lo asume | Dueño de las funciones `SECURITY DEFINER`. `SELECT` e `INSERT` en las tres tablas y `SELECT` de 12 columnas de `user`, `tenant_user`, `role`, `tenant` y `debtor`. `BYPASSRLS` es necesario porque no se agregan políticas a tablas existentes |
+
+Los roles de servidor son propios y no `service_role` para que una filtración del servidor web no entregue la cartera ni la escritura general. Las funciones tienen `search_path` vacío y nombres calificados. Las columnas `reviewer_role`, `approver_role`, `created_by_role` y las fechas las fija la base: no son parámetros.
+
+| Función | Quién actúa | Rechazos (mensaje estable, sin valores) |
+| --- | --- | --- |
+| `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW:<restricción>` |
+| `record_case_review_approval` | `supervisor` activo del tenant y distinto del proponente | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
+| `read_case_review_reason_text` | `operador` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT` |
+| `record_import_batch` | `importador`, `importador_sistema` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_IMPORT_BATCH:<restricción>` |
+
+- **Roles.** Se aplica literal lo aprobado en ALIGN-003: el `supervisor` aprueba u objeta, no registra decisiones. `importador` "puede coincidir con supervisor" y la membresía admite un solo rol por tenant: por eso `supervisor` también registra lotes.
+- **Motivo.** Toda decisión distinta de `ACEPTA` exige `reason_code`. `ACEPTA` debe coincidir con la sugerencia, `MODIFICA` debe cambiarla, `RECHAZA` y `POSPONE` no llevan intervención decidida. El sistema nunca sugiere 3 o 4 (`suggested_intensity` entre 0 y 2).
+- **Lista de control.** Solo `situacion_hogar` (`CONSULTADA` o `NO_DISPONIBLE`), `estado_juridico_verificado`, `canal_valido` y `alternativa_asistida_ofrecida` (booleanos). Cualquier otra clave o valor se rechaza: no admite texto sobre el hogar. Una decisión ≥3 y un `APRUEBA` la exigen completa y con las casillas en verdadero.
+- **`reason_text`.** Hasta 500 caracteres. El formulario debe advertir: "No incluyas datos personales ni información del hogar". Ningún rol de cliente tiene `SELECT` de esa columna: `select=*` falla con `42501` y hay que listar columnas. Se lee solo con `read_case_review_reason_text`, nunca en evidencias ni exportaciones. Un rechazo reemplaza el `DETAIL` de PostgreSQL, que contendría la fila.
+- **Idempotencia.** Cada llamada lleva `p_idempotency_key` (uuid), única por tenant. Repetirla con la misma carga devuelve la fila existente con `created = false`; con otra carga, `IDEMPOTENCY_KEY_CONFLICT`. Un bloqueo por objeto serializa los envíos simultáneos.
+
+### Uso desde el servidor (ALIGN-020)
+
+1. La credencial es un JWT con `role = equitas_review_server`, firmado con el secreto del proyecto. Va en una variable **sin** prefijo `NEXT_PUBLIC_` (`EQUITAS_REVIEW_SERVER_JWT`), leída solo en un módulo con `import 'server-only'`. Nunca llega al navegador, a un componente cliente ni a un log.
+2. En local se emite fuera del repositorio con vigencia corta. El comando no la imprime:
+
+   ```sh
+   python3 -I database/testing/case_review_local.py mint-jwt --role equitas_review_server --hours 12
+   # escribe /tmp/equitas-local-db/equitas_review_server.jwt (0600)
+   ```
+
+3. La Server Action verifica sesión, membresía y rol con la DAL (cliente de sesión). Toma el actor de esa sesión (`public.user.id`), **nunca** de la entrada del navegador; la función vuelve a verificar membresía y rol.
+4. Crea un cliente aparte para la escritura y no reutiliza el de sesión:
+
+   ```ts
+   import 'server-only'
+   const writer = createClient(url, publishableKey, {
+     global: { headers: { Authorization: `Bearer ${process.env.EQUITAS_REVIEW_SERVER_JWT}` } },
+     auth: { persistSession: false, autoRefreshToken: false },
+   })
+   const { data, error } = await writer.rpc('record_case_review', { p_reviewer_user, p_tenant, /* … */ })
+   ```
+
+5. `error.message` trae el código estable de la tabla anterior; se traduce a un mensaje de pantalla sin mostrar valores. La lectura del historial usa el cliente de sesión con columnas explícitas. El servicio de importación usa `equitas_import_server` de la misma forma.
+
+### Semillas y escenarios
+
+`case-review-auth-fixtures.sql` crea ocho cuentas confirmadas con contraseña aleatoria (`consulta`, `operador`, `supervisor`, `importador`, `sin-membresia`, `inactivo`, `otro-operador`, `otro-supervisor`). `case-review-fixtures.sql` crea los tenants 920001 y 920002, los cinco roles, los usuarios, las membresías y un objeto por tenant, y un usuario `importador_sistema` sin cuenta de Auth. Están **solo en la base local** y no crean revisiones.
+
+| Escenario | Resultado |
+| --- | --- |
+| Solo ALIGN-018 | `db reset` → cuentas → semillas |
+| Con e06 | Cargar e06 **primero**: `create-auth-fixtures.sql` exige Auth vacío y, si no, falla sin cambios. `cleanup.sql` de e06 no toca estas filas |
+| Con catálogos y ETL de ALIGN-017 | Conviven en cualquier orden: las semillas no usan esos catálogos (`debtor.type` queda nulo) y los IDs explícitos no avanzan la secuencia de `tenant`, que sigue dando 1 |
+
+Esos IDs explícitos dejan `secuencias_sin_superar_maximo` en 4 en `etl-compat-verify.sql` (`tenant`, `user`, `tenant_user`, `debtor`): los valores generados quedan por debajo del rango reservado mientras una tabla tenga menos de 920 000 filas. Las filas de `case_review` no se pueden borrar: para limpiar se usa `db reset`.
+
+### Procedimiento y esperados
+
+Desde la raíz del worktree, con el stack de `docs/tesis/entorno-aislado.md` levantado. `case-review-checks.sql` se conecta como `supabase_admin` solo para simular roles con `SET LOCAL ROLE`, y termina en `ROLLBACK`. `http-check` usa Auth y la Data API reales, deja filas y exige una base recién sembrada.
+
+```sh
+umask 077
+npx --yes supabase@2.108.0 db reset
+P="docker exec -i supabase_db_equitas-tp-testing psql -X -U postgres -d postgres -v ON_ERROR_STOP=1"
+$P -At -F '|' < database/testing/case-review-verify.sql
+$P -q -At -F '|' < database/testing/case-review-auth-fixtures.sql > /tmp/equitas-local-db/case-review-credentials.psv   # contraseñas: no copiar
+$P -q < database/testing/case-review-fixtures.sql
+docker exec -i supabase_db_equitas-tp-testing psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -At -F '|' < database/testing/case-review-checks.sql
+python3 -I database/testing/case_review_local.py http-check
+npx --yes supabase@2.108.0 db reset
+```
+
+| Verificación (`case-review-verify.sql`, solo metadatos y conteos) | Esperado |
+| --- | --- |
+| `tablas_nuevas` / `tablas_nuevas_con_rls` / `politicas_nuevas` | 3 / 3 / 3 |
+| `politicas_nuevas_using_true` / `politicas_nuevas_no_select` / `politicas_nuevas_anon_o_public` | 0 / 0 / 0 |
+| `privilegios_escritura_clientes` (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`, cinco roles) / `secuencias_nuevas_privilegios_clientes` | 0 / 0 |
+| `reason_text_legible_por_clientes` / `columnas_case_review_legibles_authenticated` | 0 / 19 |
+| `funciones_security_definer` / `funciones_sin_search_path_vacio` / `funciones_definer_dueno_definidor` | 4 / 0 / 4 |
+| `funciones_ejecutables_public` / `funciones_ejecutables_anon_authenticated_service` | 0 / 0 |
+| `funciones_servidor_revision` / `funciones_servidor_importacion` | 3 / 1 |
+| `politicas_23_md5` / `grants_23_md5` / `acl_23_md5` | Iguales antes y después de la migración |
+| `grants_columna_definidor_en_existentes` / `grants_columna_clientes_en_existentes` | 12 / 0 |
+| `filas_nuevas_total` tras `db reset` | 0 |
+
+`case-review-checks.sql` y `http-check` terminan en `FALLAS|0` y salen con error si un caso falla. Publican solo códigos y conteos.
+
+**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git.
+
+### Reversión
+
+Solo en la base local. La reversión exacta es `npx --yes supabase@2.108.0 db reset --version 20261030090000`, y después `db reset` para volver al estado completo. Para conservar las filas de las demás tablas, esta inversa se ejecuta como `supabase_admin` (las funciones son de otro dueño) y descarta las revisiones y los lotes:
+
+```sql
+begin;
+drop table public.case_review_approval, public.case_review, public.import_batch;
+drop function public.record_case_review, public.record_case_review_approval, public.read_case_review_reason_text, public.record_import_batch, public.equitas_member_role, public.equitas_append_only;
+drop domain public.case_review_checklist;
+alter table public.debtor drop constraint debtor_tenant_id_key;
+revoke select (id, status) on public."user" from equitas_write_definer;
+revoke select (tenant, "user", role, status) on public.tenant_user from equitas_write_definer;
+revoke select (id, name) on public.role from equitas_write_definer;
+revoke select (id, status) on public.tenant from equitas_write_definer;
+revoke select (id, tenant) on public.debtor from equitas_write_definer;
+drop role equitas_write_definer, equitas_review_server, equitas_import_server;
+delete from supabase_migrations.schema_migrations where version = '20261030100000';
 commit;
 notify pgrst, 'reload schema';
 ```

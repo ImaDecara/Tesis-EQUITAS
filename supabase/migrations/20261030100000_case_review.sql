@@ -334,15 +334,17 @@ end $$;
 
 -- Lectura explicita del motivo libre para quien decide o supervisa. consulta no lo ve (minimizacion).
 
-create function public.read_case_review_reason_text(p_actor_user bigint, p_tenant bigint, p_case_review bigint, out reason_text text)
+create function public.read_case_review_reason_text(p_actor_user bigint, p_tenant bigint, p_case_review bigint) returns text
 language plpgsql stable security definer set search_path = '' as $$
 declare
   v_role text := public.equitas_member_role(p_actor_user, p_tenant);
+  v_text text;
 begin
   if v_role is null then raise exception 'ACTOR_NOT_ACTIVE_MEMBER'; end if;
   if v_role not in ('operador', 'supervisor') then raise exception 'ROLE_NOT_ALLOWED'; end if;
-  select r.reason_text into reason_text from public.case_review r where r.id = p_case_review and r.tenant = p_tenant;
+  select r.reason_text into v_text from public.case_review r where r.id = p_case_review and r.tenant = p_tenant;
   if not found then raise exception 'REVIEW_NOT_IN_TENANT'; end if;
+  return v_text;
 end $$;
 
 -- importador "puede coincidir con supervisor" (ALIGN-003) y la membresia admite un solo rol por tenant: por eso supervisor tambien registra lotes.
