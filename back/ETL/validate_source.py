@@ -91,19 +91,29 @@ def validate_contract(contract):
     require(0 < int(c['claves']['bigint_max']) <= 9223372036854775807)
     require(set(c['archivos']) == {'cabecera', 'detalle'})
     required = {'cabecera': {'ClaveAgrupacion': 'texto', 'Bien_Tipo_Id': 'catalogo', 'Cuenta': 'cuenta',
+                             'Bien_Tipo': 'texto', 'Identificador': 'texto', 'Destinatario': 'texto',
+                             'Destinatario_CUIT': 'texto',
                              'Destinatario_Id': 'id', 'Deuda_Actualizada': 'importe'},
                 'detalle': {'ClaveAgrupacion': 'texto', 'DEUD_id': 'id', 'NOTD_capital': 'importe',
                             'NOTD_totalActualizado': 'importe', 'NOTD_vencimiento': 'fecha', 'Tipo_Ingreso_Id': 'catalogo'}}
-    types = {'texto', 'id', 'cuenta', 'importe', 'fecha', 'catalogo', 'entero', 'estado_objeto',
-             'estado_obligacion', 'porcentaje', 'contacto'}
+    optional = {
+        'cabecera': {
+            **dict.fromkeys(('Bien_Descripcion', 'Tipo_Ingreso_Id', 'Destinatario_Tipo', 'Destinatario_Calle',
+                             'Destinatario_Numeracion', 'Destinatario_Piso', 'Destinatario_Depto',
+                             'Destinatario_Localidad', 'Destinatario_CP', 'Destinatario_Provincia'), 'texto'),
+            **dict.fromkeys(('Destinatario_Email', 'Destinatario_Telefono', 'Destinatario_Celular'), 'contacto'),
+            'Estado': 'estado_objeto', 'Destinatario_Porcentaje': 'porcentaje', 'Deuda_Capital': 'importe',
+            'Periodos_Deuda': 'entero', 'Fecha_Actualizacion': 'fecha',
+        },
+        'detalle': {'Bien_Tipo_Id': 'catalogo', 'Cuenta': 'cuenta', 'Detalle_Deuda': 'texto',
+                    'NOTD_intereses': 'importe', 'NOTD_honorarios': 'importe',
+                    'NOTD_ESTA_id': 'estado_obligacion', 'NOTD_SITU_id': 'estado_obligacion'},
+    }
     for kind, fields in required.items():
         columns = c['archivos'][kind]['columnas']
-        require(isinstance(columns, dict))
-        for name, spec in columns.items():
-            require(isinstance(name, str) and name and spec['tipo'] in types and type(spec['requerida']) is bool)
-            require(spec['tipo'] != 'catalogo' or name in ('Bien_Tipo_Id', 'Tipo_Ingreso_Id'))
-        for name, field_type in fields.items():
-            require(columns[name]['tipo'] == field_type and columns[name]['requerida'])
+        require(isinstance(columns, dict) and set(columns) == set(fields) | set(optional[kind]))
+        for name, field_type in (fields | optional[kind]).items():
+            require(columns[name]['tipo'] == field_type and columns[name]['requerida'] is (name in fields))
     catalogs = c['catalogos']
     require(set(catalogs['por_lote']) == {'Bien_Tipo_Id', 'Tipo_Ingreso_Id', 'NOTD_ESTA_id', 'NOTD_SITU_id'})
     require(set(catalogs['estados_obligacion']) == {'PENDIENTE', 'PAGADA', 'ANULADA', 'SUSPENDIDA', 'UNKNOWN'})
@@ -574,6 +584,9 @@ class _Validator:
         control = header.cells['Deuda_Actualizada']
         difference = None
         link_evaluable = all(r.values.get('ClaveAgrupacion') for r in obj.headers) and 'CLAVE_AGRUPACION_AMBIGUA' not in obj.reasons
+        if not link_evaluable:
+            for subtotal in amounts.values():
+                subtotal.update(valor=None, presencia='NO_INTEGRADO', completo=False)
         if control.value is not None and actual['completo'] and link_evaluable:
             difference = control.value - Decimal(actual['valor'])
             if abs(difference) > Decimal(self.contract['consistencias']['tolerancia_importe']):
@@ -633,23 +646,26 @@ class _Validator:
     def report(self, structural=False):
         objects = [] if structural else [self.object_report(obj) for obj in self.objects.values()]
         quarantined = [o for o in objects if o['resultado'] == 'CUARENTENA']
-        amounts = {'actualizado_aceptado': Decimal(0), 'actualizado_en_cuarentena_observado': Decimal(0)}
+        categories = {'actualizado_aceptado': [], 'actualizado_en_cuarentena_observado': []}
         missing = Counter()
         for obj in objects:
             key = 'actualizado_aceptado' if obj['resultado'] == 'ACEPTADO' else 'actualizado_en_cuarentena_observado'
-            value = obj['importe_actualizado']['valor']
-            if value is not None:
-                amounts[key] += Decimal(value)
-            missing.update(obj['importe_actualizado']['filas_no_observadas'])
+            subtotal = obj['importe_actualizado']
+            value = subtotal['valor']
+            categories[key].append(Cell(None if value is None else Decimal(value), subtotal['presencia']))
+            missing.update(subtotal['filas_no_observadas'])
+        amounts = {key: aggregate(cells, 'sum') for key, cells in categories.items()}
+        amounts_complete = all(obj['importe_actualizado']['completo'] for obj in objects) and not structural
         object_pct = Decimal(len(quarantined) * 100) / len(objects) if objects and not structural else None
-        denominator = sum(amounts.values())
-        amount_pct = amounts['actualizado_en_cuarentena_observado'] * 100 / denominator if denominator and not structural else None
+        denominator = sum((Decimal(a['valor']) for a in amounts.values() if a['valor'] is not None), Decimal(0))
+        numerator = amounts['actualizado_en_cuarentena_observado']['valor']
+        amount_pct = Decimal(numerator) * 100 / denominator if denominator and numerator is not None and not structural else None
         rules = self.contract['consistencias']
         if object_pct is not None and object_pct > Decimal(rules['cuarentena_max_objetos_pct']):
             self.blockers.add('CUARENTENA_EXCEDE_OBJETOS')
         if amount_pct is not None and amount_pct > Decimal(rules['cuarentena_max_importe_pct']):
             self.blockers.add('CUARENTENA_EXCEDE_IMPORTE')
-        if missing:
+        if not amounts_complete and not structural:
             self.blockers.add('CUARENTENA_IMPORTE_NO_EVALUABLE')
         unlinked = []
         for row in self.rows:
@@ -696,10 +712,15 @@ class _Validator:
         totals = {key: None if structural else value for key, value in totals.items()}
         presence = dict.fromkeys(totals, 'NO_INTEGRADO' if structural else OBSERVED)
         for kind in counts:
-            totals[f'filas_{kind}'] = counts[kind]['leidas']
-            presence[f'filas_{kind}'] = OBSERVED  # Registros alcanzados a leer, no total inferido del archivo.
+            complete = counts[kind]['lectura_completa']
+            totals[f'filas_{kind}'] = counts[kind]['leidas'] if complete else None
+            presence[f'filas_{kind}'] = OBSERVED if complete else 'NO_INTEGRADO'
         amount_presence = 'NO_INTEGRADO' if structural else OBSERVED
         missing_pct_presence = 'NO_INTEGRADO' if structural else 'NO_APLICA'
+        unknown_amounts = set(missing) | {a['presencia'] for a in amounts.values() if a['valor'] is None}
+        missing_amount_pct_presence = ('NO_INTEGRADO' if structural else
+                                      next((p for p in PRESENCE_ORDER if p in unknown_amounts), 'NO_APLICA'))
+        unlinked_amount = aggregate(unlinked, 'sum')
         return {
             'version': 'source-report.v1', 'contrato': self.contract['version'], 'fecha_corte': self.cut_off.isoformat(),
             'moneda': self.mapping['moneda'],
@@ -709,16 +730,19 @@ class _Validator:
             'accion_cuarentena': 'CONSERVAR_ESTADO_PREVIO_MARCAR_ACTUALIZACION_PENDIENTE',
             'columnas': self.columns, 'filas': counts, 'decisiones_filas': decisions,
             'conteos': totals, 'conteos_presencia': presence,
-            'importes': {**{key: None if structural else f'{value:.2f}' for key, value in amounts.items()},
-                      'presencias': dict.fromkeys([*amounts, 'actualizado_filas_no_observadas', 'detalle_sin_objeto'], amount_presence),
+            'importes': {**{key: None if structural else value['valor'] for key, value in amounts.items()},
+                      'presencias': {**{key: 'NO_INTEGRADO' if structural else value['presencia']
+                                        for key, value in amounts.items()},
+                                     'actualizado_filas_no_observadas': amount_presence,
+                                     'detalle_sin_objeto': 'NO_INTEGRADO' if structural else unlinked_amount['presencia']},
                       'actualizado_filas_no_observadas': None if structural else dict(sorted(missing.items())),
-                      'detalle_sin_objeto': None if structural else aggregate(unlinked, 'sum'),
-                      'completo': not missing and not structural},
+                      'detalle_sin_objeto': None if structural else unlinked_amount,
+                      'completo': amounts_complete},
             'cuarentena': {'objetos_pct': None if object_pct is None else f'{object_pct:.2f}',
                             'objetos_pct_presencia': missing_pct_presence if object_pct is None else OBSERVED,
                             'importe_observado_pct': None if amount_pct is None else f'{amount_pct:.2f}',
-                            'importe_observado_pct_presencia': missing_pct_presence if amount_pct is None else OBSERVED,
-                            'importe_evaluable': amount_pct is not None and not missing},
+                            'importe_observado_pct_presencia': missing_amount_pct_presence if amount_pct is None else OBSERVED,
+                            'importe_evaluable': amount_pct is not None and amounts_complete},
             'objetos': objects, 'hallazgos': findings, 'hallazgos_por_codigo': dict(sorted(codes.items())),
         }
 

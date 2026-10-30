@@ -114,7 +114,9 @@ define el tributo validado, evitando dos hallazgos por la misma referencia.
   y la ambigüedad bloquea el lote. Un enlace vacío nunca se registra ni se busca:
   se informa `CAMPO_OBLIGATORIO_VACIO`; el detalle no asignable también se informa
   como `DETALLE_SIN_CABECERA`. No se concilia un objeto cuyo enlace es vacío o
-  ambiguo. Los subtotales de ese objeto solo incluyen detalles asignados.
+  ambiguo. Sus subtotales son null con presencia `NO_INTEGRADO` y `completo=false`:
+  el universo de obligaciones del objeto no se puede determinar. El importe de
+  los detalles no asignables sigue informado aparte; `importe_evaluable=false`.
 - `Cuenta` y `Bien_Tipo_Id` del detalle se comparan con la cabecera únicamente
   cuando están informados. Su vacío opcional no es una diferencia ni invalida.
   En los catálogos obligatorios, vacío es `CAMPO_OBLIGATORIO_VACIO` con presencia
@@ -275,15 +277,25 @@ son **null**, con `conteos_presencia.<campo> = NO_INTEGRADO`. Los importes y el
 desglose de faltantes también son null con presencia explícita en
 `importes.presencias`; un desglose no calculado no se representa con `{}`.
 
-Solo `filas_cabecera`, `filas_detalle` y `filas.*` conservan los conteos de registros
-alcanzados a leer, con `leidas = aceptadas + rechazadas`; `lectura_completa=false`
-indica que ese prefijo no permite conocer el total del archivo. Si no se pudo
+Cada categoría se calcula con el mismo agregado que los objetos: si tiene
+contribuciones pero ninguna observada, informa null con la presencia del faltante,
+no un cero. Una categoría vacía y completamente leída sí suma cero observado.
+`importes.presencias.detalle_sin_objeto` coincide con la presencia de su agregado.
+Estos casos límite corrigen N2 de la revisión de ALIGN-024 sin modificar la
+fixture ni el oráculo independiente de ALIGN-023.
+
+`filas.*` conserva los conteos de registros alcanzados a leer, con
+`leidas = aceptadas + rechazadas`. Si `lectura_completa=false`, el total
+`conteos.filas_<archivo>` es null y su `conteos_presencia` es `NO_INTEGRADO`:
+ese prefijo no permite conocer el total del archivo. Si no se pudo
 leer la tabla, `columnas.*.opcionales_presentes/ausentes` y `extras_ignoradas`
 son null, `presencia=NO_INTEGRADO`, sin inventar faltas de columnas obligatorias.
 
 Con tablas leídas y vacías, `LOTE_VACIO` bloquea: los conteos cero y la suma vacía
 son observados, pero el porcentaje sobre cero objetos es null con `NO_APLICA`.
-También es null/`NO_APLICA` el porcentaje de importe con denominador cero.
+También es null/`NO_APLICA` el porcentaje de importe con denominador cero y sin
+faltantes. Con faltantes conserva su presencia; un numerador sin observaciones
+da porcentaje null aunque el denominador tenga importes observados.
 En un lote estructural, ambos porcentajes son null/`NO_INTEGRADO`. Sus presencias
 están en `cuarentena.<campo>_presencia`. El Markdown muestra «no disponible»,
 «no aplica» y «no evaluable» (conciliación), nunca `None` ni ceros sustitutos.
@@ -330,7 +342,9 @@ o `BLOQUEO`; `banderas` enumera observaciones por objeto sin multiplicar filas y
 `codigos_resumen`. `bloquea_lote: true` declara el bloqueo adicional de huérfanos
 y enlaces ambiguos; `efecto_opcional` distingue la centinela opcional. El motor
 lee esos efectos y los separadores permitidos desde el contrato. Valida que los
-tipos de columna estén soportados y que estén todos sus códigos emitibles; una
+nombre, tipo y obligatoriedad de cada columna coincidan con el motor v1, y que
+estén todos sus códigos emitibles. No admite columnas nuevas en el contrato ni
+redefinir como texto una fecha, un porcentaje, un contacto o un estado; una
 prueba genera cada código y compara el conjunto con `codigos`.
 
 | Familia | Códigos principales |

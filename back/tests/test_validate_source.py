@@ -476,6 +476,8 @@ def test_row_limit_is_enforced_during_reading_before_validation(tmp_path):
     contract['limites']['filas'] = 1
     report = validate_batch(dict.fromkeys(('cabecera', 'detalle'), path), load_mapping(FIXTURE), contract, '2026-09-30')
     assert report['filas']['cabecera']['leidas'] == 1
+    assert report['conteos']['filas_cabecera'] is None
+    assert report['conteos_presencia']['filas_cabecera'] == 'NO_INTEGRADO'
     assert not report['universo_completo']
     assert 'LIMITE_ARCHIVO_EXCEDIDO' in codes(report)
 
@@ -515,8 +517,9 @@ def test_unanalysed_counts_are_null_with_presence_and_read_counts_remain_honest(
     assert codes(report) == [failure]
     for key, value in report['conteos'].items():
         if key.startswith('filas_'):
-            assert value == (1 if key == 'filas_cabecera' else 0 if failure == 'ARCHIVO_NO_LEIBLE' else 3)
-            assert report['conteos_presencia'][key] == 'OBSERVADO'
+            incomplete = key == 'filas_detalle' and failure == 'ARCHIVO_NO_LEIBLE'
+            assert value == (None if incomplete else 1 if key == 'filas_cabecera' else 3)
+            assert report['conteos_presencia'][key] == ('NO_INTEGRADO' if incomplete else 'OBSERVADO')
         else:
             assert value is None, key
             assert report['conteos_presencia'][key] == 'NO_INTEGRADO'
@@ -567,6 +570,80 @@ def test_zero_amount_denominator_does_not_fabricate_a_percentage(simple):
     assert report['cuarentena']['objetos_pct_presencia'] == 'OBSERVADO'
     assert report['cuarentena']['importe_observado_pct'] is None
     assert report['cuarentena']['importe_observado_pct_presencia'] == 'NO_APLICA'
+
+
+def test_missing_quarantine_category_is_not_an_observed_zero(simple):
+    records = repeated_objects(simple, 20)
+    records['detalle'] = records['detalle'][2:]
+    records['detalle'][0]['NOTD_totalActualizado'] = ''
+    report = check(records)
+    assert report['conteos']['objetos_en_cuarentena'] == 1
+    assert report['importes']['actualizado_aceptado'] == '570.00'
+    assert report['importes']['actualizado_en_cuarentena_observado'] is None
+    assert report['importes']['presencias']['actualizado_en_cuarentena_observado'] == 'NO_INFORMADO_EN_ORIGEN'
+    assert report['cuarentena']['importe_observado_pct'] is None
+    assert report['cuarentena']['importe_observado_pct_presencia'] == 'NO_INFORMADO_EN_ORIGEN'
+    assert not report['cuarentena']['importe_evaluable']
+    assert 'Importe excluido observado de esos objetos (ARS): no disponible.' in render_markdown(report)
+
+
+@pytest.mark.parametrize(('value', 'presence'), [('', 'NO_INFORMADO_EN_ORIGEN'), ('abc', 'INVALIDO')])
+def test_orphan_amount_presence_matches_its_aggregate(simple, value, presence):
+    simple['detalle'].append({**simple['detalle'][0], 'ClaveAgrupacion': 'huerfano', 'NOTD_totalActualizado': value})
+    amounts = check(simple)['importes']
+    assert amounts['detalle_sin_objeto']['valor'] is None
+    assert amounts['detalle_sin_objeto']['presencia'] == presence
+    assert amounts['presencias']['detalle_sin_objeto'] == presence
+
+
+@pytest.mark.parametrize(('values', 'presence'), [
+    (['', '', ''], 'NO_INFORMADO_EN_ORIGEN'), (['abc', 'abc', 'abc'], 'INVALIDO'),
+    (['', 'abc', '0'], 'NO_INFORMADO_EN_ORIGEN'),
+])
+def test_zero_denominator_with_missing_amounts_preserves_missing_state(simple, values, presence):
+    for row, value in zip(simple['detalle'], values, strict=True):
+        row['NOTD_totalActualizado'] = value
+    report = check(simple)
+    assert report['cuarentena']['importe_observado_pct'] is None
+    assert report['cuarentena']['importe_observado_pct_presencia'] == presence
+    assert not report['cuarentena']['importe_evaluable']
+
+
+@pytest.mark.parametrize('ambiguous', [False, True])
+def test_unassignable_object_subtotals_are_not_integrated(simple, ambiguous):
+    if ambiguous:
+        simple['cabecera'].append({**simple['cabecera'][0], 'Cuenta': '42'})
+    else:
+        simple['cabecera'][0]['ClaveAgrupacion'] = ''
+    report = check(simple)
+    for obj in report['objetos']:
+        for key in ('importe_actualizado', 'importe_capital'):
+            assert obj[key]['valor'] is None
+            assert obj[key]['presencia'] == 'NO_INTEGRADO'
+            assert obj[key]['completo'] is False
+    assert report['importes']['detalle_sin_objeto']['valor'] == '30.00'
+    assert report['cuarentena']['importe_observado_pct_presencia'] == 'NO_INTEGRADO'
+    assert not report['cuarentena']['importe_evaluable']
+
+
+@pytest.mark.parametrize(('kind', 'name'), [
+    ('cabecera', name) for name in ('Estado', 'Destinatario_Porcentaje', 'Destinatario_Email',
+                                    'Destinatario_Telefono', 'Destinatario_Celular', 'Fecha_Actualizacion')
+] + [('detalle', 'NOTD_ESTA_id'), ('detalle', 'NOTD_SITU_id')])
+@pytest.mark.parametrize('change', [{'tipo': 'texto'}, {'requerida': True}])
+def test_named_v1_fields_cannot_silently_change_type_or_requirement(simple, kind, name, change):
+    contract = load_contract()
+    contract['archivos'][kind]['columnas'][name].update(change)
+    with pytest.raises(ValidationError, match='^CONFIGURACION_INVALIDA$'):
+        check(simple, contract=contract)
+
+
+def test_unimplemented_percentage_column_is_rejected(simple):
+    contract = load_contract()
+    contract['archivos']['cabecera']['columnas']['Otro_Porcentaje'] = {'tipo': 'porcentaje', 'requerida': False}
+    simple['cabecera'][0]['Otro_Porcentaje'] = 'abc'
+    with pytest.raises(ValidationError, match='^CONFIGURACION_INVALIDA$'):
+        check(simple, contract=contract)
 
 
 def test_markdown_unevaluable_difference_is_explicit():
