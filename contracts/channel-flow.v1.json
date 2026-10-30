@@ -97,7 +97,7 @@
     {"id": "CAN-INFO-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Tenés derecho a un trato respetuoso y a recibir información clara sobre tus obligaciones con el municipio.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-INFO-RECLAMOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Si no estás de acuerdo con un cobro o con la atención recibida, podés presentar un reclamo en {direccion_oficial} o por {correo_oficial}. También podés pedir que una persona te contacte.", "requiere_validacion": ["JURIDICA", "MUNICIPAL"]},
     {"id": "CAN-PRIVACIDAD-RESUMEN-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Este chat no guarda lo que elegís en el menú. Solo guarda datos si pedís que una persona te contacte.", "requiere_validacion": ["JURIDICA"]},
-    {"id": "CAN-PRIVACIDAD-DETALLE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "En ese caso, {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-PRIVACIDAD-DETALLE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "{nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-RETENCION-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Tu nombre, tu contacto y la referencia que escribas se borran a los {dias_retencion} días de la solicitud, aunque no se haya podido responder.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-VINCULO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Si te identificás por un medio oficial, una persona del área puede vincular tu consulta con tu caso. Ese vínculo queda en un registro de auditoría, con sus propias reglas de acceso y conservación.", "requiere_validacion": ["JURIDICA"]},
     {"id": "CAN-PRIVACIDAD-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Podés pedir ver, corregir o borrar tus datos antes de ese plazo en {direccion_oficial} o por {correo_oficial}.", "requiere_validacion": ["JURIDICA"]},
@@ -269,6 +269,7 @@
         "digitos_nacionales": 10,
         "posiciones_15": [2, 3, 4],
         "forma": "+<prefijo de país><dígitos>",
+        "por_que_no_une_personas": "Un número nacional de 10 dígitos queda intacto y cada variante (+, 00, 0 troncal, 9 de celular, 15) se reduce a él, de modo que dos números nacionales distintos no comparten clave, ni siquiera si el número contiene otro 15. Supone el plan de numeración argentino, con códigos de área que empiezan con 1, 2 o 3; no se consultó una tabla de asignaciones.",
         "pasos": [
           "Quitar espacios, guiones y paréntesis; queda un + opcional y dígitos.",
           "Con +: los dígitos ya llevan el prefijo de país. Con 00 seguido de un dígito distinto de 0: se quita el 00 y los dígitos llevan el prefijo. Sin ninguno de los dos, si empiezan con 54 y tienen al menos 12 dígitos, también lo llevan. En otro caso se antepone 54.",
@@ -279,6 +280,7 @@
         "equivalencias": [
           {"clave": "+540000000000", "formas": ["+54 000 000-0000", "+54(000)0000000", "+54-000-000-0000", "+54 000 000 0000", "(000) 0000-0000"]},
           {"clave": "+545550000000", "formas": ["+54 555 000-0000", "+54 9 555 000 0000", "+54 0 555 000 0000", "+54 555 15 000 0000", "54 555 000 0000", "0054 555 000 0000", "555 000 0000", "0555 000 0000", "0555 15 000 0000", "555 15 000 0000"]},
+          {"clave": "+545515000000", "formas": ["+54 5515 000000", "5515 15 000000", "0 5515 15 000000", "+54 9 5515 000000"]},
           {"clave": "+34555000000", "formas": ["+34 555 000 000", "0034 555 000 000"]}
         ],
         "distintos": [
@@ -289,26 +291,35 @@
         ]
       },
       "EMAIL": {
-        "dominios_equivalentes": [{"dominio": "googlemail.com", "equivale_a": "gmail.com"}],
-        "dominios_sin_puntos": ["gmail.com"],
-        "forma": "<parte local>@<dominio> en minúsculas",
+        "regla_general": "Sin política conocida para el dominio, la parte local se conserva tal cual: admitir mayúsculas o un + no demuestra que el servidor los ignore, y un mismo dominio puede tener buzones independientes de personas distintas. Las equivalencias de la parte local y del dominio valen solo para los proveedores de politicas_por_proveedor, con coincidencia exacta del dominio.",
+        "politicas_por_proveedor": [
+          {"proveedor": "Gmail", "dominios": ["gmail.com", "googlemail.com"], "dominio_canonico": "gmail.com", "parte_local_en_minusculas": true, "quitar_etiqueta_mas": true, "quitar_puntos": true, "justificacion": "Comportamiento conocido de Gmail: ignora puntos y mayúsculas de la parte local, trata lo que sigue a + como etiqueta y googlemail.com es el mismo servicio. Debe revisarse si el proveedor lo cambia."}
+        ],
+        "forma": "<parte local>@<dominio en minúsculas>",
         "pasos": [
-          "Pasar a minúsculas (el formato solo admite ASCII).",
-          "Reemplazar el dominio por su equivalente, si tiene.",
-          "Quitar de la parte local desde el primer + (etiqueta), salvo que el + esté al inicio.",
-          "En los dominios sin puntos, quitar los puntos de la parte local."
+          "Separar la parte local y el dominio, y pasar el dominio a minúsculas.",
+          "Buscar el dominio, con coincidencia exacta, en politicas_por_proveedor.",
+          "Sin política: conservar la parte local tal cual; la clave es esa parte local, @ y el dominio en minúsculas.",
+          "Con política: aplicar solo lo que esa política declara (parte local en minúsculas, quitar desde el primer + salvo que esté al inicio, quitar puntos) y usar su dominio canónico."
         ],
         "equivalencias": [
-          {"clave": "persona@example.com", "formas": ["persona@example.com", "PERSONA@EXAMPLE.COM", "Persona+chat@Example.com", "persona+otra@example.com"]},
-          {"clave": "ab@gmail.com", "formas": ["a.b@gmail.com", "ab@googlemail.com", "A.B+chat@GMAIL.COM"]}
+          {"clave": "Persona@example.com", "formas": ["Persona@example.com", "Persona@EXAMPLE.COM", "Persona@Example.Com"]},
+          {"clave": "ab@gmail.com", "formas": ["a.b@gmail.com", "ab@googlemail.com", "A.B+chat@GMAIL.COM", "AB@gmail.com"]}
         ],
         "distintos": [
+          ["buzon+uno@example.org", "buzon+dos@example.org"],
+          ["buzon+tres@example.org", "buzon+cuatro@example.org"],
+          ["buzon+uno@example.org", "buzon@example.org"],
+          ["Buzon@example.org", "buzon@example.org"],
+          ["a.b@example.org", "ab@example.org"],
           ["persona@example.com", "persona@example.org"],
           ["persona@example.com", "per.sona@example.com"],
-          ["+a@example.com", "+b@example.com"]
+          ["+a@example.com", "+b@example.com"],
+          ["a.b@gmail.com.example.org", "ab@gmail.com.example.org"],
+          ["ab@gmail.com", "ab@example.org"]
         ]
       },
-      "limitaciones": "No se unifican un teléfono sin código de área con el mismo número con código, números extranjeros escritos sin + ni 00, alias de otros proveedores de correo ni dominios que aceptan cualquier dirección. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO."
+      "limitaciones": "No se unifican un teléfono sin código de área con el mismo número con código, ni un número extranjero escrito sin + ni 00, que se lee como argentino. Por eso comparten clave, en casos muy poco probables, dos números locales iguales sin código de área o ese número extranjero y un argentino que se lea igual: la persona operadora tampoco podría distinguirlos al marcar. Los alias de correo de proveedores sin política conocida no se unifican, incluidos los dominios que aceptan cualquier dirección: pueden crear más de una solicitud para un mismo destinatario. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO. Se acepta porque la alternativa podría unir buzones de personas distintas, perder sus consultas y hacerles compartir un límite."
     },
     "escenarios_equivalencia": [
       {"id": "ESC-TEL-MISMO-MOTIVO", "descripcion": "Cuatro formas del mismo teléfono con el mismo motivo se deduplican.", "medio": "TELEFONO", "envios": [
@@ -323,12 +334,32 @@
         {"contacto": "+54-000-000-0000", "motivo": "PLAN_PAGOS"},
         {"contacto": "+54 000 000 0000", "motivo": "RECLAMO"}
       ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "LIMITE"], "solicitudes_creadas": 3},
-      {"id": "ESC-CORREO-MOTIVOS-DISTINTOS", "descripcion": "Cuatro formas del mismo correo con motivos distintos comparten el límite de 3.", "medio": "EMAIL", "envios": [
-        {"contacto": "persona@example.com", "motivo": "INFO_GENERAL"},
-        {"contacto": "PERSONA@EXAMPLE.COM", "motivo": "MEDIOS_PAGO"},
-        {"contacto": "Persona+chat@Example.com", "motivo": "PLAN_PAGOS"},
-        {"contacto": "persona+otra@example.com", "motivo": "RECLAMO"}
-      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "LIMITE"], "solicitudes_creadas": 3}
+      {"id": "ESC-GMAIL-MOTIVOS-DISTINTOS", "descripcion": "Cuatro formas del mismo buzón de Gmail, con política explícita, y motivos distintos comparten el límite de 3.", "medio": "EMAIL", "envios": [
+        {"contacto": "a.b@gmail.com", "motivo": "INFO_GENERAL"},
+        {"contacto": "ab@googlemail.com", "motivo": "MEDIOS_PAGO"},
+        {"contacto": "A.B+chat@GMAIL.COM", "motivo": "PLAN_PAGOS"},
+        {"contacto": "AB@gmail.com", "motivo": "RECLAMO"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "LIMITE"], "solicitudes_creadas": 3},
+      {"id": "ESC-DOMINIO-MAYUSCULAS", "descripcion": "Un dominio escrito con otras mayúsculas es el mismo: con el mismo motivo se deduplica.", "medio": "EMAIL", "envios": [
+        {"contacto": "Persona@example.com", "motivo": "PLAN_PAGOS"},
+        {"contacto": "Persona@EXAMPLE.COM", "motivo": "PLAN_PAGOS"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA"], "solicitudes_creadas": 1},
+      {"id": "ESC-BUZONES-MISMO-MOTIVO", "descripcion": "Contraejemplo: cuatro buzones independientes de un dominio sin política, con el mismo motivo, no se deduplican.", "medio": "EMAIL", "envios": [
+        {"contacto": "buzon+uno@example.org", "motivo": "PLAN_PAGOS"},
+        {"contacto": "buzon+dos@example.org", "motivo": "PLAN_PAGOS"},
+        {"contacto": "buzon+tres@example.org", "motivo": "PLAN_PAGOS"},
+        {"contacto": "buzon+cuatro@example.org", "motivo": "PLAN_PAGOS"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "RECIBIDA"], "solicitudes_creadas": 4},
+      {"id": "ESC-BUZONES-MOTIVOS-DISTINTOS", "descripcion": "Contraejemplo: cuatro buzones independientes de un dominio sin política, con motivos distintos, no comparten el límite.", "medio": "EMAIL", "envios": [
+        {"contacto": "buzon+uno@example.org", "motivo": "INFO_GENERAL"},
+        {"contacto": "buzon+dos@example.org", "motivo": "MEDIOS_PAGO"},
+        {"contacto": "buzon+tres@example.org", "motivo": "PLAN_PAGOS"},
+        {"contacto": "buzon+cuatro@example.org", "motivo": "RECLAMO"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA", "RECIBIDA", "RECIBIDA"], "solicitudes_creadas": 4},
+      {"id": "ESC-BUZONES-MAYUSCULAS", "descripcion": "Contraejemplo: en un dominio sin política, Buzon@ y buzon@ pueden ser buzones distintos y no se deduplican.", "medio": "EMAIL", "envios": [
+        {"contacto": "Buzon@example.org", "motivo": "PLAN_PAGOS"},
+        {"contacto": "buzon@example.org", "motivo": "PLAN_PAGOS"}
+      ], "resultados": ["RECIBIDA", "RECIBIDA"], "solicitudes_creadas": 2}
     ],
     "formatos": {
       "NOMBRE": {"regla": "1 a 80 caracteres: letras Unicode (con sus tildes), espacio, punto, apóstrofo (' o ’) o guion; al menos una letra.", "error": "CAN-ERROR-NOMBRE-v1", "validos": ["Ana", "José María", "M. de la Fuente", "D'Alessandro"], "invalidos": ["Ana3", "<b>Ana</b>", "Ana\u0000", "!!!", "--"]},

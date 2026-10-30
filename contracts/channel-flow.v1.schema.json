@@ -270,12 +270,13 @@
             "TELEFONO": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["prefijo_pais", "digitos_nacionales", "posiciones_15", "forma", "pasos", "equivalencias", "distintos"],
+              "required": ["prefijo_pais", "digitos_nacionales", "posiciones_15", "forma", "por_que_no_une_personas", "pasos", "equivalencias", "distintos"],
               "properties": {
                 "prefijo_pais": {"const": "54"},
                 "digitos_nacionales": {"const": 10},
                 "posiciones_15": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 4}},
                 "forma": {"$ref": "#/$defs/texto_no_vacio"},
+                "por_que_no_une_personas": {"$ref": "#/$defs/texto_no_vacio"},
                 "pasos": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}},
                 "equivalencias": {"$ref": "#/$defs/equivalencias"},
                 "distintos": {"$ref": "#/$defs/pares_distintos"}
@@ -284,21 +285,27 @@
             "EMAIL": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["dominios_equivalentes", "dominios_sin_puntos", "forma", "pasos", "equivalencias", "distintos"],
+              "required": ["regla_general", "politicas_por_proveedor", "forma", "pasos", "equivalencias", "distintos"],
               "properties": {
-                "dominios_equivalentes": {
+                "regla_general": {"$ref": "#/$defs/texto_no_vacio"},
+                "politicas_por_proveedor": {
                   "type": "array",
+                  "minItems": 1,
                   "items": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["dominio", "equivale_a"],
+                    "required": ["proveedor", "dominios", "dominio_canonico", "parte_local_en_minusculas", "quitar_etiqueta_mas", "quitar_puntos", "justificacion"],
                     "properties": {
-                      "dominio": {"$ref": "#/$defs/texto_no_vacio"},
-                      "equivale_a": {"$ref": "#/$defs/texto_no_vacio"}
+                      "proveedor": {"$ref": "#/$defs/texto_no_vacio"},
+                      "dominios": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"}},
+                      "dominio_canonico": {"type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$"},
+                      "parte_local_en_minusculas": {"type": "boolean"},
+                      "quitar_etiqueta_mas": {"type": "boolean"},
+                      "quitar_puntos": {"type": "boolean"},
+                      "justificacion": {"$ref": "#/$defs/texto_no_vacio"}
                     }
                   }
                 },
-                "dominios_sin_puntos": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/texto_no_vacio"}},
                 "forma": {"$ref": "#/$defs/texto_no_vacio"},
                 "pasos": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}},
                 "equivalencias": {"$ref": "#/$defs/equivalencias"},
@@ -332,7 +339,7 @@
                 }
               },
               "resultados": {"type": "array", "minItems": 2, "items": {"enum": ["RECIBIDA", "LIMITE"]}},
-              "solicitudes_creadas": {"type": "integer", "minimum": 1, "maximum": 3}
+              "solicitudes_creadas": {"type": "integer", "minimum": 1, "maximum": 4}
             }
           }
         },

@@ -1,7 +1,9 @@
 """Contrato del canal con el deudor ALIGN-047: esquema, flujo, textos, datos mínimos, retención y documento."""
 
 import copy
+import itertools
 import json
+import random
 import re
 import unicodedata
 import unittest
@@ -24,6 +26,9 @@ REQUIRED_NOT_DONE = {'NO_INFORMA_DEUDA', 'NO_CONFIRMA_EXISTENCIA', 'NO_CONSULTA_
                      'NO_COBRA', 'NO_DECIDE', 'NO_EJECUTA_INTERVENCIONES', 'NO_ENVIA_MENSAJES', 'NO_USA_LLM',
                      'NO_PROMETE', 'NO_AMENAZA', 'NO_INFIERE_VULNERABILIDAD', 'NO_VINCULA_AUTOMATICAMENTE',
                      'NO_RASTREA', 'NO_SE_PRESENTA_COMO_PERSONA', 'NO_USA_TERCEROS', 'NO_ALIMENTA_REGLAS_NI_MODELOS'}
+# Contraejemplos de buzones independientes: no se deduplican ni comparten el límite.
+MAILBOX_SCENARIOS = {'ESC-BUZONES-MISMO-MOTIVO': (['RECIBIDA'] * 4, 4), 'ESC-BUZONES-MOTIVOS-DISTINTOS': (['RECIBIDA'] * 4, 4),
+                     'ESC-BUZONES-MAYUSCULAS': (['RECIBIDA'] * 2, 2)}
 # Datos mínimos de la solicitud (plan v2 §7.9, ALIGN-065): campo → obligatorio.
 MINIMAL_FIELDS = {'nombre': False, 'medio_preferido': True, 'contacto': True, 'motivo': True, 'referencia': False,
                   'consentimiento': True}
@@ -196,13 +201,19 @@ def canonical_phone(value: str, rule: dict) -> str:
 
 
 def canonical_email(value: str, rule: dict) -> str:
-    """Clave canónica de un correo válido (solicitud_contacto.clave_canonica.EMAIL)."""
-    local, domain = normalize(value).lower().split('@')
-    domain = {item['dominio']: item['equivale_a'] for item in rule['dominios_equivalentes']}.get(domain, domain)
-    local = local.split('+', 1)[0] or local
-    if domain in rule['dominios_sin_puntos']:
+    """Clave canónica de un correo válido: la parte local solo cambia con una política explícita del proveedor."""
+    local, domain = normalize(value).split('@')
+    domain = domain.lower()
+    policy = next((item for item in rule['politicas_por_proveedor'] if domain in item['dominios']), None)
+    if policy is None:
+        return f'{local}@{domain}'
+    if policy['parte_local_en_minusculas']:
+        local = local.lower()
+    if policy['quitar_etiqueta_mas']:
+        local = local.split('+', 1)[0] or local
+    if policy['quitar_puntos']:
         local = local.replace('.', '') or local
-    return f'{local}@{domain}'
+    return f"{local}@{policy['dominio_canonico']}"
 
 
 CANONICAL = {'TELEFONO': canonical_phone, 'EMAIL': canonical_email}
@@ -524,6 +535,51 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertEqual(len({normalize(form) for form in reported}), 4)
         self.assertEqual(len({canonical_phone(form, keys['TELEFONO']) for form in reported}), 1)
 
+    def test_independent_mailboxes_keep_their_own_key(self):
+        rule = self.form['clave_canonica']['EMAIL']
+        self.assertEqual({domain for item in rule['politicas_por_proveedor'] for domain in item['dominios']},
+                         {'gmail.com', 'googlemail.com'})
+        pairs = {frozenset(pair) for pair in rule['distintos']}
+        mailboxes = [f'buzon+{name}@example.org' for name in ('uno', 'dos', 'tres', 'cuatro')]
+        self.assertEqual(len({canonical_email(item, rule) for item in mailboxes}), 4)
+        self.assertTrue({frozenset(mailboxes[:2]), frozenset(mailboxes[2:]),
+                         frozenset(('Buzon@example.org', 'buzon@example.org'))} <= pairs)
+        # Sin política, la parte local queda exactamente como se escribió y solo cambia el dominio.
+        for local in ('buzon+uno', 'Buzon', 'BUZON', 'a.b', 'a.b+c.d', '+a'):
+            for domain, expected in (('example.org', 'example.org'), ('EXAMPLE.ORG', 'example.org'),
+                                     ('gmail.com.example.org', 'gmail.com.example.org')):
+                self.assertEqual(canonical_email(f'{local}@{domain}', rule), f'{local}@{expected}')
+        forms = {item for group in rule['equivalencias'] if 'gmail.com' not in group['clave'] for item in group['formas']}
+        self.assertEqual({item.split('@')[0] for item in forms}, {'Persona'})
+        scenarios = {item['id']: item for item in self.form['escenarios_equivalencia']}
+        for scenario_id, expected in MAILBOX_SCENARIOS.items():
+            with self.subTest(scenario_id):
+                self.assertEqual((scenarios[scenario_id]['resultados'], scenarios[scenario_id]['solicitudes_creadas']),
+                                 expected)
+        notes = re.findall(r'^\| ALIGN-0(?:65|71) \|.*$', self.document, flags=re.MULTILINE)
+        self.assertEqual(len(notes), 2)
+        for note in notes:
+            self.assertEqual([item for item in MAILBOX_SCENARIOS if f'`{item}`' not in note], [])
+
+    def test_phone_variants_never_merge_distinct_national_numbers(self):
+        rule = self.form['clave_canonica']['TELEFONO']
+        generator = random.Random(47)
+        samples = [''.join(generator.choice('0123456789') for _ in range(10)) for _ in range(2000)]
+        # Exhaustivo con 1 y 5 para forzar 15 repetidos; muestra fija con códigos de área posibles (1, 2 o 3).
+        numbers = {''.join(digits) for digits in itertools.product('15', repeat=10)}
+        numbers |= {number for number in samples if number[0] in '123'}
+        keys = set()
+        for number in numbers:
+            key = f'+54{number}'
+            keys.add(canonical_phone(key, rule))
+            forms = [number, f'0{number}', f'+540{number}', f'+549{number}', f'54{number}', f'0054{number}',
+                     *(number[:area] + '15' + number[area:] for area in rule['posiciones_15'])]
+            forms += [f'0{number[:area]}15{number[area:]}' for area in rule['posiciones_15']]
+            forms += [f'+54{number[:area]}15{number[area:]}' for area in rule['posiciones_15']]
+            for form in forms:
+                self.assertEqual(canonical_phone(form, rule), key, form)
+        self.assertEqual(keys, {f'+54{number}' for number in numbers})
+
     def test_equivalent_forms_share_deduplication_and_limit(self):
         limit = next(item for item in self.contract['antiabuso']['limites'] if item['clave'] == 'CONTACTO')
         self.assertEqual((limit['maximo'], limit['ventana_horas'], limit['cuenta']), (3, 24, 'SOLICITUDES_CREADAS'))
@@ -570,6 +626,8 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertIn('no borra ese vínculo', retention['vinculacion_con_caso'])
         for state_id in ('INFO_PRIVACIDAD', 'CONTACTO_AVISO'):
             self.assertIn('CAN-PRIVACIDAD-VINCULO-v1', self.states[state_id]['textos'], state_id)
+        # «En ese caso» quedaba con un antecedente ambiguo en el aviso previo al formulario.
+        self.assertEqual([text_id for text_id, item in self.texts.items() if 'en ese caso' in fold(item['texto'])], [])
         for text in (self.document, retention['registro_de_interacciones']):
             self.assertNotIn('ya no permite llegar', text)
         self.assertIn('no borra ese vínculo', self.document)
@@ -608,6 +666,9 @@ class ChannelFlowContract(unittest.TestCase):
                  *(item['codigo'] for item in self.form['motivos']),
                  *(item['id'] for item in self.form['escenarios_equivalencia'])]
         self.assertEqual([code for code in codes if f'`{code}`' not in self.document], [])
+        keys = self.form['clave_canonica']
+        for text in (keys['limitaciones'], keys['EMAIL']['regla_general'], keys['TELEFONO']['por_que_no_une_personas']):
+            self.assertIn(text, self.document)
         for path in ('contracts/channel-flow.v1.json', 'contracts/channel-flow.v1.schema.json',
                      'quality/tests/test_channel_flow.py'):
             self.assertIn(path, self.document)

@@ -161,7 +161,7 @@ La columna «Validación previa» marca los textos que, además de la aprobació
 | `CAN-INFO-DERECHOS-v1` | Mensaje · `INFO_DERECHOS` | Tenés derecho a un trato respetuoso y a recibir información clara sobre tus obligaciones con el municipio. | Jurídica |
 | `CAN-INFO-RECLAMOS-v1` | Mensaje · `INFO_DERECHOS` | Si no estás de acuerdo con un cobro o con la atención recibida, podés presentar un reclamo en {direccion_oficial} o por {correo_oficial}. También podés pedir que una persona te contacte. | Jurídica y municipal |
 | `CAN-PRIVACIDAD-RESUMEN-v1` | Mensaje · `INFO_PRIVACIDAD` | Este chat no guarda lo que elegís en el menú. Solo guarda datos si pedís que una persona te contacte. | Jurídica |
-| `CAN-PRIVACIDAD-DETALLE-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | En ese caso, {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos. | Jurídica |
+| `CAN-PRIVACIDAD-DETALLE-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos. | Jurídica |
 | `CAN-PRIVACIDAD-RETENCION-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | Tu nombre, tu contacto y la referencia que escribas se borran a los {dias_retencion} días de la solicitud, aunque no se haya podido responder. | Jurídica |
 | `CAN-PRIVACIDAD-VINCULO-v1` | Mensaje · `INFO_PRIVACIDAD`, `CONTACTO_AVISO` | Si te identificás por un medio oficial, una persona del área puede vincular tu consulta con tu caso. Ese vínculo queda en un registro de auditoría, con sus propias reglas de acceso y conservación. | Jurídica |
 | `CAN-PRIVACIDAD-DERECHOS-v1` | Mensaje · `INFO_PRIVACIDAD` | Podés pedir ver, corregir o borrar tus datos antes de ese plazo en {direccion_oficial} o por {correo_oficial}. | Jurídica |
@@ -270,12 +270,20 @@ La normalización común conserva espacios, guiones y paréntesis: es la present
 4. Con prefijo 54, sobre los dígitos nacionales: quitar un 0 inicial (prefijo troncal) si hay más de 10; después, quitar un 9 inicial (marca de celular) si hay más de 10; después, si hay exactamente 12, quitar el primer 15 que empiece en la posición 2, 3 o 4 contando desde 0 (el 15 sigue al código de área, de 2 a 4 dígitos).
 5. La clave es +54 y los dígitos nacionales resultantes.
 
-**Correo** (forma `<parte local>@<dominio>` en minúsculas):
+Un número nacional de 10 dígitos queda intacto y cada variante (+, 00, 0 troncal, 9 de celular, 15) se reduce a él, de modo que dos números nacionales distintos no comparten clave, ni siquiera si el número contiene otro 15. Supone el plan de numeración argentino, con códigos de área que empiezan con 1, 2 o 3; no se consultó una tabla de asignaciones.
 
-1. Pasar a minúsculas (el formato solo admite ASCII).
-2. Reemplazar el dominio por su equivalente, si tiene.
-3. Quitar de la parte local desde el primer + (etiqueta), salvo que el + esté al inicio.
-4. En los dominios sin puntos, quitar los puntos de la parte local.
+**Correo** (forma `<parte local>@<dominio en minúsculas>`):
+
+1. Separar la parte local y el dominio, y pasar el dominio a minúsculas.
+2. Buscar el dominio, con coincidencia exacta, en politicas_por_proveedor.
+3. Sin política: conservar la parte local tal cual; la clave es esa parte local, @ y el dominio en minúsculas.
+4. Con política: aplicar solo lo que esa política declara (parte local en minúsculas, quitar desde el primer + salvo que esté al inicio, quitar puntos) y usar su dominio canónico.
+
+Sin política conocida para el dominio, la parte local se conserva tal cual: admitir mayúsculas o un + no demuestra que el servidor los ignore, y un mismo dominio puede tener buzones independientes de personas distintas. Las equivalencias de la parte local y del dominio valen solo para los proveedores de politicas_por_proveedor, con coincidencia exacta del dominio.
+
+| Proveedor | Dominios (coincidencia exacta) | Dominio canónico | Parte local | Justificación |
+|---|---|---|---|---|
+| Gmail | `gmail.com`, `googlemail.com` | `gmail.com` | en minúsculas, sin etiqueta `+`, sin puntos | Comportamiento conocido de Gmail: ignora puntos y mayúsculas de la parte local, trata lo que sigue a + como etiqueta y googlemail.com es el mismo servicio. Debe revisarse si el proveedor lo cambia. |
 
 Vectores del contrato, que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar:
 
@@ -283,11 +291,12 @@ Vectores del contrato, que la prueba contrasta con una implementación de refere
 |---|---|---|
 | Teléfono | `+540000000000` | `+54 000 000-0000`, `+54(000)0000000`, `+54-000-000-0000`, `+54 000 000 0000`, `(000) 0000-0000` |
 | Teléfono | `+545550000000` | `+54 555 000-0000`, `+54 9 555 000 0000`, `+54 0 555 000 0000`, `+54 555 15 000 0000`, `54 555 000 0000`, `0054 555 000 0000`, `555 000 0000`, `0555 000 0000`, `0555 15 000 0000`, `555 15 000 0000` |
+| Teléfono | `+545515000000` | `+54 5515 000000`, `5515 15 000000`, `0 5515 15 000000`, `+54 9 5515 000000` |
 | Teléfono | `+34555000000` | `+34 555 000 000`, `0034 555 000 000` |
-| Correo | `persona@example.com` | `persona@example.com`, `PERSONA@EXAMPLE.COM`, `Persona+chat@Example.com`, `persona+otra@example.com` |
-| Correo | `ab@gmail.com` | `a.b@gmail.com`, `ab@googlemail.com`, `A.B+chat@GMAIL.COM` |
+| Correo | `Persona@example.com` | `Persona@example.com`, `Persona@EXAMPLE.COM`, `Persona@Example.Com` |
+| Correo | `ab@gmail.com` | `a.b@gmail.com`, `ab@googlemail.com`, `A.B+chat@GMAIL.COM`, `AB@gmail.com` |
 
-Pares que **no** deben unirse:
+Pares que **no** deben unirse (unirlos perdería la consulta de otra persona o le haría compartir un límite):
 
 | Medio | Contacto | Contacto |
 |---|---|---|
@@ -295,9 +304,16 @@ Pares que **no** deben unirse:
 | Teléfono | `+54 555 000 0000` | `+54 555 150 0000` |
 | Teléfono | `+54 555 000 0000` | `+34 555 000 0000` |
 | Teléfono | `+54 555 000 0000` | `5550 0000` |
+| Correo | `buzon+uno@example.org` | `buzon+dos@example.org` |
+| Correo | `buzon+tres@example.org` | `buzon+cuatro@example.org` |
+| Correo | `buzon+uno@example.org` | `buzon@example.org` |
+| Correo | `Buzon@example.org` | `buzon@example.org` |
+| Correo | `a.b@example.org` | `ab@example.org` |
 | Correo | `persona@example.com` | `persona@example.org` |
 | Correo | `persona@example.com` | `per.sona@example.com` |
 | Correo | `+a@example.com` | `+b@example.com` |
+| Correo | `a.b@gmail.com.example.org` | `ab@gmail.com.example.org` |
+| Correo | `ab@gmail.com` | `ab@example.org` |
 
 Escenarios exigidos a ALIGN-065 y ALIGN-071 (`escenarios_equivalencia`):
 
@@ -305,9 +321,13 @@ Escenarios exigidos a ALIGN-065 y ALIGN-071 (`escenarios_equivalencia`):
 |---|---|---|---|
 | `ESC-TEL-MISMO-MOTIVO` | Cuatro formas del mismo teléfono con el mismo motivo se deduplican. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 1 |
 | `ESC-TEL-MOTIVOS-DISTINTOS` | Cuatro formas del mismo teléfono con motivos distintos comparten el límite de 3. | RECIBIDA, RECIBIDA, RECIBIDA, LIMITE | 3 |
-| `ESC-CORREO-MOTIVOS-DISTINTOS` | Cuatro formas del mismo correo con motivos distintos comparten el límite de 3. | RECIBIDA, RECIBIDA, RECIBIDA, LIMITE | 3 |
+| `ESC-GMAIL-MOTIVOS-DISTINTOS` | Cuatro formas del mismo buzón de Gmail, con política explícita, y motivos distintos comparten el límite de 3. | RECIBIDA, RECIBIDA, RECIBIDA, LIMITE | 3 |
+| `ESC-DOMINIO-MAYUSCULAS` | Un dominio escrito con otras mayúsculas es el mismo: con el mismo motivo se deduplica. | RECIBIDA, RECIBIDA | 1 |
+| `ESC-BUZONES-MISMO-MOTIVO` | Contraejemplo: cuatro buzones independientes de un dominio sin política, con el mismo motivo, no se deduplican. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 4 |
+| `ESC-BUZONES-MOTIVOS-DISTINTOS` | Contraejemplo: cuatro buzones independientes de un dominio sin política, con motivos distintos, no comparten el límite. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 4 |
+| `ESC-BUZONES-MAYUSCULAS` | Contraejemplo: en un dominio sin política, Buzon@ y buzon@ pueden ser buzones distintos y no se deduplican. | RECIBIDA, RECIBIDA | 2 |
 
-**Limitaciones.** No se unifican un teléfono sin código de área con el mismo número con código, números extranjeros escritos sin `+` ni `00`, alias de otros proveedores de correo ni dominios que aceptan cualquier dirección. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre `ABUSO`.
+**Limitaciones.** No se unifican un teléfono sin código de área con el mismo número con código, ni un número extranjero escrito sin + ni 00, que se lee como argentino. Por eso comparten clave, en casos muy poco probables, dos números locales iguales sin código de área o ese número extranjero y un argentino que se lea igual: la persona operadora tampoco podría distinguirlos al marcar. Los alias de correo de proveedores sin política conocida no se unifican, incluidos los dominios que aceptan cualquier dirección: pueden crear más de una solicitud para un mismo destinatario. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO. Se acepta porque la alternativa podría unir buzones de personas distintas, perder sus consultas y hacerles compartir un límite.
 
 ## 8. No revelación: respuesta idéntica
 
@@ -438,7 +458,7 @@ Los envíos inválidos también cuentan para los límites por IP y por municipio
 | RC-02 | Oráculo de existencia | Probar referencias y comparar respuestas, errores o tiempos | Referencia no verificada; respuesta idéntica; errores solo de formato; sin lectura de la base | 065: misma respuesta para referencias existentes e inexistentes | Bajo |
 | RC-03 | Exposición en la devolución | El contacto escrito pertenece a otra persona y el operador le habla de una deuda | `RO-02`, `RO-03`, guion `OPE-GUION-LLAMADA-v1`, plantillas sin datos de cuenta, cierre `CONTACTO_NO_CORRESPONDE` con purga | 066: E2E con destinatario sintético; capacitación del operador | Medio: depende de que la persona cumpla las reglas |
 | RC-04 | Suplantación o fraude | Terceros imitan al municipio y piden pagos o claves | `CAN-AVISO-FRAUDE-v1`, `OPE-GUION-FRAUDE-v1`; sin enlaces de pago; el chat no pide claves | Prueba de lenguaje; revisión de textos | Medio (externo) |
-| RC-05 | Acoso a un tercero | Alguien carga el teléfono de otra persona muchas veces, también escrito de formas distintas | Clave canónica por medio (§7.5) para el límite por contacto y los duplicados, primera pregunta del guion, cierre con purga, motivo `ABUSO` | 065 y 071: escenarios `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` | Bajo; las formas no unificables de §7.5 dependen de los otros límites |
+| RC-05 | Acoso a un tercero | Alguien carga el teléfono de otra persona muchas veces, también escrito de formas distintas | Clave canónica por medio (§7.5) para el límite por contacto y los duplicados, primera pregunta del guion, cierre con purga, motivo `ABUSO` | 065 y 071: escenarios `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` | Bajo; las formas no unificables de §7.5, como los alias de proveedores sin política, dependen de los otros límites |
 | RC-06 | Inundación o denegación | Bots llenan la cola | Límites por IP y municipio, campo trampa, tamaño máximo | 065 y 071: abuso | Bajo |
 | RC-07 | Recolección excesiva o sensible | La persona escribe DNI, salud o su situación económica | Sin texto libre; patrones cerrados; avisos «no escribas tu DNI»; motivos sin situación social | Prueba de este contrato (campos mínimos y prohibidos) | Bajo: la referencia podría contener un número sensible; se purga a los 90 días |
 | RC-08 | Retención excesiva | Contactos guardados indefinidamente | Purga de los campos directos a 90 días en cualquier estado, purga inmediata en supresión, contadores de 24 h, registro sin campos directos | 065: reloj simulado; 071: purga verificada | Bajo (copias de seguridad: ALIGN-050). El registro y el vínculo con un caso siguen siendo seudónimos |
@@ -454,14 +474,15 @@ Los envíos inválidos también cuentan para los límites por IP y por municipio
 | RC-18 | Vinculación errónea con un caso o reidentificación | Se asocia la solicitud a otra persona, o alguien con acceso al vínculo y al caso reidentifica a quien consultó después de la purga | Solo manual, tras identificación oficial, auditada (`RO-06`); `CAN-PRIVACIDAD-VINCULO-v1` lo informa; vínculo seudónimo con el acceso y la retención de ALIGN-069 | 066 y 069 | Medio (humano) |
 | RC-19 | Datos personales en registros técnicos | El servidor guarda cuerpos o IP | `no_se_guarda`; IP solo como HMAC; errores con códigos | 065 y 071: revisión de registros | Bajo |
 | RC-20 | Configuración del municipio falsa o incompleta | Un teléfono oficial equivocado deriva llamadas a un tercero | Configuración obligatoria con formato; sin ella la ruta no se publica | 065 | Medio: requiere control humano de los valores |
+| RC-21 | Unión indebida de destinatarios | Dos buzones de personas distintas dan la misma clave: se descarta una consulta como duplicada o una persona agota el límite de otra | La parte local del correo se conserva salvo política explícita del proveedor; un número nacional de 10 dígitos queda intacto | Prueba de este contrato; 065 y 071: `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS` | Bajo |
 
 ## 15. Obligaciones para los consumidores
 
 | Ticket | Debe |
 |---|---|
-| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; clave canónica de §7.5 con sus vectores `equivalencias` y `distintos`, separada del contacto que ve el operador; función de servidor de envío con el orden y las respuestas de §8; pruebas ejecutables de los escenarios `ESC-TEL-MISMO-MOTIVO`, `ESC-TEL-MOTIVOS-DISTINTOS` y `ESC-CORREO-MOTIVOS-DISTINTOS`; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
+| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; clave canónica de §7.5 con sus vectores `equivalencias` y `distintos`, separada del contacto que ve el operador; función de servidor de envío con el orden y las respuestas de §8; pruebas ejecutables de todos los `escenarios_equivalencia`, incluidos los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS`: buzones independientes no se deduplican ni comparten el límite; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
 | ALIGN-066 | Cola con los estados, transiciones y motivos de cierre de §9.1; purga inmediata para `SUPRESION_SOLICITADA` y `CONTACTO_NO_CORRESPONDE` (reutilizando la función de purga de 065); plantillas `OPE-*` del catálogo; mostrar el contacto normalizado, nunca la clave canónica; eventos de §10 sin nombre, contacto ni referencia; solo `RESPUESTA_REALIZADA` cuenta como respuesta; acceso de §9.3; vinculación manual auditada con ALIGN-069 |
-| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12) incluidos los escenarios `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` contra el endpoint, permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
+| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12) con todos los `escenarios_equivalencia` contra el endpoint: `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` (un mismo teléfono) y los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS` (buzones independientes), permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
 
 ## 16. Decisiones de interpretación (lectura más acotada)
 
@@ -486,6 +507,8 @@ Los envíos inválidos también cuentan para los límites por IP y por municipio
 | D17 | «Mismo contacto» | Misma clave canónica por medio (§7.5), no el texto escrito. El límite cuenta solicitudes creadas: los duplicados responden igual y no consumen el límite |
 | D18 | Alcance de la purga | Elimina los campos directos; el registro y el vínculo con un caso se describen como seudónimos, no como anónimos |
 | D19 | Controles de lenguaje | Son una comprobación parcial; no reemplazan la revisión semántica humana de cada versión aprobada |
+| D20 | Equivalencias de correo | Solo con política explícita por proveedor y coincidencia exacta del dominio (hoy, Gmail); en otro dominio la parte local se conserva tal cual. Un falso positivo pierde una consulta; un alias no detectado solo consume otro cupo, así que se prefiere no unir |
+| D21 | Variantes de teléfono | Se mantienen `+`, `00`, 0 troncal, 9 y 15: se revisaron con el mismo criterio y no unen números nacionales distintos (§7.5) |
 
 ## 17. Aprobación
 
@@ -508,3 +531,4 @@ Al aprobar, un commit nuevo cambia `estado` a `APROBADO` y completa `aprobacion`
 |---|---|---|
 | 1.0.0 (borrador) | 30/10/2026 | Versión inicial para aprobación (ALIGN-047). Sin consumidores |
 | 1.0.0 (borrador, corrección 1) | 30/10/2026 | Sin consumidores, se corrige la misma versión tras la revisión independiente: clave canónica del contacto con vectores y escenarios (B1), afirmaciones e importes literales en el control de lenguaje, descrito como parcial (M1), igualdad JSON en el validador de la prueba (M2), alcance de la purga y texto `CAN-PRIVACIDAD-VINCULO-v1` (M3) y atención presencial en los resultados (M4) |
+| 1.0.0 (borrador, corrección 2) | 30/10/2026 | Sin consumidores, se corrige la misma versión tras la segunda revisión: en el correo, la parte local solo cambia con política explícita del proveedor, con contraejemplos de buzones independientes (B2); `CAN-PRIVACIDAD-DETALLE-v1` sin «En ese caso» (M5) |
