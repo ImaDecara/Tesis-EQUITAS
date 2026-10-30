@@ -196,8 +196,10 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
 | Escenario | Resultado |
 | --- | --- |
 | Solo ALIGN-018 | `db reset` → cuentas → semillas |
-| Con e06 | Cargar e06 **primero**: `create-auth-fixtures.sql` exige Auth vacío y, si no, falla sin cambios. `cleanup.sql` de e06 no toca estas filas |
+| Con e06 | Cargar e06 **primero**: `create-auth-fixtures.sql` exige Auth vacío y, si no, falla sin cambios. `cleanup.sql` de e06 no toca estas filas. Las lecturas de negocio de las identidades e06 no cambian; `role` es un catálogo compartido (E06) y sus cuentas pasan a ver seis filas |
 | Con catálogos y ETL de ALIGN-017 | Conviven en cualquier orden: las semillas no usan esos catálogos (`debtor.type` queda nulo) y los IDs explícitos no avanzan la secuencia de `tenant`, que sigue dando 1 |
+
+**Límite con e06.** La campaña de 12 casos exige que `role` tenga exactamente la fila 910001 (`front/tests/external/supabase.integration.test.ts:83`): no daría ese resultado con estas semillas en la misma base. Hoy no pueden coincidir, porque esa campaña solo acepta la URL del proyecto testing y estas semillas solo existen en local. Un ensayo local de los esperados de e06 requiere `db reset` y no cargar las semillas de ALIGN-018.
 
 Esos IDs explícitos dejan `secuencias_sin_superar_maximo` en 4 en `etl-compat-verify.sql` (`tenant`, `user`, `tenant_user`, `debtor`): los valores generados quedan por debajo del rango reservado mientras una tabla tenga menos de 920 000 filas. Las filas de `case_review` no se pueden borrar: para limpiar se usa `db reset`.
 
@@ -208,10 +210,10 @@ Desde la raíz del worktree, con el stack de `docs/tesis/entorno-aislado.md` lev
 ```sh
 umask 077
 npx --yes supabase@2.108.0 db reset
-P="docker exec -i supabase_db_equitas-tp-testing psql -X -U postgres -d postgres -v ON_ERROR_STOP=1"
-$P -At -F '|' < database/testing/case-review-verify.sql
-$P -q -At -F '|' < database/testing/case-review-auth-fixtures.sql > /tmp/equitas-local-db/case-review-credentials.psv   # contraseñas: no copiar
-$P -q < database/testing/case-review-fixtures.sql
+P() { docker exec -i supabase_db_equitas-tp-testing psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 "$@"; }
+P -At -F '|' < database/testing/case-review-verify.sql
+P -q -At -F '|' < database/testing/case-review-auth-fixtures.sql > /tmp/equitas-local-db/case-review-credentials.psv   # contraseñas: no copiar
+P -q < database/testing/case-review-fixtures.sql
 docker exec -i supabase_db_equitas-tp-testing psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -At -F '|' < database/testing/case-review-checks.sql
 python3 -I database/testing/case_review_local.py http-check
 npx --yes supabase@2.108.0 db reset
@@ -232,7 +234,7 @@ npx --yes supabase@2.108.0 db reset
 
 `case-review-checks.sql` y `http-check` terminan en `FALLAS|0` y salen con error si un caso falla. Publican solo códigos y conteos.
 
-**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git.
+**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 232 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 232 pruebas por rol y 98 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
 
 ### Reversión
 

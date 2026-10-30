@@ -31,7 +31,7 @@ TABLES = ('case_review', 'case_review_approval', 'import_batch')
 OPEN_URL = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
 
 TENANT_A, TENANT_B, OBJECT_A, OBJECT_B = 920001, 920002, 920001, 920002
-USER_OPERADOR, USER_SUPERVISOR, USER_IMPORTADOR, USER_SIN = 920002, 920003, 920004, 920005
+USER_CONSULTA, USER_OPERADOR, USER_SUPERVISOR, USER_IMPORTADOR, USER_SIN = 920001, 920002, 920003, 920004, 920005
 READY_CHECKLIST = {'situacion_hogar': 'NO_DISPONIBLE', 'estado_juridico_verificado': True,
                    'canal_valido': True, 'alternativa_asistida_ofrecida': True}
 
@@ -196,6 +196,8 @@ def check_server_credential(api, report, env, review_jwt, import_jwt):
     for table in TABLES:
         report.error(f'servidor POST {table}', '42501', api.call('POST', f'/rest/v1/{table}', review_jwt, {}))
         report.error(f'servidor GET {table}', '42501', api.rows(table, 'id', review_jwt))
+    report.rejected('credencial de servidor con clave publicable', 'ROLE_NOT_ALLOWED', api.call(
+        'POST', '/rest/v1/rpc/record_case_review', review_jwt, review_body(USER_CONSULTA, TENANT_A, OBJECT_A), env['PUBLISHABLE_KEY']))
     report.error('servidor de revision no registra lotes', '42501', api.rpc('record_import_batch', review_jwt, batch_body(USER_IMPORTADOR, TENANT_A)))
     report.error('servidor de importacion no registra decisiones', '42501', api.rpc('record_case_review', import_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A)))
 
