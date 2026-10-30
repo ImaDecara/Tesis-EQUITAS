@@ -47,5 +47,8 @@ union all select 'external_id_tipos', (select string_agg(table_name || '=' || da
   from information_schema.columns where table_schema = 'public' and column_name = 'external_id')
 union all select 'filas_por_tabla', coalesce(string_agg(nombre || '=' || filas, ',' order by nombre), '') from tabla
 union all select 'filas_total', coalesce(sum(filas), 0)::text from tabla
+union all select 'ids_identity_min_max', coalesce(string_agg(nombre || '=' || coalesce(rango, '-'), ',' order by nombre), '') from (
+  select i.nombre, (xpath('/row/r/text()', query_to_xml(format('select min(id) || ''..'' || max(id) as r from public.%I', i.nombre), false, true, '')))[1]::text as rango
+  from identidad i) r
 union all select 'debt_updated_distinto_current', (select count(*)::text from public.debt where updated_amount is distinct from current_amount)
 union all select 'usuarios_auth', (select count(*)::text from auth.users);
