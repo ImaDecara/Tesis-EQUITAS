@@ -12,8 +12,16 @@ from pathlib import Path
 import pytest
 
 from ETL.validate_source import (
-    SourceRow, SourceTable, ValidationError, load_contract, load_mapping, main,
-    parse_amount, parse_date, render_markdown, validate_batch,
+    SourceRow,
+    SourceTable,
+    ValidationError,
+    load_contract,
+    load_mapping,
+    main,
+    parse_amount,
+    parse_date,
+    render_markdown,
+    validate_batch,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -171,6 +179,7 @@ def test_partial_amount_is_a_subtotal_and_reconciliation_is_not_fabricated(simpl
         'filas_no_observadas': {'NO_INFORMADO_EN_ORIGEN': 1}, 'completo': False}
     assert obj['importe_capital'] == obj['importe_actualizado']
     assert obj['conciliacion']['evaluable'] is False
+    assert obj['conciliacion']['presencia_diferencia'] == 'NO_INFORMADO_EN_ORIGEN'
     assert codes(report) == ['IMPORTE_VACIO', 'IMPORTE_VACIO']  # dos campos, una fila rechazada
     assert report['filas']['detalle']['rechazadas_por_codigo'] == {'IMPORTE_VACIO': 1, 'OBJETO_EN_CUARENTENA': 2}
     assert 'CUARENTENA_IMPORTE_NO_EVALUABLE' in report['motivos_bloqueo']
@@ -486,8 +495,264 @@ runpy.run_module('ETL.validate_source', run_name='__main__')
 '''
     result = subprocess.run([sys.executable, '-I', '-c', script, '--folder', str(FIXTURE.resolve()),
         '--contract', str(CONTRACT), '--cut-off', '2026-09-30', '--output', str(tmp_path)],
-        cwd=ROOT / 'back', env={}, capture_output=True, text=True)
+        cwd=ROOT / 'back', env={}, capture_output=True, text=True, check=False)
     assert result.returncode == 1, result.stderr
     assert result.stdout.startswith('BLOQUEADO: objetos=40; cuarentena=9')
     assert result.stderr == ''
     assert (tmp_path / 'report.json').is_file()
+
+
+@pytest.mark.parametrize('failure', ['ARCHIVO_NO_LEIBLE', 'COLUMNA_OBLIGATORIA_AUSENTE'])
+def test_unanalysed_counts_are_null_with_presence_and_read_counts_remain_honest(simple, tmp_path, failure):
+    files = tables(simple)
+    if failure == 'ARCHIVO_NO_LEIBLE':
+        files['detalle'] = tmp_path / 'ausente.tsv'
+    else:
+        files['detalle'].columns.remove('NOTD_capital')
+        for row in files['detalle'].rows:
+            row.values.pop('NOTD_capital')
+    report = validate_batch(files, load_mapping(FIXTURE), load_contract(), '2026-09-30')
+    assert codes(report) == [failure]
+    for key, value in report['conteos'].items():
+        if key.startswith('filas_'):
+            assert value == (1 if key == 'filas_cabecera' else 0 if failure == 'ARCHIVO_NO_LEIBLE' else 3)
+            assert report['conteos_presencia'][key] == 'OBSERVADO'
+        else:
+            assert value is None, key
+            assert report['conteos_presencia'][key] == 'NO_INTEGRADO'
+    for key in ('actualizado_aceptado', 'actualizado_en_cuarentena_observado',
+                'actualizado_filas_no_observadas', 'detalle_sin_objeto'):
+        assert report['importes'][key] is None
+        assert report['importes']['presencias'][key] == 'NO_INTEGRADO'
+    for key in ('objetos_pct', 'importe_observado_pct'):
+        assert report['cuarentena'][key] is None
+        assert report['cuarentena'][key + '_presencia'] == 'NO_INTEGRADO'
+    for counts in report['filas'].values():
+        assert counts['leidas'] == counts['aceptadas'] + counts['rechazadas']
+    metadata = report['columnas']['detalle']
+    if failure == 'ARCHIVO_NO_LEIBLE':
+        assert metadata == {'opcionales_presentes': None, 'opcionales_ausentes': None,
+                            'extras_ignoradas': None, 'presencia': 'NO_INTEGRADO'}
+        assert report['filas']['detalle']['lectura_completa'] is False
+    else:
+        assert metadata['presencia'] == 'OBSERVADO'
+        assert report['filas']['detalle']['lectura_completa'] is True
+    markdown = render_markdown(report)
+    assert 'None' not in markdown and 'null' not in markdown
+    assert 'Objetos en cuarentena: no disponible.' in markdown
+    assert 'Importe observado en cuarentena (%): no disponible.' in markdown
+
+
+def test_empty_batch_counts_are_observed_zero_but_percentages_do_not_apply():
+    report = check({'cabecera': [], 'detalle': []})
+    assert report['motivos_bloqueo'] == ['LOTE_VACIO']
+    assert all(value == 0 for value in report['conteos'].values())
+    assert set(report['conteos_presencia'].values()) == {'OBSERVADO'}
+    assert report['importes']['actualizado_aceptado'] == '0.00'
+    assert report['importes']['presencias']['actualizado_aceptado'] == 'OBSERVADO'
+    for key in ('objetos_pct', 'importe_observado_pct'):
+        assert report['cuarentena'][key] is None
+        assert report['cuarentena'][key + '_presencia'] == 'NO_APLICA'
+    markdown = render_markdown(report)
+    assert 'Objetos en cuarentena (%): no aplica.' in markdown
+    assert 'Importe observado en cuarentena (%): no aplica.' in markdown
+    assert 'None' not in markdown
+
+
+def test_zero_amount_denominator_does_not_fabricate_a_percentage(simple):
+    simple['detalle'] = []
+    simple['cabecera'][0]['Deuda_Actualizada'] = '0'
+    report = check(simple)
+    assert report['cuarentena']['objetos_pct'] == '0.00'
+    assert report['cuarentena']['objetos_pct_presencia'] == 'OBSERVADO'
+    assert report['cuarentena']['importe_observado_pct'] is None
+    assert report['cuarentena']['importe_observado_pct_presencia'] == 'NO_APLICA'
+
+
+def test_markdown_unevaluable_difference_is_explicit():
+    report = fixture_report()
+    assert any(not obj['conciliacion']['evaluable'] for obj in report['objetos'])
+    markdown = render_markdown(report)
+    assert '| no evaluable |' in markdown
+    assert 'None' not in markdown
+
+
+def test_unreadable_encoding_does_not_cascade_to_missing_columns(tmp_path):
+    path = tmp_path / 'input.tsv'
+    path.write_bytes(b'ClaveAgrupacion\tCuenta\n\xff\t1\n')
+    report = validate_batch(dict.fromkeys(('cabecera', 'detalle'), path), load_mapping(FIXTURE), load_contract(), '2026-09-30')
+    assert codes(report) == ['ARCHIVO_NO_LEIBLE', 'ARCHIVO_NO_LEIBLE']
+    assert report['conteos']['objetos'] is None
+    assert report['conteos_presencia']['objetos'] == 'NO_INTEGRADO'
+    assert all(columns['opcionales_ausentes'] is None for columns in report['columnas'].values())
+
+
+@pytest.mark.parametrize(('esta', 'situ', 'category', 'expected'), [
+    ('99', 'P', 'VENCIDA', []), ('10', 'U', 'VENCIDA', []),
+    ('99', 'U', 'UNKNOWN', ['ESTADO_ORIGEN_NO_INFORMADO']),
+    ('999', 'U', 'UNKNOWN', ['ESTADO_ORIGEN_DESCONOCIDO']),
+])
+def test_unknown_is_absence_before_conflict_detection(simple, esta, situ, category, expected):
+    mapping = load_mapping(FIXTURE)
+    mapping['catalogos']['NOTD_ESTA_id']['99'] = 'UNKNOWN'
+    mapping['catalogos']['NOTD_SITU_id'] = {'P': 'PENDIENTE', 'U': 'UNKNOWN'}
+    simple['detalle'][0].update(NOTD_ESTA_id=esta, NOTD_SITU_id=situ)
+    report = check(simple, mapping)
+    assert codes(report) == expected
+    assert report['objetos'][0]['estados_al_corte'][category] >= 1
+    assert 'ESTADOS_ORIGEN_CONFLICTIVOS' not in codes(report)
+
+
+def test_optional_detail_identity_empty_is_not_a_difference(simple):
+    simple['detalle'][0].update(Cuenta='', Bien_Tipo_Id='  ')
+    report = check(simple)
+    assert report['resultado_lote'] == 'VALIDADO'
+    assert codes(report) == []
+
+
+@pytest.mark.parametrize('sentinel', ['0000-00-00', '00/00/0000', '01/01/1900', '01/01/2999', '31/12/9999'])
+def test_optional_date_sentinel_alerts_without_quarantine(simple, sentinel):
+    simple['cabecera'][0]['Fecha_Actualizacion'] = sentinel
+    report = check(simple)
+    assert report['resultado_lote'] == 'VALIDADO'
+    assert codes(report) == ['FECHA_CENTINELA']
+    assert report['hallazgos'][0]['presencia'] == 'NO_INFORMADO_EN_ORIGEN'
+    assert report['filas']['cabecera']['aceptadas_por_codigo'] == {'FECHA_CENTINELA': 1}
+    assert report['conteos']['objetos_en_cuarentena'] == 0
+
+
+@pytest.mark.parametrize(('kind', 'field'), [('cabecera', 'Bien_Tipo_Id'), ('detalle', 'Tipo_Ingreso_Id')])
+def test_empty_required_catalog_value_is_missing_not_outside_catalog(simple, kind, field):
+    simple[kind][0][field] = ''
+    report = check(simple)
+    findings = [finding for finding in report['hallazgos'] if finding['archivo'] == kind and finding['campo'] == field]
+    assert findings == [{'archivo': kind, 'linea': 2, 'campo': field,
+                         'codigo': 'CAMPO_OBLIGATORIO_VACIO', 'presencia': 'NO_INFORMADO_EN_ORIGEN'}]
+
+
+@pytest.mark.parametrize('mutation', [
+    lambda c: c['codigos'].pop('CONCILIACION_DIFERENTE'),
+    lambda c: c['codigos']['FECHA_VACIA'].update(efecto='IGNORAR'),
+    lambda c: c['codigos']['FECHA_CENTINELA'].update(efecto_opcional='IGNORAR'),
+    lambda c: c['codigos']['DETALLE_SIN_CABECERA'].update(bloquea_lote='sí'),
+    lambda c: c['archivos']['detalle']['columnas'].pop('NOTD_capital'),
+    lambda c: c['archivos']['detalle']['columnas']['NOTD_capital'].update(tipo='nuevo'),
+    lambda c: c['archivos']['detalle']['columnas']['NOTD_capital'].update(tipo='texto'),
+    lambda c: c['archivos']['detalle']['columnas']['NOTD_capital'].update(requerida=False),
+    lambda c: c['catalogos'].pop('Estado'), lambda c: c['contactos'].pop('columnas'),
+    lambda c: c['consistencias'].pop('campos_comunes_cabecera'),
+    lambda c: c['consistencias'].update(porcentaje_total='NaN'),
+    lambda c: c['limites'].pop('bytes'), lambda c: c['formatos'].pop('fechas_centinela'),
+    lambda c: c['formatos']['fechas'].update(otro='%Y'),
+    lambda c: c['catalogos']['Estado'].update(ACTIVO='INACTIVO'),
+])
+def test_incomplete_contract_fails_safely_before_reading(simple, mutation):
+    contract = load_contract()
+    mutation(contract)
+    with pytest.raises(ValidationError, match='^CONFIGURACION_INVALIDA$'):
+        check(simple, contract=contract)
+
+
+def test_cli_incomplete_contract_exits_two_without_traceback(tmp_path, capsys):
+    contract = load_contract()
+    del contract['codigos']['CONCILIACION_DIFERENTE']
+    path = tmp_path / 'contract.json'
+    path.write_text(json.dumps(contract))
+    result = main(['--folder', str(FIXTURE), '--contract', str(path), '--cut-off', '2026-09-30', '--output', str(tmp_path)])
+    assert result == 2
+    assert capsys.readouterr().out == 'CONFIGURACION_INVALIDA\n'
+    assert not (tmp_path / 'report.json').exists()
+
+
+@pytest.mark.parametrize(('name', 'allowed'), [('separadores_decimales', ['.']),
+    ('separadores_miles', ['']), ('separadores_adaptadores', [','])])
+def test_allowed_separators_are_read_from_contract(simple, name, allowed):
+    contract = load_contract()
+    contract['formatos'][name] = allowed
+    with pytest.raises(ValidationError, match='^CONFIGURACION_INVALIDA$'):
+        check(simple, contract=contract)
+
+
+@pytest.mark.parametrize('status', ['Activo', 'ACTIVO', 'activo', 'AcTiVo'])
+def test_object_state_normalization_applies_before_header_consistency(simple, status):
+    simple['cabecera'].append({**simple['cabecera'][0], 'Destinatario_Id': '42', 'Estado': status})
+    report = check(simple)
+    assert report['resultado_lote'] == 'VALIDADO'
+    assert 'CABECERAS_INCONSISTENTES' not in codes(report)
+
+
+def test_tsv_bom_trimmed_headers_and_blank_lines_preserve_locations(simple, tmp_path):
+    files = {}
+    for kind, rows in simple.items():
+        path = tmp_path / f'{kind}.tsv'
+        with path.open('w', encoding='utf-8-sig', newline='') as stream:
+            writer = csv.writer(stream, delimiter='\t')
+            writer.writerow([f' {name} ' for name in rows[0]])
+            writer.writerow(rows[0].values())
+            stream.write('\n   \n')
+            writer.writerows(row.values() for row in rows[1:])
+            stream.write('\n\n')
+        files[kind] = path
+    report = validate_batch(files, load_mapping(FIXTURE), load_contract(), '2026-09-30')
+    assert report['resultado_lote'] == 'VALIDADO'
+    assert [r['linea'] for r in report['decisiones_filas'] if r['archivo'] == 'detalle'] == [2, 5, 6]
+    assert report['conteos']['filas_detalle'] == 3
+
+
+def test_blank_links_never_join_or_create_a_false_reconciliation(simple):
+    simple['cabecera'][0]['ClaveAgrupacion'] = ''
+    for row in simple['detalle']:
+        row['ClaveAgrupacion'] = ''
+    report = check(simple)
+    assert report['conteos']['obligaciones_unicas'] == 0
+    assert report['conteos']['detalle_sin_cabecera'] == 3
+    assert all(r['objeto'] is None for r in report['decisiones_filas'] if r['archivo'] == 'detalle')
+    assert 'CONCILIACION_DIFERENTE' not in codes(report)
+    assert report['objetos'][0]['conciliacion']['evaluable'] is False
+    assert report['objetos'][0]['conciliacion']['presencia_diferencia'] == 'NO_INTEGRADO'
+    assert report['motivos_bloqueo'] and not report['publicacion_permitida']
+
+
+def test_emittable_finding_codes_match_contract_catalog(simple, tmp_path):
+    from ETL.validate_source import FINDING_CODES
+
+    emitted = set(codes(fixture_report()))
+    for kind, column, value in [
+        ('cabecera', 'ClaveAgrupacion', ''), ('cabecera', 'Cuenta', '00'),
+        ('cabecera', 'Destinatario_Id', 'X'), ('cabecera', 'Bien_Tipo_Id', 'X'),
+        ('cabecera', 'Estado', 'X'), ('cabecera', 'Destinatario_Porcentaje', '101'),
+        ('cabecera', 'Periodos_Deuda', '-1'), ('cabecera', 'Destinatario_Email', 'X'),
+        ('detalle', 'NOTD_capital', 'X'), ('detalle', 'NOTD_capital', '-1'),
+        ('detalle', 'NOTD_capital', '10000000000000000'), ('detalle', 'NOTD_vencimiento', ''),
+        ('detalle', 'NOTD_vencimiento', '2026-09-29'), ('detalle', 'Tipo_Ingreso_Id', 'X'),
+        ('detalle', 'NOTD_vencimiento', '01/01/1900'), ('detalle', 'NOTD_ESTA_id', 'X'),
+        ('detalle', 'Cuenta', '42'), ('detalle', 'Bien_Tipo_Id', '42'),
+    ]:
+        records = copy.deepcopy(simple)
+        records[kind][0][column] = value
+        emitted.update(codes(check(records)))
+    records = copy.deepcopy(simple)
+    records['cabecera'].append({**records['cabecera'][0], 'Destinatario_Id': '42', 'Deuda_Actualizada': '31'})
+    emitted.update(codes(check(records)))
+    records['cabecera'][-1]['Cuenta'] = '42'
+    report = check(records)
+    emitted.update(codes(report))
+    assert 'CLAVE_AGRUPACION_AMBIGUA' in report['motivos_bloqueo']
+    mapping = load_mapping(FIXTURE)
+    mapping['catalogos']['NOTD_SITU_id'] = {'P': 'PAGADA'}
+    records = copy.deepcopy(simple)
+    records['detalle'][0]['NOTD_SITU_id'] = 'P'
+    emitted.update(codes(check(records, mapping)))
+    records['detalle'][0].pop('NOTD_capital')
+    for row in records['detalle'][1:]:
+        row.pop('NOTD_capital')
+    emitted.update(codes(check(records)))
+    files = dict.fromkeys(('cabecera', 'detalle'), tmp_path / 'missing.tsv')
+    emitted.update(codes(validate_batch(files, load_mapping(FIXTURE), load_contract(), '2026-09-30')))
+    files = tables(simple)
+    files['cabecera'].columns.append(files['cabecera'].columns[0])
+    emitted.update(codes(validate_batch(files, load_mapping(FIXTURE), load_contract(), '2026-09-30')))
+    contract = load_contract()
+    contract['limites']['celda'] = 1
+    emitted.update(codes(check(simple, contract=contract)))
+    assert emitted == FINDING_CODES == set(load_contract()['codigos'])

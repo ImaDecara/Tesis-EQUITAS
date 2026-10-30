@@ -31,7 +31,13 @@
       ";",
       null
     ],
-    "lector_rutas_v1": "Solo TSV; CSV/XLSX mediante adaptadores que entregan SourceTable."
+    "lector_rutas_v1": "Solo TSV; CSV/XLSX mediante adaptadores que entregan SourceTable.",
+    "separadores_miles": [
+      "",
+      ",",
+      "."
+    ],
+    "normalizacion_tsv": "BOM UTF-8 opcional; recortar encabezados; ignorar líneas vacías sin delimitadores conservando números de línea físicos."
   },
   "limites": {
     "bytes": 25000000,
@@ -87,7 +93,8 @@
       "800",
       "801",
       "802"
-    ]
+    ],
+    "normalizacion_estado_objeto": "casefold"
   },
   "contactos": {
     "columnas": [
@@ -313,10 +320,6 @@
       "efecto": "ALERTA",
       "descripcion": "Baja explícita; valor observado no utilizable."
     },
-    "PORCENTAJE_FALTANTE": {
-      "efecto": "ALERTA",
-      "descripcion": "Porcentaje no informado; no normalizar."
-    },
     "CUENTA_NO_CANONICA": {
       "efecto": "CUARENTENA",
       "descripcion": "Cuenta distinta de su representación decimal canónica bigint no negativa."
@@ -351,7 +354,8 @@
     },
     "FECHA_CENTINELA": {
       "efecto": "CUARENTENA",
-      "descripcion": "Fecha centinela declarada: no informada, nunca fecha real."
+      "descripcion": "Fecha centinela declarada: no informada, nunca fecha real.",
+      "efecto_opcional": "ALERTA"
     },
     "FECHA_FORMATO_INVALIDO": {
       "efecto": "CUARENTENA",
@@ -387,11 +391,13 @@
     },
     "DETALLE_SIN_CABECERA": {
       "efecto": "CUARENTENA",
-      "descripcion": "Detalle sin objeto identificable en la cabecera."
+      "descripcion": "Detalle sin objeto identificable en la cabecera.",
+      "bloquea_lote": true
     },
     "CLAVE_AGRUPACION_AMBIGUA": {
       "efecto": "CUARENTENA",
-      "descripcion": "Una clave de relación apunta a más de un objeto."
+      "descripcion": "Una clave de relación apunta a más de un objeto.",
+      "bloquea_lote": true
     },
     "CABECERAS_INCONSISTENTES": {
       "efecto": "CUARENTENA",
@@ -432,10 +438,6 @@
     "LIMITE_ARCHIVO_EXCEDIDO": {
       "efecto": "BLOQUEO",
       "descripcion": "Límite de bytes, filas, columnas o celda excedido."
-    },
-    "LOTE_VACIO": {
-      "efecto": "BLOQUEO",
-      "descripcion": "No hay objetos para validar."
     }
   },
   "banderas": [
@@ -458,6 +460,7 @@
     "LOTE_ESTRUCTURA_INVALIDA": "Fila excluida por un bloqueo de estructura del lote.",
     "CUARENTENA_EXCEDE_OBJETOS": "Más del límite porcentual de objetos en cuarentena.",
     "CUARENTENA_EXCEDE_IMPORTE": "Más del límite porcentual del importe observado en cuarentena.",
-    "CUARENTENA_IMPORTE_NO_EVALUABLE": "Faltan importes: no se puede certificar el límite porcentual."
+    "CUARENTENA_IMPORTE_NO_EVALUABLE": "Faltan importes: no se puede certificar el límite porcentual.",
+    "LOTE_VACIO": "No hay objetos para validar; porcentajes NO_APLICA."
   }
 }

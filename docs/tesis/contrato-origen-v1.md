@@ -25,6 +25,8 @@ salida no ejecutable. La fixture de contrato devuelve **1 deliberadamente**:
 contiene cuarentenas, un huérfano e importe no informado. Un exit 1 en esta fixture
 no implica una falla del programa. Una falla de lectura de TSV sí genera reporte
 bloqueado; un JSON de configuración ilegible no permite construir ese reporte.
+Un contrato incompleto o con tipos/efectos no soportados se rechaza antes de leer
+filas con `CONFIGURACION_INVALIDA`, salida 2, sin traceback ni valores del origen.
 
 No se importan `ETL.config`, `ETL.transform`, pandas, dotenv ni clientes de base;
 no se leen variables de entorno ni `.env`. Solo se usa la biblioteca estándar.
@@ -69,6 +71,11 @@ jurisdicción, moneda, corte, catálogos ni formato. El JSON tiene esta estructu
 
 El mapeo es **nombre canónico → columna física**, con identidad para los nombres
 no declarados. No admite dos campos canónicos leyendo la misma columna.
+El lector TSV admite BOM inicial en UTF-8, recorta los encabezados y omite líneas
+vacías sin delimitadores, incluso al final. Conserva los números de línea físicos;
+las filas con delimitadores y celdas vacías sí se validan. Encabezados duplicados
+después del recorte siguen siendo un error. Los nombres físicos del mapeo se
+declaran ya recortados. ALIGN-030 debe conservar estas reglas en los adaptadores.
 Los nombres desconocidos se ignoran y se cuentan; no se reproducen en reportes.
 El corte ISO `aaaa-mm-dd` es obligatorio y debe coincidir con `fecha_corte`;
 jamás se sustituye por el reloj. `moneda` es un código de tres letras mayúsculas.
@@ -104,7 +111,14 @@ define el tributo validado, evitando dos hallazgos por la misma referencia.
   no es duplicado. La cuenta igual en dos tipos define dos objetos.
 - `ClaveAgrupacion` enlaza cabecera y detalle. Puede repetirse entre relaciones
   del mismo objeto; si apunta a objetos distintos, todos quedan en cuarentena
-  y los detalles ambiguos bloquean el lote.
+  y la ambigüedad bloquea el lote. Un enlace vacío nunca se registra ni se busca:
+  se informa `CAMPO_OBLIGATORIO_VACIO`; el detalle no asignable también se informa
+  como `DETALLE_SIN_CABECERA`. No se concilia un objeto cuyo enlace es vacío o
+  ambiguo. Los subtotales de ese objeto solo incluyen detalles asignados.
+- `Cuenta` y `Bien_Tipo_Id` del detalle se comparan con la cabecera únicamente
+  cuando están informados. Su vacío opcional no es una diferencia ni invalida.
+  En los catálogos obligatorios, vacío es `CAMPO_OBLIGATORIO_VACIO` con presencia
+  `NO_INFORMADO_EN_ORIGEN`; un código presente ajeno al catálogo es `INVALIDO`.
 - Cuenta y claves numéricas: representación decimal canónica de bigint no
   negativo, entre 0 y 9223372036854775807. Se recortan espacios externos; no se
   quitan ceros ni caracteres: `000123`, `R-0456`, signos y exponentes se rechazan.
@@ -137,12 +151,17 @@ Centinelas declarados: `00/00/0000`, `0000-00-00`, y los días 1900-01-01,
 `NO_INFORMADO_EN_ORIGEN`, nunca vencimientos vigentes o históricos observados.
 Vencimiento vacío → `FECHA_VACIA`, misma presencia. Al ser un insumo obligatorio,
 todos estos casos ponen al objeto en cuarentena. Una `Fecha_Actualizacion`
-ausente es opcional; informada e inválida/centinela también invalida la cabecera.
+ausente es opcional; su centinela solo alerta (`efecto_opcional: ALERTA` en el
+JSON), con presencia `NO_INFORMADO_EN_ORIGEN`. Una fecha opcional informada pero
+imposible o fuera del formato sí invalida la cabecera.
 Representa `source_updated_at`, no emisión ni gestión.
 
 El catálogo municipal declara códigos semánticos `PENDIENTE`, `PAGADA`, `ANULADA`,
 `SUSPENDIDA` o `UNKNOWN`. Se resuelve cada columna informada; si ESTA falta puede
-usarse SITU, únicamente con catálogo explícito. Dos estados informados deben
+usarse SITU, únicamente con catálogo explícito. `UNKNOWN` se descarta como ausencia
+antes de comparar; UNKNOWN más PENDIENTE se resuelve como PENDIENTE. Si no queda
+ningún estado observado, se emite una sola alerta de estado no informado.
+Dos estados observados deben
 coincidir; de lo contrario, `ESTADOS_ORIGEN_CONFLICTIVOS` y cuarentena.
 
 | Situación | Presencia | Efecto |
@@ -154,8 +173,14 @@ coincidir; de lo contrario, `ESTADOS_ORIGEN_CONFLICTIVOS` y cuarentena.
 | Pagada, anulada o suspendida, aunque su vencimiento sea antiguo | `OBSERVADO` | Conserva su categoría, no se transforma en vencida |
 
 El estado del objeto (`Estado`: Activo/Inactivo) es independiente del estado de
-la obligación. Vacío queda no informado, nunca activo por defecto; otro valor
-presente queda inválido. Los IDs de catálogos sintéticos no son IDs del municipio
+la obligación. Se recortan espacios y se aplica `casefold` antes de validar,
+deduplicar y comparar cabeceras: Activo, ACTIVO y activo son equivalentes. Esta
+normalización se declara en `catalogos.normalizacion_estado_objeto`; el catálogo
+sigue siendo global y cerrado. El código `1` no se interpreta como activo.
+Vacío queda no informado, nunca activo por defecto; otro valor presente queda
+inválido. ALIGN-046 debe homologar si el origen usa códigos numéricos y requiere
+un catálogo por lote; ALIGN-030 no debe aplicar conversiones booleanas implícitas.
+Los IDs de catálogos sintéticos no son IDs del municipio
 real ni claves internas de base. Un tributo catalogado pero sin mapeo en el ETL
 heredado alerta `TIPO_INGRESO_SIN_MAPEO_EN_ETL`; no autoriza inventar un ID de base.
 
@@ -210,6 +235,8 @@ de obligaciones únicas. Diferencia absoluta **>0,05** →
 Decimal. Con control o detalle no observado, la conciliación es no evaluable,
 sin sumar el faltante como cero ni producir otro falso motivo de conciliación.
 Sin detalles, el total derivado es 0 y solo concilia con control equivalente.
+Esta regla exige un enlace válido: un enlace vacío o ambiguo deja la conciliación
+no evaluable, sin generar una diferencia contra un cero artificial.
 
 Un error de estructura bloquea todo el lote. También lo bloquean detalles sin
 cabecera/ambiguos, más del 5 % de objetos en cuarentena, más del 5 % del importe
@@ -217,6 +244,12 @@ observado en cuarentena o importes incompletos que impiden certificar ese límit
 Los dos límites porcentuales viven en `consistencias` (configuración de servidor,
 no una opción del importador). Exactamente 5 % no los supera. El porcentaje de
 importe observado se declara diagnóstico cuando el importe está incompleto.
+**Decisión conservadora v1, aceptada por la orquestación:** un solo importe
+actualizado no evaluable o un detalle huérfano bloquea el lote, aunque los
+porcentajes observados no superen el 5 %. No se estima el faltante con el control
+de cabecera. **Pregunta de homologación para ALIGN-046:** ¿se mantiene el bloqueo
+total o se admite una regla explícita de estimación y publicación parcial?
+Hasta resolverla, ALIGN-026/052 deben respetar el bloqueo actual.
 
 Por archivo: **leídas = aceptadas + rechazadas**. Son registros físicos, no
 hallazgos. Cada registro tiene una decisión y un código primario; sus desgloses
@@ -236,7 +269,24 @@ Los importes aceptados y en cuarentena se suman **una vez por objeto**, con
 subtotal observado y desglose de faltantes. El importe del detalle que no puede
 asignarse a un objeto se informa aparte (`detalle_sin_objeto`), sin atribuirlo a
 un objeto inventado. Ante estructura/lectura fallida, los importes son null y
-`universo_completo=false`: los conteos solo describen lo alcanzado a leer.
+`universo_completo=false`. Los conteos de objetos, personas, relaciones,
+obligaciones, duplicados, huérfanos, contactos y porcentajes no se calculan:
+son **null**, con `conteos_presencia.<campo> = NO_INTEGRADO`. Los importes y el
+desglose de faltantes también son null con presencia explícita en
+`importes.presencias`; un desglose no calculado no se representa con `{}`.
+
+Solo `filas_cabecera`, `filas_detalle` y `filas.*` conservan los conteos de registros
+alcanzados a leer, con `leidas = aceptadas + rechazadas`; `lectura_completa=false`
+indica que ese prefijo no permite conocer el total del archivo. Si no se pudo
+leer la tabla, `columnas.*.opcionales_presentes/ausentes` y `extras_ignoradas`
+son null, `presencia=NO_INTEGRADO`, sin inventar faltas de columnas obligatorias.
+
+Con tablas leídas y vacías, `LOTE_VACIO` bloquea: los conteos cero y la suma vacía
+son observados, pero el porcentaje sobre cero objetos es null con `NO_APLICA`.
+También es null/`NO_APLICA` el porcentaje de importe con denominador cero.
+En un lote estructural, ambos porcentajes son null/`NO_INTEGRADO`. Sus presencias
+están en `cuarentena.<campo>_presencia`. El Markdown muestra «no disponible»,
+«no aplica» y «no evaluable» (conciliación), nunca `None` ni ceros sustitutos.
 
 ## 7. Biblioteca compartida y privacidad
 
@@ -276,6 +326,12 @@ siguen perteneciendo a ALIGN-032/052/054.
 `codigos` del JSON es el catálogo de hallazgos con efecto `ALERTA`, `CUARENTENA`
 o `BLOQUEO`; `banderas` enumera observaciones por objeto sin multiplicar filas y
 `codigos_resumen` identifica propagación de cuarentena y límites de lote.
+`PORCENTAJE_FALTANTE` pertenece solo a `banderas`; `LOTE_VACIO`, solo a
+`codigos_resumen`. `bloquea_lote: true` declara el bloqueo adicional de huérfanos
+y enlaces ambiguos; `efecto_opcional` distingue la centinela opcional. El motor
+lee esos efectos y los separadores permitidos desde el contrato. Valida que los
+tipos de columna estén soportados y que estén todos sus códigos emitibles; una
+prueba genera cada código y compara el conjunto con `codigos`.
 
 | Familia | Códigos principales |
 |---|---|
