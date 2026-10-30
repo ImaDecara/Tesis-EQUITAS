@@ -70,7 +70,7 @@ O = observado; P = pendiente. El snapshot del 21/10 (`database/schema-observado-
 | Filas de catálogo | 4 `document_type`, 5 `person_type`, 3 `person_status`, 3 `debtor_type`, 5 `contact_type`, 1 `currency`, 8 `debt_status` (informe §2); claves no observadas | Vacíos; e06 agrega una fila 910001 por catálogo | Vacíos tras `db reset`; `database/testing/etl-compat-catalogs.sql` carga los mismos conteos con los IDs del ETL | P: claves y etiquetas supuestas desde los nombres de las constantes del ETL |
 | `debtor_type` | 3 filas, IDs no observados | — | 1 `INMUEBLE`, 3 `RODADO`, 6 `AGUA`: IDs del lote sintético (`back/tests/fixtures/sintetico-v1/manifest.json`), no del municipio | P (ALIGN-004/026) |
 | Tenant del ETL | 1 tenant (`tenant=1` fijo en `back/ETL/config.py:21`) | e06: 910001 y 910002 | El script de catálogos crea un tenant sintético con id generado y exige que sea 1 | — |
-| Políticas y RLS | 23 `USING(true)` | 23 `member_read_*` | Igual que testing: mismo md5 de políticas y de grants de tablas | O |
+| Políticas y RLS | 23 `USING(true)` | 23 `member_read_*` | Sin cambios frente a la base local con 2 migraciones: mismo md5 de políticas y de grants de tablas | O |
 | Privilegios de secuencias | No observado | Sin secuencias | 0 para `anon`/`authenticated` | O (solo local) |
 
 ### Catálogos del ETL y e06 son excluyentes
