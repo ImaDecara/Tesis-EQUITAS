@@ -1,0 +1,520 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/channel-flow.v1.schema.json",
+  "title": "Catálogo y flujo del canal con el deudor v1 (ALIGN-047)",
+  "description": "Estructura de contracts/channel-flow.v1.json. Usa solo type, properties, required, additionalProperties, items, enum, const, pattern, minLength, maxLength, minimum, maximum, minItems, maxItems, uniqueItems y $ref locales. Los pattern siguen ECMA-262 sin banderas: anclados con ^ y $, sin ., \\d, \\w ni \\b, para que JavaScript y Python coincidan; quality/tests/test_channel_flow.py la valida con la biblioteca estándar y verifica además la coherencia del flujo y de los textos.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "estado", "aprobacion", "fecha", "ticket", "documento", "esquema", "idioma", "fase", "naturaleza", "el_canal_no_hace", "intensidades_ejecutables", "configuracion_municipio", "marcadores", "lenguaje", "textos", "flujo", "solicitud_contacto", "antiabuso", "retencion", "derivacion", "acceso", "accesibilidad", "fases"],
+  "properties": {
+    "id": {"const": "channel-flow"},
+    "version": {"type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$"},
+    "estado": {"enum": ["BORRADOR_PENDIENTE_APROBACION", "APROBADO"]},
+    "aprobacion": {
+      "type": ["null", "object"],
+      "additionalProperties": false,
+      "required": ["por", "fecha", "referencia", "sha256_aprobado"],
+      "properties": {
+        "por": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/texto_no_vacio"}},
+        "fecha": {"$ref": "#/$defs/fecha"},
+        "referencia": {"$ref": "#/$defs/texto_no_vacio"},
+        "sha256_aprobado": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "fecha": {"$ref": "#/$defs/fecha"},
+    "ticket": {"const": "ALIGN-047"},
+    "documento": {"const": "docs/tesis/canal-deudor-diseno.md"},
+    "esquema": {"const": "contracts/channel-flow.v1.schema.json"},
+    "idioma": {"const": "es-AR"},
+    "fase": {"const": "CHAT_WEB_SIN_DATOS_DE_CUENTA"},
+    "naturaleza": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descripcion", "politica_de_cambios", "aprobacion_requerida", "datos_personales"],
+      "properties": {
+        "descripcion": {"$ref": "#/$defs/texto_no_vacio"},
+        "politica_de_cambios": {"$ref": "#/$defs/texto_no_vacio"},
+        "aprobacion_requerida": {"$ref": "#/$defs/texto_no_vacio"},
+        "datos_personales": {"$ref": "#/$defs/texto_no_vacio"}
+      }
+    },
+    "el_canal_no_hace": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["codigo", "descripcion"],
+        "properties": {
+          "codigo": {"type": "string", "pattern": "^NO_[A-Z_]+$"},
+          "descripcion": {"$ref": "#/$defs/texto_no_vacio"}
+        }
+      }
+    },
+    "intensidades_ejecutables": {"type": "array", "maxItems": 0},
+    "configuracion_municipio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regla", "campos"],
+      "properties": {
+        "regla": {"$ref": "#/$defs/texto_no_vacio"},
+        "campos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clave", "formato", "max_caracteres"],
+            "properties": {
+              "clave": {"$ref": "#/$defs/clave"},
+              "formato": {"enum": ["TEXTO_PLANO", "TELEFONO", "EMAIL", "URL_HTTPS"]},
+              "max_caracteres": {"type": "integer", "minimum": 1, "maximum": 254}
+            }
+          }
+        }
+      }
+    },
+    "marcadores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["municipio", "parametros", "solo_operador", "prohibidos"],
+      "properties": {
+        "municipio": {"$ref": "#/$defs/lista_claves"},
+        "parametros": {"$ref": "#/$defs/lista_claves"},
+        "solo_operador": {"$ref": "#/$defs/lista_claves"},
+        "prohibidos": {"$ref": "#/$defs/lista_claves"}
+      }
+    },
+    "lenguaje": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tratamiento", "max_palabras_por_oracion", "max_caracteres", "siglas_permitidas", "terminos_prohibidos", "promesas_prohibidas", "sin_urls_ni_telefonos_literales"],
+      "properties": {
+        "tratamiento": {"enum": ["VOSEO", "USTED"]},
+        "max_palabras_por_oracion": {"type": "integer", "minimum": 10, "maximum": 30},
+        "max_caracteres": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["MENSAJE", "OPCION", "ETIQUETA", "AYUDA", "ERROR", "MOTIVO", "MEDIO", "PLANTILLA", "GUION"],
+          "properties": {
+            "MENSAJE": {"$ref": "#/$defs/entero_positivo"},
+            "OPCION": {"type": "integer", "minimum": 1, "maximum": 40},
+            "ETIQUETA": {"$ref": "#/$defs/entero_positivo"},
+            "AYUDA": {"$ref": "#/$defs/entero_positivo"},
+            "ERROR": {"$ref": "#/$defs/entero_positivo"},
+            "MOTIVO": {"type": "integer", "minimum": 1, "maximum": 40},
+            "MEDIO": {"type": "integer", "minimum": 1, "maximum": 40},
+            "PLANTILLA": {"$ref": "#/$defs/entero_positivo"},
+            "GUION": {"$ref": "#/$defs/entero_positivo"}
+          }
+        },
+        "siglas_permitidas": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z]{2,6}$"}},
+        "terminos_prohibidos": {"$ref": "#/$defs/lista_terminos"},
+        "promesas_prohibidas": {"$ref": "#/$defs/lista_terminos"},
+        "sin_urls_ni_telefonos_literales": {"const": true}
+      }
+    },
+    "textos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "audiencia", "tipo", "texto", "requiere_validacion"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id_texto"},
+          "audiencia": {"enum": ["PUBLICO", "OPERADOR"]},
+          "tipo": {"enum": ["MENSAJE", "OPCION", "ETIQUETA", "AYUDA", "ERROR", "MOTIVO", "MEDIO", "PLANTILLA", "GUION"]},
+          "texto": {"type": "string", "minLength": 1, "maxLength": 900, "pattern": "^\\S(?:[^\\n\\r\\u2028\\u2029]*\\S)?$"},
+          "requiere_validacion": {"type": "array", "uniqueItems": true, "items": {"enum": ["JURIDICA", "MUNICIPAL"]}}
+        }
+      }
+    },
+    "flujo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estado_inicial", "estados", "navegacion"],
+      "properties": {
+        "estado_inicial": {"$ref": "#/$defs/id_estado"},
+        "navegacion": {"$ref": "#/$defs/texto_no_vacio"},
+        "estados": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "tipo", "textos", "opciones"],
+            "properties": {
+              "id": {"$ref": "#/$defs/id_estado"},
+              "tipo": {"enum": ["MENU", "INFO", "AVISO", "FORMULARIO", "RESULTADO", "FIN"]},
+              "textos": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id_texto"}},
+              "opciones": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["texto", "destino"],
+                  "properties": {
+                    "texto": {"$ref": "#/$defs/id_texto"},
+                    "destino": {"$ref": "#/$defs/id_estado"}
+                  }
+                }
+              },
+              "envio": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["texto", "resultados"],
+                "properties": {
+                  "texto": {"$ref": "#/$defs/id_texto"},
+                  "resultados": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["RECIBIDA", "INVALIDA", "LIMITE", "ERROR"],
+                    "properties": {
+                      "RECIBIDA": {"$ref": "#/$defs/id_estado"},
+                      "INVALIDA": {"$ref": "#/$defs/id_estado"},
+                      "LIMITE": {"$ref": "#/$defs/id_estado"},
+                      "ERROR": {"$ref": "#/$defs/id_estado"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "solicitud_contacto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["campos", "campo_trampa", "campos_prohibidos", "medios_contacto", "motivos", "normalizacion", "formatos", "errores", "datos_de_servidor", "no_se_guarda", "orden_de_evaluacion", "respuestas_envio", "garantias_no_revelacion"],
+      "properties": {
+        "campos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "control", "etiqueta", "obligatorio", "personal", "finalidad"],
+            "properties": {
+              "id": {"$ref": "#/$defs/clave"},
+              "control": {"enum": ["TEXTO", "OPCION_UNICA", "LISTA", "CASILLA"]},
+              "etiqueta": {"$ref": "#/$defs/id_texto"},
+              "ayuda": {"$ref": "#/$defs/id_texto"},
+              "obligatorio": {"type": "boolean"},
+              "personal": {"type": "boolean"},
+              "formato": {"enum": ["NOMBRE", "SEGUN_MEDIO", "REFERENCIA"]},
+              "max_caracteres": {"type": "integer", "minimum": 1, "maximum": 254},
+              "autocompletar": {"enum": ["name", "off", "SEGUN_MEDIO"]},
+              "verificado": {"const": false},
+              "opciones": {"enum": ["medios_contacto", "motivos"]},
+              "valor_inicial": {"const": false},
+              "finalidad": {"$ref": "#/$defs/texto_no_vacio"}
+            }
+          }
+        },
+        "campo_trampa": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "etiqueta", "regla"],
+          "properties": {
+            "id": {"$ref": "#/$defs/clave"},
+            "etiqueta": {"$ref": "#/$defs/id_texto"},
+            "regla": {"$ref": "#/$defs/texto_no_vacio"}
+          }
+        },
+        "campos_prohibidos": {"$ref": "#/$defs/lista_claves"},
+        "medios_contacto": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "texto", "formato", "autocompletar", "max_caracteres"],
+            "properties": {
+              "codigo": {"$ref": "#/$defs/codigo"},
+              "texto": {"$ref": "#/$defs/id_texto"},
+              "formato": {"enum": ["TELEFONO", "EMAIL"]},
+              "autocompletar": {"enum": ["tel", "email"]},
+              "max_caracteres": {"type": "integer", "minimum": 1, "maximum": 254}
+            }
+          }
+        },
+        "motivos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "texto", "plantilla_correo"],
+            "properties": {
+              "codigo": {"$ref": "#/$defs/codigo"},
+              "texto": {"$ref": "#/$defs/id_texto"},
+              "plantilla_correo": {"$ref": "#/$defs/id_texto"}
+            }
+          }
+        },
+        "normalizacion": {"$ref": "#/$defs/texto_no_vacio"},
+        "formatos": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["NOMBRE", "TELEFONO", "EMAIL", "REFERENCIA"],
+          "properties": {
+            "NOMBRE": {"$ref": "#/$defs/formato"},
+            "TELEFONO": {"$ref": "#/$defs/formato"},
+            "EMAIL": {"$ref": "#/$defs/formato"},
+            "REFERENCIA": {"$ref": "#/$defs/formato"}
+          }
+        },
+        "errores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["OBLIGATORIO", "LONGITUD_MAXIMA", "OPCION_INVALIDA", "CONSENTIMIENTO_REQUERIDO", "RESUMEN"],
+          "properties": {
+            "OBLIGATORIO": {"$ref": "#/$defs/id_texto"},
+            "LONGITUD_MAXIMA": {"$ref": "#/$defs/id_texto"},
+            "OPCION_INVALIDA": {"$ref": "#/$defs/id_texto"},
+            "CONSENTIMIENTO_REQUERIDO": {"$ref": "#/$defs/id_texto"},
+            "RESUMEN": {"$ref": "#/$defs/id_texto"}
+          }
+        },
+        "datos_de_servidor": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["campo", "descripcion"],
+            "properties": {
+              "campo": {"$ref": "#/$defs/clave"},
+              "descripcion": {"$ref": "#/$defs/texto_no_vacio"}
+            }
+          }
+        },
+        "no_se_guarda": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}},
+        "orden_de_evaluacion": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[A-Z_]+: \\S(?:[^\\n\\r\\u2028\\u2029]*\\S)?$"}},
+        "respuestas_envio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["RECIBIDA", "INVALIDA", "LIMITE", "ERROR"],
+          "properties": {
+            "RECIBIDA": {"$ref": "#/$defs/respuesta"},
+            "INVALIDA": {"$ref": "#/$defs/respuesta"},
+            "LIMITE": {"$ref": "#/$defs/respuesta"},
+            "ERROR": {"$ref": "#/$defs/respuesta"}
+          }
+        },
+        "garantias_no_revelacion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["consulta_tablas_de_cartera", "valida_referencia_contra_base", "devuelve_datos_enviados", "devuelve_numero_de_solicitud", "misma_respuesta_para_cualquier_referencia", "mismo_cuerpo_valida_duplicada_trampa", "errores_dependen_solo_del_formato", "limite_sin_detalle_de_causa"],
+          "properties": {
+            "consulta_tablas_de_cartera": {"const": false},
+            "valida_referencia_contra_base": {"const": false},
+            "devuelve_datos_enviados": {"const": false},
+            "devuelve_numero_de_solicitud": {"const": false},
+            "misma_respuesta_para_cualquier_referencia": {"const": true},
+            "mismo_cuerpo_valida_duplicada_trampa": {"const": true},
+            "errores_dependen_solo_del_formato": {"const": true},
+            "limite_sin_detalle_de_causa": {"const": true}
+          }
+        }
+      }
+    },
+    "antiabuso": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seudonimo", "limites", "retencion_contadores_horas", "duplicado_ventana_horas", "max_bytes_cuerpo", "captcha_de_terceros"],
+      "properties": {
+        "seudonimo": {"$ref": "#/$defs/texto_no_vacio"},
+        "limites": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clave", "ventana_horas", "maximo"],
+            "properties": {
+              "clave": {"enum": ["IP", "CONTACTO", "MUNICIPIO"]},
+              "ventana_horas": {"type": "integer", "minimum": 1, "maximum": 24},
+              "maximo": {"$ref": "#/$defs/entero_positivo"}
+            }
+          }
+        },
+        "retencion_contadores_horas": {"type": "integer", "minimum": 1, "maximum": 24},
+        "duplicado_ventana_horas": {"type": "integer", "minimum": 1, "maximum": 24},
+        "max_bytes_cuerpo": {"type": "integer", "minimum": 512, "maximum": 8192},
+        "captcha_de_terceros": {"const": false}
+      }
+    },
+    "retencion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dias_por_defecto", "dias_minimo", "dias_maximo", "desde", "campos_personales", "accion", "se_conserva", "frecuencia_minima", "aplica_en_cualquier_estado", "purga_inmediata_por_cierre", "registro_de_interacciones", "vinculacion_con_caso"],
+      "properties": {
+        "dias_por_defecto": {"const": 90},
+        "dias_minimo": {"type": "integer", "minimum": 1, "maximum": 90},
+        "dias_maximo": {"const": 90},
+        "desde": {"const": "creada_at"},
+        "campos_personales": {"$ref": "#/$defs/lista_claves"},
+        "accion": {"$ref": "#/$defs/texto_no_vacio"},
+        "se_conserva": {"$ref": "#/$defs/lista_claves"},
+        "frecuencia_minima": {"$ref": "#/$defs/texto_no_vacio"},
+        "aplica_en_cualquier_estado": {"const": true},
+        "purga_inmediata_por_cierre": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/codigo"}},
+        "registro_de_interacciones": {"$ref": "#/$defs/texto_no_vacio"},
+        "vinculacion_con_caso": {"$ref": "#/$defs/texto_no_vacio"}
+      }
+    },
+    "derivacion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estados_cola", "transiciones", "motivos_cierre", "max_intentos_contacto", "eventos_registro", "resultados_intento", "campos_evento", "campos_prohibidos_en_registro", "rotulo_indicadores", "plantillas", "reglas_operador"],
+      "properties": {
+        "estados_cola": {"type": "array", "uniqueItems": true, "items": {"enum": ["NUEVA", "EN_CURSO", "RESUELTA", "DESCARTADA"]}},
+        "transiciones": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["desde", "hacia", "accion"],
+            "properties": {
+              "desde": {"enum": ["NUEVA", "EN_CURSO", "RESUELTA", "DESCARTADA"]},
+              "hacia": {"enum": ["NUEVA", "EN_CURSO", "RESUELTA", "DESCARTADA"]},
+              "accion": {"enum": ["ASIGNAR", "LIBERAR", "CERRAR"]}
+            }
+          }
+        },
+        "motivos_cierre": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "estado"],
+            "properties": {
+              "codigo": {"$ref": "#/$defs/codigo"},
+              "estado": {"enum": ["RESUELTA", "DESCARTADA"]}
+            }
+          }
+        },
+        "max_intentos_contacto": {"type": "integer", "minimum": 1, "maximum": 5},
+        "eventos_registro": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "cuenta_como_respuesta"],
+            "properties": {
+              "codigo": {"$ref": "#/$defs/codigo"},
+              "cuenta_como_respuesta": {"type": "boolean"}
+            }
+          }
+        },
+        "resultados_intento": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/codigo"}},
+        "campos_evento": {"$ref": "#/$defs/lista_claves"},
+        "campos_prohibidos_en_registro": {"$ref": "#/$defs/lista_claves"},
+        "rotulo_indicadores": {"$ref": "#/$defs/texto_no_vacio"},
+        "plantillas": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id_texto"}},
+        "reglas_operador": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "regla"],
+            "properties": {
+              "codigo": {"type": "string", "pattern": "^RO-[0-9]{2}$"},
+              "regla": {"$ref": "#/$defs/texto_no_vacio"}
+            }
+          }
+        }
+      }
+    },
+    "acceso": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rol", "puede"],
+        "properties": {
+          "rol": {"$ref": "#/$defs/clave"},
+          "puede": {"$ref": "#/$defs/texto_no_vacio"}
+        }
+      }
+    },
+    "accesibilidad": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objetivo", "requisitos"],
+      "properties": {
+        "objetivo": {"const": "WCAG 2.2 nivel AA"},
+        "requisitos": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["codigo", "descripcion"],
+            "properties": {
+              "codigo": {"$ref": "#/$defs/codigo"},
+              "descripcion": {"$ref": "#/$defs/texto_no_vacio"}
+            }
+          }
+        }
+      }
+    },
+    "fases": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["numero", "nombre", "alcance", "tickets", "condiciones_de_entrada"],
+        "properties": {
+          "numero": {"type": "integer", "minimum": 1, "maximum": 9},
+          "nombre": {"$ref": "#/$defs/texto_no_vacio"},
+          "alcance": {"enum": ["IMPRESCINDIBLE", "EVOLUCION"]},
+          "tickets": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^ALIGN-[0-9]{3}$"}},
+          "condiciones_de_entrada": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/texto_no_vacio"}}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "texto_no_vacio": {"type": "string", "minLength": 1},
+    "fecha": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "clave": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "codigo": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "id_texto": {"type": "string", "pattern": "^(CAN|OPE)-[A-Z0-9]+(-[A-Z0-9]+)*-v[0-9]+$"},
+    "id_estado": {"type": "string", "pattern": "^[A-Z][A-Z_]*$"},
+    "entero_positivo": {"type": "integer", "minimum": 1},
+    "lista_claves": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/clave"}},
+    "lista_terminos": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z ]*[a-z]$"}},
+    "formato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regla", "error", "validos", "invalidos"],
+      "properties": {
+        "regla": {"$ref": "#/$defs/texto_no_vacio"},
+        "error": {"$ref": "#/$defs/id_texto"},
+        "validos": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "invalidos": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "respuesta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cuerpo", "cuando", "estado_destino"],
+      "properties": {
+        "cuerpo": {"type": "object"},
+        "cuando": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/codigo"}},
+        "estado_destino": {"$ref": "#/$defs/id_estado"}
+      }
+    }
+  }
+}

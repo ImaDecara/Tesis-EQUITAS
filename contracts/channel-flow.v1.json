@@ -1,0 +1,420 @@
+{
+  "id": "channel-flow",
+  "version": "1.0.0",
+  "estado": "BORRADOR_PENDIENTE_APROBACION",
+  "aprobacion": null,
+  "fecha": "2026-10-30",
+  "ticket": "ALIGN-047",
+  "documento": "docs/tesis/canal-deudor-diseno.md",
+  "esquema": "contracts/channel-flow.v1.schema.json",
+  "idioma": "es-AR",
+  "fase": "CHAT_WEB_SIN_DATOS_DE_CUENTA",
+  "naturaleza": {
+    "descripcion": "Flujo guiado por reglas con textos fijos y botones. Sin escritura libre fuera del formulario de contacto, sin modelos de lenguaje y sin acceso a datos de la cartera.",
+    "politica_de_cambios": "Todo cambio de un texto, un estado, un campo o un parámetro crea una versión nueva del catálogo (1.1.0, 2.0.0) y un identificador de texto nuevo (-v2); esta versión nunca se edita en silencio. Cada versión requiere la aprobación del usuario y del director antes de publicarse.",
+    "aprobacion_requerida": "Usuario y director (compuerta antes de cerrar ALIGN-047). Los textos marcados JURIDICA o MUNICIPAL requieren además validación jurídica o del municipio antes de cualquier uso con un municipio real.",
+    "datos_personales": "Ninguno. Los ejemplos de formato usan valores sintéticos y dominios reservados (example.com)."
+  },
+  "el_canal_no_hace": [
+    {"codigo": "NO_INFORMA_DEUDA", "descripcion": "No muestra deudas, importes, vencimientos, planes vigentes ni el estado de ninguna cuenta, con o sin referencia."},
+    {"codigo": "NO_CONFIRMA_EXISTENCIA", "descripcion": "No confirma ni niega que una persona, un bien o una cuenta existan o tengan pagos pendientes: la respuesta es la misma para cualquier referencia."},
+    {"codigo": "NO_CONSULTA_CARTERA", "descripcion": "No lee tablas de la cartera (objetos, obligaciones, personas, contactos, perfiles ni revisiones) ni valida la referencia contra la base."},
+    {"codigo": "NO_PIDE_IDENTIFICACION", "descripcion": "No pide ni acepta DNI, CUIT, claves, datos de tarjetas o bancarios, fotos de documentos ni datos de salud o de la situación del hogar."},
+    {"codigo": "NO_COBRA", "descripcion": "No recibe pagos, no genera boletas ni enlaces de pago y no calcula cuotas."},
+    {"codigo": "NO_DECIDE", "descripcion": "No decide ni sugiere intervenciones sobre un caso, no registra decisiones de revisión y no modifica severidad, prioridad ni intensidad."},
+    {"codigo": "NO_EJECUTA_INTERVENCIONES", "descripcion": "No ejecuta ningún nivel de la escala de intensidad 0–4 (ALIGN-003); en particular nunca una intimación (3) ni una derivación a procuración o vía judicial (4), ni por el chat ni por la devolución del operador."},
+    {"codigo": "NO_ENVIA_MENSAJES", "descripcion": "No envía mensajes salientes (correo, SMS, WhatsApp ni notificaciones) ni códigos de verificación; la devolución la hace una persona, a mano y fuera de EQUITAS."},
+    {"codigo": "NO_USA_LLM", "descripcion": "No usa modelos de lenguaje ni genera respuestas: solo muestra textos aprobados de este catálogo."},
+    {"codigo": "NO_PROMETE", "descripcion": "No promete planes, descuentos, quitas, condonaciones, plazos de respuesta ni resultados de un trámite."},
+    {"codigo": "NO_AMENAZA", "descripcion": "No menciona consecuencias del no pago (intimación, embargo, juicio) ni usa lenguaje culpabilizante, urgente o de último aviso."},
+    {"codigo": "NO_INFIERE_VULNERABILIDAD", "descripcion": "No pregunta ni infiere la situación social o económica; los motivos de contacto no la revelan."},
+    {"codigo": "NO_VINCULA_AUTOMATICAMENTE", "descripcion": "No vincula una solicitud con un caso: la vinculación es manual, posterior a una identificación por medio oficial y auditada (ALIGN-066, ALIGN-069)."},
+    {"codigo": "NO_RASTREA", "descripcion": "No registra la navegación por persona, no usa cookies de seguimiento, analítica ni huella del dispositivo, y no guarda la IP en claro."},
+    {"codigo": "NO_SE_PRESENTA_COMO_PERSONA", "descripcion": "Se presenta como asistente automático con respuestas fijas; nunca simula ser una persona."},
+    {"codigo": "NO_ASESORA_JURIDICAMENTE", "descripcion": "No da asesoramiento jurídico ni interpreta la situación de una deuda (exigibilidad, prescripción)."},
+    {"codigo": "NO_USA_TERCEROS", "descripcion": "No incrusta servicios de terceros (captcha externo, chat externo, analítica, mensajería) ni comparte datos con ellos."},
+    {"codigo": "NO_ALIMENTA_REGLAS_NI_MODELOS", "descripcion": "Las solicitudes y su registro no se usan como variables de reglas, prioridad, simulación ni analítica experimental."}
+  ],
+  "intensidades_ejecutables": [],
+  "configuracion_municipio": {
+    "regla": "Valores públicos del municipio (no personales). Todos son obligatorios y se validan con su formato; si falta o es inválido alguno, el canal no se publica y la ruta responde como inexistente.",
+    "campos": [
+      {"clave": "nombre_organismo", "formato": "TEXTO_PLANO", "max_caracteres": 80},
+      {"clave": "telefono_oficial", "formato": "TELEFONO", "max_caracteres": 25},
+      {"clave": "direccion_oficial", "formato": "TEXTO_PLANO", "max_caracteres": 120},
+      {"clave": "horario_atencion", "formato": "TEXTO_PLANO", "max_caracteres": 80},
+      {"clave": "sitio_oficial", "formato": "URL_HTTPS", "max_caracteres": 200},
+      {"clave": "correo_oficial", "formato": "EMAIL", "max_caracteres": 254}
+    ]
+  },
+  "marcadores": {
+    "municipio": ["nombre_organismo", "telefono_oficial", "direccion_oficial", "horario_atencion", "sitio_oficial", "correo_oficial"],
+    "parametros": ["dias_retencion", "max_caracteres"],
+    "solo_operador": ["fecha_solicitud", "motivo_etiqueta", "respuesta_general"],
+    "prohibidos": ["nombre", "contacto", "referencia", "documento", "dni", "cuit", "importe", "monto", "deuda", "saldo", "cuenta", "vencimiento", "domicilio", "severidad", "prioridad", "intensidad", "riesgo"]
+  },
+  "lenguaje": {
+    "tratamiento": "VOSEO",
+    "max_palabras_por_oracion": 25,
+    "max_caracteres": {"MENSAJE": 300, "OPCION": 40, "ETIQUETA": 120, "AYUDA": 200, "ERROR": 200, "MOTIVO": 40, "MEDIO": 40, "PLANTILLA": 900, "GUION": 300},
+    "siglas_permitidas": ["DNI", "CUIT"],
+    "terminos_prohibidos": ["moros", "deudor", "incumpl", "embarg", "juicio", "judicial", "intima", "sancion", "multa", "ultimo aviso", "urgente", "inmediat", "prescrip", "puntaje", "riesgo", "probabilidad", "vulnerab", "prioridad", "tu deuda", "su deuda", "debes", "adeud", "saldo", "importe", "monto"],
+    "promesas_prohibidas": ["garantiz", "aseguramos", "descuento", "condon", "quita", "bonific", "sin interes", "te otorgamos", "aprobamos tu"],
+    "sin_urls_ni_telefonos_literales": true
+  },
+  "textos": [
+    {"id": "CAN-INICIO-BIENVENIDA-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Hola. Este es el chat de información de {nombre_organismo} sobre tasas y contribuciones municipales.", "requiere_validacion": []},
+    {"id": "CAN-INICIO-AUTOMATICO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Soy un asistente automático con respuestas fijas. No soy una persona y no tomo decisiones sobre tu situación.", "requiere_validacion": []},
+    {"id": "CAN-INICIO-SIN-DATOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Por tu seguridad, este chat no muestra información de cuentas ni de pagos pendientes. No escribas tu DNI, tu CUIT, claves ni datos de tarjetas.", "requiere_validacion": []},
+    {"id": "CAN-INICIO-PREGUNTA-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "¿Sobre qué tema querés información?", "requiere_validacion": []},
+    {"id": "CAN-MENU-PREGUNTA-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "¿Sobre qué otro tema querés información?", "requiere_validacion": []},
+    {"id": "CAN-OPC-INFO-GENERAL-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Qué son las tasas municipales", "requiere_validacion": []},
+    {"id": "CAN-OPC-MEDIOS-PAGO-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Dónde y cómo pagar", "requiere_validacion": []},
+    {"id": "CAN-OPC-PLANES-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Planes de pago", "requiere_validacion": []},
+    {"id": "CAN-OPC-ATENCION-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Horarios y lugares de atención", "requiere_validacion": []},
+    {"id": "CAN-OPC-ESTADO-CUENTA-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Consultar el estado de una cuenta", "requiere_validacion": []},
+    {"id": "CAN-OPC-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Derechos y reclamos", "requiere_validacion": []},
+    {"id": "CAN-OPC-PRIVACIDAD-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Cómo cuidamos tus datos", "requiere_validacion": []},
+    {"id": "CAN-OPC-PERSONA-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Hablar con una persona", "requiere_validacion": []},
+    {"id": "CAN-OPC-VOLVER-MENU-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Volver al menú", "requiere_validacion": []},
+    {"id": "CAN-OPC-TERMINAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Terminar", "requiere_validacion": []},
+    {"id": "CAN-OPC-CONTINUAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Continuar", "requiere_validacion": []},
+    {"id": "CAN-OPC-ENVIAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Enviar solicitud", "requiere_validacion": []},
+    {"id": "CAN-OPC-CANCELAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Cancelar y volver al menú", "requiere_validacion": []},
+    {"id": "CAN-OPC-REINTENTAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Intentar de nuevo", "requiere_validacion": []},
+    {"id": "CAN-OPC-EMPEZAR-v1", "audiencia": "PUBLICO", "tipo": "OPCION", "texto": "Empezar de nuevo", "requiere_validacion": []},
+    {"id": "CAN-INFO-GENERAL-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Las tasas y contribuciones municipales financian servicios y obras de {nombre_organismo}. Cada municipio fija sus tasas, sus valores y sus fechas de pago. La información oficial está en {sitio_oficial}.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "CAN-INFO-PAGOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Los medios de pago oficiales están informados en {sitio_oficial} y en {direccion_oficial}. Este chat no recibe pagos ni genera boletas.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "CAN-AVISO-FRAUDE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Ni este chat ni la persona que responda tu consulta te van a pedir claves, datos de tarjetas ni pagos. Si alguien te los pide en nombre del municipio, no respondas y llamá al {telefono_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-INFO-PLANES-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "{nombre_organismo} define si ofrece planes de pago y con qué condiciones. Este chat no puede otorgar planes ni calcular cuotas. Si querés que una persona te explique las opciones, elegí «Hablar con una persona».", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "CAN-INFO-ATENCION-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Podés hacer consultas en persona en {direccion_oficial}, en el horario {horario_atencion}. También podés llamar al {telefono_oficial} o escribir a {correo_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-INFO-ESTADO-CUENTA-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Este chat no muestra el estado de ninguna cuenta y no confirma si una persona o un bien tiene pagos pendientes. Es así porque por este medio no podemos saber quién pregunta.", "requiere_validacion": []},
+    {"id": "CAN-INFO-ESTADO-CUENTA-OFICIAL-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Para conocer tu situación, acercate a {direccion_oficial} con tu documento, en el horario {horario_atencion}. También podés pedir que una persona te contacte.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "CAN-INFO-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Tenés derecho a un trato respetuoso y a recibir información clara sobre tus obligaciones con el municipio.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-INFO-RECLAMOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Si no estás de acuerdo con un cobro o con la atención recibida, podés presentar un reclamo en {direccion_oficial} o por {correo_oficial}. También podés pedir que una persona te contacte.", "requiere_validacion": ["JURIDICA", "MUNICIPAL"]},
+    {"id": "CAN-PRIVACIDAD-RESUMEN-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Este chat no guarda lo que elegís en el menú. Solo guarda datos si pedís que una persona te contacte.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-PRIVACIDAD-DETALLE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "En ese caso, {nombre_organismo} guarda los datos del formulario solo para responderte. Los ve únicamente el personal autorizado del área. No se comparten con otras organizaciones ni se usan para enviarte mensajes automáticos.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-PRIVACIDAD-RETENCION-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Tu nombre, tu contacto y la referencia que escribas se borran a los {dias_retencion} días de la solicitud, aunque no se haya podido responder.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-PRIVACIDAD-DERECHOS-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Podés pedir ver, corregir o borrar tus datos antes de ese plazo en {direccion_oficial} o por {correo_oficial}.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-CONTACTO-INTRO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Dejanos un medio de contacto y una persona del área va a revisar tu pedido. Te va a responder por el medio que elijas.", "requiere_validacion": []},
+    {"id": "CAN-CONTACTO-QUE-NO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Por seguridad, la respuesta no va a incluir información de cuentas. Para eso hace falta que te identifiques por un medio oficial.", "requiere_validacion": []},
+    {"id": "CAN-FORM-OBLIGATORIOS-v1", "audiencia": "PUBLICO", "tipo": "AYUDA", "texto": "Los campos sin la palabra «opcional» son obligatorios.", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-NOMBRE-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "Nombre (opcional)", "requiere_validacion": []},
+    {"id": "CAN-AYUDA-NOMBRE-v1", "audiencia": "PUBLICO", "tipo": "AYUDA", "texto": "Podés dejarlo vacío. Solo sirve para saber cómo llamarte cuando te respondan.", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-MEDIO-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "¿Cómo preferís que te respondan?", "requiere_validacion": []},
+    {"id": "CAN-MEDIO-TELEFONO-v1", "audiencia": "PUBLICO", "tipo": "MEDIO", "texto": "Llamada telefónica", "requiere_validacion": []},
+    {"id": "CAN-MEDIO-EMAIL-v1", "audiencia": "PUBLICO", "tipo": "MEDIO", "texto": "Correo electrónico", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-CONTACTO-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "Teléfono o correo para responderte", "requiere_validacion": []},
+    {"id": "CAN-AYUDA-CONTACTO-v1", "audiencia": "PUBLICO", "tipo": "AYUDA", "texto": "Escribí el teléfono con código de área o tu correo electrónico, según lo que elegiste. No lo verificamos ni te enviamos códigos.", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-MOTIVO-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "Motivo de la consulta", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-INFO-GENERAL-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Información general sobre tasas", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-MEDIOS-PAGO-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Dónde y cómo pagar", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-PLANES-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Planes de pago", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-ESTADO-CUENTA-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Estado de una cuenta", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-RECLAMO-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Reclamo o desacuerdo", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-DATOS-PERSONALES-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Mis datos personales", "requiere_validacion": []},
+    {"id": "CAN-MOTIVO-OTRO-v1", "audiencia": "PUBLICO", "tipo": "MOTIVO", "texto": "Otro motivo", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-REFERENCIA-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "Número de cuenta o del bien (opcional)", "requiere_validacion": []},
+    {"id": "CAN-AYUDA-REFERENCIA-v1", "audiencia": "PUBLICO", "tipo": "AYUDA", "texto": "Puede ayudar a la persona que te responda. No lo revisamos ahora y no cambia lo que te muestra este chat. No escribas tu DNI ni tu CUIT.", "requiere_validacion": []},
+    {"id": "CAN-CAMPO-CONSENTIMIENTO-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "Acepto que {nombre_organismo} guarde estos datos para responder mi consulta y los borre a los {dias_retencion} días.", "requiere_validacion": ["JURIDICA"]},
+    {"id": "CAN-CAMPO-TRAMPA-v1", "audiencia": "PUBLICO", "tipo": "ETIQUETA", "texto": "No completes este campo", "requiere_validacion": []},
+    {"id": "CAN-ERROR-RESUMEN-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Hay datos para revisar. Te los marcamos debajo de cada campo.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-OBLIGATORIO-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Completá este campo.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-LONGITUD-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Este campo admite hasta {max_caracteres} caracteres.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-OPCION-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Elegí una de las opciones de la lista.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-NOMBRE-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Usá solo letras, espacios, puntos, apóstrofos o guiones.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-TELEFONO-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Escribí el teléfono con código de área, con entre 8 y 15 números. Podés usar espacios, guiones o paréntesis.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-EMAIL-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Revisá el correo electrónico: tiene que tener una @ y un dominio, sin espacios.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-REFERENCIA-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Usá solo letras sin tilde, números, espacios, guiones, barras o puntos.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-CONSENTIMIENTO-v1", "audiencia": "PUBLICO", "tipo": "ERROR", "texto": "Para enviar la solicitud tenés que aceptar el uso de tus datos. Si no querés, podés llamar al {telefono_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-CONFIRMACION-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Recibimos tu solicitud. Una persona del área la va a revisar y te va a responder por el medio que elegiste.", "requiere_validacion": []},
+    {"id": "CAN-CONFIRMACION-TIEMPO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "El tiempo de respuesta depende de la cantidad de consultas. Si necesitás atención antes, llamá al {telefono_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-LIMITE-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "En este momento no podemos recibir más solicitudes. Probá de nuevo más tarde o llamá al {telefono_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-ERROR-ENVIO-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "No pudimos confirmar el envío de tu solicitud. Probá de nuevo más tarde o llamá al {telefono_oficial}.", "requiere_validacion": []},
+    {"id": "CAN-FIN-v1", "audiencia": "PUBLICO", "tipo": "MENSAJE", "texto": "Gracias por tu consulta. Si necesitás algo más, podés empezar de nuevo cuando quieras.", "requiere_validacion": []},
+    {"id": "OPE-CORREO-ASUNTO-v1", "audiencia": "OPERADOR", "tipo": "PLANTILLA", "texto": "Respuesta a tu consulta en el chat de {nombre_organismo}", "requiere_validacion": []},
+    {"id": "OPE-CORREO-GENERAL-v1", "audiencia": "OPERADOR", "tipo": "PLANTILLA", "texto": "Hola. Te escribimos de {nombre_organismo} por la consulta que dejaste en el chat el {fecha_solicitud} sobre «{motivo_etiqueta}». {respuesta_general} Por seguridad, por correo no damos información de cuentas, porque no podemos confirmar quién recibe este mensaje. Para conocer tu situación, acercate a {direccion_oficial} con tu documento, en el horario {horario_atencion}. En este correo no te pedimos claves, datos de tarjetas ni pagos. Si no hiciste esta consulta, ignorá este mensaje y disculpá la molestia.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "OPE-CORREO-ESTADO-CUENTA-v1", "audiencia": "OPERADOR", "tipo": "PLANTILLA", "texto": "Hola. Te escribimos de {nombre_organismo} por la consulta que dejaste en el chat el {fecha_solicitud} sobre el estado de una cuenta. Por seguridad, no podemos darte esa información por correo, porque no podemos confirmar quién lo recibe. Podés consultarla en {direccion_oficial} con tu documento, en el horario {horario_atencion}. En este correo no te pedimos claves, datos de tarjetas ni pagos. Si no hiciste esta consulta, ignorá este mensaje y disculpá la molestia.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "OPE-CORREO-DATOS-PERSONALES-v1", "audiencia": "OPERADOR", "tipo": "PLANTILLA", "texto": "Hola. Te escribimos de {nombre_organismo} por la consulta que dejaste en el chat el {fecha_solicitud} sobre tus datos personales. Si querés que borremos los datos de tu solicitud, respondé este correo y los borramos. Para ver o corregir otros datos que tenga el municipio, acercate a {direccion_oficial} con tu documento, en el horario {horario_atencion}. En este correo no te pedimos claves, datos de tarjetas ni pagos. Si no hiciste esta consulta, ignorá este mensaje y disculpá la molestia.", "requiere_validacion": ["JURIDICA", "MUNICIPAL"]},
+    {"id": "OPE-GUION-LLAMADA-v1", "audiencia": "OPERADOR", "tipo": "GUION", "texto": "Hola, te llamo de {nombre_organismo} por una consulta que se dejó en el chat de información el {fecha_solicitud}. ¿Hablo con la persona que hizo esa consulta?", "requiere_validacion": []},
+    {"id": "OPE-GUION-NO-ES-v1", "audiencia": "OPERADOR", "tipo": "GUION", "texto": "Disculpá la molestia, seguramente hubo un error con el número. Que tengas un buen día.", "requiere_validacion": []},
+    {"id": "OPE-GUION-SEGURIDAD-v1", "audiencia": "OPERADOR", "tipo": "GUION", "texto": "Por seguridad, por teléfono no podemos darte información de cuentas. Podés consultarla en {direccion_oficial} con tu documento, en el horario {horario_atencion}.", "requiere_validacion": ["MUNICIPAL"]},
+    {"id": "OPE-GUION-FRAUDE-v1", "audiencia": "OPERADOR", "tipo": "GUION", "texto": "En esta llamada no te vamos a pedir claves, datos de tarjetas ni pagos.", "requiere_validacion": []}
+  ],
+  "flujo": {
+    "estado_inicial": "INICIO",
+    "estados": [
+      {"id": "INICIO", "tipo": "MENU", "textos": ["CAN-INICIO-BIENVENIDA-v1", "CAN-INICIO-AUTOMATICO-v1", "CAN-INICIO-SIN-DATOS-v1", "CAN-INICIO-PREGUNTA-v1"], "opciones": [
+        {"texto": "CAN-OPC-INFO-GENERAL-v1", "destino": "INFO_GENERAL"},
+        {"texto": "CAN-OPC-MEDIOS-PAGO-v1", "destino": "INFO_PAGOS"},
+        {"texto": "CAN-OPC-PLANES-v1", "destino": "INFO_PLANES"},
+        {"texto": "CAN-OPC-ATENCION-v1", "destino": "INFO_ATENCION"},
+        {"texto": "CAN-OPC-ESTADO-CUENTA-v1", "destino": "INFO_ESTADO_CUENTA"},
+        {"texto": "CAN-OPC-DERECHOS-v1", "destino": "INFO_DERECHOS"},
+        {"texto": "CAN-OPC-PRIVACIDAD-v1", "destino": "INFO_PRIVACIDAD"},
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "MENU", "tipo": "MENU", "textos": ["CAN-MENU-PREGUNTA-v1"], "opciones": [
+        {"texto": "CAN-OPC-INFO-GENERAL-v1", "destino": "INFO_GENERAL"},
+        {"texto": "CAN-OPC-MEDIOS-PAGO-v1", "destino": "INFO_PAGOS"},
+        {"texto": "CAN-OPC-PLANES-v1", "destino": "INFO_PLANES"},
+        {"texto": "CAN-OPC-ATENCION-v1", "destino": "INFO_ATENCION"},
+        {"texto": "CAN-OPC-ESTADO-CUENTA-v1", "destino": "INFO_ESTADO_CUENTA"},
+        {"texto": "CAN-OPC-DERECHOS-v1", "destino": "INFO_DERECHOS"},
+        {"texto": "CAN-OPC-PRIVACIDAD-v1", "destino": "INFO_PRIVACIDAD"},
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_GENERAL", "tipo": "INFO", "textos": ["CAN-INFO-GENERAL-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_PAGOS", "tipo": "INFO", "textos": ["CAN-INFO-PAGOS-v1", "CAN-AVISO-FRAUDE-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_PLANES", "tipo": "INFO", "textos": ["CAN-INFO-PLANES-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_ATENCION", "tipo": "INFO", "textos": ["CAN-INFO-ATENCION-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_ESTADO_CUENTA", "tipo": "INFO", "textos": ["CAN-INFO-ESTADO-CUENTA-v1", "CAN-INFO-ESTADO-CUENTA-OFICIAL-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_DERECHOS", "tipo": "INFO", "textos": ["CAN-INFO-DERECHOS-v1", "CAN-INFO-RECLAMOS-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "INFO_PRIVACIDAD", "tipo": "INFO", "textos": ["CAN-PRIVACIDAD-RESUMEN-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1", "CAN-PRIVACIDAD-DERECHOS-v1"], "opciones": [
+        {"texto": "CAN-OPC-PERSONA-v1", "destino": "CONTACTO_AVISO"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "CONTACTO_AVISO", "tipo": "AVISO", "textos": ["CAN-CONTACTO-INTRO-v1", "CAN-CONTACTO-QUE-NO-v1", "CAN-PRIVACIDAD-DETALLE-v1", "CAN-PRIVACIDAD-RETENCION-v1"], "opciones": [
+        {"texto": "CAN-OPC-CONTINUAR-v1", "destino": "CONTACTO_FORM"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"}
+      ]},
+      {"id": "CONTACTO_FORM", "tipo": "FORMULARIO", "textos": ["CAN-FORM-OBLIGATORIOS-v1"], "opciones": [
+        {"texto": "CAN-OPC-CANCELAR-v1", "destino": "MENU"}
+      ], "envio": {"texto": "CAN-OPC-ENVIAR-v1", "resultados": {
+        "RECIBIDA": "CONTACTO_CONFIRMACION",
+        "INVALIDA": "CONTACTO_FORM",
+        "LIMITE": "CONTACTO_LIMITE",
+        "ERROR": "CONTACTO_ERROR"
+      }}},
+      {"id": "CONTACTO_CONFIRMACION", "tipo": "RESULTADO", "textos": ["CAN-CONFIRMACION-v1", "CAN-CONFIRMACION-TIEMPO-v1", "CAN-AVISO-FRAUDE-v1"], "opciones": [
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "CONTACTO_LIMITE", "tipo": "RESULTADO", "textos": ["CAN-LIMITE-v1"], "opciones": [
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "CONTACTO_ERROR", "tipo": "RESULTADO", "textos": ["CAN-ERROR-ENVIO-v1"], "opciones": [
+        {"texto": "CAN-OPC-REINTENTAR-v1", "destino": "CONTACTO_FORM"},
+        {"texto": "CAN-OPC-VOLVER-MENU-v1", "destino": "MENU"},
+        {"texto": "CAN-OPC-TERMINAR-v1", "destino": "FIN"}
+      ]},
+      {"id": "FIN", "tipo": "FIN", "textos": ["CAN-FIN-v1"], "opciones": [
+        {"texto": "CAN-OPC-EMPEZAR-v1", "destino": "INICIO"}
+      ]}
+    ],
+    "navegacion": "Ocurre en el navegador con el catálogo ya cargado: elegir una opción no envía datos al servidor ni deja registro. El único envío es el del formulario de contacto."
+  },
+  "solicitud_contacto": {
+    "campos": [
+      {"id": "nombre", "control": "TEXTO", "etiqueta": "CAN-CAMPO-NOMBRE-v1", "ayuda": "CAN-AYUDA-NOMBRE-v1", "obligatorio": false, "personal": true, "formato": "NOMBRE", "max_caracteres": 80, "autocompletar": "name", "finalidad": "Saber cómo dirigirse a la persona al responder."},
+      {"id": "medio_preferido", "control": "OPCION_UNICA", "etiqueta": "CAN-CAMPO-MEDIO-v1", "obligatorio": true, "personal": false, "opciones": "medios_contacto", "finalidad": "Responder por el medio que eligió la persona."},
+      {"id": "contacto", "control": "TEXTO", "etiqueta": "CAN-CAMPO-CONTACTO-v1", "ayuda": "CAN-AYUDA-CONTACTO-v1", "obligatorio": true, "personal": true, "formato": "SEGUN_MEDIO", "max_caracteres": 254, "autocompletar": "SEGUN_MEDIO", "verificado": false, "finalidad": "Hacer la devolución manual."},
+      {"id": "motivo", "control": "LISTA", "etiqueta": "CAN-CAMPO-MOTIVO-v1", "obligatorio": true, "personal": false, "opciones": "motivos", "finalidad": "Elegir la plantilla de respuesta y medir la demanda agregada."},
+      {"id": "referencia", "control": "TEXTO", "etiqueta": "CAN-CAMPO-REFERENCIA-v1", "ayuda": "CAN-AYUDA-REFERENCIA-v1", "obligatorio": false, "personal": true, "formato": "REFERENCIA", "max_caracteres": 30, "autocompletar": "off", "verificado": false, "finalidad": "Orientar a la persona operadora después de una identificación por medio oficial; nunca se consulta contra la base."},
+      {"id": "consentimiento", "control": "CASILLA", "etiqueta": "CAN-CAMPO-CONSENTIMIENTO-v1", "obligatorio": true, "personal": false, "valor_inicial": false, "finalidad": "Dejar constancia de la versión del aviso aceptada."}
+    ],
+    "campo_trampa": {"id": "sitio_web", "etiqueta": "CAN-CAMPO-TRAMPA-v1", "regla": "Oculto a personas y a lectores de pantalla (fuera de pantalla, aria-hidden, tabindex -1, autocomplete off). Si llega con valor, la respuesta es RECIBIDA y no se guarda nada."},
+    "campos_prohibidos": ["documento", "dni", "cuit", "domicilio", "direccion", "fecha_nacimiento", "mensaje", "texto_libre", "comentario", "adjunto", "situacion_hogar", "ingresos", "importe"],
+    "medios_contacto": [
+      {"codigo": "TELEFONO", "texto": "CAN-MEDIO-TELEFONO-v1", "formato": "TELEFONO", "autocompletar": "tel", "max_caracteres": 25},
+      {"codigo": "EMAIL", "texto": "CAN-MEDIO-EMAIL-v1", "formato": "EMAIL", "autocompletar": "email", "max_caracteres": 254}
+    ],
+    "motivos": [
+      {"codigo": "INFO_GENERAL", "texto": "CAN-MOTIVO-INFO-GENERAL-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"},
+      {"codigo": "MEDIOS_PAGO", "texto": "CAN-MOTIVO-MEDIOS-PAGO-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"},
+      {"codigo": "PLAN_PAGOS", "texto": "CAN-MOTIVO-PLANES-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"},
+      {"codigo": "ESTADO_CUENTA", "texto": "CAN-MOTIVO-ESTADO-CUENTA-v1", "plantilla_correo": "OPE-CORREO-ESTADO-CUENTA-v1"},
+      {"codigo": "RECLAMO", "texto": "CAN-MOTIVO-RECLAMO-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"},
+      {"codigo": "DATOS_PERSONALES", "texto": "CAN-MOTIVO-DATOS-PERSONALES-v1", "plantilla_correo": "OPE-CORREO-DATOS-PERSONALES-v1"},
+      {"codigo": "OTRO", "texto": "CAN-MOTIVO-OTRO-v1", "plantilla_correo": "OPE-CORREO-GENERAL-v1"}
+    ],
+    "normalizacion": "Antes de validar: forma Unicode NFC, sin espacios al inicio ni al final y espacios internos repetidos reducidos a uno. Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida el campo con FORMATO. Todo se guarda y se muestra como texto plano, nunca como HTML.",
+    "formatos": {
+      "NOMBRE": {"regla": "1 a 80 caracteres: letras Unicode (con sus tildes), espacio, punto, apóstrofo (' o ’) o guion; al menos una letra.", "error": "CAN-ERROR-NOMBRE-v1", "validos": ["Ana", "José María", "M. de la Fuente", "D'Alessandro"], "invalidos": ["Ana3", "<b>Ana</b>", "Ana\u0000", "!!!", "--"]},
+      "TELEFONO": {"regla": "Hasta 25 caracteres: dígitos, espacio, guion y paréntesis, con un + opcional solo al inicio; entre 8 y 15 dígitos en total. No se verifica que exista.", "error": "CAN-ERROR-TELEFONO-v1", "validos": ["+54 000 000-0000", "(000) 0000-0000", "00000000"], "invalidos": ["0000000", "0000000000000000", "000-ABC-0000", "00+000000000", "+54 000\n0000"]},
+      "EMAIL": {"regla": "Hasta 254 caracteres ASCII sin espacios, con una sola @; parte local de 1 a 64 caracteres entre letras, dígitos y . _ % + -; dominio con al menos dos etiquetas de letras, dígitos o guiones (sin guion al inicio ni al final) y la última solo de letras, con 2 o más. No se verifica que exista.", "error": "CAN-ERROR-EMAIL-v1", "validos": ["persona@example.com", "nombre.apellido+chat@example.org"], "invalidos": ["persona@", "persona.example.com", "per sona@example.com", "persona@example", "a@b@example.com", "persona@-example.com"]},
+      "REFERENCIA": {"regla": "1 a 30 caracteres ASCII: letras sin tilde, dígitos, espacio, guion, barra o punto; al menos una letra o un dígito. No se consulta contra la base.", "error": "CAN-ERROR-REFERENCIA-v1", "validos": ["SINT-0001", "12/345.6", "AB 123 CD"], "invalidos": ["<script>", "SINT_0001", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "---", "Ñandú 1"]}
+    },
+    "errores": {
+      "OBLIGATORIO": "CAN-ERROR-OBLIGATORIO-v1",
+      "LONGITUD_MAXIMA": "CAN-ERROR-LONGITUD-v1",
+      "OPCION_INVALIDA": "CAN-ERROR-OPCION-v1",
+      "CONSENTIMIENTO_REQUERIDO": "CAN-ERROR-CONSENTIMIENTO-v1",
+      "RESUMEN": "CAN-ERROR-RESUMEN-v1"
+    },
+    "datos_de_servidor": [
+      {"campo": "id", "descripcion": "UUID aleatorio (no secuencial); seudónimo de la solicitud en el registro de interacciones."},
+      {"campo": "tenant", "descripcion": "Municipio resuelto en el servidor a partir de la ruta pública, nunca del cuerpo enviado."},
+      {"campo": "origen", "descripcion": "CHAT_WEB."},
+      {"campo": "estado", "descripcion": "NUEVA al crear."},
+      {"campo": "creada_at", "descripcion": "Fecha y hora UTC del servidor."},
+      {"campo": "version_flujo", "descripcion": "Versión de este catálogo (channel-flow 1.0.0)."},
+      {"campo": "consentimiento_texto_id", "descripcion": "CAN-CAMPO-CONSENTIMIENTO-v1 u otra versión aceptada."},
+      {"campo": "consentimiento_at", "descripcion": "Igual a creada_at."},
+      {"campo": "purga_programada_at", "descripcion": "creada_at + dias_retencion."},
+      {"campo": "purgada_at", "descripcion": "Nulo hasta que la purga suprime los campos personales."}
+    ],
+    "no_se_guarda": ["IP en claro", "agente de usuario", "cookies o identificadores de sesión", "navegación por el menú", "huella del dispositivo", "ubicación", "cuerpo de la solicitud en registros del servidor"],
+    "orden_de_evaluacion": [
+      "TAMANO: cuerpo de más de 4096 bytes → ERROR, sin procesar ni guardar.",
+      "CAMPO_TRAMPA: con valor → RECIBIDA, sin guardar.",
+      "LIMITES: algún límite de antiabuso superado → LIMITE, sin guardar (cuenta también los envíos inválidos).",
+      "FORMATO: algún campo inválido → INVALIDA con la lista de errores por campo, sin guardar.",
+      "DUPLICADO: mismo contacto y motivo en las últimas 24 horas en el mismo municipio → RECIBIDA, sin crear otra solicitud.",
+      "GUARDAR: inserción mediante la función de servidor → RECIBIDA; si falla → ERROR."
+    ],
+    "respuestas_envio": {
+      "RECIBIDA": {"cuerpo": {"resultado": "RECIBIDA"}, "cuando": ["VALIDA", "DUPLICADA_24H", "CAMPO_TRAMPA_CON_VALOR"], "estado_destino": "CONTACTO_CONFIRMACION"},
+      "INVALIDA": {"cuerpo": {"resultado": "INVALIDA", "errores": "lista de {campo, codigo}"}, "cuando": ["FORMATO_INVALIDO"], "estado_destino": "CONTACTO_FORM"},
+      "LIMITE": {"cuerpo": {"resultado": "LIMITE"}, "cuando": ["LIMITE_SUPERADO"], "estado_destino": "CONTACTO_LIMITE"},
+      "ERROR": {"cuerpo": {"resultado": "ERROR"}, "cuando": ["CUERPO_DEMASIADO_GRANDE", "FALLA_DEL_SERVIDOR"], "estado_destino": "CONTACTO_ERROR"}
+    },
+    "garantias_no_revelacion": {
+      "consulta_tablas_de_cartera": false,
+      "valida_referencia_contra_base": false,
+      "devuelve_datos_enviados": false,
+      "devuelve_numero_de_solicitud": false,
+      "misma_respuesta_para_cualquier_referencia": true,
+      "mismo_cuerpo_valida_duplicada_trampa": true,
+      "errores_dependen_solo_del_formato": true,
+      "limite_sin_detalle_de_causa": true
+    }
+  },
+  "antiabuso": {
+    "seudonimo": "HMAC-SHA-256 con un secreto de servidor por entorno, nunca en el navegador ni en el repositorio. Se aplica a la IP y al contacto normalizado; la IP en claro no se guarda ni se registra.",
+    "limites": [
+      {"clave": "IP", "ventana_horas": 1, "maximo": 5},
+      {"clave": "IP", "ventana_horas": 24, "maximo": 20},
+      {"clave": "CONTACTO", "ventana_horas": 24, "maximo": 3},
+      {"clave": "MUNICIPIO", "ventana_horas": 24, "maximo": 200}
+    ],
+    "retencion_contadores_horas": 24,
+    "duplicado_ventana_horas": 24,
+    "max_bytes_cuerpo": 4096,
+    "captcha_de_terceros": false
+  },
+  "retencion": {
+    "dias_por_defecto": 90,
+    "dias_minimo": 30,
+    "dias_maximo": 90,
+    "desde": "creada_at",
+    "campos_personales": ["nombre", "contacto", "referencia"],
+    "accion": "SUPRIMIR: los campos personales pasan a nulo y se registra purgada_at; la solicitud queda solo con datos no personales.",
+    "se_conserva": ["id", "tenant", "origen", "motivo", "medio_preferido", "estado", "motivo_cierre", "creada_at", "cerrada_at", "version_flujo", "consentimiento_texto_id", "consentimiento_at", "purgada_at"],
+    "frecuencia_minima": "Diaria, como tarea programada documentada; con reloj simulado, a creada_at + dias_retencion + 1 segundo no queda ningún campo personal.",
+    "aplica_en_cualquier_estado": true,
+    "purga_inmediata_por_cierre": ["SUPRESION_SOLICITADA", "CONTACTO_NO_CORRESPONDE"],
+    "registro_de_interacciones": "No contiene campos personales; queda referido al id de la solicitud, que tras la purga ya no permite llegar a la persona.",
+    "vinculacion_con_caso": "Si una persona operadora vinculó la solicitud con un caso tras una identificación oficial, el vínculo (id de solicitud e id de caso) vive en la auditoría de ALIGN-069 con su propia política; la purga del canal se aplica igual."
+  },
+  "derivacion": {
+    "estados_cola": ["NUEVA", "EN_CURSO", "RESUELTA", "DESCARTADA"],
+    "transiciones": [
+      {"desde": "NUEVA", "hacia": "EN_CURSO", "accion": "ASIGNAR"},
+      {"desde": "EN_CURSO", "hacia": "NUEVA", "accion": "LIBERAR"},
+      {"desde": "EN_CURSO", "hacia": "RESUELTA", "accion": "CERRAR"},
+      {"desde": "EN_CURSO", "hacia": "DESCARTADA", "accion": "CERRAR"},
+      {"desde": "NUEVA", "hacia": "DESCARTADA", "accion": "CERRAR"}
+    ],
+    "motivos_cierre": [
+      {"codigo": "RESPONDIDA", "estado": "RESUELTA"},
+      {"codigo": "DERIVADA_A_ATENCION_OFICIAL", "estado": "RESUELTA"},
+      {"codigo": "SUPRESION_SOLICITADA", "estado": "RESUELTA"},
+      {"codigo": "SIN_RESPUESTA_TRAS_INTENTOS", "estado": "RESUELTA"},
+      {"codigo": "CONTACTO_NO_CORRESPONDE", "estado": "DESCARTADA"},
+      {"codigo": "CONTACTO_INVALIDO", "estado": "DESCARTADA"},
+      {"codigo": "DUPLICADA", "estado": "DESCARTADA"},
+      {"codigo": "ABUSO", "estado": "DESCARTADA"}
+    ],
+    "max_intentos_contacto": 3,
+    "eventos_registro": [
+      {"codigo": "ASIGNACION", "cuenta_como_respuesta": false},
+      {"codigo": "LIBERACION", "cuenta_como_respuesta": false},
+      {"codigo": "PREPARACION", "cuenta_como_respuesta": false},
+      {"codigo": "INTENTO", "cuenta_como_respuesta": false},
+      {"codigo": "RESPUESTA_REALIZADA", "cuenta_como_respuesta": true},
+      {"codigo": "CIERRE", "cuenta_como_respuesta": false},
+      {"codigo": "VINCULACION_CASO", "cuenta_como_respuesta": false},
+      {"codigo": "PURGA", "cuenta_como_respuesta": false}
+    ],
+    "resultados_intento": ["CONTESTO", "NO_CONTESTO", "CONTACTO_INVALIDO", "CONTACTO_NO_CORRESPONDE"],
+    "campos_evento": ["solicitud_id", "tenant", "actor", "evento", "fecha", "medio", "plantilla_id", "resultado", "motivo_cierre"],
+    "campos_prohibidos_en_registro": ["nombre", "contacto", "referencia", "contenido_de_la_respuesta"],
+    "rotulo_indicadores": "Eventos declarados por la persona operadora; no prueban que el mensaje haya sido entregado ni leído.",
+    "plantillas": ["OPE-CORREO-ASUNTO-v1", "OPE-CORREO-GENERAL-v1", "OPE-CORREO-ESTADO-CUENTA-v1", "OPE-CORREO-DATOS-PERSONALES-v1", "OPE-GUION-LLAMADA-v1", "OPE-GUION-NO-ES-v1", "OPE-GUION-SEGURIDAD-v1", "OPE-GUION-FRAUDE-v1"],
+    "reglas_operador": [
+      {"codigo": "RO-01", "regla": "Responder a mano por el medio que eligió la persona, fuera de EQUITAS y sin envíos automáticos."},
+      {"codigo": "RO-02", "regla": "No dar información de cuentas, importes ni vencimientos, ni confirmar que la persona o el bien tienen cuentas o pagos pendientes, aunque la persona lo pida."},
+      {"codigo": "RO-03", "regla": "En una llamada, preguntar primero si quien atiende hizo la consulta (OPE-GUION-LLAMADA-v1). Si dice que no, usar OPE-GUION-NO-ES-v1, no dar detalles y cerrar con CONTACTO_NO_CORRESPONDE."},
+      {"codigo": "RO-04", "regla": "No pedir DNI, CUIT, claves, datos de tarjetas, pagos ni datos sobre la situación del hogar."},
+      {"codigo": "RO-05", "regla": "La devolución no es una intervención de cobranza: no anuncia ni ejecuta ningún nivel de la escala 0–4. Si corresponde gestionar un caso, se hace en la revisión del caso (ALIGN-021), después de identificar a la persona."},
+      {"codigo": "RO-06", "regla": "Vincular la solicitud con un caso solo después de identificar a la persona por un medio oficial; la vinculación es manual y queda auditada (ALIGN-069)."},
+      {"codigo": "RO-07", "regla": "Registrar preparación, intento, respuesta y cierre como códigos, sin copiar nombre, contacto ni el contenido de la respuesta."},
+      {"codigo": "RO-08", "regla": "Hacer como máximo 3 intentos de contacto, en días distintos; después, cerrar con SIN_RESPUESTA_TRAS_INTENTOS."},
+      {"codigo": "RO-09", "regla": "Si la persona pide borrar sus datos, cerrar con SUPRESION_SOLICITADA (purga inmediata)."},
+      {"codigo": "RO-10", "regla": "Tratar a la persona con respeto, sin juicios sobre ella ni sobre su situación, y completar {respuesta_general} solo con información general."}
+    ]
+  },
+  "acceso": [
+    {"rol": "anon", "puede": "Solo ejecutar la función de servidor de envío. Sin SELECT, INSERT, UPDATE ni DELETE directos sobre ninguna tabla del canal."},
+    {"rol": "operador", "puede": "Ver la cola de su municipio con los campos personales hasta la purga; asignar, registrar eventos y cerrar mediante funciones de servidor. Sin UPDATE ni DELETE directos."},
+    {"rol": "supervisor", "puede": "Ver indicadores agregados y el registro seudónimo de su municipio, sin nombre, contacto ni referencia en claro (salvo que también tenga el rol operador)."},
+    {"rol": "consulta", "puede": "Nada del canal."},
+    {"rol": "importador", "puede": "Nada del canal."},
+    {"rol": "importador_sistema", "puede": "Nada del canal."},
+    {"rol": "otro_municipio", "puede": "Nada: toda lectura y escritura se filtra por el municipio resuelto en el servidor."},
+    {"rol": "tarea_de_purga", "puede": "Suprimir campos personales vencidos o con cierre de purga inmediata y registrar el evento PURGA."},
+    {"rol": "reglas_analitica_simulacion", "puede": "Nada: los datos del canal no alimentan severidad, prioridad, intensidad, simulación ni analítica experimental."}
+  ],
+  "accesibilidad": {
+    "objetivo": "WCAG 2.2 nivel AA",
+    "requisitos": [
+      {"codigo": "ANCHO_360", "descripcion": "Usable en 360 px de ancho y con zoom de 200 % sin desplazamiento horizontal."},
+      {"codigo": "TECLADO", "descripcion": "Todo se opera con teclado, con foco visible y orden lógico; ningún foco queda oculto."},
+      {"codigo": "LECTOR_PANTALLA", "descripcion": "Cada respuesta nueva se anuncia en una región aria-live polite y el foco pasa a su encabezado; las opciones son botones de una lista."},
+      {"codigo": "ETIQUETAS_VISIBLES", "descripcion": "Cada campo tiene etiqueta visible asociada; opcionales indicados en la etiqueta; opciones de medio en un grupo con leyenda."},
+      {"codigo": "ERRORES_TEXTUALES", "descripcion": "Errores en texto junto al campo, vinculados con aria-describedby, y un resumen al inicio que recibe el foco."},
+      {"codigo": "CONTRASTE", "descripcion": "Contraste de texto de al menos 4,5:1 y de componentes de al menos 3:1."},
+      {"codigo": "SIN_DEPENDER_COLOR", "descripcion": "Ningún estado o error se comunica solo con color."},
+      {"codigo": "OBJETIVOS_24PX", "descripcion": "Botones y casillas de al menos 24 × 24 px."},
+      {"codigo": "SIN_LIMITE_TIEMPO", "descripcion": "Sin límites de tiempo ni sesiones que expiren mientras se completa el formulario."},
+      {"codigo": "IDIOMA_ES_AR", "descripcion": "Página con lang es-AR."},
+      {"codigo": "MOVIMIENTO_REDUCIDO", "descripcion": "Sin animaciones obligatorias; respeta prefers-reduced-motion."},
+      {"codigo": "SIN_CAPTCHA", "descripcion": "Sin desafíos visuales ni auditivos; el antiabuso es invisible para la persona."},
+      {"codigo": "ALTERNATIVA_HUMANA", "descripcion": "Teléfono y atención presencial visibles en los avisos de límite, error y confirmación."}
+    ]
+  },
+  "fases": [
+    {"numero": 1, "nombre": "Chat web por reglas sin datos de cuenta, con derivación a operador", "alcance": "IMPRESCINDIBLE", "tickets": ["ALIGN-047", "ALIGN-065", "ALIGN-066", "ALIGN-071"], "condiciones_de_entrada": ["Este catálogo aprobado por el usuario y el director"]},
+    {"numero": 2, "nombre": "Consulta de estado de cuenta tras identificación robusta", "alcance": "EVOLUCION", "tickets": ["ALIGN-067"], "condiciones_de_entrada": ["Decisión de alcance que la incorpore", "Proveedor de identidad aprobado por el municipio (OIDC)", "Procedimiento municipal documentado de vínculo identidad ↔ persona", "Respuesta jurídica de ALIGN-042", "Prohibido usar como único factor un código enviado a contactos del padrón", "Versión nueva de este catálogo (2.0.0) con su propia aprobación"]},
+    {"numero": 3, "nombre": "WhatsApp Business", "alcance": "EVOLUCION", "tickets": ["ALIGN-068"], "condiciones_de_entrada": ["Decisión, cuenta y proveedor de WhatsApp Business", "Costos aprobados", "Plantillas aprobadas por el proveedor y por el usuario y el director", "Análisis de transferencia de datos al tercero", "Consentimiento previo verificable", "Sin información de cuenta salvo con la fase 2"]}
+  ]
+}
