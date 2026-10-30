@@ -5,7 +5,7 @@ const { browserClient } = vi.hoisted(() => ({ browserClient: vi.fn() }))
 vi.mock('@/lib/supabase-browser', () => ({ createBrowserSupabaseClient: browserClient }))
 
 import {
-  getCurrentAuthUser, mapAuthErrorMessage, signInWithPassword, signOutCurrentSession,
+  getCurrentAuthUser, mapAuthErrorMessage, selectCurrentTenant, signInWithPassword, signOutCurrentSession,
   validateAuthUserTenantAccess, validateCurrentUserTenantAccess,
 } from '@/lib/services/auth-service'
 
@@ -130,5 +130,52 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
     const { queries } = clientWithReplies([ok([row])])
     expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'APP_USER_NOT_FOUND' })
     expect(queries).toHaveLength(1)
+  })
+})
+
+describe('ALIGN-019: la seleccion de municipio es explicita y no confiere permisos', () => {
+  beforeEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
+  const authorized = () => [ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]),
+    ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])]
+
+  it.each(['https:', 'http:'])('guarda la eleccion solo despues de validarla (%s)', async protocol => {
+    const document = { cookie: '' }
+    vi.stubGlobal('document', document)
+    vi.stubGlobal('location', { protocol })
+    const { queries } = clientWithReplies(authorized())
+    expect((await selectCurrentTenant('7')).isAuthorized).toBe(true)
+    expect(queries[1].filters).toContainEqual(['tenant', '7'])
+    expect(document.cookie).toBe(`equitas_tenant_id=7; Path=/; SameSite=Lax${protocol === 'https:' ? '; Secure' : ''}`)
+  })
+
+  it('una seleccion denegada no escribe cookies', async () => {
+    const document = { cookie: 'preferencia=valor' }
+    vi.stubGlobal('document', document)
+    clientWithReplies([authorized()[0], ok([]), ok([])])
+    expect((await selectCurrentTenant('8')).isAuthorized).toBe(false)
+    expect(document.cookie).toBe('preferencia=valor')
+    expect((await selectCurrentTenant('8inyectado')).isAuthorized).toBe(false)
+    expect(document.cookie).toBe('preferencia=valor')
+  })
+
+  it('cerrar o iniciar sesion borra selecciones anteriores', async () => {
+    const document = { cookie: 'equitas_tenant_id=8' }
+    vi.stubGlobal('document', document)
+    clientWithReplies([])
+    await signOutCurrentSession()
+    expect(document.cookie).toContain('Max-Age=0')
+    document.cookie = 'equitas_tenant_id=8'
+    await signInWithPassword('test@example.test', 'test-only-password')
+    expect(document.cookie).toContain('Max-Age=0')
+  })
+
+  it('null pide opciones nuevas mientras la consulta normal revalida la cookie', async () => {
+    vi.stubGlobal('document', { cookie: 'preferencia=valor; equitas_tenant_id=7' })
+    const first = clientWithReplies(authorized())
+    await validateCurrentUserTenantAccess()
+    expect(first.queries[1].filters).toContainEqual(['tenant', '7'])
+    const second = clientWithReplies(authorized())
+    await validateCurrentUserTenantAccess(null)
+    expect(second.queries[1].filters).not.toContainEqual(['tenant', '7'])
   })
 })

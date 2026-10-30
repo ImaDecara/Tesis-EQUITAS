@@ -47,12 +47,18 @@ export function createPaginatedSupabase(
 
     let rows = [...(tables[request.table] ?? [])]
     if (enforceFilters || ['user', 'tenant_user', 'tenant', 'role'].includes(request.table)) {
-      const matches = (value: unknown, path: string[], expected: string): boolean => {
-        if (Array.isArray(value)) return value.some(item => matches(item, path, expected))
-        if (!path.length) return String(value) === expected
-        return !!value && typeof value === 'object' && matches((value as RawRow)[path[0]], path.slice(1), expected)
+      type Filter = [string[], string]
+      const matches = (value: unknown, filters: Filter[]): boolean => {
+        if (Array.isArray(value)) return value.some(item => matches(item, filters))
+        const children = new Map<string, Filter[]>()
+        for (const [path, expected] of filters) {
+          if (!path.length) { if (String(value) !== expected) return false; continue }
+          const group = children.get(path[0]) ?? []
+          group.push([path.slice(1), expected]); children.set(path[0], group)
+        }
+        return [...children].every(([key, group]) => !!value && typeof value === 'object' && matches((value as RawRow)[key], group))
       }
-      rows = rows.filter(row => Object.entries(request.filters).every(([path, value]) => matches(row, path.split('.'), value.slice(3))))
+      rows = rows.filter(row => matches(row, Object.entries(request.filters).map(([path, value]) => [path.split('.'), value.slice(3)])))
     }
     if (request.order === 'id.asc') {
       rows.sort((a, b) => Number(a.id) - Number(b.id))

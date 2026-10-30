@@ -209,3 +209,27 @@ it('el limite de filas del servidor no oculta la segunda membresia', async () =>
   clientFor({ tenant_user: [membership, { ...membership, id: 2, tenant: 8 }] }, true, { serverMaxRows: 1 })
   await expect(requireTenantAccess()).rejects.toMatchObject({ code: 'TENANT_SELECTION_REQUIRED' })
 })
+
+it('la relacion activa y el tenant deben pertenecer al mismo enlace de persona', async () => {
+  cookieStore.mockResolvedValue({ get: () => undefined })
+  clientFor({ person: [{ id: 1, __links: [
+    { active: false, __debtor: { tenant: 7 } }, { active: true, __debtor: { tenant: 8 } },
+  ] }] })
+  const result = await getPeopleDataFromService()
+  expect(result.people).toEqual([])
+  expect(result.warnings).toEqual([])
+})
+
+it('las opciones de seleccion incluyen todas las membresias propias, incluso tras la primera pagina', async () => {
+  cookieStore.mockResolvedValue({ get: () => undefined })
+  const { client } = clientFor({ tenant_user: [
+    { ...membership, selection: { name: 'Municipio A' } },
+    { ...membership, id: 2, tenant: 8, selection: { name: 'Municipio B' } },
+    { ...membership, id: 3, tenant: 9, selection: { name: 'Municipio C' } },
+    { ...membership, id: 4, user: 999, tenant: 10, selection: { name: 'Municipio ajeno' } },
+  ] }, true, { serverMaxRows: 1 })
+  const { resolveTenantAccess } = await import('@/lib/auth/tenant-access')
+  const access = await resolveTenantAccess('auth-test', client)
+  expect(access).toMatchObject({ code: 'TENANT_SELECTION_REQUIRED', isAuthorized: false,
+    tenantChoices: [{ id: '7', name: 'Municipio A' }, { id: '8', name: 'Municipio B' }, { id: '9', name: 'Municipio C' }] })
+})

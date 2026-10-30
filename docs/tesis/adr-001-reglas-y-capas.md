@@ -194,7 +194,7 @@ adaptación de faltantes, restricciones y reproducibilidad. Los resultados de
 rendimiento E08/E11 no se extrapolan a esta versión: véase la nota en
 [`RENDIMIENTO_CALIDAD.md`](../../RENDIMIENTO_CALIDAD.md).
 
-## 8. Frontera de autorización de lecturas (ALIGN-019, 30/10/2026)
+## 9. Frontera de autorización de lecturas (ALIGN-019, 30/10/2026)
 
 Las pantallas de servidor ya no dependen del `AuthGuard` de navegador para impedir
 la lectura. `front/lib/server/dal.ts` usa `auth.getUser()` con el cliente de sesión,
@@ -208,6 +208,9 @@ Sin selección se exige exactamente una membresía activa. Con varias, se devuel
 `equitas_tenant_id`. Esa selección es entrada no confiable: se vuelve a comprobar
 contra las membresías del usuario en cada entrada, y nunca concede acceso sola.
 El conteo exacto evita que un límite de filas oculte una segunda membresía.
+El ingreso deriva a `/select-tenant` cuando hace falta elegir. Esa pantalla carga
+las membresías propias paginadas, sin opción preseleccionada; vuelve a validar la
+elección antes de guardar la cookie. Ingresar o salir borra la selección anterior.
 
 `requireTenantAccess({ permission, tenantId? })` devuelve contexto y cliente de
 sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`,

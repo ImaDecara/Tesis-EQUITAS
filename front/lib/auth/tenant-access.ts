@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 
 export const WEB_ROLES = ['consulta', 'operador', 'supervisor', 'importador'] as const
 export type WebRole = (typeof WEB_ROLES)[number]
@@ -16,12 +17,14 @@ export type TenantAccessContext = {
   tenantId: string
   role: WebRole
 }
+export type TenantChoice = { id: string; name: string }
 export type TenantAccessValidation = {
   isAuthorized: boolean
   requiresLogin: boolean
   code?: AuthValidationErrorCode
   message?: string
   context?: TenantAccessContext
+  tenantChoices?: TenantChoice[]
 }
 
 export function denied(code: AuthValidationErrorCode, message: string): TenantAccessValidation {
@@ -70,7 +73,16 @@ export async function resolveTenantAccess(
         : denied('TENANT_ACCESS_NOT_FOUND', 'No existe una membresia activa para este municipio.')
     }
     if ((active.count ?? active.data.length) !== 1 || active.data.length !== 1) {
-      return denied('TENANT_SELECTION_REQUIRED', 'Selecciona explicitamente un municipio para continuar.')
+      const choices = await loadAllTableRows('tenant_user', supabase, {
+        select: 'id,tenant,selection:tenant(name)', filters: [['user', appUserId], ['status', true]],
+      })
+      if (choices.warning) return denied('DATABASE_ERROR', 'No disponible: no se pudieron leer los municipios.')
+      const tenantChoices = choices.rows.flatMap(row => {
+        const id = databaseId(row.tenant)
+        const selection = row.selection as { name?: unknown } | null
+        return id ? [{ id, name: typeof selection?.name === 'string' ? selection.name : `Municipio ${id}` }] : []
+      })
+      return { ...denied('TENANT_SELECTION_REQUIRED', 'Selecciona explicitamente un municipio para continuar.'), tenantChoices }
     }
     const membership = active.data[0]
     const tenantId = databaseId(membership.tenant)

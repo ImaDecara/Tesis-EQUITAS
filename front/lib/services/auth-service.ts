@@ -1,7 +1,7 @@
 import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js'
 import { createBrowserSupabaseClient } from '@/lib/supabase-browser'
-import { denied, resolveTenantAccess, TENANT_COOKIE, type TenantAccessValidation } from '@/lib/auth/tenant-access'
-export type { TenantAccessContext, TenantAccessValidation } from '@/lib/auth/tenant-access'
+import { databaseId, denied, resolveTenantAccess, TENANT_COOKIE, type TenantAccessValidation } from '@/lib/auth/tenant-access'
+export type { TenantAccessContext, TenantAccessValidation, TenantChoice } from '@/lib/auth/tenant-access'
 
 function selectedTenant() {
   if (typeof document === 'undefined') return undefined
@@ -41,11 +41,17 @@ export async function signInWithPassword(email: string, password: string) {
     }
   }
 
+  clearTenantSelection()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   return { error }
 }
 
+function clearTenantSelection() {
+  if (typeof document !== 'undefined') document.cookie = `${TENANT_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
+}
+
 export async function signOutCurrentSession() {
+  clearTenantSelection()
   const supabase = createBrowserSupabaseClient()
 
   if (!supabase) {
@@ -79,10 +85,22 @@ export async function validateAuthUserTenantAccess(
   return resolveTenantAccess(authUserId, supabase, tenantId)
 }
 
-export async function validateCurrentUserTenantAccess(): Promise<TenantAccessValidation> {
+export async function validateCurrentUserTenantAccess(tenantId: string | null | undefined = selectedTenant()): Promise<TenantAccessValidation> {
   const supabase = createBrowserSupabaseClient()
   if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'Supabase no esta configurado en el frontend.')
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) return denied('AUTH_REQUIRED', 'Debes iniciar sesion para continuar.')
-  return validateAuthUserTenantAccess(data.user.id, supabase)
+  return resolveTenantAccess(data.user.id, supabase, tenantId ?? undefined)
+}
+
+// La cookie conserva una eleccion, nunca una prueba de autorizacion. La DAL la
+// verifica de nuevo con getUser y las tablas en cada solicitud.
+export async function selectCurrentTenant(tenantId: string): Promise<TenantAccessValidation> {
+  if (!databaseId(tenantId)) return denied('TENANT_ACCESS_NOT_FOUND', 'La seleccion de municipio no es valida.')
+  const access = await validateCurrentUserTenantAccess(tenantId)
+  if (access.isAuthorized && typeof document !== 'undefined') {
+    const secure = location.protocol === 'https:' ? '; Secure' : ''
+    document.cookie = `${TENANT_COOKIE}=${tenantId}; Path=/; SameSite=Lax${secure}`
+  }
+  return access
 }
