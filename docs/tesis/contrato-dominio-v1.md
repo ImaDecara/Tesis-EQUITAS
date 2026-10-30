@@ -349,6 +349,36 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 | `PersonListItem.totalDebtAssociated` / "Deuda total asociada" | Exposición asociada no aditiva | "Exposición asociada (no aditiva)" | §3 |
 | `DebtorListItem.priorityScore` / "Score / prioridad" | Puntaje operativo heredado 0–172 del frontend, distinto de `priority_score` de Python (0–100) | Reemplazado por la prioridad operativa 0–100 de ALIGN-008 | `front/lib/mappers/debtor-object-mapper.ts:120-147`, `back/services/scoring_service.py:139-167` |
 
+### 8.1 Aplicación de etiquetas — ALIGN-012
+
+Después de ALIGN-010, `DebtorListItem.riskScore` y `DebtorProfileSummary.riskScore`
+son la **severidad v1** (§7.12), no el índice v0 persistido. El detalle los
+rotula «Severidad del objeto (v1)», en puntos de 0 a 100. El índice heredado
+ya no llega en el DTO del detalle: su bloque «Índice heredado de severidad
+(no social)» muestra **No disponible**, sin sustituirlo por v1 ni por cero.
+«Vulnerabilidad: no informada» se muestra por separado. La prioridad se
+rotula «Prioridad dentro de su cola (puntos de 0 a 100)». Ningún puntaje se
+presenta como porcentaje ni probabilidad de pago.
+
+| Pantalla / dato | Rótulo aplicado y límite |
+|---|---|
+| Detalle / `debtor_person.priority` | «Porcentaje declarado en origen». Se informa si la suma difiere de 100 con la tolerancia 0,01 del contrato de reglas; un valor ausente o inválido impide verificarla. No se normaliza ni se deduce una cuota legal de deuda |
+| Detalle / `debt.period` | «ID externo de la obligación»; no se presenta como período fiscal |
+| Personas y análisis / `risk_value` | «Máxima severidad heredada»: máximo del índice heredado por persona entre sus objetos vinculados; separado de la severidad v1 del objeto |
+| Personas / `totalDebtAssociated` | «Exposición asociada (no aditiva)» por persona. El resumen «Deuda asociada» mantiene la deduplicación por objeto de ALIGN-011 |
+| Ingreso | «Ejemplo ilustrativo, no son datos» para cifras y distribución; «Deuda de ejemplo» no afirma una gestión realizada |
+| Avisos de lectura | Solicitar revisión de permisos de la cuenta; sin recomendar acceso anónimo |
+
+En el detalle, contacto null y listas cuya lectura falló muestran **No
+disponible**; una lista leída correctamente y vacía conserva su mensaje de
+ausencia. Si `decisionIssues` registra una lectura fallida y no hay decisión,
+se informa que no se pudieron leer los datos necesarios para evaluar el objeto.
+
+La tarjeta del análisis declara **más de 90 puntos** (excluye 90); la tabla,
+**banda alta desde 70 puntos**, muestra hasta diez objetos. ALIGN-012 cambia
+estos rótulos, sin cambiar `riskAboveNinetyCases`, los selectores ni los
+agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
+
 ## 9. Reglas para mapeadores (las aplica ALIGN-011)
 
 1. **Cero conservado**: un numérico observado igual a 0 se conserva. No se usa `||` ni ningún reemplazo por "falsy" para numéricos; la ausencia se detecta por columna ausente o valor nulo y produce el estado de §4.

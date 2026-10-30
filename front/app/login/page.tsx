@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const PREVIEW_METRICS = [
   {
-    label: 'Casos criticos',
+    label: 'Objetos en banda alta',
     value: '186',
     icon: AlertCircle,
     tone: 'border-[#e8b7b7] bg-[#f8e7e7] text-[#8f3434]',
@@ -18,17 +18,17 @@ const PREVIEW_METRICS = [
     tone: 'border-[#d8c28a] bg-[#f6efdc] text-[#6f561e]',
   },
   {
-    label: 'Deuda gestionada',
+    label: 'Deuda de ejemplo',
     value: '$99M',
     icon: CircleDollarSign,
     tone: 'border-[#b8c8dd] bg-[#e6edf6] text-[#123459]',
   },
 ] as const
 
-const RISK_PREVIEW = [
-  { label: 'Alto', width: 72, color: 'bg-[#9d3d3d]' },
-  { label: 'Medio', width: 48, color: 'bg-[#8a6f2a]' },
-  { label: 'Bajo', width: 35, color: 'bg-[#2d6a4f]' },
+const SEVERITY_PREVIEW = [
+  { label: 'Alta', width: 50, color: 'bg-[#9d3d3d]' },
+  { label: 'Media', width: 30, color: 'bg-[#8a6f2a]' },
+  { label: 'Baja', width: 20, color: 'bg-[#2d6a4f]' },
 ] as const
 
 const PRODUCT_MODULES = [
@@ -63,7 +63,7 @@ export default async function LoginPage({
                 className="size-3.5 object-contain"
                 priority
               />
-              Preview institucional
+              Ejemplo ilustrativo, no son datos
             </div>
 
             <div className="flex items-center gap-3">
@@ -80,12 +80,12 @@ export default async function LoginPage({
               <h1 className="text-4xl font-semibold tracking-tight lg:text-[42px]">EQUITAS</h1>
             </div>
             <p className="mt-2 max-w-lg text-sm text-slate-200/95">
-              Centralizacion de deudas, perfiles de riesgo y acciones recomendadas.
+              Centralización de deudas, severidad por reglas y acciones recomendadas.
             </p>
 
             <div className="mt-6 rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
               <p className="text-xs font-semibold tracking-wide text-slate-100/90 uppercase">
-                Centro operativo
+                Centro operativo ilustrativo, no son datos
               </p>
 
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -114,10 +114,10 @@ export default async function LoginPage({
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-white/20 bg-white/90 p-3 text-slate-900">
                   <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
-                    Distribucion de riesgo
+                    Distribución ilustrativa de objetos por severidad
                   </p>
                   <div className="mt-3 space-y-2.5">
-                    {RISK_PREVIEW.map((item) => (
+                    {SEVERITY_PREVIEW.map((item) => (
                       <div key={item.label}>
                         <div className="mb-1 flex items-center justify-between text-xs text-slate-700">
                           <span>{item.label}</span>

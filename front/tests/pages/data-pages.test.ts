@@ -144,16 +144,16 @@ describe('pantallas con datos de gestion simulados', () => {
 
     expect(text).toContain('Personas / Deudores')
     expect(text).toContain('Ana Perez')
-    expect(text).toContain('Riesgo alto')
+    expect(text).toContain('Severidad heredada alta')
   })
 
-  it('presenta analisis de riesgo individual y del objeto', async () => {
+  it('presenta severidad v1 del objeto y severidad heredada entre objetos de una persona', async () => {
     const page = await RiskAnalysisPage()
     const text = textFromReactTree(page)
 
-    expect(text).toContain('Analisis de riesgo')
-    expect(text).toContain('Objetos con riesgo')
-    expect(text).toContain('Personas con puntaje alto')
+    expect(text).toContain('Análisis de severidad')
+    expect(text).toContain('Objetos con severidad mayor a 90 puntos')
+    expect(text).toContain('Personas con severidad heredada alta')
   })
 
   it('agrupa las acciones recomendadas existentes', async () => {
