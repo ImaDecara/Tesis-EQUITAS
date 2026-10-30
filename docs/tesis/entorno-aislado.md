@@ -56,9 +56,26 @@ En la máquina del equipo, npm 11.21.1 está en
 ```sh
 export PATH=/Users/jirustaroure/.t3/tools/equitas-npm-11.21.1/bin:$PATH
 export DO_NOT_TRACK=1 SUPABASE_TELEMETRY_DISABLED=1
-docker info >/dev/null && echo "Docker responde"
-test ! -e supabase/.temp/project-ref && echo "sin proyecto vinculado"
-env | grep -i -E 'folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo' && echo "DETENERSE: hay referencias remotas en el entorno"
+(
+  docker info >/dev/null 2>&1 || { echo "DETENERSE: Docker no responde"; exit 1; }
+  [ ! -e supabase/.temp/project-ref ] || { echo "DETENERSE: el worktree está vinculado a un proyecto remoto"; exit 1; }
+  if env | grep -q -i -E 'folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo'; then
+    echo "DETENERSE: hay variables con referencias a proyectos remotos (no se muestran valores)"
+    exit 1
+  fi
+  echo "Precondiciones OK"
+)
+```
+
+El bloque corre en un subshell: ante un fallo imprime un mensaje fijo, sale con
+código 1 y no cierra la terminal. **Nunca imprime ni interpola valores de
+variables**: la búsqueda usa `grep -q`, que solo informa si hubo coincidencia. No
+reemplazarlo por `env | grep …` sin `-q`, que mostraría la línea completa, por ejemplo
+una cadena de conexión con contraseña. Para saber qué variables limpiar, listar solo
+sus **nombres**:
+
+```sh
+python3 -I -c 'import os, re; r = re.compile("folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo", re.I); print(" ".join(sorted(k for k, v in os.environ.items() if r.search(k) or r.search(v))) or "ninguna")'
 ```
 
 1. Docker Desktop iniciado. La primera vez se descargan 13 imágenes, que ocupan
@@ -66,19 +83,26 @@ env | grep -i -E 'folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo' && echo "DETENERSE:
 2. El worktree no está vinculado a ningún proyecto remoto. Nunca ejecutar
    `supabase link`, `login`, `db push`, ni opciones `--linked` o `--db-url` hacia un
    host remoto.
-3. Ninguna variable del entorno nombra el original ni el testing. Si el último
-   comando imprime algo, detenerse y limpiar el entorno.
+3. Ninguna variable del entorno nombra el original ni el testing. Si el bloque dice
+   `DETENERSE`, no continuar: limpiar esas variables (`unset NOMBRE`) y repetirlo.
 4. Puertos 54320–54329 libres (`supabase/config.toml`).
 
 ### 3.2 Levantar el stack
 
 ```sh
-mkdir -p -m 700 /tmp/equitas-local-db
-npx --yes supabase@2.108.0 start > /tmp/equitas-local-db/start.log 2>&1
+mkdir -p /tmp/equitas-local-db && chmod 700 /tmp/equitas-local-db
+(umask 077; npx --yes supabase@2.108.0 start > /tmp/equitas-local-db/start.log 2>&1)
 ```
 
-- La salida incluye las claves: se redirige a un archivo fuera del repositorio. No
-  pegarla en issues, logs de evidencia ni conversaciones.
+- La salida incluye las claves: se redirige a un archivo fuera del repositorio,
+  creado con `umask 077` (modo 0600) dentro de una carpeta 0700. `mkdir -m` no cambia
+  el modo de una carpeta que ya existe; por eso se usa `chmod 700`. No pegar la salida
+  en issues, logs de evidencia ni conversaciones.
+- **Regla para toda captura de `start` o `status`** (también los logs de evidencia
+  de un ticket): crearla con `umask 077`, guardarla solo en `/tmp/equitas-local-db/`,
+  copiar a la evidencia únicamente una versión depurada (claves como `<REDACTADO>`) y
+  borrar la captura cruda cuando ya no haga falta. Comprobar los permisos sin mostrar
+  contenido (§3.5).
 - `start` ya aplica las migraciones sobre una base nueva. `imgproxy` y `pooler`
   quedan detenidos por la configuración por defecto; no se usan.
 - Si la descarga falla con `error from registry: Rate exceeded` (límite de
@@ -135,12 +159,23 @@ mismas** claves (`ANON_KEY`, `PUBLISHABLE_KEY`, `SECRET_KEY`, `SERVICE_ROLE_KEY`
 archivo fuera del repositorio con permisos restringidos.
 
 ```sh
-mkdir -p -m 700 /tmp/equitas-local-db
+mkdir -p /tmp/equitas-local-db && chmod 700 /tmp/equitas-local-db
 (umask 077; npx --yes supabase@2.108.0 status -o env > /tmp/equitas-local-db/supabase-local.env)
 ```
 
+Verificar los permisos sin mostrar contenido (solo modos y nombres):
+
+```sh
+ls -ld /tmp/equitas-local-db && ls -l /tmp/equitas-local-db   # esperado: drwx------ y -rw------- en cada archivo
+find /tmp/equitas-local-db \( -perm -g=r -o -perm -o=r -o -perm -g=w -o -perm -o=w \) -print   # esperado: sin salida
+```
+
+Si `find` lista algo, corregirlo con `chmod -R go-rwx /tmp/equitas-local-db` antes
+de seguir.
+
 - Ruta acordada: `/tmp/equitas-local-db/supabase-local.env`. Nunca dentro de un
-  worktree (tampoco en `.quality/`, `back/.env` ni `front/.env.local`).
+  worktree (tampoco en `.quality/`, `back/.env` ni `front/.env.local`). No hacer
+  copias de este archivo; si un script necesita las claves, que lo lea de esta ruta.
 - La CLI advierte que son claves por defecto compartidas: sirven solo para esta base
   local. Aun así se tratan como secretos: no se copian a evidencia, commits,
   documentos ni respuestas. En la evidencia figuran como `<REDACTADO>`.
@@ -232,3 +267,4 @@ plan (fuera de git). Hay un log por comando y las claves figuran como `<REDACTAD
 | Claves tras cada `db reset` y tras `stop`/`start` | Iguales a la primera captura (comparación sin registrar valores) |
 | API local con la clave `anon` | Auth 200; `GET` de `tenant`, `debtor`, `debt`, `person` y `role` devuelve `[]`; `POST` rechazado con `42501`; signup 422 |
 | Guardia del ETL frente a la allowlist | 6/6: loopback aceptado; testing remoto `TARGET_HOST_FORBIDDEN`; original `TARGET_ORIGINAL_FORBIDDEN`; sin `EQUITAS_TARGET_ENV`, `TARGET_ENV_INVALID` |
+| Revisión independiente, ciclo 1 (30/10) | La precondición del §3.1, probada literal con una variable ficticia, sale con 1 y no muestra el valor. Se borraron las capturas crudas con claves; queda solo `/tmp/equitas-local-db/supabase-local.env` (carpeta 0700, archivo 0600, verificado sin mostrar contenido) |
