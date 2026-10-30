@@ -394,3 +394,52 @@ def test_transformation_expansion_cannot_exceed_the_cell_limit(tmp_path):
     contract['limites']['celda'] = 100
     with pytest.raises(extract.ValidationError, match='CELDA_EXCEDE_LIMITE'):
         extract.read_source_tables(write_records(tmp_path, records), mapping, contract=contract)
+
+
+@pytest.mark.parametrize('loader', [extract.load_source_profile, lambda path: load_mapping(None, path), load_contract])
+@pytest.mark.parametrize('payload', ['{"a":' * 200_000, '[' * 200_000])
+def test_deeply_nested_json_has_a_safe_code(tmp_path, loader, payload):
+    path = tmp_path / 'perfil.json'
+    path.write_text(payload)
+    with pytest.raises(extract.ValidationError, match='^JSON_NO_LEIBLE$'):
+        loader(path)
+
+
+@pytest.mark.parametrize('payload', [
+    '{"version": "v0", "version": "source-mapping.v1"}',
+    '{"columnas": {"cabecera": {"Cuenta": "a", "Cuenta": "b"}}}',
+    '{"catalogos": {"NOTD_ESTA_id": {"A": "PAGADA", "A": "PENDIENTE"}}}',
+])
+@pytest.mark.parametrize('loader', [extract.load_source_profile, lambda path: load_mapping(None, path)])
+def test_duplicate_profile_keys_are_rejected(tmp_path, loader, payload):
+    path = tmp_path / 'perfil.json'
+    path.write_text(payload)
+    with pytest.raises(extract.ValidationError, match='^PERFIL_INVALIDO$'):
+        loader(path)
+
+
+def test_paths_refuse_transformations_they_would_silently_ignore():
+    files = {kind: FIXTURE / f'{kind}.tsv' for kind in KINDS}
+    mapping = load_mapping(FIXTURE)
+    mapping['transformaciones'] = {'detalle': {'NOTD_ESTA_id': [{'operacion': 'mapear_codigos', 'valores': {'10': '20', '20': '10', '30': '30', '40': '40'}}]}}
+    with pytest.raises(extract.ValidationError, match='^LECTOR_TSV_SIN_TRANSFORMACIONES$'):
+        validate_batch(files, mapping, load_contract(), mapping['fecha_corte'])
+    assert extract.validate_source_files(files, mapping, cut_off=mapping['fecha_corte'])['version'] == 'source-report.v1'
+    mapping.pop('transformaciones')
+    assert validate_batch(files, mapping, load_contract(), mapping['fecha_corte'])['version'] == 'source-report.v1'
+
+
+def test_explicit_mapping_path_is_checked_against_the_schema(tmp_path):
+    mapping = load_mapping(FIXTURE)
+    path = tmp_path / 'perfil.json'
+    path.write_text(json.dumps(mapping))
+    assert load_mapping(None, path) == mapping
+    mapping['transformaciones'] = {'cabecera': {'Estado': [{'operacion': 'eval'}]}}
+    path.write_text(json.dumps(mapping))
+    with pytest.raises(extract.ValidationError, match='^PERFIL_INVALIDO$'):
+        load_mapping(None, path)
+    from ETL import validate_source
+    output = tmp_path / 'salida'
+    assert validate_source.main(['--folder', str(FIXTURE), '--contract', str(extract.DEFAULT_CONTRACT), '--cut-off', '2026-09-30',
+                                 '--output', str(output), '--mapping', str(path)]) == 2
+    assert not output.exists()

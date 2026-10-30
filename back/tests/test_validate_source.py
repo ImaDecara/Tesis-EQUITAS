@@ -844,3 +844,15 @@ def test_emittable_finding_codes_match_contract_catalog(simple, tmp_path):
     contract['limites']['celda'] = 1
     emitted.update(codes(check(simple, contract=contract)))
     assert emitted == FINDING_CODES == set(load_contract()['codigos'])
+
+
+def test_unknown_quarantined_amount_is_not_labelled_not_applicable(simple):
+    """Denominador 0 con un objeto no integrado: el porcentaje informa ese estado, no NO_APLICA."""
+    for row in simple['detalle']:
+        row.update(NOTD_totalActualizado='0,00', NOTD_capital='0,00')
+    simple['cabecera'].append({**simple['cabecera'][0], 'Cuenta': '', 'ClaveAgrupacion': '', 'Destinatario_Id': '88'})
+    report = check(simple)
+    assert report['importes']['actualizado_en_cuarentena_observado'] == '0.00'
+    assert report['importes']['completo'] is False
+    assert report['cuarentena']['importe_observado_pct'] is None
+    assert report['cuarentena']['importe_observado_pct_presencia'] == 'NO_INTEGRADO'

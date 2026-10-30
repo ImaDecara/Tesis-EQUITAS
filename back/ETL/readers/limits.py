@@ -42,7 +42,7 @@ class FileLimits:
     zip_directory_bytes: int = 1_048_576
     # openpyxl arma estas partes enteras en memoria; las hojas se recorren en flujo.
     part_bytes: int = 8_000_000
-    shared_strings_bytes: int = 64_000_000
+    shared_strings_bytes: int = 32_000_000
     workbook_sheets: int = 32
     read_seconds: float = 120.0
     temp_ttl_seconds: int = 86_400
