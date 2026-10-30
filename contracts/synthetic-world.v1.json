@@ -1,0 +1,583 @@
+{
+  "id": "synthetic-world",
+  "version": "1.0.0",
+  "estado": "BORRADOR_PENDIENTE_APROBACION",
+  "aprobacion": {
+    "fecha": null,
+    "aprobado_por": null,
+    "referencia": null,
+    "protocolo_sha256": null
+  },
+  "fecha_borrador": "2026-10-29",
+  "ticket": "ALIGN-048",
+  "plan": "2026-10-28-v2",
+  "documento": "docs/tesis/protocolo-analitica-v1.md",
+  "rotulos": {
+    "analitica": "Factibilidad experimental con datos sintéticos; no es desempeño predictivo real",
+    "pantalla": "Experimental: datos sintéticos, no usar para decidir",
+    "simulacion": "Evaluación artificial; no acredita impacto municipal real"
+  },
+  "naturaleza": {
+    "que_es": "Especificación única del mundo sintético que comparten la simulación (ALIGN-035/036) y la analítica experimental (ALIGN-061/062/063): población, latentes, escenario social, segmentos plantados, comportamiento de pago, historial de acciones con submuestra aleatoria y escenarios, más el plan de análisis pre-registrado.",
+    "que_no_es": "No describe ningún municipio real ni se calibra con la cartera real. Sus resultados acreditan factibilidad experimental, no desempeño predictivo, equidad ni impacto reales.",
+    "politica_de_cambios": "Mientras la versión 1.0.0 sea borrador, las correcciones de revisión cambian su hash y se registran en el protocolo. Una vez aprobada, cualquier cambio de un valor incluido en el hash crea una versión nueva (1.1.0, 2.0.0) con su propio hash y su propia aprobación, antes de ver resultados. Los cambios después de ver resultados son enmiendas: se versionan, se justifican y se publican junto con los resultados originales."
+  },
+  "consumidores": {
+    "ALIGN-061": "Implementa el generador del mundo (quality/fixtures/) y las tablas action_log y payment_event; verifica el hash de esta especificación",
+    "ALIGN-062": "Experimento de propensión (sección propension)",
+    "ALIGN-063": "Experimento de clustering (sección clustering)",
+    "ALIGN-064": "Pantalla agregada; muestra el rótulo de pantalla y solo corridas con manifiesto válido",
+    "ALIGN-035": "Protocolo de simulación: usa la población, los latentes, el escenario social y el modelo de pago de este mundo; define sus propias políticas",
+    "ALIGN-036": "Simulador: lee el mismo generador con el mismo hash; nunca lee puntajes de ML",
+    "ALIGN-070": "Verificación integrada: reproducibilidad, rótulos y ausencia de efecto en decisiones"
+  },
+  "control_de_entrada": {
+    "manifiesto_requerido": {
+      "clase": "S",
+      "especificacion": "contracts/synthetic-world.v1.json",
+      "especificacion_sha256": "igual a integridad.especificacion_sha256 de la especificación aprobada",
+      "estado_especificacion": "APROBADO",
+      "cartera_base_manifest_sha256": "sha256 del manifest.json de la cartera base usada",
+      "semilla": "entero",
+      "escenario": "PRINCIPAL | NULO | MAL_ESPECIFICADO"
+    },
+    "rechazos": {
+      "SIN_MANIFIESTO_SINTETICO": "La corrida no tiene manifiesto o su clase no es S",
+      "ESPECIFICACION_NO_APROBADA": "estado distinto de APROBADO",
+      "HASH_DE_ESPECIFICACION_DISTINTO": "El hash del manifiesto no coincide con el aprobado",
+      "CARTERA_BASE_DISTINTA": "La cartera base no es la declarada en cartera_base",
+      "VINCULO_CON_OTRA_CARTERA": "Un resultado se intenta vincular con casos que no pertenecen a la cartera sintética del manifiesto"
+    },
+    "regla": "Ninguna autorización de ALIGN-004 habilita por sí sola datos reales: usarlos exige otra versión del plan y de esta especificación (sección datos_reales)."
+  },
+  "cartera_base": {
+    "ticket": "ALIGN-023",
+    "generador": "quality/fixtures/synthetic_portfolio.py",
+    "version": "sintetico-v1",
+    "perfil": "escala",
+    "semilla": 20261028,
+    "municipio": "municipio-sintetico-a",
+    "fecha_corte_esperada": "2026-09-30",
+    "poblacion": "Objetos del municipio sintético A aceptados por el oráculo expected.json de la cartera base (sin cuarentena)",
+    "canal_utilizable": "Objeto con al menos un contacto utilizable según el oráculo de la cartera base (formato válido y vigente)",
+    "identificacion": "El sha256 del manifest.json de la cartera base se registra en el manifiesto de cada mundo generado. Otra versión, perfil, semilla o fecha de corte es otra cartera: el generador se detiene (CARTERA_BASE_DISTINTA) y hace falta una versión nueva de esta especificación",
+    "estado_integracion": "ALIGN-023 integrado en la rama de integración del plan (bc0fd54, posterior a la base de esta rama); esta especificación cita su diseño (TICKETS/ALIGN-023.md) y no depende de su código. El manifiesto versionado en el repositorio es del perfil contrato: el generador del mundo debe generar el perfil escala, registrar su propio manifest.json y usar sus objetos aceptados como población",
+    "escenario_social_de_la_cartera": "No se usa en el mundo: el escenario social del mundo es el de la sección escenario_social"
+  },
+  "tiempo": {
+    "inicio_T0": "Día siguiente a la fecha de corte de la cartera base (2026-10-01 con la fecha esperada)",
+    "granularidad": "mes calendario",
+    "meses": 24,
+    "ciclos": "c_m = primer día del mes m, m = 1..24; c_1 = T0; T_final = c_25",
+    "fecha_de_evento": "Día uniforme dentro del mes del evento (flujo dias); las comparaciones temporales usan fechas, no índices de mes",
+    "nuevas_obligaciones": "Ninguna (supuesto v1): el historial trabaja el stock de deuda de la cartera base",
+    "contactabilidad": "Fija: el canal utilizable de cada objeto no cambia durante el historial (supuesto v1)"
+  },
+  "latentes": {
+    "capacidad_latente": {
+      "simbolo": "u_i",
+      "distribucion": "Normal(0, 1)",
+      "flujo_rng": "latentes",
+      "observable": false
+    },
+    "shock_latente": {
+      "simbolo": "e_i(m)",
+      "proceso": "AR(1) solo en MAL_ESPECIFICADO (parámetros en escenarios); en los demás escenarios vale 0",
+      "flujo_rng": "shock",
+      "observable": false
+    },
+    "regla": "Solo el generador lee los latentes; ningún modelo, regla, clustering, simulación de políticas ni pantalla los recibe como entrada"
+  },
+  "escenario_social": {
+    "unidad": "objeto",
+    "flujo_rng": "social",
+    "vulnerable_sintetico": {
+      "tipo": "booleano",
+      "proceso": "Bernoulli(sigmoid(a0 + Σ coeficientes · variable))",
+      "coeficientes": {
+        "sin_canal_utilizable": 0.8,
+        "tipo_objeto_AGUA": 0.4,
+        "capacidad_latente": -0.5
+      },
+      "prevalencia_objetivo": 0.2,
+      "a0": "Se resuelve por bisección (tolerancia 1e-9) para que la media de las probabilidades sobre la población sea la prevalencia objetivo; el valor obtenido queda en el manifiesto del mundo"
+    },
+    "grupo_sintetico": {
+      "tipo": "categoría",
+      "valores": ["G1", "G2", "G3"],
+      "proceso": "Uniforme e independiente de todo lo demás",
+      "uso": "Grupo placebo: control negativo de las métricas de equidad (sus disparidades deben ser ≈ 0)"
+    },
+    "supuesto": "La asociación con la falta de canal y con el tipo AGUA es un supuesto declarado para que la auditoría de proxy tenga algo que detectar; no es una medición ni informa sobre hogares reales",
+    "usos_permitidos": [
+      "Evaluar equidad en ALIGN-062 y ALIGN-063 (solo lectura, después de calcular los puntajes o segmentos)",
+      "Calcular métricas de equidad y carga de la simulación (ALIGN-036)",
+      "Entrada de la política simulada P1 de ALIGN-035 (vulnerabilidad sintética conocida), solo dentro del simulador"
+    ],
+    "prohibido": [
+      "Variable de entrada de un modelo de propensión o de clustering",
+      "Entrada de las reglas en el historial analítico (allí la vulnerabilidad es NO_INFORMADO_EN_ORIGEN)",
+      "Unirse a la cartera base, a la base local o a la pantalla"
+    ]
+  },
+  "segmentos_plantados": {
+    "simbolo": "s_i",
+    "flujo_rng": "segmentos",
+    "asignacion": "Categórica, independiente de los observables, de la capacidad latente y del escenario social",
+    "probabilidades": {
+      "S1": 0.3,
+      "S2": 0.25,
+      "S3": 0.2,
+      "S4": 0.25
+    },
+    "comportamiento": {
+      "S1": "Responde sobre todo a un recordatorio informativo",
+      "S2": "Responde sobre todo a contacto personal con plan o asistencia; regulariza más",
+      "S3": "Pagos parciales espontáneos frecuentes",
+      "S4": "Respuesta baja a cualquier gestión"
+    },
+    "observable": false,
+    "nombres": "S1–S4 y su comportamiento sintético; nunca rótulos sociales",
+    "uso": "Chequeo de cordura del clustering (ALIGN-063): diagnóstico que se publica; nunca criterio de éxito ni de factibilidad"
+  },
+  "modelo_de_pago": {
+    "tipo": "Riesgo mensual (hazard) logístico por objeto; a lo sumo un evento de pago por objeto y mes",
+    "elegibles": "Objetos con saldo vencido > 0 y no regularizados al inicio del mes",
+    "ecuacion": "logit h_i(m) = theta0 + theta_segmento[s_i] + Σ beta · x_i(m) + gamma · u_i + eta · vulnerable_i + e_i(m) + efecto_accion_i(m)",
+    "variables_x": {
+      "z_monto": "(ln(1 + saldo vencido en ARS en c_m) − media) / desvío, con media y desvío de la población en T0",
+      "z_antiguedad": "(ln(1 + días de atraso máximo en c_m) − media) / desvío, con media y desvío en T0",
+      "z_cantidad": "(ln(1 + obligaciones con saldo > 0 en c_m) − media) / desvío, con media y desvío en T0",
+      "frecuencia_pagos_6m": "Eventos de pago en [c_m − 6 meses, c_m)",
+      "pago_ultimos_90d": "1 si hubo un evento de pago en [c_m − 90 días, c_m)"
+    },
+    "efecto_accion": "Si la acción más reciente con intensidad a ocurrió en c_k con k ∈ {m − 2, m − 1, m}, suma tau[s_i][a] · (1 − (1 − kappa_vulnerable) · vulnerable_i) · factor_interaccion_i; en otro caso 0. Intensidad 0 y ausencia de acción no tienen efecto",
+    "tipo_de_evento": "Si hay evento: con probabilidad psi_regularizacion[s_i] es REGULARIZACION (solo si la acción vigente es de intensidad 2); si no, con probabilidad pi_total[s_i] es PAGO_TOTAL; si no, PAGO_PARCIAL por una fracción uniforme en fraccion_parcial del saldo, redondeada hacia abajo al centavo",
+    "imputacion": "Los pagos parciales cancelan primero la obligación de vencimiento más antiguo (empate: DEUD_id ascendente); una obligación saldada deja de contar",
+    "regularizacion": "Adhesión a un plan registrada: el saldo vencido pasa a 0 en el mundo y el objeto sale de la cartera vencida; las cuotas no se modelan en v1",
+    "aritmetica": "Importes en centavos enteros, como las reglas v1"
+  },
+  "politica_de_registro": {
+    "uso": "Genera el historial analítico (action_log y payment_event). La simulación (ALIGN-035) define sus propias políticas sobre el mismo modelo de pago",
+    "reglas": {
+      "contrato": "contracts/decision-rules.v1.json",
+      "version": "1.0.0",
+      "implementacion": "back/services/decision_rules_v1.py (ALIGN-015): evaluate y priority_sort_key",
+      "as_of": "c_m",
+      "entrada": "Obligaciones con saldo > 0 en c_m (saldo vigente como current_amount, OBSERVADO), demás campos y contactos de la cartera base; vulnerabilidad NO_INFORMADO_EN_ORIGEN"
+    },
+    "capacidad_mensual_fraccion": 0.12,
+    "capacidad": "round(capacidad_mensual_fraccion × tamaño de la población) gestiones (intensidad ≥ 1) por mes",
+    "elegibilidad": "Saldo vencido > 0, no regularizado, canal utilizable y sin gestión en los dos ciclos anteriores (período de espera: las ventanas de 90 días de un mismo objeto no se superponen)",
+    "fraccion_aleatoria": 0.25,
+    "brazo_aleatorio": "Los round(fraccion_aleatoria × capacidad) elegibles con menor clave de asignación del ciclo (sorteo clave_asignacion, semillas.acoplamiento), lo que equivale a elegirlos uniformemente; intensidad 1 si el sorteo intensidad_aleatoria es < 0,5 y 2 si no; se registra la probabilidad de asignación (elegidos / elegibles)",
+    "brazo_reglas": "El resto de la capacidad, entre los elegibles no elegidos al azar cuya sugerencia v1 tiene intensidad ≥ 1, en orden de intensidad sugerida descendente y luego priority_sort_key; intensidad = la sugerida",
+    "intensidades_registradas": [0, 1, 2],
+    "intensidad_maxima_historial": 2,
+    "intensidad_0": "Las sugerencias de intensidad 0 se registran en action_log sin consumir capacidad ni generar observaciones",
+    "intensidades_3_4": "No ocurren en el historial analítico: el sistema nunca las sugiere y el historial no simula propuestas humanas",
+    "revision_humana": "El historial ejecuta la sugerencia sin modificación humana (supuesto v1)",
+    "registro": {
+      "action_log": ["objeto", "fecha", "intensidad", "intervencion", "brazo (REGLAS | ALEATORIA)", "probabilidad_asignacion", "version_reglas"],
+      "payment_event": ["objeto", "fecha", "tipo (PAGO_TOTAL | PAGO_PARCIAL | REGULARIZACION)", "monto_centavos", "origen = sintetico"]
+    }
+  },
+  "escenarios": {
+    "PRINCIPAL": {
+      "descripcion": "El pago depende de las variables observables, de la capacidad latente, de la vulnerabilidad sintética, del segmento y de la gestión",
+      "theta0": -3.0,
+      "beta": {
+        "z_monto": -0.3,
+        "z_antiguedad": -0.4,
+        "z_cantidad": -0.2,
+        "frecuencia_pagos_6m": 0.25,
+        "pago_ultimos_90d": 0.3
+      },
+      "gamma_capacidad_latente": 0.6,
+      "eta_vulnerable": -0.4,
+      "theta_segmento": {"S1": 0.0, "S2": -0.2, "S3": 0.7, "S4": -1.2},
+      "tau_por_intensidad": {
+        "S1": [0.0, 1.0, 0.7, 0.8, 0.5],
+        "S2": [0.0, 0.2, 1.2, 0.6, 0.4],
+        "S3": [0.0, 0.3, 0.4, 0.4, 0.3],
+        "S4": [0.0, 0.05, 0.1, 0.3, 0.3]
+      },
+      "kappa_vulnerable": 0.5,
+      "factor_interaccion": "1",
+      "shock": null,
+      "pi_total": {"S1": 0.5, "S2": 0.3, "S3": 0.1, "S4": 0.5},
+      "psi_regularizacion": {"S1": 0.2, "S2": 0.6, "S3": 0.1, "S4": 0.1},
+      "fraccion_parcial": [0.1, 0.6]
+    },
+    "NULO": {
+      "descripcion": "El pago es independiente de todas las variables, de los latentes, del segmento, de la vulnerabilidad y de la gestión: el AUC esperado es 0,5",
+      "theta0": -2.75,
+      "beta": {
+        "z_monto": 0.0,
+        "z_antiguedad": 0.0,
+        "z_cantidad": 0.0,
+        "frecuencia_pagos_6m": 0.0,
+        "pago_ultimos_90d": 0.0
+      },
+      "gamma_capacidad_latente": 0.0,
+      "eta_vulnerable": 0.0,
+      "theta_segmento": {"S1": 0.0, "S2": 0.0, "S3": 0.0, "S4": 0.0},
+      "tau_por_intensidad": {
+        "S1": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "S2": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "S3": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "S4": [0.0, 0.0, 0.0, 0.0, 0.0]
+      },
+      "kappa_vulnerable": 1.0,
+      "factor_interaccion": "1",
+      "shock": null,
+      "pi_total": {"S1": 0.4, "S2": 0.4, "S3": 0.4, "S4": 0.4},
+      "psi_regularizacion": {"S1": 0.0, "S2": 0.0, "S3": 0.0, "S4": 0.0},
+      "fraccion_parcial": [0.1, 0.6]
+    },
+    "MAL_ESPECIFICADO": {
+      "descripcion": "Impulsores latentes no observados dominan: señal observable débil, capacidad latente fuerte, shock mensual persistente e interacción no lineal entre capacidad y respuesta a la gestión; segmentos débiles",
+      "theta0": -3.0,
+      "beta": {
+        "z_monto": -0.075,
+        "z_antiguedad": -0.1,
+        "z_cantidad": -0.05,
+        "frecuencia_pagos_6m": 0.0625,
+        "pago_ultimos_90d": 0.075
+      },
+      "gamma_capacidad_latente": 1.2,
+      "eta_vulnerable": -0.4,
+      "theta_segmento": {"S1": 0.0, "S2": -0.06, "S3": 0.21, "S4": -0.36},
+      "tau_por_intensidad": {
+        "S1": [0.0, 1.0, 0.7, 0.8, 0.5],
+        "S2": [0.0, 0.2, 1.2, 0.6, 0.4],
+        "S3": [0.0, 0.3, 0.4, 0.4, 0.3],
+        "S4": [0.0, 0.05, 0.1, 0.3, 0.3]
+      },
+      "kappa_vulnerable": 0.5,
+      "factor_interaccion": "2 · sigmoid(1,5 · u_i)",
+      "shock": {"rho": 0.8, "sigma": 0.5, "inicial": "Normal(0, sigma² / (1 − rho²))"},
+      "pi_total": {"S1": 0.5, "S2": 0.3, "S3": 0.1, "S4": 0.5},
+      "psi_regularizacion": {"S1": 0.2, "S2": 0.6, "S3": 0.1, "S4": 0.1},
+      "fraccion_parcial": [0.1, 0.6]
+    },
+    "sensibilidad_simulacion": "ALIGN-035 puede variar parámetros de PRINCIPAL para su análisis de sensibilidad sin una versión nueva: cada corrida registra el hash de esta especificación y la lista de parámetros cambiados"
+  },
+  "semillas": {
+    "principal": 20261029,
+    "replicas": 20,
+    "regla_replicas": "Réplica k (k = 0..19) usa semilla principal + k; k = 0 es la corrida principal",
+    "semilla_independiente_utilidad": 20262029,
+    "flujos_rng": ["latentes", "social", "segmentos", "shock", "pagos", "dias", "asignacion", "particion", "modelos", "bootstrap"],
+    "flujos_del_mundo": ["latentes", "social", "segmentos", "shock", "pagos", "dias", "asignacion"],
+    "derivacion_flujos": "Flujos del mundo: un sorteo por (flujo, objeto, mes, propósito) según acoplamiento. Flujos de análisis (particion, modelos, bootstrap): secuenciales, numpy.random.Generator(numpy.random.PCG64(numpy.random.SeedSequence(semilla, spawn_key=(índice del flujo en flujos_rng,))))",
+    "acoplamiento": {
+      "sorteo": "numpy.random.Generator(numpy.random.PCG64(numpy.random.SeedSequence(semilla, spawn_key=(índice del flujo en flujos_rng, índice del objeto, mes, índice del propósito en su flujo)))); uniforme = .random() y normal = .standard_normal() del primer valor",
+      "indice_objeto": "Posición del objeto en la población ordenada por su clave externa (Bien_Tipo_Id, Cuenta) por punto de código; es la misma en los tres escenarios",
+      "mes": "0 para los sorteos invariantes en el tiempo; m = 1..24 para los del ciclo m",
+      "propositos": {
+        "latentes": ["capacidad_latente"],
+        "social": ["vulnerable", "grupo"],
+        "segmentos": ["segmento"],
+        "shock": ["shock_inicial", "innovacion"],
+        "pagos": ["evento", "tipo", "fraccion"],
+        "dias": ["dia"],
+        "asignacion": ["clave", "intensidad"]
+      },
+      "uso": "Bernoulli: uniforme < p. Categórica: inversa de la acumulada en el orden declarado (G1–G3 por tercios; S1–S4 según probabilidades). Evento de pago del ciclo: uniforme evento < h_i(m). Tipo: con regularización posible, REGULARIZACION si uniforme tipo < psi, PAGO_TOTAL si cae en [psi, psi + (1 − psi) · pi_total) y PAGO_PARCIAL si no; sin regularización posible, PAGO_TOTAL si < pi_total. Fracción parcial: mínimo + (máximo − mínimo) · uniforme fraccion. Día: piso(uniforme dia · días del mes). Brazo aleatorio: los elegibles con menor uniforme clave; intensidad 1 si uniforme intensidad < 0,5",
+      "por_que": "Cada sorteo depende solo de su índice y no del orden de consumo: si un escenario cambia los elegibles o los eventos de un objeto, los sorteos de los demás objetos y ciclos no se desplazan, y los objetos elegibles en ambos escenarios conservan su orden relativo de asignación"
+    },
+    "numeros_aleatorios_comunes": "Con la misma semilla, los tres escenarios comparten la población inicial y todos los sorteos subyacentes por objeto, ciclo y propósito (latentes, escenario social, segmentos, eventos, tipos, fracciones, días y claves de asignación). Las gestiones y los eventos realizados pueden diferir entre escenarios, porque la elegibilidad, el saldo y la sugerencia de las reglas evolucionan distinto (por ejemplo, un pago total en un escenario saca al objeto de la cartera vencida y cambia los elegibles siguientes); por eso se comparan sorteos comunes, no historias idénticas"
+  },
+  "observaciones": {
+    "unidad_de_analisis": "Objeto tributario (contrato-dominio-v1 §2)",
+    "observacion": "Una gestión registrada (intensidad 1 o 2) de un objeto en un ciclo c_m",
+    "variable_objetivo": {
+      "nombre": "pago_o_regularizacion_90d",
+      "definicion": "1 si en [instante_prediccion, fin_ventana) hay un PAGO_TOTAL o una REGULARIZACION del objeto, o PAGO_PARCIAL cuya suma alcanza umbral_parcial × saldo vencido del objeto en el instante de predicción; 0 en otro caso",
+      "ventana_dias": 90,
+      "umbral_parcial": 0.2,
+      "interpretacion": "Propensión ante una gestión [P0106]; no es el efecto causal de la gestión [P0263]"
+    },
+    "campos_temporales": {
+      "instante_prediccion": "c_m, antes de ejecutar la gestión",
+      "fin_ventana": "instante_prediccion + ventana_dias",
+      "disponibilidad_etiqueta": "fin_ventana + rezago_registro_dias",
+      "rezago_registro_dias": 10
+    },
+    "regla_de_variables": "Toda variable usa solo eventos con fecha estrictamente anterior al instante de predicción",
+    "regla_de_madurez": "Entrenamiento: solo observaciones con disponibilidad_etiqueta ≤ corte de entrenamiento. Ventanas cuya disponibilidad supera T_final: censuradas, excluidas y contadas"
+  },
+  "particion": {
+    "tipo": "Temporal por instante de predicción (meses del historial, ambos extremos incluidos)",
+    "meses": {
+      "calentamiento": [1, 6],
+      "entrenamiento": [7, 14],
+      "embargo": [15, 17],
+      "prueba": [18, 21],
+      "censurado": [22, 24]
+    },
+    "corte_entrenamiento_mes": 18,
+    "ventana_frecuencia_meses": 6,
+    "calentamiento": "Hay gestiones y pagos, pero no observaciones: garantiza 6 meses de historial para frecuencia_pagos_6m",
+    "embargo": "Instantes cuya etiqueta madura después del corte de entrenamiento: no entran en entrenamiento ni en prueba",
+    "pliegue_reservado": {
+      "fraccion_objetos": 0.2,
+      "agrupado_por": "objeto",
+      "flujo_rng": "particion",
+      "uso": "Solo el mapeo isotónico del baseline de severidad y la auditoría de proxy; nunca ajuste de hiperparámetros"
+    }
+  },
+  "variables": {
+    "lista_cerrada": true,
+    "permitidas": {
+      "monto_ars": "Saldo vencido del objeto en el instante",
+      "antiguedad_max_dias": "Días de atraso máximo entre las obligaciones con saldo > 0 en el instante",
+      "cantidad_obligaciones": "Obligaciones con saldo > 0 en el instante",
+      "recencia_pago_dias": "Días desde el último evento de pago anterior al instante; NO_INFORMADO si no hubo pagos desde T0 (nunca 0)",
+      "frecuencia_pagos_6m": "Eventos de pago en los 6 meses anteriores al instante (0 derivado legítimo: el calentamiento garantiza la ventana completa)"
+    },
+    "con_auditoria_de_proxy": {
+      "tipo_objeto": "RODADO | AGUA | INMUEBLE",
+      "cantidad_canales_utilizables": "Contactos utilizables del objeto (contactabilidad)",
+      "sin_canal_utilizable": "Bandera de contactabilidad; en propensión es constante (toda gestión requiere canal) y se excluye por constante",
+      "PORCENTAJES_NO_SUMAN_100": "Bandera de calidad de reglas v1",
+      "ESTADO_ORIGEN_NO_INFORMADO": "Bandera de calidad de reglas v1",
+      "PERIODO_NO_INFORMADO": "Bandera de calidad de reglas v1",
+      "FECHAS_INCONSISTENTES": "Bandera de calidad de reglas v1"
+    },
+    "prohibidas": {
+      "vulnerable_sintetico": "Escenario social: solo para evaluar equidad",
+      "grupo_sintetico": "Escenario social: solo para evaluar equidad",
+      "segmento_plantado": "Latente del generador",
+      "capacidad_latente": "Latente del generador",
+      "shock_latente": "Latente del generador",
+      "datos_sociales": "Hogar, ingresos o cualquier dato social [P0273]–[P0274]",
+      "identidad": "Identificadores internos o externos, nombre, documento, CUIT",
+      "tipo_persona": "Incluye TIPO_PERSONA_DESCONOCIDO: el tipo de persona nunca es factor",
+      "domicilio": "Dirección, ciudad, provincia o cualquier dato territorial",
+      "valores_de_contacto": "Teléfonos y correos",
+      "porcentaje_declarado_y_rol": "Relación persona–objeto",
+      "salidas_de_reglas": "Severidad, prioridad, cola, intensidad sugerida y VERIFICAR_PRESCRIPCION: entrenar con el propio puntaje validaría las reglas consigo mismas [P0270]",
+      "gestion": "Intensidad, intervención, brazo y probabilidad de asignación de la gestión observada",
+      "tiempo_calendario": "Índice de mes o fecha del instante",
+      "proxy_no_auditado": "Cualquier variable fuera de las listas anteriores"
+    }
+  },
+  "auditoria_de_proxy": {
+    "cuando": "Una vez, en la semilla principal del escenario PRINCIPAL, con el período de entrenamiento y antes de evaluar en prueba; la decisión rige para todas las réplicas y escenarios",
+    "modelo": "HGB con los hiperparámetros de propension.modelo, ajustado fuera del pliegue reservado y evaluado en él",
+    "asociacion": {
+      "medida": "V de Cramér entre la variable (los conteos se agrupan en 0, 1, 2 y ≥ 3) y vulnerable_sintetico",
+      "umbral_max": 0.1
+    },
+    "disparidad": {
+      "medida": "Aumento de |media del puntaje con vulnerable = 1 − media con vulnerable = 0| al agregar la variable a las permitidas",
+      "umbral_max": 0.01
+    },
+    "contrafactual": {
+      "medida": "|Δ puntaje| al cambiar solo la variable (binaria: invertir; categórica: cada otra categoría; conteo: ±1 dentro del rango observado)",
+      "umbral_p95": 0.05,
+      "umbral_mediana": 0.02
+    },
+    "clustering": {
+      "asociacion": "Igual que en propensión, sobre la población de clustering",
+      "disparidad_umbral_max": 0.05,
+      "disparidad_medida": "Aumento de la diferencia máxima entre segmentos en la proporción de vulnerable_sintetico al agregar la variable",
+      "contrafactual_umbral_max": 0.05,
+      "contrafactual_medida": "Proporción de objetos que cambian de segmento al cambiar solo la variable"
+    },
+    "decision": "Admitida solo si pasa las tres pruebas; si no, excluida. Una variable sin variación se excluye por constante. La tabla completa se publica"
+  },
+  "propension": {
+    "ticket": "ALIGN-062",
+    "baselines": {
+      "TASA_BASE": "Probabilidad constante igual a la tasa de positivos de entrenamiento",
+      "SEVERIDAD_V1": "Severidad v1 en el instante. Discriminación con el valor crudo (los nulos se excluyen y se cuentan). Calibración solo con mapeo isotónico ajustado en el pliegue reservado, con dirección fijada por el signo de la correlación de Spearman en ese pliegue; nulo → tasa del pliegue",
+      "REGRESION_LOGISTICA": {
+        "penalizacion": "l2",
+        "C": 1.0,
+        "solver": "lbfgs",
+        "max_iter": 1000,
+        "estandarizacion": "Media y desvío de entrenamiento"
+      }
+    },
+    "modelo": {
+      "id": "HGB",
+      "clase": "sklearn.ensemble.HistGradientBoostingClassifier",
+      "hiperparametros": {
+        "learning_rate": 0.05,
+        "max_iter": 300,
+        "max_leaf_nodes": 15,
+        "min_samples_leaf": 40,
+        "l2_regularization": 1.0,
+        "early_stopping": false
+      },
+      "random_state": "Primer entero de 32 bits del flujo modelos"
+    },
+    "ajuste_de_hiperparametros": "Ninguno: valores fijos pre-registrados",
+    "faltantes": "HGB: recencia NO_INFORMADO como NaN nativo. Regresión logística: indicador sin_pago_previo y recencia imputada con 730 días",
+    "transformaciones": "monto_ars, antiguedad_max_dias, cantidad_obligaciones y recencia_pago_dias con ln(1 + x) en la regresión logística",
+    "metricas": ["AUC_ROC", "AUC_PR", "BRIER", "CALIBRACION"],
+    "calibracion": {
+      "bins": 10,
+      "tipo_bins": "cuantiles",
+      "medidas": ["intercepto y pendiente de recalibración logística", "ECE con 10 bins de igual frecuencia", "diagrama de confiabilidad"]
+    },
+    "poblaciones": ["TOTAL", "ALEATORIA", "REGLAS"],
+    "intervalos": {
+      "metodo": "Bootstrap por objeto",
+      "remuestras": 1000,
+      "nivel": 0.95,
+      "flujo_rng": "bootstrap"
+    },
+    "replicas": "Media y percentiles 2,5 y 97,5 de cada métrica sobre las 20 réplicas",
+    "intervalo_nulo": {
+      "centro": 0.5,
+      "z": 3.29,
+      "error_estandar": "sqrt((n1 + n0 + 1) / (12 · n1 · n0)), con n1 positivos y n0 negativos de la población evaluada",
+      "aplica_a": ["SEVERIDAD_V1", "REGRESION_LOGISTICA", "HGB"],
+      "poblaciones": ["TOTAL", "ALEATORIA"],
+      "fuera_del_intervalo": "FUGA_SOSPECHADA"
+    },
+    "equidad": {
+      "grupos": ["vulnerable_sintetico", "grupo_sintetico"],
+      "poblaciones": ["TOTAL", "ALEATORIA"],
+      "medidas": ["n", "tasa observada", "puntaje medio", "calibración global (puntaje medio − tasa observada)", "AUC dentro del grupo", "participación hipotética en el 20 % de mayor puntaje frente a su participación en la población"],
+      "reporte": "Valores absolutos y diferencias por grupo; denominador 0 → no informativo",
+      "lectura": "El escenario social se lee solo después de calcular los puntajes; la selección del 20 % es hipotética y nunca se usa"
+    },
+    "artefacto": "Hash de los datos de entrada, versión de esta especificación, semilla, escenario y versión del código; puntajes en analytics_score por corrida",
+    "documento": "docs/tesis/model-card-propension-v1.md (con el rótulo de analítica)"
+  },
+  "clustering": {
+    "ticket": "ALIGN-063",
+    "poblacion": "Objetos con saldo vencido > 0 en c_18 (incluye objetos sin canal)",
+    "instante_referencia_mes": 18,
+    "variables": "Permitidas + admitidas por la auditoría de clustering, en c_18 y con eventos anteriores; ln(1 + x) en las numéricas; recencia: indicador sin_pago_previo y 730 días si no hay pagos",
+    "estandarizacion": "z con media y desvío de la población de ajuste",
+    "metodo_principal": {
+      "clase": "sklearn.cluster.KMeans",
+      "n_init": 20,
+      "random_state": "Primer entero de 32 bits del flujo modelos"
+    },
+    "metodo_contraste": {
+      "clase": "sklearn.mixture.GaussianMixture",
+      "covariance_type": "full",
+      "n_init": 5,
+      "comparacion": "ARI entre las asignaciones de ambos métodos con el mismo k"
+    },
+    "k": {
+      "min": 3,
+      "max": 8,
+      "segmento_minimo_fraccion": 0.05,
+      "regla": "Entre los k cuyo segmento más chico tiene al menos el 5 % de los objetos, el de mayor silueta; si difieren en menos de 0,01, el de menor Davies–Bouldin y luego el menor k. Silueta y Davies–Bouldin se publican para todos los k"
+    },
+    "estabilidad": {
+      "remuestras": 100,
+      "medida": "ARI entre la asignación de referencia y la de cada remuestra bootstrap de objetos, predicha sobre todos los objetos",
+      "estadistico": "mediana",
+      "condiciona_factibilidad": false,
+      "umbral_estable": 0.75,
+      "umbral_inestable": 0.6
+    },
+    "cordura_plantados": {
+      "tipo": "Diagnóstico (chequeo de cordura): se ejecuta y se publica siempre; no es criterio de éxito ni de factibilidad",
+      "condiciona_factibilidad": false,
+      "medida": "ARI entre la asignación de k-means y s_i, en PRINCIPAL y en NULO con la misma semilla",
+      "estructura_recuperada_si": "ARI_PRINCIPAL − ARI_NULO ≥ 0,05, |ARI_NULO| ≤ 0,05 y ARI_PRINCIPAL ≤ 0,95",
+      "margen": 0.05,
+      "maximo_sin_fuga": 0.95,
+      "si_no_se_recupera": "Se publica como 'estructura plantada no recuperada' y los segmentos no se interpretan como estructura del mundo; la corrida sigue siendo válida y se informan igual estabilidad y utilidad",
+      "posible_fuga": "ARI_PRINCIPAL > 0,95 o |ARI_NULO| > 0,05 se investigan como posible fuga de la etiqueta plantada o error del circuito (FUGA_SOSPECHADA); solo una fuga o un error demostrados invalidan la corrida (abandono A2)",
+      "tension_con_ALIGN_063": "El criterio de aceptación de ALIGN-063 pide 'chequeo de cordura contra lo plantado aprobado', mientras que ALIGN-048 dice que el ARI contra lo plantado no es criterio de éxito. Este protocolo propone leer 'aprobado' como 'ejecutado, publicado y revisado, sin fuga demostrada', no como 'estructura recuperada'. Los tickets congelados no se editan: la lectura queda sujeta a la aprobación humana (pregunta 9 del resumen de aprobación)"
+    },
+    "perfil": "Tamaño y medianas de cada variable por segmento; tabla de contingencia con las colas de reglas v1 en c_18",
+    "utilidad_operativa": {
+      "condiciona_factibilidad": false,
+      "corrida_independiente": "Mundo con semilla_independiente_utilidad y el mismo escenario; se le aplican el escalador y los centroides ajustados en la semilla principal, sin reajustar",
+      "poblacion": "Observaciones de prueba (meses 18–21) del brazo ALEATORIO del mundo independiente",
+      "U1_separacion_de_resultados": {
+        "medida": "Reducción relativa de log-loss de la etiqueta: tasas por cola + segmento frente a tasas por cola, estimadas en el brazo aleatorio de entrenamiento del mundo de ajuste con suavizado de Laplace (alfa = 1)",
+        "umbral": 0.02,
+        "condicion": "Límite inferior del IC 95 % bootstrap por objeto > 0"
+      },
+      "U2_respuesta_diferencial": {
+        "medida": "Prueba de razón de verosimilitud de la interacción segmento × intensidad (1 frente a 2, asignada al azar) en una regresión logística sin penalización que ya incluye cola × intensidad",
+        "umbral_p": 0.05
+      },
+      "redundancia": {
+        "medida": "V de Cramér entre segmento y cola v1 en c_18",
+        "umbral": 0.8
+      },
+      "veredicto": "POSITIVA si se cumple U1 o U2 y los segmentos no son redundantes; NEGATIVA en otro caso. Se publica en ambos casos [T02.R04], [P0261]"
+    },
+    "nombres": "Segmentos numerados con descripción por medianas; prohibidos los rótulos sociales",
+    "salida": "segment_assignment versionado por corrida, solo sobre la cartera sintética",
+    "documento": "docs/tesis/clustering-v1.md (con el rótulo de analítica)"
+  },
+  "criterios": {
+    "alcance_factibilidad": "La factibilidad es la integridad del experimento: que corra completo, sin fuga, reproducible y publicado. No depende de que el método recupere la estructura plantada ni de que el modelo o los segmentos rindan bien; esos resultados son diagnósticos e hipótesis que se publican igual",
+    "factibilidad": {
+      "F1": "Reproducibilidad: misma especificación, semilla y escenario producen los mismos hashes de datos y artefactos y las mismas métricas",
+      "F2": "Controles temporales: ninguna variable usa eventos con fecha ≥ instante y ninguna etiqueta inmadura entra en entrenamiento (pruebas alrededor del corte y del final del historial)",
+      "F3": "Escenario nulo: todas las AUC de intervalo_nulo dentro del intervalo, en la corrida principal y en todas las réplicas",
+      "F4": "Publicación completa: todas las métricas, baselines, poblaciones, escenarios y réplicas con sus IC, la tabla de auditoría y, en clustering, todos los k, la estabilidad, el chequeo de cordura y la utilidad",
+      "F5": "Rótulos, control de entrada y ausencia de variables prohibidas verificados por prueba",
+      "F6": "Clustering: circuito completo ejecutado (selección de k, estabilidad, chequeo de cordura en PRINCIPAL y NULO y utilidad en la corrida independiente) sin fuga demostrada de la etiqueta plantada. El valor del ARI con lo plantado, la estabilidad y la utilidad se publican y no condicionan la factibilidad"
+    },
+    "no_condicionan_factibilidad": ["clustering.cordura_plantados", "clustering.estabilidad", "clustering.utilidad_operativa", "criterios.hipotesis"],
+    "hipotesis": {
+      "H-P1": "PRINCIPAL: en la población ALEATORIA, la mejor de REGRESION_LOGISTICA y HGB supera a SEVERIDAD_V1 calibrada y a TASA_BASE (diferencia media de AUC ≥ 0,02 y positiva en al menos 16 de 20 réplicas). Predicción: se cumple, por construcción del generador",
+      "H-P2": "PRINCIPAL: la calibración difiere entre REGLAS y ALEATORIA (sesgo de selección de la política de reglas). Predicción: pendiente de recalibración distinta de 1 en REGLAS",
+      "H-P3": "MAL_ESPECIFICADO: AUC menor que en PRINCIPAL. Predicción: AUC entre 0,52 y 0,65",
+      "H-P4": "PRINCIPAL: el puntaje medio difiere entre vulnerable = 1 y 0 aunque la vulnerabilidad no sea entrada [P0273]–[P0274]; el grupo placebo no difiere (|Δ| ≤ 0,01). Una disparidad placebo > 0,02 se investiga como error de métrica",
+      "H-P5": "PRINCIPAL: |AUC_HGB − AUC_LR| ≤ 0,02, porque el generador es aditivo en logit. Si HGB supera a LR por más de 0,05 se investiga una fuga",
+      "H-P6": "SEVERIDAD_V1 cruda tiene AUC < 0,5 en PRINCIPAL: en este mundo, más deuda y más atraso bajan la propensión. Severidad mide urgencia, no probabilidad de pago",
+      "H-C1": "Cordura (diagnóstico): la estructura plantada se recupera según cordura_plantados.estructura_recuperada_si. Predicción: sí, con ARI moderado. Si no se recupera, se publica y no invalida la corrida",
+      "H-C2": "Utilidad: predicción del autor, de baja confianza: U1 débilmente positiva (S3/S4 dejan huella en recencia y frecuencia) y U2 negativa (S1/S2 solo difieren en la respuesta, que no es observable antes de la gestión)"
+    },
+    "lectura_de_hipotesis": "Las hipótesis no son criterios de éxito: cualquiera sea el resultado se publica. Confirmar una predicción hecha por construcción solo muestra que el método recupera lo que el generador puso",
+    "abandono": {
+      "A1": "scikit-learn sin autorización: 062 y 063 no se ejecutan ni se implementan con otra biblioteca; quedan pendientes con esta especificación vigente",
+      "A2": "FUGA_SOSPECHADA (propensión: AUC del nulo fuera del intervalo; clustering: posible fuga de cordura_plantados) sin resolver después de dos ciclos de corrección: el experimento afectado se declara no concluyente por fuga y no se publica ninguna de sus métricas de PRINCIPAL como válida",
+      "A3": "Tamaño insuficiente (verificado con conteos, antes de entrenar): menos de 50 positivos o 50 negativos en la prueba ALEATORIA de la corrida principal. Se admite una única enmienda registrada de capacidad_mensual_fraccion o fraccion_aleatoria antes de entrenar; si persiste, ALEATORIA se informa solo agregada sobre las réplicas y, con menos de 200 positivos agregados, como no concluyente",
+      "A4": "Cualquier indicio de datos reales (manifiesto no sintético, identificadores no ficticios): se detiene la corrida, se registra el incidente y no se publica nada de ella",
+      "A5": "La cartera base o el hash no coinciden con esta especificación: se detiene y hace falta una versión nueva",
+      "A6": "Se detecta un camino desde puntajes o segmentos hacia prioridad, intensidad, colas o revisión: la pantalla experimental se desactiva hasta corregirlo",
+      "regla": "Abandonar no es ocultar: se publica qué se corrió, qué no y por qué"
+    }
+  },
+  "publicacion": {
+    "regla": "Se publican todos los resultados pre-registrados aunque el modelo pierda frente a los baselines, aunque la utilidad sea negativa y aunque una corrida se abandone",
+    "orden": "Si el modelo no supera a los baselines, se dice en el primer párrafo de la model card",
+    "sin_seleccion": "No se omiten escenarios, poblaciones, métricas, réplicas ni corridas fallidas",
+    "exploratorio": "Todo análisis no pre-registrado se rotula 'exploratorio, no pre-registrado' y no se usa para concluir",
+    "enmiendas": "Versión nueva con fecha, motivo y aprobación; se publican los resultados con y sin la enmienda",
+    "destinos": ["docs/tesis/model-card-propension-v1.md", "docs/tesis/clustering-v1.md", "Tesis vía ALIGN-051, con el rótulo de analítica"]
+  },
+  "sin_efecto_en_decisiones": [
+    "Puntajes y segmentos nunca modifican severidad, banderas, prioridad, cola, intensidad, explicación, mensajes ni revisión humana",
+    "Sin marcas por caso en detalle, revisión ni colas: solo vistas agregadas en la pantalla experimental (ALIGN-064) [P0219]",
+    "Los puntajes de ML nunca alimentan las políticas simuladas (ALIGN-036); si algún día lo hicieran, exige versión nueva y corridas independientes",
+    "Verificación: prioridad e intensidad idénticas con y sin analítica (ALIGN-064) y verificación integrada (ALIGN-070)"
+  ],
+  "datos_reales": {
+    "estado": "Prohibidos en esta versión (decisión del usuario en ALIGN-004: ningún dato real)",
+    "condiciones_futuras": [
+      "Otra versión del plan y de esta especificación, aprobada antes de ver los datos",
+      "Historial suficiente de acciones y pagos (al menos 24 meses) con fechas por objeto",
+      "Registro de acciones con su probabilidad de asignación",
+      "Submuestra con asignación aleatoria conocida [P0270]",
+      "Autorización del custodio y de la finalidad (ALIGN-004)",
+      "Análisis de impacto en datos personales (ALIGN-042)"
+    ]
+  },
+  "integridad": {
+    "algoritmo": "sha256",
+    "canonicalizacion": "json.dumps(documento sin las claves excluidas, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')",
+    "excluye": ["estado", "aprobacion", "integridad"],
+    "motivo_exclusion": "Aprobar (estado y aprobacion) no cambia la especificación aprobada; integridad contiene el propio hash",
+    "especificacion_sha256": "3c3101555a1375cb63b591e599c476c519237dced39d3ec38de5707c3e87c740"
+  }
+}
