@@ -45,6 +45,8 @@ Los archivos se crearon con `supabase migration new` (CLI 2.108.0) y se alinearo
 
 `supabase/config.toml` describe únicamente el stack local opcional con PostgreSQL 17 y límite API 1.000. No se aplicó esa configuración a la nube. El Docker local estaba detenido; toda la campaña E06 se ejecutó contra Supabase cloud real.
 
+Desde ALIGN-016 (plan `2026-10-28-v2`) ese stack local es el entorno aislado obligatorio para cambios de esquema, cuentas sintéticas y escrituras de prueba. El procedimiento verificado, la versión fijada de la CLI y la allowlist de destinos están en [Entorno de base de datos aislado](docs/tesis/entorno-aislado.md). No reemplaza la campaña de 12 casos de este documento ni habilita resets, migraciones o políticas de ensayo en el proyecto testing.
+
 ## Alta de fixtures y secretos
 
 El entorno queda preparado para usarlo: no volver a ejecutar el alta sobre datos existentes.
