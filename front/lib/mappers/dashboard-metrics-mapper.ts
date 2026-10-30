@@ -1,5 +1,5 @@
 import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
-import { RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
+import { RECOMMENDATION_KINDS, recommendationQueuesUnknown } from '@/lib/equitas-view-selectors'
 import type { DashboardData, DataWarning, DebtorListItem, NumericData } from '@/types/equitas-domain'
 
 type DashboardMapperInput = {
@@ -142,7 +142,7 @@ export function mapDashboardMetricsFromDebtorObjects({
     byRisk: failed('debtor_profile') ? [] : Array.from(byRiskMap.entries())
       .filter(([label]) => label === 'No disponible' || !debtors.length || debtors.some(debtor => debtor.risk !== null))
       .map(([label, value]) => ({ label, value })),
-    byRecommendation: metrics.priorityCases.value === null ? [] : Array.from(byRecommendationMap.entries()).map(([label, value]) => ({
+    byRecommendation: recommendationQueuesUnknown(debtors, warnings) ? [] : Array.from(byRecommendationMap.entries()).map(([label, value]) => ({
       label,
       value,
     })),

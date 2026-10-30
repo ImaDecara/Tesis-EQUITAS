@@ -5,6 +5,7 @@ import { textFromReactTree } from '@/tests/helpers/react-tree'
 import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
+import { buildRecommendationSummary, RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
 
 const { getPeopleData, getDebtorsData, getDashboardData } = vi.hoisted(() => ({
   getPeopleData: vi.fn(), getDebtorsData: vi.fn(), getDashboardData: vi.fn(),
@@ -32,6 +33,7 @@ function configure(peopleRaw = buildPresencePeopleData(), debtorRaw = buildPrese
   getPeopleData.mockResolvedValue({ people: personResult.people, peopleDashboard: personResult.dashboard, warnings: peopleRaw.warnings })
   getDebtorsData.mockResolvedValue({ debtors: objects.debtors, warnings: debtorRaw.warnings })
   getDashboardData.mockResolvedValue({ dashboard: mapDashboardMetricsFromDebtorObjects(objects), warnings: debtorRaw.warnings })
+  return objects
 }
 
 describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
@@ -135,6 +137,82 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+casos/)
   })
 
+  it.each(['debt', 'debtor_contact', 'debtor_person', 'debtor', 'as_of'])('las colas son no disponibles ante fallo de %s, conservando los objetos conocidos aparte', async failure => {
+    const raw = buildPresenceRawData()
+    raw.batch = { as_of: failure === 'as_of' ? '2026-02-30' : '2026-09-30' }
+    raw.debts[0].current_amount = 100
+    raw.debts[0].due_date = '2026-09-01'
+    if (failure !== 'as_of') raw.warnings = [{ table: failure, message: 'Fallo sintético', needsSelectPolicy: false }]
+    if (failure === 'debt') raw.debts = []
+    if (failure === 'debtor_contact') raw.debtorContacts = []
+    if (failure === 'debtor_person') raw.debtorPeople = []
+    if (failure === 'debtor') raw.debtors = []
+    const mapped = configure(buildPresencePeopleData(), raw)
+    const summary = buildRecommendationSummary(mapped.debtors, raw.warnings)
+    const page = await RecommendedActionsPage()
+    const cards = cardValues(page)
+    const text = textFromReactTree(page)
+    for (const group of summary.filter(item => item.interventionCode !== null)) {
+      expect(group).toMatchObject({ count: null, cases: [], highlightedCases: [], debtAssociated: null, averageRisk: null })
+      expect(group.metrics.totalDebt.presence).toBe('NO_INTEGRADO')
+      expect(group.metrics.riskScore.presence).toBe('NO_INTEGRADO')
+      expect(cards[group.recommendation]).toBe('No disponible')
+      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s*/\\s*100`))
+    }
+    const unavailable = summary.find(group => group.interventionCode === null)!
+    expect(unavailable.count).toBe(failure === 'debtor' ? null : mapped.debtors.length)
+    expect(unavailable.cases).toEqual(mapped.debtors)
+    expect(cards['No disponible']).toBe(failure === 'debtor' ? 'No disponible' : '1')
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toEqual([])
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+casos/)
+  })
+
+  it('un objeto parcial evaluado conserva su cola y los bloqueados se cuentan aparte', async () => {
+    const raw = buildPresenceRawData()
+    raw.batch = { as_of: '2026-09-30' }
+    Object.assign(raw.debts[0], { current_amount: 100, due_date: '2026-09-01' })
+    raw.debts.push({ id: 802, debtor: 901, current_amount: null, due_date: '2026-09-01' })
+    raw.debtors.push({ id: 902, external_id: 'SINTETICO-BLOQUEADO', type: 6 })
+    // Cada importe es válido; su suma supera el entero seguro de centavos.
+    raw.debts.push(...[803, 804].map(id => ({ id, debtor: 902, current_amount: 50000000000000, due_date: '2026-09-01' })))
+    const mapped = configure(buildPresencePeopleData(), raw)
+    expect(mapped.debtors[0].decision?.severidad.estado).toBe('PARCIAL')
+    expect(mapped.debtors[1].decision).toBeNull()
+    const summary = buildRecommendationSummary(mapped.debtors, raw.warnings)
+    expect(summary.find(group => group.recommendation === 'Seguimiento')).toMatchObject({ count: 1, debtAssociated: 100, averageRisk: 20, cases: [mapped.debtors[0]] })
+    expect(summary.find(group => group.interventionCode === null)).toMatchObject({ count: 1, cases: [mapped.debtors[1]] })
+    expect(summary.every(group => group.count === group.cases.length)).toBe(true)
+    const page = await RecommendedActionsPage()
+    expect(cardValues(page)).toMatchObject({ Seguimiento: '1', 'No disponible': '1', 'Mejorar datos': '0' })
+    expect(textFromReactTree(page)).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0\s*\/\s*100/)
+    expect(textFromReactTree(page)).toContain('Deuda total: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
+  })
+
+  it.each(['person', 'debtor_profile', 'debt_status'])('una falla de %s no oculta las colas v1 conocidas', async table => {
+    const raw = buildPresenceRawData()
+    raw.warnings = [{ table, message: 'Fallo sintético', needsSelectPolicy: false }]
+    const mapped = configure(buildPresencePeopleData(), raw)
+    const summary = buildRecommendationSummary(mapped.debtors, raw.warnings)
+    expect(summary.every(group => group.count === group.cases.length)).toBe(true)
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
+    expect(cardValues(await RecommendedActionsPage())).toMatchObject({ Seguimiento: '1', 'Mejorar datos': '0' })
+    expect(textFromReactTree(await HomePage())).toMatch(/Seguimiento\s+1\s+casos\s*\(\s*100%\s*\)/)
+  })
+
+  it('una cartera R2 conserva conteos de colas aunque no tenga puntajes', async () => {
+    const raw = buildPresenceRawData()
+    raw.debts[0].current_amount = null
+    const mapped = configure(buildPresencePeopleData(), raw)
+    expect(mapped.debtors[0].decision?.intervencion.regla).toBe('R2')
+    expect(mapped.debtors[0].priorityScore).toBeNull()
+    const buckets = mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation
+    expect(buckets.map(bucket => bucket.label)).toEqual(RECOMMENDATION_KINDS)
+    expect(buckets.find(bucket => bucket.label === 'Mejorar datos')?.value).toBe(1)
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+1\s+casos\s*\(\s*100%\s*\)/)
+    expect(cardValues(await RecommendedActionsPage())['Mejorar datos']).toBe('1')
+  })
+
   it('declara un empate real solamente entre categorías de recomendación', async () => {
     const dashboard = buildDashboard()
     dashboard.byRecommendation.push({ label: 'No disponible', value: 1 })
@@ -184,13 +262,13 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
 
   it('puede contar cero objetos de severidad alta sin perfil cuando las obligaciones son evaluables', async () => {
     const text = textFromReactTree(await HomePage())
-    expect(text).toMatch(/0%\s*de los objetos/)
+    expect(text).toMatch(/(?:^|\s)0%\s*de los objetos/)
     const raw = buildPresenceRawData()
     raw.debts[0].current_amount = null
     configure(buildPresencePeopleData(), raw)
     const unavailable = textFromReactTree(await HomePage())
     expect(unavailable).toMatch(/No disponible\s*de los objetos/)
-    expect(unavailable).not.toMatch(/0%\s*de los objetos/)
+    expect(unavailable).not.toMatch(/(?:^|\s)0%\s*de los objetos/)
   })
 
   it('un filtro de riesgo cuya lectura falla no produce deuda cero', async () => {

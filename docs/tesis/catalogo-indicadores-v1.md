@@ -947,15 +947,18 @@ a ALIGN-014. La implementación se describe en
 | <a id="kpi-v1-severidad"></a>KPI-V1-01 Severidad | `decision.severidad`; alias `riskScore` y `risk` del objeto | Puntos 0–100, **no % ni probabilidad**, por objeto | Fecha usada `decisionAsOf`; COMPLETA/PARCIAL/NO_DISPONIBLE; parcial es mínimo y conserva motivos | Ordena dentro de la cola; no mide vulnerabilidad ni riesgo social |
 | <a id="kpi-v1-prioridad"></a>KPI-V1-02 Prioridad | `decision.prioridad.valor` = severidad; alias `priorityScore`; banda en `priorityLevel` | Puntos 0–100, **no %**, objetos de una misma intervención | Mismo corte/estado que severidad; null al final | Prioridad ↓, monto evaluable ↓, vencimiento más antiguo ↑, id ASCII ↑. Las prioridades de colas distintas no se comparan |
 | <a id="kpi-v1-intervencion"></a>KPI-V1-03 Intervención | `decision.intervencion` y etiquetas de `contracts/decision-rules.v1.json`; `recommendationType`/`recommendationReason` | Código, etiqueta e intensidad 0–4 (automático ≤2), **no %**, por objeto | Incluye versión, fecha usada y aviso si no hay corte municipal | Falta de contacto → mejorar datos, intensidad 0; no aumenta severidad; revisión se evalúa con supervisor |
-| <a id="kpi-v1-colas"></a>KPI-V1-04 Casos de cola | `buildRecommendationSummary`: `count = cases.length`, destacados = primeros 3 de `cases` | Cantidad de objetos distintos de esa intervención | Universo leído: cola vacía = 0; lectura fallida de objetos: null, lista vacía. Objetos no evaluados en grupo separado | Elegir casos de la intervención; el orden visual de colas no implica una prioridad global |
+| <a id="kpi-v1-colas"></a>KPI-V1-04 Casos de cola | `buildRecommendationSummary`: con pertenencia conocida, `count = cases.length`, destacados = primeros 3 de `cases` | Cantidad de objetos distintos de esa intervención | Cola vacía conocida = 0; falla de `debtor`/`debt`/`debtor_contact`/`debtor_person` o ningún objeto con decisión en un universo no vacío: colas null, listas vacías. El grupo No disponible conserva los objetos conocidos; con evaluación parcial se cuentan aparte los bloqueados | Elegir casos de la intervención; el orden visual de colas no implica una prioridad global |
 | <a id="kpi-v1-monto-cola"></a>KPI-V1-05 Monto de cola | Σ `decision.severidad.monto_actualizado_ars` de los objetos de `cases` | ARS de obligaciones evaluables, vencidas o no; cada objeto una vez | No usa importes persistidos del perfil; conserva faltantes; sin observados → null, cola vacía leída → 0 | Dimensionar exposición evaluable; un parcial no es el total certificado |
-| <a id="kpi-v1-promedio-cola"></a>KPI-V1-06 Severidad media de cola | Media de `decision.severidad.valor` entre casos con valor | Puntos 0–100, **no %**, casos evaluados de la cola | Con faltantes se informa el desglose; cola vacía → NO_APLICA | Describe esa cola; no predice pago ni compara prioridades entre intervenciones |
+| <a id="kpi-v1-promedio-cola"></a>KPI-V1-06 Severidad media de cola | Media de `decision.severidad.valor` entre casos con valor | Puntos 0–100, **no %**, casos evaluados de la cola | Con faltantes se informa el desglose; cola vacía conocida → NO_APLICA; pertenencia desconocida → null/NO_INTEGRADO, igual que el monto de KPI-V1-05 | Describe esa cola; no predice pago ni compara prioridades entre intervenciones |
 
 Los nombres del DTO anterior se mantienen para compatibilidad de pantallas,
 pero el adaptador ya no genera las cuatro recomendaciones heredadas. ALIGN-012
 renombra los rótulos y explicita “puntos”; las participaciones de objetos en una
 categoría siguen siendo porcentajes verdaderos. ALIGN-010 inicializa las
-categorías del tablero desde el catálogo v1: cola vacía leída = 0; lectura
-fallida conserva `byRecommendation: []`. ALIGN-014 debe sustituir el orden
+categorías del tablero desde el catálogo v1: cola vacía conocida = 0; la misma
+condición de pertenencia desconocida de KPI-V1-04 conserva `byRecommendation: []`.
+Una decisión R2 permite contar la cola aunque su puntaje sea null. Fallas de
+`person`, `debtor_profile` o `debt_status` no afectan esa disponibilidad.
+ALIGN-014 debe sustituir el orden
 global y las dependencias heredadas de perfiles/estados. Las demás cifras y el orden del tablero
 no se confunden con el contrato de `buildRecommendationSummary` de esta adenda.

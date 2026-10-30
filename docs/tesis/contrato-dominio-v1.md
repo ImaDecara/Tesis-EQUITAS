@@ -317,10 +317,15 @@ usan para sustituir `current_amount`, `due_date`, `estado_origen` o `periodo_fis
 Ver [implementación y procedencia](reglas-decision-v1.md#17-adaptador-web--align-010)
 y [catálogo v1, adenda ALIGN-010](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1).
 
+El adaptador de **objetos** lee exclusivamente `current_amount`: si falta la
+clave, informa `NO_INTEGRADO`; no la sustituye por `updated_amount` ni otros
+alias. La compatibilidad con alias descrita en DE06 y §9 regla 2 queda para
+el mapeador de **personas**, que conserva el selector general de importes.
+
 | ID | Variable | Rótulo | Fuente → fórmula | Unidad | Corte | Faltantes | Clase |
 |---|---|---|---|---|---|---|---|
 | DV01 | `DebtorListItem.decision` | Intervención / prioridad | Salida completa de `evaluateDecisionRulesV1`; incluye severidad, banderas, vulnerabilidad no informada, intensidad, revisión, prioridad y explicación | puntos 0–100, códigos e intensidad 0–4 (máximo automático 2), **no %** | `decisionAsOf` | null ante lectura incompleta, corte no evaluable o entrada fuera de contrato; los importes individuales inválidos producen severidad parcial/no disponible según v1 | D |
-| DV02 | `DebtorListItem.decisionInput`, `DebtorDebtItem.ruleInput` | — (trazabilidad del adaptador) | Insumos normalizados con los cinco estados; `status`, `period`, `issue_date` y `last_collection_date` heredados nunca sustituyen a campos de origen | datos tipados con presencia | `decisionAsOf` | null si no se puede construir una entrada completa de obligaciones/corte; un dato individual no observado conserva null y su estado | D |
+| DV02 | `DebtorListItem.decisionInput`, `DebtorDebtItem.ruleInput` | — (trazabilidad del adaptador) | Insumos normalizados con los cinco estados; `status`, `period`, `issue_date` y `last_collection_date` heredados nunca sustituyen a campos de origen | datos tipados con presencia | `decisionAsOf` | `decisionInput` null si no se puede construir una entrada completa de obligaciones/corte o falla la lectura de relaciones `debtor_person`; registra `personas: NO_INTEGRADO: LECTURA_FALLIDA`, sin enviar una lista vacía ficticia al núcleo. Un dato individual no observado conserva null y su estado | D |
 | DV03 | `DebtorListItem.decisionAsOf`, `DebtorListItem.decisionAsOfSource` | Corte del manifiesto / Fecha de cálculo usada | `RawDebtorDataBundle.batch.as_of`; si no hay manifiesto, fecha UTC de `decisionComputedAt` con aviso “corte de origen no informado” | fecha y procedencia | — | Un manifiesto presente con corte inválido o vacío bloquea la evaluación: no se sustituye silenciosamente | O/D |
 | DV04 | `DebtorListItem.decisionComputedAt` | Decisión calculada el | Una captura de reloj UTC por lectura; inyectable para reproducir | fecha-hora UTC | — | Fecha de cálculo, nunca evidencia del corte municipal ni del momento del perfil persistido | D |
 | DV05 | `DebtorListItem.rulesVersion` | Reglas v1.0.0 | `RULES_VERSION` del JSON compartido | versión | — | Siempre informada por el adaptador | D |

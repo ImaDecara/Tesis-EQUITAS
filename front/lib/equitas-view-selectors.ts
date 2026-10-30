@@ -127,26 +127,34 @@ export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataW
   }
 }
 
+// La pertenencia a una cola requiere estas lecturas, no perfiles ni catálogos históricos.
+export function recommendationQueuesUnknown(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
+  return readingFailed(warnings, 'debtor', 'debt', 'debtor_contact', 'debtor_person') ||
+    (debtors.length > 0 && debtors.every(item => !item.decision))
+}
+
 export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const universeFailed = readingFailed(warnings, 'debtor')
+  const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
   return [...INTERVENTION_CODES, null].map(code => {
-    const cases = universeFailed ? [] : code === null
-      ? debtors.filter(item => !item.decision).sort(compareIds) : getInterventionCases(debtors, code)
+    const groupFailed = code === null ? universeFailed : queuesUnknown
+    const cases = groupFailed ? [] : code === null
+      ? debtors.filter(item => !item.decision || queuesUnknown).sort(compareIds) : getInterventionCases(debtors, code)
     const metrics = {
       totalDebt: aggregateData(cases.map(debtor => debtor.decision
         ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.monto_actualizado_ars }
-        : unavailable()), 'sum', universeFailed),
+        : unavailable()), 'sum', groupFailed),
       riskScore: aggregateData(cases.map(debtor => debtor.decision
         ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.valor }
-        : unavailable()), 'mean', universeFailed),
+        : unavailable()), 'mean', groupFailed),
     }
     return {
       interventionCode: code,
       recommendation: code === null ? 'No disponible' as const : INTERVENTION_LABELS[code],
       cases,
       metrics,
-      // La categoría sin decisión conserva los objetos bloqueados; nunca oculta sus filas.
-      count: universeFailed ? null : cases.length,
+      // La categoría sin cola conocida conserva los objetos; nunca oculta sus filas.
+      count: groupFailed ? null : cases.length,
       debtAssociated: metrics.totalDebt.value,
       averageRisk: metrics.riskScore.value,
       highlightedCases: cases.slice(0, 3),

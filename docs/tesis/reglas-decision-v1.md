@@ -7,7 +7,7 @@
 | Parámetros | `contracts/decision-rules.v1.json` (fuente única de umbrales, bandas, reglas y textos) |
 | Casos golden | `contracts/decision-rules.v1.golden.json` (43 casos sintéticos, 14 pares contrafactuales, 5 ordenamientos por cola) |
 | Contrato de dominio | `docs/tesis/contrato-dominio-v1.md` (ALIGN-007): nombres, estados de presencia (`DataPresence`) y corte `as_of` |
-| Escala de intensidad | Valor por defecto provisional, pendiente de ALIGN-003 (no aprobado todavía por el usuario): solo habilita uso con datos sintéticos |
+| Escala de intensidad | Aprobada por el usuario en ALIGN-003 el 2026-10-30T00:15Z: 0–4, intensa ≥3, máximo automático 2; rige solo con datos sintéticos |
 | Consumidores | ALIGN-009 (núcleo TypeScript), ALIGN-015 (servicio Python), ALIGN-010/021 (pantallas y colas), ALIGN-013 (catálogo), ALIGN-035/036 (simulación) |
 | Datos personales | Ninguno. Los casos golden usan identificadores `SINT-*` |
 
@@ -328,7 +328,11 @@ explicaciones del JSON y agrega “Evaluar con supervisor antes de gestionar”
 cuando hay revisión. No afirma exigibilidad ni propone escalamiento.
 Cuando hay obligaciones vencidas evaluables, el adaptador añade al motivo
 “N obligación(es) vencida(s) a la fecha de corte AAAA-MM-DD”, con concordancia
-singular/plural y la fecha usada; no modifica las frases del JSON congelado.
+singular/plural y la fecha del manifiesto, aunque se calcule otro día. Si no hay
+manifiesto dice “a la fecha de cálculo usada”; si la severidad es PARCIAL,
+antepone “al menos” porque la cantidad es un mínimo. Ante lectura fallida de
+contactos añade “Lectura de contactos no disponible: no se pudo verificar si
+hay contacto cargado.” No modifica las frases del JSON congelado.
 
 Los [selectores](../../front/lib/equitas-view-selectors.ts) crean las cinco colas
 por código de intervención. El orden de presentación es el del catálogo del
@@ -337,8 +341,19 @@ JSON, sin comparar prioridades entre colas; dentro de cada una se usa
 disponible**, ordenado por id. En un universo leído, `count = cases.length`,
 los destacados son los primeros tres de esa misma lista y los agregados toman
 el monto evaluable y la severidad de la decisión, con desglose de faltantes.
-Si falla la lectura del universo de objetos, los conteos son null y las listas
-quedan vacías. La banda alta se obtiene del núcleo, inclusive desde 70 puntos.
+Si falla `debtor`, todos los conteos y agregados son null y las listas quedan
+vacías. Si falla `debt`, `debtor_contact` o `debtor_person`, o hay objetos pero
+ninguno tiene decisión (por ejemplo, corte inválido), la pertenencia a las cinco
+colas es desconocida: conteos, sumas y promedios son null/`NO_INTEGRADO`, nunca
+0 derivado ni `NO_APLICA`, y sus listas quedan vacías. El grupo **No disponible**
+conserva todos los objetos conocidos con `count = cases.length`, aun si tienen
+decisión individual pero la lectura de contactos impide conocer la cola.
+Sin falla de lectura y con al menos una decisión, los objetos evaluados siguen
+en sus colas, conservando mínimos parciales y faltantes; los bloqueados se
+cuentan aparte (§4.1, regla 3 del contrato). `person`, `debtor_profile` y
+`debt_status` no determinan disponibilidad de las colas. Un universo leído
+correctamente sin objetos sí permite conteos/sumas 0 y promedios `NO_APLICA`.
+La banda alta se obtiene del núcleo, inclusive desde 70 puntos.
 
 La [adenda del catálogo](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1)
 define unidades, poblaciones y límites. ALIGN-012 debe actualizar los rótulos
@@ -346,7 +361,9 @@ heredados “riesgo”, “riesgo >90”, “Score” y “urgente”; ALIGN-014
 responsabilidad de reemplazar los agregados y el orden global del tablero y
 los indicadores de mora basados en perfil/catálogo. ALIGN-010 inicializa los
 conteos del tablero desde las cinco etiquetas v1 y “No disponible”: una cola
-vacía leída tiene 0; ante lectura fallida se conserva `byRecommendation: []`.
+vacía leída tiene 0; la misma condición de colas desconocidas del resumen
+produce `byRecommendation: []`. Una decisión R2 sin puntaje sí permite contar
+su cola; no se usa la disponibilidad de `priorityCases` como condición.
 Los demás agregados del tablero no se modifican aquí.
 Los campos financieros históricos se mantienen separados y
 no alimentan las decisiones ni las sumas de las colas v1.

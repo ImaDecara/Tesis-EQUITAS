@@ -167,6 +167,7 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(without.decision?.intervencion).toMatchObject({ codigo: 'MEJORAR_DATOS', intensidad: 0, canal_requerido: false })
     expect(withContact.decision?.intervencion.codigo).toBe('CONTACTO_PERSONAL_Y_PLAN')
     expect(without.decision?.mensaje_borrador).toBeNull()
+    expect(without.recommendationReason).not.toContain('Lectura de contactos no disponible')
     expect(without.decision?.vulnerabilidad.valor).toBe('NO_INFORMADA')
     expect(without.decision?.revision).toStrictEqual(withContact.decision?.revision)
     // Conserva toda la decisión salvo las cinco diferencias permitidas por contacto.
@@ -194,6 +195,21 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(mapOne(raw).recommendationReason).toContain('2 obligaciones vencidas a la fecha de corte 2026-09-30')
     raw.debts.forEach(debt => { debt.due_date = '2026-09-30' })
     expect(mapOne(raw).recommendationReason).not.toContain('obligaciones vencidas a la fecha de corte')
+  })
+
+  it.each([
+    { manifest: true, partial: false }, { manifest: true, partial: true },
+    { manifest: false, partial: false }, { manifest: false, partial: true },
+  ])('el motivo distingue corte/cálculo y mínimo: manifiesto=$manifest, parcial=$partial', ({ manifest, partial }) => {
+    const raw = buildRawData()
+    raw.debts[0].due_date = '2026-09-01'
+    if (!manifest) delete raw.batch
+    if (partial) raw.debts.push({ id: 11, debtor: 1, current_amount: null, due_date: '2026-09-01' })
+    const debtor = mapDebtorObjectsFromRawData(raw, { computedAt: '2026-10-15T12:00:00.000Z' }).debtors[0]
+    expect(debtor.decision?.severidad.estado).toBe(partial ? 'PARCIAL' : 'COMPLETA')
+    const date = manifest ? 'fecha de corte 2026-09-30' : 'fecha de cálculo usada 2026-10-15'
+    expect(debtor.recommendationReason).toContain(`${partial ? 'al menos ' : ''}1 obligación vencida a la ${date}.`)
+    expect(debtor.recommendationReason).not.toContain('obligación vencida a la fecha de corte 2026-10-15')
   })
 
   it('un contacto vacío, inactivo o de una relación inactiva no habilita comunicación', () => {
@@ -304,7 +320,11 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(failed.decisionIssues).toContainEqual({ field: 'obligaciones', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     const summary = buildRecommendationSummary([failed], raw.warnings)
     expect(summary.find(group => group.interventionCode === null)).toMatchObject({ count: 1, cases: [failed] })
-    expect(summary.filter(group => group.interventionCode !== null).every(group => group.count === group.cases.length && group.count === 0)).toBe(true)
+    for (const group of summary.filter(group => group.interventionCode !== null)) {
+      expect(group).toMatchObject({ count: null, cases: [], highlightedCases: [], debtAssociated: null, averageRisk: null })
+      expect(group.metrics.totalDebt.presence).toBe('NO_INTEGRADO')
+      expect(group.metrics.riskScore.presence).toBe('NO_INTEGRADO')
+    }
   })
 
   it('una lectura de contactos fallida mantiene los puntos y fuerza mejorar datos', () => {
@@ -315,6 +335,7 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(after.hasContact).toBeNull()
     expect(after.decision?.severidad).toStrictEqual(before.decision?.severidad)
     expect(after.decision?.intervencion.codigo).toBe('MEJORAR_DATOS')
+    expect(after.recommendationReason).toContain('Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.')
   })
 
   it('una lectura de relaciones fallida no se evalúa como una lista sin personas', () => {
@@ -329,12 +350,24 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(failed.decisionInput).toBeNull()
     expect(failed.decision).toBeNull()
     expect(failed.priorityScore).toBeNull()
+    expect(failed.recommendationReason).toContain('Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.')
     raw.warnings = []
     const empty = mapOne(raw)
     expect(empty.peopleCount).toBe(0)
     expect(empty.decisionInput?.personas).toEqual([])
     expect(empty.decision).not.toBeNull()
     expect(empty.decisionIssues?.some(issue => issue.field === 'personas')).toBe(false)
+  })
+
+  it.each(['debtor', 'debt', 'debtor_person'])('la lectura fallida de %s prevalece sobre un importe inválido en la presencia de la decisión', table => {
+    const raw = buildRawData()
+    raw.debts[0].current_amount = 'ilegible'
+    raw.warnings = [{ table, message: 'Error sintético', needsSelectPolicy: false }]
+    const debtor = mapOne(raw)
+    expect(debtor.decision).toBeNull()
+    expect(debtor.decisionIssues).toContainEqual(expect.objectContaining({ field: 'current_amount', presence: 'INVALIDO' }))
+    expect(debtor.metrics?.priorityScore).toMatchObject({ value: null, presence: 'NO_INTEGRADO' })
+    expect(debtor.metrics?.riskScore).toMatchObject({ value: null, presence: 'NO_INTEGRADO' })
   })
 
   it('conserva el mínimo parcial, los motivos y la revisión humana', () => {

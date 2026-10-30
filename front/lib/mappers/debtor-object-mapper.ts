@@ -159,7 +159,10 @@ function rulePersonType(row: RawRow | undefined): DecisionInput['personas'][numb
 }
 
 function decisionMetric(input: DecisionInput | null, value: number | null, issues: DecisionDataIssue[]): NumericData {
-  if (!input) return unavailable(issues.some(issue => issue.presence === 'INVALIDO') ? 'INVALIDO' : 'NO_INTEGRADO', 'DECISION_NO_EVALUABLE')
+  if (!input) {
+    if (issues.some(issue => issue.reason === 'LECTURA_FALLIDA')) return unavailable('NO_INTEGRADO')
+    return unavailable(issues.some(issue => issue.presence === 'INVALIDO') ? 'INVALIDO' : 'NO_INTEGRADO', 'DECISION_NO_EVALUABLE')
+  }
   const missing = input.obligaciones.flatMap(item => [item.current_amount, item.due_date])
     .filter(item => item.estado !== 'OBSERVADO').map(item => unavailable(item.estado))
   const data = aggregateData(missing, 'max')
@@ -534,9 +537,11 @@ export function mapDebtorObjectsFromRawData(
       ? `Corte del manifiesto: ${decisionAsOf.valor ?? 'no disponible'}`
       : `Fecha de cálculo usada: ${decisionAsOf.valor}; corte de origen no informado (corte no integrado)`
     const overdueCount = decision?.severidad.cantidad_vencidas ?? 0
+    const overdueDateLabel = decisionAsOfSource === 'FECHA_CALCULO' ? 'fecha de cálculo usada' : 'fecha de corte'
     const overdueReason = overdueCount > 0
-      ? ` ${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la fecha de corte ${decisionAsOf.valor}.`
+      ? ` ${decision?.severidad.estado === 'PARCIAL' ? 'al menos ' : ''}${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la ${overdueDateLabel} ${decisionAsOf.valor}.`
       : ''
+    const contactReason = contactsFailed ? ' Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.' : ''
     const temporalProvenance = `${decisionTime}; reglas v${RULES_VERSION}; decisión calculada el ${decisionComputedAt}. Importes del perfil: ${computedAt ?? 'momento de cálculo desconocido'}; estado del catálogo persistido: momento de cálculo desconocido.`
 
     const debtorTypeId = stringifyUnknownValue(
@@ -604,7 +609,7 @@ export function mapDebtorObjectsFromRawData(
       priorityLevel,
       recommendation: recommendationResult.summary,
       recommendationType: recommendationResult.type,
-      recommendationReason: `${recommendationResult.reason}${overdueReason} ${decisionTime}; reglas v${RULES_VERSION}.`,
+      recommendationReason: `${recommendationResult.reason}${overdueReason}${contactReason} ${decisionTime}; reglas v${RULES_VERSION}.`,
       isUrgentRecommendation: recommendationResult.isUrgent,
     })
   }
