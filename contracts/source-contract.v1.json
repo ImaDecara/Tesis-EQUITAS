@@ -24,7 +24,14 @@
       "1900-01-01",
       "2999-01-01",
       "9999-12-31"
-    ]
+    ],
+    "separadores_adaptadores": [
+      "\\t",
+      ",",
+      ";",
+      null
+    ],
+    "lector_rutas_v1": "Solo TSV; CSV/XLSX mediante adaptadores que entregan SourceTable."
   },
   "limites": {
     "bytes": 25000000,
@@ -443,5 +450,14 @@
     "TIPO_INGRESO_SIN_MAPEO_EN_ETL",
     "CABECERA_SIN_DETALLE",
     "DUPLICADO_IDENTICO"
-  ]
+  ],
+  "codigos_resumen": {
+    "SIN_OBSERVACIONES": "Fila candidata sin alertas.",
+    "OBJETO_CON_ALERTAS": "Fila candidata de un objeto con banderas.",
+    "OBJETO_EN_CUARENTENA": "Fila válida excluida por la invalidez de otra fila de su objeto.",
+    "LOTE_ESTRUCTURA_INVALIDA": "Fila excluida por un bloqueo de estructura del lote.",
+    "CUARENTENA_EXCEDE_OBJETOS": "Más del límite porcentual de objetos en cuarentena.",
+    "CUARENTENA_EXCEDE_IMPORTE": "Más del límite porcentual del importe observado en cuarentena.",
+    "CUARENTENA_IMPORTE_NO_EVALUABLE": "Faltan importes: no se puede certificar el límite porcentual."
+  }
 }

@@ -27,6 +27,11 @@ class ValidationError(ValueError):
     """Solo códigos propios: nunca incluye el valor recibido ni rutas del usuario."""
 
 
+def require(condition):
+    if not condition:
+        raise ValidationError('CONFIGURACION_INVALIDA')
+
+
 @dataclass
 class SourceRow:
     line: int
@@ -87,13 +92,16 @@ def load_mapping(folder, path=None) -> dict:
         return _read_json(path)
     folder = Path(folder)
     manifest = _read_json(folder / 'manifest.json')
-    if manifest.get('version') != 'sintetico-v1' or not manifest.get('clase', '').startswith('S '):
+    if (manifest.get('version') != 'sintetico-v1'
+            or not isinstance(manifest.get('clase'), str) or not manifest['clase'].startswith('S ')):
         raise ValidationError('MAPEO_REQUERIDO')
     mapping = _read_json(DEFAULT_CONTRACT.with_name('source-mapping.sintetico-v1.json'))
     mapping['fecha_corte'] = manifest.get('fecha_corte')
     mapping['formato'] = manifest.get('formato_origen')
     # El manifiesto v1 documenta NOTD_SITU_id como texto explicativo, no como catálogo.
     catalogs = manifest.get('catalogos', {})
+    if not isinstance(catalogs, dict):
+        raise ValidationError('CONFIGURACION_INVALIDA')
     mapping['catalogos'] = {name: catalogs.get(name, {}) for name in
                            ('Bien_Tipo_Id', 'Tipo_Ingreso_Id', 'NOTD_ESTA_id')}
     mapping['catalogos']['NOTD_SITU_id'] = {}
@@ -170,43 +178,48 @@ class _Validator:
             raise ValidationError('CORTE_INVALIDO') from None
         try:
             m, c = self.mapping, self.contract
-            assert c['version'] == 'source-contract.v1'
-            assert m['version'] == 'source-mapping.v1'
-            assert all(isinstance(m[k], str) and m[k].strip() for k in ('municipio', 'jurisdiccion', 'moneda'))
-            assert m['fecha_corte'] == self.cut_off.isoformat()
+            require(c['version'] == 'source-contract.v1')
+            require(m['version'] == 'source-mapping.v1')
+            require(all(isinstance(m[k], str) and m[k].strip() for k in ('municipio', 'jurisdiccion', 'moneda')))
+            require(re.fullmatch(r'[A-Z]{3}', m['moneda']))
+            require(m['fecha_corte'] == self.cut_off.isoformat())
             f = m['formato']
-            assert f['fecha'] in c['formatos']['fechas']
-            assert f['codificacion'] in c['formatos']['codificaciones']
-            assert f['separador'] in ('\t', '\\t')  # Lectura CSV/XLSX: ALIGN-030/053 vía SourceTable.
-            assert f['decimal'] in (',', '.') and f['miles'] in ('', ',', '.')
-            assert f['decimal'] != f['miles']
-            assert isinstance(m.get('columnas', {}), dict)
+            require(f['fecha'] in c['formatos']['fechas'])
+            require(f['codificacion'] in c['formatos']['codificaciones'])
+            # Separador físico del lote; los adaptadores CSV/XLSX entregan SourceTable.
+            require(f['separador'] in ('\t', '\\t', ',', ';', None))
+            require(f['decimal'] in (',', '.') and f['miles'] in ('', ',', '.'))
+            require(f['decimal'] != f['miles'])
+            require(isinstance(m.get('columnas', {}), dict))
+            require(set(m.get('columnas', {})) <= {'cabecera', 'detalle'})
             for kind in ('cabecera', 'detalle'):
                 columns = m.get('columnas', {}).get(kind, {})
-                assert isinstance(columns, dict) and set(columns) <= set(c['archivos'][kind]['columnas'])
-                assert all(isinstance(v, str) and v for v in columns.values())
+                require(isinstance(columns, dict) and set(columns) <= set(c['archivos'][kind]['columnas']))
+                require(all(isinstance(v, str) and v for v in columns.values()))
                 effective = [columns.get(name, name) for name in c['archivos'][kind]['columnas']]
-                assert len(effective) == len(set(effective))
+                require(len(effective) == len(set(effective)))
             for name in c['catalogos']['por_lote']:
-                assert isinstance(m['catalogos'][name], dict)
-                assert all(isinstance(k, str) and isinstance(v, str) and k and v
-                           for k, v in m['catalogos'][name].items())
-            assert m['catalogos']['Bien_Tipo_Id'] and m['catalogos']['Tipo_Ingreso_Id']
+                require(isinstance(m['catalogos'][name], dict))
+                require(all(isinstance(k, str) and isinstance(v, str) and k and v
+                           for k, v in m['catalogos'][name].items()))
+            require(m['catalogos']['Bien_Tipo_Id'] and m['catalogos']['Tipo_Ingreso_Id'])
             for name in ('NOTD_ESTA_id', 'NOTD_SITU_id'):
-                assert set(m['catalogos'][name].values()) <= set(c['catalogos']['estados_obligacion'])
-            assert m.get('vigencia_por_defecto', 'NO_INTEGRADO') in ('ACTIVO', 'NO_INTEGRADO')
+                require(set(m['catalogos'][name].values()) <= set(c['catalogos']['estados_obligacion']))
+            require(m.get('vigencia_por_defecto', 'NO_INTEGRADO') in ('ACTIVO', 'NO_INTEGRADO'))
             self.validity = {}
             for item in m.get('vigencia_contactos', []):
                 key = (item['municipio'], item['Destinatario_Id'], item['columna'])
-                assert all(isinstance(k, str) and k for k in key)
-                assert key not in self.validity and key[2] in c['contactos']['columnas']
-                assert item['vigencia'] in ('ACTIVO', 'INACTIVO')
+                require(all(isinstance(k, str) and k for k in key))
+                require(key not in self.validity and key[2] in c['contactos']['columnas'])
+                require(item['vigencia'] in ('ACTIVO', 'INACTIVO'))
                 self.validity[key] = item['vigencia']
             rules = c['consistencias']
-            assert Decimal(rules['tolerancia_importe']) >= 0
+            require(Decimal(rules['tolerancia_importe']).is_finite() and Decimal(rules['tolerancia_importe']) >= 0)
             for name in ('cuarentena_max_objetos_pct', 'cuarentena_max_importe_pct'):
-                assert Decimal(rules[name]).is_finite() and 0 <= Decimal(rules[name]) <= 100
-        except (KeyError, TypeError, ValueError, ArithmeticError, AssertionError):
+                require(Decimal(rules[name]).is_finite() and 0 <= Decimal(rules[name]) <= 100)
+            require(set(c['archivos']) == {'cabecera', 'detalle'})
+            require(all(type(v) is int and v > 0 for v in c['limites'].values()))
+        except (KeyError, TypeError, ValueError, ArithmeticError, AttributeError):
             raise ValidationError('CONFIGURACION_INVALIDA') from None
 
     def note(self, row, column, code, presence=INVALID):
@@ -224,6 +237,8 @@ class _Validator:
         limits = self.contract['limites']
         if isinstance(source, SourceTable):
             return source
+        if self.mapping['formato']['separador'] not in ('\t', '\\t'):
+            raise ValidationError('LECTOR_TSV_REQUIERE_TABULADOR')
         rows, columns = [], []
         code = None
         try:
@@ -387,7 +402,8 @@ class _Validator:
             state = states[0]
             if state.value == 'UNKNOWN':
                 state = Cell(None, MISSING, 'ESTADO_ORIGEN_NO_INFORMADO')
-                self.cell(row, 'NOTD_ESTA_id', state)
+                name = 'NOTD_ESTA_id' if row.values.get('NOTD_ESTA_id') else 'NOTD_SITU_id'
+                self.cell(row, name, state)
         row.cells['estado'] = state
 
     def deduplicate(self, row, seen, key, column):
@@ -524,10 +540,19 @@ class _Validator:
             self.blockers.add('CUARENTENA_EXCEDE_IMPORTE')
         if missing:
             self.blockers.add('CUARENTENA_IMPORTE_NO_EVALUABLE')
+        unlinked = []
+        for row in self.rows:
+            if row.kind == 'detalle' and row.obj is None:
+                fmt = self.mapping['formato']
+                unlinked.append(parse_amount(row.values.get('NOTD_totalActualizado', ''), fmt['decimal'], fmt['miles']))
         counts, decisions = {}, []
+        warnings = {}
+        for finding in sorted(self.findings.values(), key=lambda f: (f['archivo'], f['linea'], f['campo'], f['codigo'])):
+            if self.contract['codigos'][finding['codigo']]['efecto'] == 'ALERTA':
+                warnings.setdefault((finding['archivo'], finding['linea']), finding['codigo'])
         for kind in ('cabecera', 'detalle'):
             primary = Counter()
-            accepted = 0
+            accepted = Counter()
             for row in (r for r in self.rows if r.kind == kind):
                 code = row.codes[0] if row.codes else None
                 if structural:
@@ -537,15 +562,19 @@ class _Validator:
                 if code:
                     primary[code] += 1
                 else:
-                    accepted += 1
+                    accepted_code = warnings.get((kind, row.line)) or (
+                        'OBJETO_CON_ALERTAS' if row.obj and row.obj.flags else 'SIN_OBSERVACIONES')
+                    accepted[accepted_code] += 1
                 decisions.append({'archivo': kind, 'linea': row.line, 'objeto': row.obj.reference if row.obj else None,
-                                      'resultado': 'RECHAZADA' if code else 'ACEPTADA', 'codigo': code})
-            counts[kind] = {'leidas': accepted + sum(primary.values()), 'aceptadas': accepted,
+                                      'resultado': 'RECHAZADA' if code else 'ACEPTADA', 'codigo': code or accepted_code})
+            counts[kind] = {'leidas': sum(accepted.values()) + sum(primary.values()), 'aceptadas': sum(accepted.values()),
+                                'aceptadas_por_codigo': dict(sorted(accepted.items())),
                                 'rechazadas': sum(primary.values()), 'rechazadas_por_codigo': dict(sorted(primary.items()))}
         findings = sorted(self.findings.values(), key=lambda f: (f['archivo'], f['linea'], f['campo'], f['codigo']))
         codes = Counter(f['codigo'] for f in findings)
         return {
             'version': 'source-report.v1', 'contrato': self.contract['version'], 'fecha_corte': self.cut_off.isoformat(),
+            'moneda': self.mapping['moneda'],
             'resultado_lote': 'BLOQUEADO' if self.blockers else 'VALIDADO', 'motivos_bloqueo': sorted(self.blockers),
             'universo_completo': self.complete and not structural,
             'publicacion_permitida': not self.blockers,
@@ -563,6 +592,7 @@ class _Validator:
                          'objetos_porcentajes_no_100': sum('PORCENTAJES_NO_SUMAN_100' in o['banderas'] for o in objects)},
             'importes': {**{key: None if structural else f'{value:.2f}' for key, value in amounts.items()},
                       'actualizado_filas_no_observadas': dict(sorted(missing.items())),
+                      'detalle_sin_objeto': None if structural else aggregate(unlinked, 'sum'),
                       'completo': not missing and not structural},
             'cuarentena': {'objetos_pct': f'{object_pct:.2f}', 'importe_observado_pct': f'{amount_pct:.2f}',
                             'importe_evaluable': not missing and not structural},
@@ -594,9 +624,29 @@ def render_markdown(report: dict) -> str:
     for kind, counts in report['filas'].items():
         lines.append(f"| {kind} | {counts['leidas']} | {counts['aceptadas']} | {counts['rechazadas']} |")
     lines += ['', f"Objetos en cuarentena: {report['conteos']['objetos_en_cuarentena']}.",
-              f"Importe excluido observado de esos objetos: {report['importes']['actualizado_en_cuarentena_observado']}.",
+              f"Importe excluido observado de esos objetos ({report['moneda']}): {report['importes']['actualizado_en_cuarentena_observado']}.",
               f"Importes completos: {report['importes']['completo']}. Los faltantes no son cero.",
-              f"Bloqueos: {', '.join(report['motivos_bloqueo']) or 'ninguno'}.", '',
+              f"Desglose de importes no observados: {json.dumps(report['importes']['actualizado_filas_no_observadas'], ensure_ascii=False)}.",
+              f"Bloqueos: {', '.join(report['motivos_bloqueo']) or 'ninguno'}.",
+              f"Duplicados idénticos: {report['conteos']['duplicados_identicos']}; conflictivos: {report['conteos']['duplicados_conflictivos']}.",
+              f"Detalle sin cabecera: {report['conteos']['detalle_sin_cabecera']}.",
+              f"Objetos sin contacto utilizable: {report['conteos']['objetos_sin_contacto_utilizable']}.",
+              f"Objetos con porcentajes ≠100: {report['conteos']['objetos_porcentajes_no_100']}.", '']
+    for kind, metadata in report['columnas'].items():
+        lines += [f"Columnas opcionales presentes ({kind}): {', '.join(metadata['opcionales_presentes']) or 'ninguna'}.",
+                  f"Columnas opcionales ausentes ({kind}): {', '.join(metadata['opcionales_ausentes']) or 'ninguna'}.", '']
+    lines += ['| Archivo | Resultado | Código primario | Filas |', '|---|---|---|---:|']
+    for kind, counts in report['filas'].items():
+        for outcome in ('aceptadas', 'rechazadas'):
+            for code, count in counts[outcome + '_por_codigo'].items():
+                lines.append(f'| {kind} | {outcome} | {code} | {count} |')
+    lines += ['', '| Objeto (referencia local) | Resultado | Subtotal actualizado | Completo | Control | Diferencia | Motivos / banderas |',
+              '|---|---|---:|---|---:|---:|---|']
+    for obj in report['objetos']:
+        amount, control = obj['importe_actualizado'], obj['conciliacion']
+        lines.append(f"| {obj['referencia']} | {obj['resultado']} | {amount['valor']} | {amount['completo']} | "
+                     f"{control['control']} | {control['diferencia']} | {', '.join(obj['motivos'] + obj['banderas']) or 'ninguno'} |")
+    lines += ['',
               '| Archivo | Línea | Campo | Código | Presencia |', '|---|---:|---|---|---|']
     for finding in report['hallazgos']:
         lines.append('| ' + ' | '.join(str(finding[k]) for k in ('archivo', 'linea', 'campo', 'codigo', 'presencia')) + ' |')

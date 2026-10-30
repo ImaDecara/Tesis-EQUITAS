@@ -112,7 +112,7 @@ Ningún centinela debe aparecer en logs ni en respuestas no autorizadas. `test_e
 
 ### 3.6 Escala
 
-`--profile escala` produce exactamente 2933 objetos y 56 286 obligaciones únicas en el municipio A (las cardinalidades agregadas del informe de input §3), más de 3000 filas de detalle (56 289 con la semilla por defecto; la cabecera tiene 2994 relaciones), e incluye los casos de contrato. Las proporciones solo fijan la forma, no la calibran.
+`--profile escala` produce exactamente 2933 objetos y 56 286 obligaciones únicas en el municipio A (las cardinalidades agregadas del informe de input §3), más de 3000 filas de detalle (56 289 con la semilla por defecto; la cabecera tiene 2990 relaciones), e incluye los casos de contrato. Las proporciones solo fijan la forma, no la calibran.
 
 ## 4. Oráculo (`expected.json`)
 
