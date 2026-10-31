@@ -39,7 +39,7 @@ Son configurables: `FileLimits` en `back/ETL/readers/limits.py`. Los cuatro prim
 
 Un lote son siempre dos archivos lógicos: dos CSV/TSV, dos XLSX o un XLSX con dos hojas. Dos libros pueden usar el mismo nombre de hoja, como `Hoja1`. Un solo libro no, y da `PERFIL_INVALIDO`.
 
-Los archivos también tienen topes internos, que un archivo legítimo no alcanza. Sin ellos, lo descomprimido alcanzaba para agotar la memoria:
+También hay topes internos, que un archivo normal no alcanza. Sin ellos, los 200 MB descomprimidos alcanzaban para agotar la memoria:
 
 | Tope interno (XLSX) | Valor | Código |
 |---|---|---|
@@ -61,7 +61,7 @@ En CSV/TSV, un registro no puede pasar de 60 × (2 × 32 767 + 3) caracteres, co
 - **Hojas y cadenas van en flujo:** ningún elemento sobrevive a su fila o cadena, así que la memoria no crece con el tamaño de la parte.
 - **No se evalúan fórmulas, no se siguen vínculos externos y no se extrae nada a disco.**
 
-Tanto el ZIP como el XML se rechazan si son raros: cifrado, compresión que no sea `deflate`, Zip64, rutas con `..` o `\`, nombres repetidos o entradas superpuestas dan `ZIP_CORRUPTO`.
+Un ZIP inusual se rechaza con `ZIP_CORRUPTO`: cifrado, compresión que no sea `deflate` o ninguna, Zip64, rutas con `..` o `\`, nombres repetidos o entradas superpuestas.
 
 **Hojas.** El perfil elige una por archivo lógico (`formato.hojas`). Las demás se listan en `SourceBatch.ignored_sheets`, con el nombre saneado, y se ignoran; solo se comprueba que su ZIP y su DTD estén limpios. Si falta la elegida: `HOJA_NO_ENCONTRADA`.
 
