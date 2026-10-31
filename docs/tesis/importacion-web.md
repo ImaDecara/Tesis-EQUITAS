@@ -107,15 +107,17 @@ Cada archivo se midió en un proceso propio; el crecimiento de memoria es `ru_ma
 
 | Caso | Presupuesto de la prueba | Medido |
 |---|---|---|
-| Cada uno de los 112 archivos hostiles, salvo los de abajo | 15 s y 128 MiB | Máximo 3,6 s y 106 MiB |
-| Cadenas compartidas al límite (4 millones) | 60 s y 1 GiB | 22 s y 342 MiB |
-| Estilos al límite (no interrumpibles) | 60 s y 1 GiB | 4 s y 92 MiB |
-| Un solo texto, comentario o atributo de 190 MB en la hoja | 60 s y 1 GiB | Menos de 2 s y hasta 738 MiB |
-| Mayor CSV aceptado: 300 000 filas × 60 columnas | 60 s y 1 GiB | 6 s y 526 MiB |
+| Cada uno de los 118 archivos hostiles, salvo los de abajo | 15 s y 192 MiB | Máximo 5 s y 107 MiB |
+| Cadenas compartidas al límite: 3 999 000 distintas | 60 s y 1 GiB | 13 s y 217 MiB |
+| Una cadena más que el límite: 4 000 001 vacías | 60 s y 1 GiB | 10 s y 34 MiB |
+| Estilos al límite, la única parte no interrumpible con costo apreciable | 60 s y 1 GiB | 5 s y 95 MiB |
+| Un solo texto de 190 MB en una celda | 60 s y 1 GiB | 1 s y 427 MiB |
+| Un solo comentario o atributo de 190 MB en la hoja | 60 s y 1 GiB | 1 s y 742 MiB |
+| Mayor CSV aceptado: 300 000 filas × 60 columnas | 60 s y 1 GiB | 5 s y 525 MiB |
 
-Se midió aparte, sin incluirlo en la suite porque tarda: un XLSX de 180 MB descomprimidos con 200 000 filas × 60 columnas numéricas se lee en 93 s con 863 MiB.
+Se midió aparte, sin incluirlo en la suite porque tarda: un XLSX de 180 MB descomprimidos con 200 000 filas × 60 columnas numéricas se lee en 78 s con 864 MiB. La cartera `escala` (2990 cabeceras y 56 289 detalles) da el mismo reporte y los mismos payloads en TSV, CSV y XLSX.
 
-**Qué no cubren estos límites.** Dentro del proceso no se puede interrumpir el armado de los estilos (hasta unos 5 s) y un lote al máximo ronda 1,8 GiB. El servidor debe correr el lector en un proceso aparte con tope de memoria y de tiempo (ALIGN-052/059).
+**Qué no cubren estos límites.** Dentro del proceso no se puede interrumpir el armado de los estilos, unos 5 s. Con dos archivos al máximo, estimamos cerca de 1,8 GiB, el doble de lo medido con uno. Por eso, el servidor debería correr el lector en un proceso aparte, con tope de memoria y de tiempo (ALIGN-052/059).
 
 ## 8. Uso
 

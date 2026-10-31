@@ -45,9 +45,9 @@ KINDS = ('cabecera', 'detalle')
 SHEETS = {'cabecera': 'cabecera', 'detalle': 'detalle'}
 SENTINEL = 'CENTINELA-EQUITAS'
 # Presupuesto de cada rechazo en un proceso propio, medido sobre el corpus (tabla en la evidencia):
-# el mayor es de 3,6 s y 106 MiB en macOS; el margen de tiempo es para un servidor de CI más lento.
+# el mayor es de 5 s y 107 MiB en macOS; el margen es para un servidor más lento o con otro asignador.
 MAX_SECONDS = 15.0
-MAX_RSS_GROWTH_MIB = 128
+MAX_RSS_GROWTH_MIB = 192
 # Lo más caro que los límites dejan pasar: estilos (no interrumpibles), cadenas (millones de textos),
 # una sola marca o texto de 190 MB (expat la guarda entera) y la mayor tabla CSV aceptada.
 AT_LIMIT_CASES = ('estilos-al-limite.xlsx', 'cadenas-al-limite.xlsx', 'cadenas-demasiadas.xlsx', 'texto-190mb.xlsx',
@@ -849,6 +849,39 @@ def test_hostile_files_stay_within_the_measured_memory_and_time_budget(tmp_path,
         assert outcome['codigo'] == code, path.name
         assert outcome['segundos'] <= (AT_LIMIT_MAX_SECONDS if at_limit else MAX_SECONDS), (path.name, outcome)
         assert outcome['memoria_mib'] <= (AT_LIMIT_MAX_RSS_GROWTH_MIB if at_limit else MAX_RSS_GROWTH_MIB), (path.name, outcome)
+
+
+AUDIT_CHILD = '''
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from ETL import extract
+files, profile = json.loads(sys.argv[2]), json.loads(sys.argv[3])
+events = []
+def hook(name, args):
+    if name.startswith(('socket.', 'subprocess.', 'os.system', 'os.exec', 'os.fork', 'os.posix_spawn', 'os.spawn', 'urllib.', 'http.',
+                        'ftplib.', 'smtplib.', 'tempfile.', 'os.remove', 'os.rename', 'os.mkdir', 'shutil.')):
+        events.append(name)
+    elif name == 'open' and isinstance(args[1], str) and set(args[1]) & set('wax+'):
+        events.append(name)
+    elif name == 'open' and isinstance(args[2], int) and args[2] & 3:
+        events.append(name)
+sys.addaudithook(hook)
+tables = extract.read_source_tables(files, profile)
+print(json.dumps({'eventos': events, 'filas': {kind: len(table.rows) for kind, table in tables.items()}}))
+'''
+
+
+def test_reading_uses_no_network_no_process_and_writes_nothing(tmp_path):
+    """Los archivos nunca salen a un servicio externo, ni la lectura deja nada en disco."""
+    book = write(tmp_path, 'libro', workbook_bytes(fixture_sheets()))
+    profile = xlsx_profile()
+    result = subprocess.run([sys.executable, '-B', '-c', AUDIT_CHILD, str(BACK), json.dumps(dict.fromkeys(KINDS, str(book))), json.dumps(profile)],
+                            capture_output=True, text=True, cwd=BACK, check=False)
+    assert result.returncode == 0, result.stderr[-400:]
+    outcome = json.loads(result.stdout)
+    assert outcome['eventos'] == []
+    assert outcome['filas']['cabecera'] > 0
+    assert sorted(path.name for path in tmp_path.iterdir()) == ['libro']
 
 
 def test_size_and_ratio_are_verified_before_opening_any_part(tmp_path, monkeypatch):
