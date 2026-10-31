@@ -700,7 +700,8 @@ def _hostile_cases():
          xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
         ('tiempo-cadenas.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(noisy(b'<si/>', 150_000_000))),
          xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
-        ('tiempo-texto.csv', b'A,B\n' + b'1,2\n' * 5_000_000, csv_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
+        # 300 000 filas de CSV se leen en unos 0,3 s: con menos que eso, el tiempo corta antes que el tope de filas.
+        ('tiempo-texto.csv', b'A,B\n' + b'1,2\n' * 5_000_000, csv_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.02)),
         ('plantilla-y-libro.xlsx', rewrite_zip(book, replace_parts={'[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
             b'</Types>', b'<Override PartName="/xl/otro.xml" ContentType="application/vnd.openxmlformats-officedocument'
                          b'.spreadsheetml.template.main+xml"/></Types>')}), xlsx_profile(), 'FORMATO_NO_SOPORTADO', None),
