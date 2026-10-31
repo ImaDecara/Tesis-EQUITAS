@@ -307,4 +307,13 @@ ambas carteras al usuario sin membresía; la DAL deniega esa misma identidad en 
 nueve rutas. Los controles positivos comprueban separación A/B, detalle ajeno,
 personas y selección explícita, sin avisos de consulta fallida. Se restauraron las
 tres migraciones antes de liberar el lock. Evidencia depurada: paquete del plan,
-`execution/evidence/ALIGN-019/`. La revisión independiente sigue pendiente.
+`execution/evidence/ALIGN-019/`.
+
+Validación del 31/10, ciclo de corrección 1. La revisión independiente pidió cambios
+por dos regresiones sin fuga: la fixture E06 quedaba sin acceso y sin sesión no se
+llegaba a `/login`. Con la fixture E06 sin tocar, `test:supabase` da 12/12 y SMOKE-01
+5/5, igual que la base; corrieron en copias locales, sin ningún proyecto remoto. Sobre
+`USING(true)` pasan los diez casos directos y un barrido de contextos denegados y
+positivos en HTML y RSC. Con la cuenta E06 se comprobó que solo lee: la DAL deniega
+los demás permisos, la Data API con RLS rechaza sus escrituras y las funciones de
+ALIGN-018 responden `ROLE_NOT_ALLOWED`. Falta la re-revisión independiente.

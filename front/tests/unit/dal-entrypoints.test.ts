@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
-import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { createElement, isValidElement, type ComponentType, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DataError from '@/app/error'
 import TenantSelectionPage from '@/app/select-tenant/page'
@@ -41,8 +41,11 @@ function button(node: ReactNode, label: string): ReactElement<ButtonProps> | nul
 
 describe('ALIGN-019: fronteras de entrada y prueba local segura', () => {
   it('el estado de error no serializa mensajes, datos ni ceros de cartera', () => {
-    const markup = renderToStaticMarkup(createElement(DataError))
+    // Next le pasa estas props; la pantalla no las usa, asi que el mensaje no puede salir.
+    const asNextRendersIt = DataError as ComponentType<{ error: unknown; retry: () => void }>
+    const markup = renderToStaticMarkup(createElement(asNextRendersIt, { error: new Error('DATO_PRIVADO'), retry: vi.fn() }))
     expect(markup).toContain('Datos no disponibles')
+    expect(markup).not.toContain('DATO_PRIVADO')
     expect(markup).not.toContain('$0')
     expect(markup).toContain('Volver al ingreso')
     expect(markup).toContain('Cerrar sesión')
