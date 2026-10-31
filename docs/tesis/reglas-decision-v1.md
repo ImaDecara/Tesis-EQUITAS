@@ -356,10 +356,12 @@ correctamente sin objetos sí permite conteos/sumas 0 y promedios `NO_APLICA`.
 La banda alta se obtiene del núcleo, inclusive desde 70 puntos.
 
 La [adenda del catálogo](catalogo-indicadores-v1.md#16-adenda-align-010-colas-y-dimensiones-v1)
-define unidades, poblaciones y límites. ALIGN-012 debe actualizar los rótulos
-heredados “riesgo”, “riesgo >90”, “Score” y “urgente”; ALIGN-014 conserva la
-responsabilidad de reemplazar los agregados y el orden global del tablero y
-los indicadores de mora basados en perfil/catálogo. ALIGN-010 inicializa los
+define unidades, poblaciones y límites. ALIGN-012 actualiza los rótulos heredados
+“riesgo”, “riesgo >90” y “Score” en el detalle, `/people`, `/risk-analysis` y el
+ingreso, y “urgente” en la línea de faltantes. Los de `/`, `/debtors`,
+`/no-contact`, `/priority-cases` y `/recommended-actions` se traspasan a ALIGN-014,
+que además conserva la responsabilidad de reemplazar los agregados y el orden
+global del tablero y los indicadores de mora basados en perfil/catálogo. ALIGN-010 inicializa los
 conteos del tablero desde las cinco etiquetas v1 y “No disponible”: una cola
 vacía leída tiene 0; la misma condición de colas desconocidas del resumen
 produce `byRecommendation: []`. Una decisión R2 sin puntaje sí permite contar

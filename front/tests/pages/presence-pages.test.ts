@@ -112,7 +112,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(text).toContain('Empate: Revisión jurídica, Seguimiento concentra 50%')
     expect(text).not.toContain('Revisión jurídica, No disponible')
     expect(text).toContain('Prioridad: 1 NO_INFORMADO_EN_ORIGEN')
-    expect(text).toContain('Recomendación urgente: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(text).toContain('Revisión requerida: 1 NO_INFORMADO_EN_ORIGEN')
   })
 
   it('una cola v1 vacía del tablero muestra 0 casos (0%) y no hay etiquetas heredadas', async () => {

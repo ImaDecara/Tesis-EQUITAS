@@ -41,12 +41,13 @@ export default async function DebtorDetailPage({
   }
 
   const { debtor, debts, people, contacts, profile } = detail
-  const peopleReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'person')
+  const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
+  const personCatalogReadFailed = readingFailed(warnings, 'person')
   const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
   const debtsReadFailed = readingFailed(warnings, 'debtor', 'debt')
   const decisionReadFailed = !debtor.decision && debtor.decisionIssues?.some(issue => issue.reason === 'LECTURA_FALLIDA')
   const percentages = people.map(person => numericData(person.priority).value)
-  const percentageTotal = peopleReadFailed || percentages.some(value => value === null)
+  const percentageTotal = relationsReadFailed || percentages.some(value => value === null)
     ? null : percentages.reduce<number>((sum, value) => sum + value!, 0)
   // Misma tolerancia que las reglas v1, con margen de representación de Number.
   const percentagesMismatch = percentageTotal !== null &&
@@ -226,7 +227,7 @@ export default async function DebtorDetailPage({
                 <CardTitle>Personas asociadas</CardTitle>
               </CardHeader>
               <CardContent>
-                {!peopleReadFailed && people.length > 0 && (percentageTotal === null || percentagesMismatch) && (
+                {!relationsReadFailed && people.length > 0 && (percentageTotal === null || percentagesMismatch) && (
                   <p role="status" className="mb-3 text-sm text-amber-800">
                     {percentageTotal === null
                       ? 'No se puede verificar la suma: hay porcentajes no informados o inválidos.'
@@ -248,14 +249,14 @@ export default async function DebtorDetailPage({
                     {people.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-slate-500">
-                          {peopleReadFailed ? 'No disponible: no se pudo leer la lista de personas asociadas.' : 'Sin personas asociadas visibles.'}
+                          {relationsReadFailed ? 'No disponible: no se pudo leer la lista de personas asociadas.' : 'Sin personas asociadas visibles.'}
                         </TableCell>
                       </TableRow>
                     )}
                     {people.map((person) => (
                       <TableRow key={person.id}>
                         <TableCell className="font-medium text-slate-900">{person.name}</TableCell>
-                        <TableCell>{person.document}</TableCell>
+                        <TableCell>{personCatalogReadFailed ? 'No disponible' : person.document}</TableCell>
                         <TableCell>{person.priority}</TableCell>
                         <TableCell>{person.relation}</TableCell>
                         <TableCell>{contactsReadFailed ? 'No disponible' : person.contact}</TableCell>

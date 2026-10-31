@@ -953,8 +953,10 @@ a ALIGN-014. La implementación se describe en
 
 Los nombres del DTO anterior se mantienen para compatibilidad de pantallas,
 pero el adaptador ya no genera las cuatro recomendaciones heredadas. ALIGN-012
-renombra los rótulos y explicita “puntos”; las participaciones de objetos en una
-categoría siguen siendo porcentajes verdaderos. ALIGN-010 inicializa las
+renombra los rótulos y explicita “puntos” en el detalle, `/people`, `/risk-analysis`,
+el ingreso y la línea de faltantes; los de `/`, `/debtors`, `/no-contact`,
+`/priority-cases` y `/recommended-actions` se traspasan a ALIGN-014. Las
+participaciones de objetos en una categoría siguen siendo porcentajes verdaderos. ALIGN-010 inicializa las
 categorías del tablero desde el catálogo v1: cola vacía conocida = 0; la misma
 condición de pertenencia desconocida de KPI-V1-04 conserva `byRecommendation: []`.
 Una decisión R2 permite contar la cola aunque su puntaje sea null. Fallas de

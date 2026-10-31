@@ -106,7 +106,7 @@ export default async function RiskAnalysisPage() {
           <Card className="border-[#d2dceb]">
             <CardHeader>
               <CardTitle>Objetos en banda alta, desde 70 puntos</CardTitle>
-              <CardDescription>Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90.</CardDescription>
+              <CardDescription>Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90. Primeros 10 en orden operativo, no por severidad.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[760px]">

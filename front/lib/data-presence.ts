@@ -90,10 +90,10 @@ export function formatPercentage(data: NumericData) {
 export function missingSummary(metrics?: Record<string, NumericData>) {
   const labels: Record<string, string> = {
     totalDebt: 'Deuda total', overdueDebt: 'Deuda vencida', totalDebtAssociated: 'Deuda asociada',
-    riskValue: 'Puntaje', riskScore: 'Riesgo', averageRiskValue: 'Riesgo promedio',
+    riskValue: 'Puntaje', riskScore: 'Severidad', averageRiskValue: 'Promedio del índice heredado',
     totalDebtors: 'Objetos', overdueCases: 'Casos vencidos', withContactCases: 'Con contacto',
-    withoutContactCases: 'Sin contacto', priorityCases: 'Prioridad', urgentRecommendationCases: 'Recomendación urgente',
-    criticalCasesToday: 'Casos críticos', riskAboveNinetyCases: 'Riesgo mayor a 90', criticalDebtTotal: 'Deuda crítica',
+    withoutContactCases: 'Sin contacto', priorityCases: 'Prioridad', urgentRecommendationCases: 'Revisión requerida',
+    criticalCasesToday: 'Casos críticos', riskAboveNinetyCases: 'Objetos con severidad mayor a 90 puntos', criticalDebtTotal: 'Deuda crítica',
     contactCount: 'Contactos', maxDaysOverdue: 'Atraso', averageOverdueDays: 'Promedio de atraso',
   }
   return Object.entries(metrics ?? {}).flatMap(([name, data]) =>
