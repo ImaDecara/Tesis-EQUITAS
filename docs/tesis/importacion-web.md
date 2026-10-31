@@ -45,7 +45,7 @@ Los archivos también tienen topes internos, que un archivo legítimo no alcanza
 |---|---|---|
 | Partes del ZIP y tamaño del directorio, antes de armarlo | 2 048 y 1 MiB | `LIMITE_PARTES_ZIP_EXCEDIDO` |
 | Tipos, libro, relaciones y estilos, que openpyxl arma enteros | 8 000 000 bytes y 500 000 elementos cada uno | `LIMITE_PARTE_ZIP_EXCEDIDO`, `LIMITE_XML_EXCEDIDO` |
-| Profundidad del XML; elementos por fila o cadena; elementos sueltos por parte | 64; 65 536; 2 000 000 | `LIMITE_XML_EXCEDIDO` |
+| Profundidad del XML; elementos por fila o cadena; elementos sueltos por parte | 64; 65 536; 1 000 000 | `LIMITE_XML_EXCEDIDO` |
 | Largo de un formato numérico y cantidad de formatos de celda | 255 y 65 490 (topes de Excel) | `LIMITE_XML_EXCEDIDO` |
 | Cadenas compartidas | 4 000 000 | `LIMITE_CADENAS_EXCEDIDO` |
 | Hojas del libro | 256 | `LIMITE_HOJAS_EXCEDIDO` |

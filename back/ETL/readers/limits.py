@@ -54,7 +54,7 @@ class FileLimits:
     # Hojas y cadenas se recorren en flujo: solo vive en memoria la fila o la cadena en curso.
     xml_depth: int = 64
     unit_elements: int = 65_536
-    other_elements: int = 2_000_000
+    other_elements: int = 1_000_000
     shared_strings: int = 4_000_000
     workbook_sheets: int = 256
     read_seconds: float = 120.0

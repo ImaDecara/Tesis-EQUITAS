@@ -830,8 +830,10 @@ def measure(path, mapping, limits=None):
     """Mide un archivo en un proceso propio: ru_maxrss no baja dentro del mismo proceso."""
     overrides = {} if limits is None else {
         name: getattr(limits, name) for name in ('uncompressed_bytes', 'compression_ratio', 'read_seconds')}
+    # Sin esto, pytest-cov mide también al hijo y el tiempo sale varias veces mayor que el real.
+    env = {name: value for name, value in os.environ.items() if not name.startswith(('COV_CORE', 'COVERAGE'))}
     result = subprocess.run([sys.executable, '-B', '-c', CHILD, str(BACK), str(path), json.dumps(mapping), json.dumps(overrides)],
-                            capture_output=True, text=True, cwd=BACK, timeout=120, check=False)
+                            capture_output=True, text=True, cwd=BACK, timeout=120, check=False, env=env)
     assert result.returncode == 0, result.stderr[-400:]
     assert 'Traceback' not in result.stderr
     assert SENTINEL not in result.stdout + result.stderr
