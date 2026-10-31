@@ -196,6 +196,8 @@ def check_server_credential(api, report, env, review_jwt, import_jwt):
     report.error('JWT vencido', 'PGRST303', api.rpc(
         'record_case_review', sign_jwt(env['JWT_SECRET'], server_claims(SERVER_ROLES[0], -1)),
         review_body(USER_OPERADOR, TENANT_A, OBJECT_A)))
+    definer_jwt = sign_jwt(env['JWT_SECRET'], server_claims('equitas_write_definer', 1))
+    report.error('authenticator no asume el definidor', '42501', api.rpc('record_case_review', definer_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A)))
     for table in TABLES:
         report.error(f'servidor POST {table}', '42501', api.call('POST', f'/rest/v1/{table}', review_jwt, {}))
         report.error(f'servidor GET {table}', '42501', api.rows(table, 'id', review_jwt))

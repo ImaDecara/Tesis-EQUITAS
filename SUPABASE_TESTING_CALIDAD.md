@@ -140,7 +140,7 @@ notify pgrst, 'reload schema';
 | `case_review_approval` | Aprobación u objeción de un supervisor sobre una decisión de intensidad ≥3 | `authenticated` con membresía activa |
 | `import_batch` | Origen, hashes, corte, `source_updated_at`, versión de reglas, conteos y estado | `authenticated` con membresía activa |
 
-Las tres son append-only: una corrección o un cambio de estado es una fila nueva con `supersedes`, y cada fila se reemplaza una sola vez. `anon` y `authenticated` solo tienen `SELECT` (`anon` no tiene política: cero filas); `service_role` tampoco escribe. Un trigger frena además `UPDATE`, `DELETE` y `TRUNCATE` del dueño de las tablas. `import_batch` ya admite los siete estados de ALIGN-032.
+Las tres son append-only: una corrección o un cambio de estado es una fila nueva con `supersedes`, y cada fila se reemplaza una sola vez. El antecedente tiene que existir en el mismo tenant (y el mismo objeto o la misma revisión) y ser estrictamente anterior (`supersedes < id`, restricciones `*_supersedes_anterior`): ninguna cadena puede cerrarse sobre sí misma, de ningún largo. `anon` y `authenticated` solo tienen `SELECT` (`anon` no tiene política: cero filas); `service_role` tampoco escribe. Un trigger frena además `UPDATE`, `DELETE` y `TRUNCATE` del dueño de las tablas. `import_batch` ya admite los siete estados de ALIGN-032.
 
 ### Canal de escritura
 
@@ -152,17 +152,21 @@ Las tres son append-only: una corrección o un cambio de estado es una fila nuev
 
 Los roles de servidor son propios y no `service_role` para que una filtración del servidor web no entregue la cartera ni la escritura general. Las funciones tienen `search_path` vacío y nombres calificados. Las columnas `reviewer_role`, `approver_role`, `created_by_role` y las fechas las fija la base: no son parámetros.
 
+**Membresías de los roles nuevos.** `postgres` no conserva `SET` ni `INHERIT` sobre ellos. Sí conserva `ADMIN OPTION`: PostgreSQL lo otorga a quien crea un rol, con `supabase_admin` como otorgante, y desde `postgres` no se puede revocar (`permission denied`). Esa cuenta administrativa podría volver a concederse el rol, como hace la propia migración para transferir las funciones; ningún rol de aplicación ni `authenticator` tiene esa opción, y `authenticator` tampoco puede asumir el definidor. `case-review-verify.sql` informa las dos cosas por separado; `definidor_miembros_con_set_o_inherit = 0` no significa que no haya miembros.
+
 | Función | Quién actúa | Rechazos (mensaje estable, sin valores) |
 | --- | --- | --- |
-| `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW:<restricción>` |
-| `record_case_review_approval` | `supervisor` activo del tenant, distinto de quien propuso esa versión o una anterior de la cadena | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
+| `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW:<restricción>` |
+| `record_case_review_approval` | `supervisor` activo del tenant, distinto de quien propuso esa versión o una anterior de la cadena | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `SUPERSEDES_CHAIN_INVALID`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
 | `read_case_review_reason_text` | `operador` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT` |
-| `record_import_batch` | `importador`, `importador_sistema` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`, `INVALID_IMPORT_BATCH:<restricción>` |
+| `record_import_batch` | `importador` o `importador_sistema` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_IMPORT_BATCH:<restricción>` |
 
-- **Roles.** Se aplica literal lo aprobado en ALIGN-003: el `supervisor` aprueba u objeta, no registra decisiones. `importador` "puede coincidir con supervisor" y la membresía admite un solo rol por tenant: por eso `supervisor` también registra lotes.
+- **Roles.** Se aplica literal lo aprobado en ALIGN-003: el `supervisor` aprueba u objeta, no registra decisiones ni lotes. Que `importador` "pueda coincidir con supervisor" no le da importación a todo supervisor: el permiso sale de una membresía `importador` explícita, por tenant. La membresía admite un solo rol por tenant (`tenant_user_tenant_user_key`), así que hoy quien cumpla las dos funciones en el mismo tenant necesita una segunda cuenta; reunirlas en una sola exige una decisión expresa y un cambio de esquema, nunca inferirlo del rol.
+- **Cadena.** `SUPERSEDES_NOT_FOUND`: el antecedente no existe en el mismo tenant (y objeto o revisión); no distingue entre inexistente y ajeno. `SUPERSEDES_CHAIN_INVALID`: la aprobación encontró en la cadena de la revisión un eslabón con `supersedes >= id`. Las restricciones lo impiden; la función lo comprueba igual porque de ese recorrido depende quién puede aprobar, y lo hace bajando siempre de ID, así que termina aunque la tabla tuviera un ciclo.
 - **Motivo.** Toda decisión distinta de `ACEPTA` exige `reason_code`. `ACEPTA` debe coincidir con la sugerencia, `MODIFICA` debe cambiarla, `RECHAZA` y `POSPONE` no llevan intervención decidida. El sistema nunca sugiere 3 o 4 (`suggested_intensity` entre 0 y 2).
 - **Lista de control.** Solo `situacion_hogar` (`CONSULTADA` o `NO_DISPONIBLE`), `estado_juridico_verificado`, `canal_valido` y `alternativa_asistida_ofrecida` (booleanos). Cualquier otra clave o valor se rechaza: no admite texto sobre el hogar. Una decisión ≥3 y un `APRUEBA` la exigen completa y con las casillas en verdadero.
-- **`reason_text`.** Hasta 500 caracteres. El formulario debe advertir: "No incluyas datos personales ni información del hogar". Ningún rol de cliente tiene `SELECT` de esa columna: `select=*` falla con `42501` y hay que listar columnas. Se lee solo con `read_case_review_reason_text`, nunca en evidencias ni exportaciones. Un rechazo reemplaza el `DETAIL` de PostgreSQL, que contendría la fila.
+- **`reason_text`.** Hasta 500 caracteres contando los espacios: se guarda tal como llega, sin normalizar, y tiene que tener algún carácter que no sea espacio, tabulación o salto de línea. Si el servidor quiere recortarlo, lo hace antes de llamar a la función. El formulario debe advertir: "No incluyas datos personales ni información del hogar". Ningún rol de cliente tiene `SELECT` de esa columna: `select=*` falla con `42501` y hay que listar columnas. Se lee solo con `read_case_review_reason_text`, nunca en evidencias ni exportaciones. Un rechazo reemplaza el `DETAIL` de PostgreSQL, que contendría la fila.
+- **Límites de `import_batch`.** `file_hashes` y `counts` tienen hasta 16384 bytes y `rules_version` hasta seis dígitos por segmento (también en `case_review`). `counts` admite solo objetos anidados con claves en código (`^[a-z][a-z0-9_]{0,63}$`) y enteros no negativos: texto libre no entra ni como valor ni como clave, y un conteo ausente se omite.
 - **Idempotencia.** Cada llamada lleva `p_idempotency_key` (uuid), única por tenant. Repetirla con la misma carga devuelve la fila existente con `created = false`; con otra carga, `IDEMPOTENCY_KEY_CONFLICT`. Un bloqueo por objeto serializa los envíos simultáneos.
 
 ### Uso desde el servidor (ALIGN-020)
@@ -205,7 +209,7 @@ Esos IDs explícitos dejan `secuencias_sin_superar_maximo` en 4 en `etl-compat-v
 
 ### Procedimiento y esperados
 
-Desde la raíz del worktree, con el stack de `docs/tesis/entorno-aislado.md` levantado. `case-review-checks.sql` se conecta como `supabase_admin` solo para simular roles con `SET LOCAL ROLE`, y termina en `ROLLBACK`. `http-check` usa Auth y la Data API reales, deja filas y exige una base recién sembrada.
+Desde la raíz del worktree, con el stack de `docs/tesis/entorno-aislado.md` levantado. `case-review-checks.sql` se conecta como `supabase_admin` solo para simular roles con `SET LOCAL ROLE` y, en su último bloque, retirar dos restricciones para inyectar cadenas inválidas; termina en `ROLLBACK`, que también las restituye. `http-check` usa Auth y la Data API reales, deja filas y exige una base recién sembrada.
 
 ```sh
 umask 077
@@ -229,12 +233,18 @@ npx --yes supabase@2.108.0 db reset
 | `funciones_ejecutables_public` / `funciones_ejecutables_anon_authenticated_service` | 0 / 0 |
 | `funciones_servidor_revision` / `funciones_servidor_importacion` | 3 / 1 |
 | `politicas_23_md5` / `grants_23_md5` / `acl_23_md5` | Iguales antes y después de la migración |
-| `grants_columna_definidor_en_existentes` / `grants_columna_clientes_en_existentes` | 12 / 0 |
+| `grants_columna_definidor_en_existentes` / `grants_columna_clientes_en_existentes` (incluye `PUBLIC`) | 12 / 0 |
+| `privilegios_definidor_distintos_de_insert` (`UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`) | 0 |
+| `definidor_miembros_con_set_o_inherit` | 0 |
+| `roles_nuevos_miembros_con_set_o_inherit` | `equitas_import_server>authenticator,equitas_review_server>authenticator` |
+| `roles_nuevos_miembros_con_admin_option` | `equitas_import_server>postgres,equitas_review_server>postgres,equitas_write_definer>postgres` |
+| `restricciones_supersedes_anterior` / `filas_con_cadena_invalida` | 3 / 0 |
+| `restricciones_reason_text` | `case_review_reason_text_length,case_review_reason_text_not_blank,case_review_reason_text_requires_code` |
 | `filas_nuevas_total` tras `db reset` | 0 |
 
 `case-review-checks.sql` y `http-check` terminan en `FALLAS|0` y salen con error si un caso falla. Publican solo códigos y conteos.
 
-**Ejecución verificada (30/10/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 233 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 233 pruebas por rol y 100 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
+**Ejecución verificada (31/10/2026, CLI 2.108.0, tras corregir los hallazgos de la revisión independiente).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 306 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 306 pruebas por rol y 140 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. La autorreferencia y el antecedente futuro se rechazan en las tres funciones y en las tres tablas; sobre ciclos de 1, 2 y 3 eslabones, un antecedente posterior y una cola que entra en un ciclo, inyectados dentro de la transacción de prueba, la aprobación termina y responde `SUPERSEDES_CHAIN_INVALID`. Un `supervisor` sin membresía `importador` recibe `ROLE_NOT_ALLOWED` también por HTTP. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
 
 ### Reversión
 
