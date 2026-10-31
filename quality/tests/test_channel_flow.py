@@ -72,12 +72,13 @@ def ecma_pattern(pattern: str) -> re.Pattern:
 
     En ECMA-262, `$` solo coincide al final de la entrada; en Python también antes de un salto de línea final,
     así que el `$` final se traduce a `\\Z`. Se rechazan las construcciones cuyo alcance difiere entre los dos
-    dialectos (`.`, `\\d`, `\\w`, `\\b`) y cualquier otro `$`.
+    dialectos (`.`, `\\d`, `\\w`, `\\b`, `\\s`: U+FEFF es espacio solo en ECMA-262 y U+0085, solo en Python) y
+    cualquier otro `$`.
     """
     if not (pattern.startswith('^') and pattern.endswith('$')):
         raise ValueError(f'pattern sin anclar: {pattern}')
     body = re.sub(r'\\.', '', pattern[1:-1])
-    if '.' in body or '$' in body or re.search(r'\\[dwbDWB]', pattern):
+    if '.' in body or '$' in body or re.search(r'\\[dwbsDWBS]', pattern):
         raise ValueError(f'pattern no portable: {pattern}')
     return re.compile(pattern[:-1] + r'\Z')
 
@@ -423,10 +424,13 @@ class ChannelFlowContract(unittest.TestCase):
         text = ecma_pattern(raw)
         for value in ('Hola.', 'Sí', 'x'):
             self.assertIsNotNone(text.search(value), value)
-        for value in ('Hola.\n', 'Hola.\nChau.', ' Hola.', 'Hola. ', 'Hola.\r', 'a\u2028b', ''):
+        for value in ('Hola.\n', 'Hola.\nChau.', ' Hola.', 'Hola. ', 'Hola.\r', 'a\u2028b', '', '\ufeffHola.', 'Hola.\ufeff',
+                      '\x85Hola.', 'Hola.\x85', '\u00a0Hola.', 'Hola.\u3000', '\x1cHola.'):
             self.assertIsNone(text.search(value), repr(value))
         with self.assertRaises(ValueError):
             ecma_pattern('^.+$')
+        with self.assertRaises(ValueError):
+            ecma_pattern('^\\S+$')
         with self.assertRaises(ValueError):
             ecma_pattern('^[0-9]+')
 
