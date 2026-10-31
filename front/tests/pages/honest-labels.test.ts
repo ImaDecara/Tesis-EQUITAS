@@ -219,6 +219,8 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     if (table === 'debtor_contact') raw.debtorContacts = []
     if (table === 'debt') raw.debts = []
     const page = await detailPage(raw)
+    // El documento depende solo del catálogo de personas: otras fallas no lo ocultan.
+    if (table !== 'debtor_person') expect(tabText(page, 'people')).toMatch(/Persona sintética A\s+SINTETICO-A/)
     if (table === 'debtor_person') {
       expect(tabText(page, 'people')).toContain('No disponible')
       expect(tabText(page, 'people')).not.toContain('Sin personas asociadas visibles')
