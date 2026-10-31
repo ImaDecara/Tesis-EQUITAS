@@ -45,7 +45,7 @@ KINDS = ('cabecera', 'detalle')
 SHEETS = {'cabecera': 'cabecera', 'detalle': 'detalle'}
 SENTINEL = 'CENTINELA-EQUITAS'
 # Presupuesto de cada rechazo en un proceso propio, medido sobre el corpus (tabla en la evidencia):
-# el mayor es de 5 s y 107 MiB en macOS; el margen es para un servidor más lento o con otro asignador.
+# el mayor es de 3,7 s y 107 MiB en macOS; el margen es para un servidor más lento o con otro asignador.
 MAX_SECONDS = 15.0
 MAX_RSS_GROWTH_MIB = 192
 # Lo más caro que los límites dejan pasar: estilos (no interrumpibles), cadenas (millones de textos),
@@ -1277,16 +1277,17 @@ def test_purge_tolerates_a_file_another_process_just_removed(tmp_path, monkeypat
     now = [1_000_000_000.0]
     with PrivateUploadStore(tmp_path / 'privado', clock=lambda: now[0]) as store:
         upload = store.save(io.BytesIO(b'A\n'), 'lote.csv')
-        real = os.scandir
-        def vanishing(path):
-            for entry in list(real(path)):
-                entry_path = Path(entry.path)
-                entry_path.unlink()
-                yield entry
-        monkeypatch.setattr('ETL.readers.limits.os.scandir', vanishing)
+        class Gone:
+            path = str(upload.path)
+
+            def stat(self, **_):
+                raise FileNotFoundError
+
+        monkeypatch.setattr('ETL.readers.limits.os.scandir', lambda _: [Gone()])
         now[0] += 86_400
         assert store.purge_expired() == 0
         monkeypatch.undo()
+        assert store.purge_expired() == 1
         assert not upload.path.exists()
 
 
