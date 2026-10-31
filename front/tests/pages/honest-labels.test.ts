@@ -22,6 +22,8 @@ vi.mock('@/lib/equitas-data', () => ({ getDebtorDetailData, getDebtorsData, getP
 // El servicio de personas corre completo: solo se reemplaza la lectura de tablas.
 vi.mock('@/lib/data/paginated-table-reader', () => ({ loadAllTableRows }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: async () => ({}) }))
+// ALIGN-019 lleva esta lectura a createTenantReader: la prueba pasa por el mismo lector en ambos caminos.
+vi.mock('@/lib/server/dal', () => ({ createTenantReader: async () => ({ readTable: loadAllTableRows }) }))
 // Se renderizan los componentes reales. Solo se reemplaza lo que exige navegador o sesión.
 vi.mock('next/navigation', () => ({
   usePathname: () => '/people', useRouter: () => ({ replace: () => undefined }),
