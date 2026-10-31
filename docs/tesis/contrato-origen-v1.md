@@ -34,7 +34,8 @@ El validador no publica, modifica ni consulta datos persistidos. Los límites so
 25 000 000 bytes, 300 000 registros, 60 columnas y 32 767 caracteres por celda.
 La lectura directa de rutas de este validador admite TSV. ALIGN-030 incorpora
 el adaptador TSV/CSV en `ETL.extract`, que entrega `SourceTable` al mismo motor;
-XLSX y los controles adicionales de archivos hostiles corresponden a ALIGN-053.
+ALIGN-053 suma XLSX y los controles ante archivos hostiles
+([`importacion-web.md`](importacion-web.md)).
 
 `python -m ETL.inspect_tsv --cabecera … --detalle … --cut-off … [--mapping …]`
 llama al mismo motor. Ya no tiene parsers monetarios propios, conciliación
@@ -101,11 +102,14 @@ ejemplo son [`source-mapping.sintetico-v1.json`](../../contracts/source-mapping.
 y [`source-mapping.sintetico-csv.v1.json`](../../contracts/source-mapping.sintetico-csv.v1.json).
 No contienen datos reales ni homologan un layout municipal.
 
-- `tipo`: `tsv` o `csv`. En perfiles anteriores que lo omiten se deriva únicamente
-  del separador declarado: tabulador para TSV, coma o punto y coma para CSV.
-  No se inspeccionan datos para adivinar el formato. La extensión `.tsv`/`.csv`
-  debe coincidir; `.xls`/`.xlsx` se rechazan con `FORMATO_NO_SOPORTADO`.
-- Codificaciones: `utf-8`, `utf-8-sig`, `cp1252`. UTF-8 admite BOM inicial.
+- `tipo`: `tsv`, `csv` o `xlsx`. En perfiles anteriores que lo omiten se deriva
+  únicamente del separador declarado: tabulador para TSV, coma o punto y coma para
+  CSV. El tipo del archivo se comprueba por su contenido, nunca por la extensión
+  ni por el MIME. `.xls` y `.xlsm` se rechazan con sus códigos
+  ([`importacion-web.md`](importacion-web.md)).
+- `hojas` y `fecha_serial`: solo XLSX, que además declara `separador: null`.
+- Codificaciones: `utf-8`, `utf-8-sig`, `cp1252`, `latin-1`, esta última solo si el
+  perfil la declara; nada se adivina. UTF-8 admite BOM inicial.
   Decimales: coma o punto; miles: punto, coma o vacío, distinto del decimal.
   Fechas: `dd/mm/aaaa` o `aaaa-mm-dd`. No se usan locales del equipo.
 - `fin_de_linea` es metadato heredado del manifiesto (`LF` o `CRLF`); ambos
@@ -399,8 +403,8 @@ report = validate_batch(
 texto y `line` es entero >=2, único dentro de la tabla. El adaptador preserva
 ceros y ubicaciones. Los adaptadores CSV pueden declarar separador coma/punto y
 coma, XLSX `null`; la lectura de rutas del validador solo permite tabulador.
-TSV v1 rechaza celdas multilínea. La fila de títulos es 1. Los adaptadores futuros
-deben documentar cómo corresponde `line` a registro/fila de hoja.
+TSV v1 rechaza celdas multilínea. La fila de títulos es 1. En XLSX, `line` es el
+número de fila de la hoja; en CSV/TSV, la línea física.
 
 Para leer CSV o aplicar transformaciones, ALIGN-026/052 deben usar el adaptador:
 
@@ -417,13 +421,14 @@ report = validate_source_files(files, mapping, contract=contract, cut_off="2026-
 Las tablas preservan nombres físicos, líneas y todos los registros, incluidos
 los que el motor pondrá en cuarentena. Se pasan con el mismo mapeo; el lector no
 deduplica ni filtra objetos. `apply_source_transformations` copia las tablas y
-puede reutilizarse en ALIGN-053 después de validar el perfil y la estructura.
-Habilitar XLSX requerirá ampliar explícitamente el esquema y su selector; esta
-versión solo acepta TSV/CSV. ALIGN-056 debe guardar el mismo JSON y validar en
-servidor, sin crear un segundo motor de reglas en la pantalla.
-Las transformaciones pertenecen al adaptador: pasar rutas directamente a
-`validate_batch` no las aplica. Un perfil con `transformaciones` debe pasar
-siempre por `read_source_tables` o `validate_source_files`.
+se aplica también a las hojas XLSX. ALIGN-056 debe guardar el mismo JSON y validar
+en servidor, sin crear un segundo motor de reglas en la pantalla.
+Las transformaciones pertenecen al adaptador: un perfil con `transformaciones` da
+`LECTOR_TSV_SIN_TRANSFORMACIONES` si se pasan rutas directamente a `validate_batch`,
+que validaría otro dato que el que después se carga. Debe pasar por
+`read_source_tables` o `validate_source_files`. Un perfil leído de un archivo se
+valida contra el esquema también en `load_mapping`, y las claves JSON duplicadas se
+rechazan con `PERFIL_INVALIDO`.
 
 `extract_source_files(cabecera, detalle, mapping=mapping, contract=contract)`
 ofrece el puente a DataFrames del ETL existente. Renombra campos canónicos y

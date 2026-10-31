@@ -48,10 +48,12 @@ SENTINEL = 'CENTINELA-EQUITAS'
 # el mayor es de 3,6 s y 106 MiB en macOS; el margen de tiempo es para un servidor de CI más lento.
 MAX_SECONDS = 15.0
 MAX_RSS_GROWTH_MIB = 128
-# Lo más caro que los límites dejan pasar: estilos (no interrumpibles) y cadenas (millones de textos).
-AT_LIMIT_CASES = ('estilos-al-limite.xlsx', 'cadenas-al-limite.xlsx', 'cadenas-demasiadas.xlsx')
+# Lo más caro que los límites dejan pasar: estilos (no interrumpibles), cadenas (millones de textos),
+# una sola marca o texto de 190 MB (expat la guarda entera) y la mayor tabla CSV aceptada.
+AT_LIMIT_CASES = ('estilos-al-limite.xlsx', 'cadenas-al-limite.xlsx', 'cadenas-demasiadas.xlsx', 'texto-190mb.xlsx',
+                  'comentario-190mb.xlsx', 'atributo-190mb.xlsx', 'mayor-csv-aceptado.csv')
 AT_LIMIT_MAX_SECONDS = 60.0
-AT_LIMIT_MAX_RSS_GROWTH_MIB = 512
+AT_LIMIT_MAX_RSS_GROWTH_MIB = 1024
 MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 HEADER_ROW = '<row r="1"><c r="A1" t="inlineStr"><is><t>A</t></is></c></row>'
 LAUGHS = (b'<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">'
@@ -154,6 +156,18 @@ def noisy(unit, total, every=40_000):
 
 def with_styles(styles):
     return rewrite_zip(minimal_workbook(), replace_parts={'xl/styles.xml': styles}, stored=('xl/styles.xml',))
+
+
+def overlapping_entry(data):
+    """Segunda entrada del directorio central que apunta a los mismos bytes de otra parte."""
+    start = data.index(b'PK\x01\x02')
+    end_record = data.rindex(b'PK\x05\x06')
+    name_length, extra, comment = struct.unpack('<HHH', data[start + 28:start + 34])
+    record = data[start:start + 46 + name_length + extra + comment]
+    decoy = record[:46] + b'x' * name_length + record[46 + name_length:]
+    entries, size, offset = struct.unpack('<HII', data[end_record + 10:end_record + 20])
+    tail = struct.pack('<HHII', entries + 1, entries + 1, size + len(decoy), offset)
+    return data[:end_record] + decoy + data[end_record:end_record + 8] + tail + data[end_record + 20:]
 
 
 def hidden_zip64_directory(data):
@@ -397,6 +411,32 @@ def test_shared_strings_like_excel_are_read(tmp_path):
     assert table.rows[0].values == {'ClaveAgrupacion': '000123', 'Bien_Descripcion': 'rico y ñ'}
 
 
+def test_package_with_everything_excel_writes_is_read(tmp_path):
+    """Lo que Excel agrega a un libro real no debe confundirse con un archivo hostil."""
+    book = workbook_bytes({'cabecera': [['A', 'B']], 'detalle': [['A'], ['2']], 'otra': [['x']]})
+    extra = 'http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac'
+    rows = ('<row r="1" spans="1:2" ht="15" customHeight="1" x14ac:dyDescent="0.25"><c r="A1" s="0" t="inlineStr"><is><t>A</t></is></c>'
+            '<c r="B1" t="inlineStr"><is><t>B</t></is></c><c r="C1" s="0"/></row>'
+            '<row r="3" spans="1:2" s="0" customFormat="1" x14ac:dyDescent="0.25"><c r="A3"><f>1+1</f><v>2</v></c>'
+            '<c r="B3" t="str"><f t="shared" ref="B3:B4" si="0">"x"</f><v>x</v><extLst/></c></row>')
+    sheet = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="{MAIN_NS}" xmlns:x14ac="{extra}" '
+             'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x14ac"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'
+             '<dimension ref="A1:B3"/><sheetViews><sheetView workbookViewId="0"><selection activeCell="A1" sqref="A1"/></sheetView></sheetViews>'
+             '<sheetFormatPr defaultRowHeight="15"/><cols><col min="1" max="2" width="9"/></cols>'
+             f'<sheetData>{rows}</sheetData><mergeCells count="1"><mergeCell ref="D5:E5"/></mergeCells>'
+             '<hyperlinks><hyperlink ref="D1" location="otra!A1"/></hyperlinks><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
+             '<extLst><ext uri="{x}" xmlns:x14="urn:x14"><x14:algo/></ext></extLst></worksheet>').encode()
+    path = write(tmp_path, 'libro', rewrite_zip(book, replace_parts={'xl/worksheets/sheet1.xml': sheet}, add={
+        'xl/printerSettings/printerSettings1.bin': bytes(4096), 'xl/calcChain.xml': b'<calcChain xmlns="' + MAIN_NS.encode() + b'"/>',
+        'customXml/item1.xml': b'<a/>'}))
+    mapping = xlsx_profile()
+    with open(path, 'rb') as stream:
+        table = extract.read_workbook(stream, {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                                      FileLimits(), Deadline(60)).tables['cabecera']
+    assert table.columns == ['A', 'B']
+    assert [(row.line, row.values) for row in table.rows] == [(3, {'A': '2', 'B': 'x'})]
+
+
 def test_transformations_and_aliases_apply_to_xlsx(tmp_path):
     sheets = fixture_sheets()
     header = sheets['detalle'][0]
@@ -464,6 +504,8 @@ def _hostile_cases():
                     f'<cellXfs count="65490">{chr(60)}xf numFmtId="164"/>'.encode()
                     + b'<xf numFmtId="164"/>' * 65_489 + b'</cellXfs>' + b'<a/>' * 430_000 + b'</styleSheet>')
     strings_at_limit = b''.join(b'<si><t>%07d</t></si>' % number for number in range(3_999_000))
+    # Un solo texto de 190 MB, con una mezcla mínima para que la razón de compresión quede bajo 100.
+    solid_text = b''.join(b'x' * 40_000 + os.urandom(300).hex().encode() for _ in range(4_700)).decode()
     random_block = os.urandom(1 << 20)
     oversized = rewrite_zip(book, add={'xl/media/grande.bin': random_block})
     no_types = rewrite_zip(book, drop=('[Content_Types].xml',))
@@ -597,6 +639,19 @@ def _hostile_cases():
                                                           _sst(b'<si><t>' + os.urandom(16_384).hex().encode() + b'</t></si>')),
          xlsx_profile(), 'CELDA_EXCEDE_LIMITE', None),
         ('zip64-oculto.xlsx', hidden_zip64_directory(book), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('zip-entradas-superpuestas.xlsx', overlapping_entry(book), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('texto-190mb.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2" t="inlineStr"><is><t>' + solid_text + '</t></is></c></row>'),
+         xlsx_profile(), 'CELDA_EXCEDE_LIMITE', None),
+        ('comentario-190mb.xlsx', with_raw_sheet(raw_sheet(HEADER_ROW).replace(b'<sheetData>', f'<!--{solid_text}--><sheetData>'.encode())),
+         xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        ('atributo-190mb.xlsx', with_raw_sheet(raw_sheet(HEADER_ROW).replace(b'<sheetData>', f'<a b="{solid_text}"/><sheetData>'.encode())),
+         xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        # El tiempo máximo corta de verdad: hojas, cadenas y texto, sin esperar al final del archivo.
+        ('tiempo-hoja.xlsx', with_raw_sheet(_worksheet(b'<sheetData>' + noisy(b'<row><c><v>1</v></c></row>', 150_000_000) + b'</sheetData></worksheet>')),
+         xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
+        ('tiempo-cadenas.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(noisy(b'<si/>', 150_000_000))),
+         xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
+        ('tiempo-texto.csv', b'A,B\n' + b'1,2\n' * 5_000_000, csv_profile(), 'TIEMPO_LECTURA_EXCEDIDO', replace(FileLimits(), read_seconds=0.5)),
         ('plantilla-y-libro.xlsx', rewrite_zip(book, replace_parts={'[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
             b'</Types>', b'<Override PartName="/xl/otro.xml" ContentType="application/vnd.openxmlformats-officedocument'
                          b'.spreadsheetml.template.main+xml"/></Types>')}), xlsx_profile(), 'FORMATO_NO_SOPORTADO', None),
@@ -613,6 +668,8 @@ def _hostile_cases():
          xlsx_profile(), 'FORMULA_EN_CELDA', None),
         ('demasiadas-filas.xlsx', with_sheet(rows_default), xlsx_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('demasiadas-filas.csv', b'A\n' + b'1\n' * 300_001, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
+        ('mayor-csv-aceptado.csv', ','.join(f'c{n}' for n in range(60)).encode() + b'\n' + (b'1' + b',' * 59 + b'\n') * 300_000,
+         csv_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
         ('lineas-en-blanco.csv', b'A\n' + b'\n' * 24_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('una-linea-enorme.csv', b'ab,' * 8_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('fila-multilinea-enorme.csv', b'A\n' + b'"\n",' * 4_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),

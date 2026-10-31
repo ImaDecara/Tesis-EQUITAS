@@ -339,11 +339,6 @@ class _PackageReader(ExcelReader):
             source_error('ESTRUCTURA_INVALIDA', self.kind)
         return result
 
-    def selected_sheet(self, name, part):
-        if part not in self.valid_files:
-            source_error('HOJA_NO_ENCONTRADA', self.kind)
-        return _SelectedSheet(self.wb, name, part, self.shared_strings)
-
 
 def _number_text(value, decimal_separator='.'):
     if isinstance(value, int):
@@ -455,8 +450,8 @@ def read_workbook(stream, selection, fmt, field_types, limits, deadline):
                 source_error('ESTRUCTURA_INVALIDA', kind)
             if 'fecha_serial' in fmt and reader.wb.epoch != EPOCHS[fmt['fecha_serial']]:
                 source_error('SISTEMA_FECHAS_NO_COINCIDE', kind)
-            tables = {logical: _read_sheet(reader.selected_sheet(name, parts[name]), logical, field_types[logical],
-                                           fmt, limits, deadline)
+            tables = {logical: _read_sheet(_SelectedSheet(reader.wb, name, parts[name], reader.shared_strings), logical,
+                                           field_types[logical], fmt, limits, deadline)
                       for logical, name in selection.items()}
         ignored = [sanitize_filename(name, 31) for name in parts if name not in selection.values()]
         return WorkbookTables(tables, ignored)
