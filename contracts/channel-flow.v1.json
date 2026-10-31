@@ -274,7 +274,7 @@
         "EMAIL": ["RECORTE_ESPACIOS"],
         "REFERENCIA": ["RECORTE_ESPACIOS", "COLAPSO_ESPACIOS"]
       },
-      "validacion": "Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida NOMBRE antes de cualquier transformación; en los otros formatos ya queda fuera del alfabeto. Las longitudes máximas se miden después de estas transformaciones.",
+      "validacion": "Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida NOMBRE antes de cualquier transformación; en los otros formatos ya queda fuera del alfabeto. TELEFONO, EMAIL y REFERENCIA deben cumplir patron_crudo sobre el valor recibido, sin banderas: con la de mayúsculas, U+212A coincide con [a-z] en más de un motor. El patrón no alcanza por sí solo: también rigen los límites de cada regla. Las longitudes máximas se miden después de estas transformaciones.",
       "presentacion": "Todo se guarda y se muestra como texto plano, nunca como HTML. La persona operadora ve el contacto como se escribió, con estas transformaciones y ninguna otra; la clave canónica es otra cosa y no se muestra."
     },
     "clave_canonica": {

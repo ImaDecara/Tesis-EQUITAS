@@ -735,11 +735,10 @@ class ChannelFlowContract(unittest.TestCase):
             corpus[item['medio']].add(item['ejemplo']['contacto'])
         for scenario in self.form['escenarios_equivalencia']:
             corpus[scenario['medio']] |= {item['contacto'] for item in scenario['envios']}
-        for name in corpus:
-            corpus[name] = {value for value in corpus[name] if VALIDATORS[name](value)}
-            corpus[name] |= {padded for value in corpus[name] for padded in (f' {value}', f'{value}  ')
-                             if VALIDATORS[name](padded)}
-        return corpus
+        accepted = {name: {value for value in values if VALIDATORS[name](value)} for name, values in corpus.items()}
+        return {name: values | {padded for value in values for padded in (f' {value}', f'{value}  ')
+                                if VALIDATORS[name](padded)}
+                for name, values in accepted.items()}
 
     def test_no_character_outside_the_declared_alphabet_is_accepted(self):
         marks = lookalikes()
@@ -815,9 +814,8 @@ class ChannelFlowContract(unittest.TestCase):
         keys = self.form['clave_canonica']
         for medium, canonical in CANONICAL.items():
             for value in self.form['formatos'][medium]['invalidos']:
-                with self.subTest(medium=medium, value=value):
-                    with self.assertRaises(ValueError):
-                        canonical(value, keys[medium])
+                with self.subTest(medium=medium, value=value), self.assertRaises(ValueError):
+                    canonical(value, keys[medium])
 
     def test_name_normalization_does_not_reach_contacts(self):
         # U+212A es K solo en un nombre, que no forma parte de ninguna clave.
@@ -827,10 +825,10 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertFalse(valid_email('\u212a@example.org'))
         self.assertFalse(valid_referencia('\u212a-0001'))
         for space in ('\u00a0', '\u2003', '\u3000', '\u2028', '\u2029'):
-            for name in VALIDATORS:
+            for name, valid in VALIDATORS.items():
                 sample = self.form['formatos'][name]['validos'][0]
-                self.assertFalse(VALIDATORS[name](space + sample), (name, hex(ord(space))))
-                self.assertFalse(VALIDATORS[name](sample + space), (name, hex(ord(space))))
+                self.assertFalse(valid(space + sample), (name, hex(ord(space))))
+                self.assertFalse(valid(sample + space), (name, hex(ord(space))))
         for value in ('Ana\ud800', '\ud800'):
             self.assertFalse(valid_nombre(value))
         self.assertFalse(valid_email('\ud800@example.org'))
