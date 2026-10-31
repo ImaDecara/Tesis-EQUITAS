@@ -1,4 +1,3 @@
-from collections.abc import Callable
 
 import httpx
 import pytest

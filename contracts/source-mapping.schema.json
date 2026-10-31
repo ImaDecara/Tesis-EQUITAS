@@ -19,7 +19,7 @@
       "properties": {
         "tipo": {"enum": ["tsv", "csv", "xlsx"]},
         "separador": {"enum": ["\\t", "\t", ",", ";", null]},
-        "codificacion": {"enum": ["utf-8", "utf-8-sig", "cp1252"]},
+        "codificacion": {"enum": ["utf-8", "utf-8-sig", "cp1252", "latin-1"]},
         "decimal": {"enum": [",", "."]},
         "miles": {"enum": ["", ",", "."]},
         "fecha": {"enum": ["dd/mm/aaaa", "aaaa-mm-dd"]},

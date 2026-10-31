@@ -40,7 +40,6 @@ KINDS = ('cabecera', 'detalle')
 def _source_format(mapping):
     fmt = mapping['formato']
     if fmt.get('tipo') == 'xlsx':
-        profile_require(fmt['hojas']['cabecera'] != fmt['hojas']['detalle'])
         return 'xlsx', None
     separator = fmt['separador']
     inferred = 'tsv' if separator in ('\t', '\\t') else 'csv'
@@ -123,23 +122,59 @@ def _finish_table(table, kind, mapping, contract):
     for name, spec in contract['archivos'][kind]['columnas'].items():
         if spec['requerida'] and aliases.get(name, name) not in table.columns:
             source_error('COLUMNA_OBLIGATORIA_AUSENTE', kind, 1, name)
+    # Sin operaciones, copiar las filas duplicaría el pico de memoria sin cambiar nada.
+    if not mapping.get('transformaciones', {}).get(kind):
+        return table
     return apply_source_transformations(table, kind, mapping, contract)
+
+
+class _BoundedLines:
+    """Líneas para csv.reader, con tope por registro: csv arma la fila entera antes de entregarla.
+
+    Con 25 MB en una sola línea, o miles de celdas multilínea, serían millones de celdas en memoria.
+    """
+
+    def __init__(self, text, kind, limit):
+        self.text = text
+        self.kind = kind
+        self.limit = limit
+        self.line = self.pending = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        chunk = self.text.readline(self.limit + 1)
+        if not chunk:
+            raise StopIteration
+        self.line += 1
+        self.pending += len(chunk)
+        if self.pending > self.limit:
+            source_error('LIMITE_ARCHIVO_EXCEDIDO', self.kind, self.line)
+        return chunk
 
 
 def _read_delimited(path, kind, mapping, contract, limits, deadline):
     source_type, separator = _source_format(mapping)
     encoding = mapping['formato']['codificacion']
     rows = []
-    with open_source(path, kind, source_type, limits) as stream:
+    with open_source(path, kind, source_type, limits, encoding) as stream:
         try:
             text = io.TextIOWrapper(stream, encoding='utf-8-sig' if encoding == 'utf-8' else encoding, newline='')
-            reader = csv.reader(text, delimiter=separator, strict=True)
+            # Cada celda puede llevar comillas duplicadas, entre comillas y con su separador. Con
+            # límites chicos, el piso deja que la fila llegue a su control y dé su código propio.
+            lines = _BoundedLines(text, kind, max(1 << 20, limits.columns * (2 * limits.cell + 3)))
+            reader = csv.reader(lines, delimiter=separator, strict=True)
             raw_columns = next(reader, [])
             check_cells(raw_columns, kind, 1, limits)
             columns = check_header(raw_columns, kind, limits)
             for values in reader:
+                lines.pending = 0
                 line = reader.line_num
                 deadline.check(kind, line)
+                # Las líneas en blanco no son filas, pero recorrerlas también cuesta.
+                if line > 2 * limits.rows + 1:
+                    source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
                 check_cells(values, kind, line, limits)
                 if not values or (len(values) == 1 and not values[0].strip()):
                     continue
@@ -150,7 +185,10 @@ def _read_delimited(path, kind, mapping, contract, limits, deadline):
                 rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
         except ValidationError:
             raise
-        except (OSError, UnicodeError, csv.Error, TypeError, ValueError):
+        except csv.Error as error:
+            # csv corta antes de nuestro límite de celda si el campo supera su propio tope global.
+            source_error('CELDA_EXCEDE_LIMITE' if 'field larger' in str(error) else 'ARCHIVO_NO_LEIBLE', kind, reader.line_num)
+        except (OSError, UnicodeError, TypeError, ValueError):
             source_error('ARCHIVO_NO_LEIBLE', kind)
     return _finish_table(SourceTable(columns, rows), kind, mapping, contract)
 
@@ -168,6 +206,8 @@ def _read_xlsx(files, mapping, contract, limits, deadline):
         groups.setdefault(str(files[kind]), []).append(kind)
     tables, ignored = {}, []
     for kinds in groups.values():
+        # Dos libros pueden traer la misma hoja, «Hoja1»; un solo libro, no.
+        profile_require(len({fmt['hojas'][kind] for kind in kinds}) == len(kinds))
         with open_source(files[kinds[0]], kinds[0], 'xlsx', limits) as stream:
             result = read_workbook(stream, {kind: fmt['hojas'][kind] for kind in kinds}, fmt,
                                    {kind: _physical_types(kind, mapping, contract) for kind in kinds},

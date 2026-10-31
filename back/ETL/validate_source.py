@@ -81,7 +81,7 @@ def validate_contract(contract):
     formats = c['formatos']
     require(formats['fechas'] and all((k, v) in (('dd/mm/aaaa', '%d/%m/%Y'), ('aaaa-mm-dd', '%Y-%m-%d'))
                                     for k, v in formats['fechas'].items()))
-    for key, supported in (('codificaciones', {'utf-8', 'utf-8-sig', 'cp1252'}),
+    for key, supported in (('codificaciones', {'utf-8', 'utf-8-sig', 'cp1252', 'latin-1'}),
                            ('separadores_decimales', {',', '.'}), ('separadores_miles', {'', ',', '.'}),
                            ('separadores_adaptadores', {'\\t', ',', ';', None})):
         require(isinstance(formats[key], list) and formats[key] and set(formats[key]) <= supported)
@@ -550,7 +550,8 @@ class _Validator:
             active = self.validity.get(key, self.mapping.get('vigencia_por_defecto', 'NO_INTEGRADO'))
             if raw.upper() in self.contract['contactos']['marcadores']:
                 contact = Cell(None, INVALID, 'CONTACTO_PLACEHOLDER')
-            elif not (re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', raw) if name == 'Destinatario_Email'
+            # Tope del RFC 5321 antes de la expresión regular, cuadrática en una celda de 32 767.
+            elif not (len(raw) <= 254 and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', raw) if name == 'Destinatario_Email'
                       else re.fullmatch(r'[+0-9() .-]+', raw) and len(re.sub(r'\D', '', raw)) >= 6):
                 contact = Cell(None, INVALID, 'CONTACTO_FORMATO_INVALIDO')
             elif active == 'INACTIVO':

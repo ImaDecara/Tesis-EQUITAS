@@ -6,6 +6,7 @@ valores, nombres de archivo subidos ni rutas.
 
 from __future__ import annotations
 
+import codecs
 import os
 import re
 import secrets
@@ -23,8 +24,13 @@ XLS_MESSAGE = 'Formato .xls no soportado: guardá el archivo como .xlsx o .csv'
 OLE2_SIGNATURE = b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
 ZIP_SIGNATURES = (b'PK\x03\x04', b'PK\x05\x06')
 SNIFF_BYTES = 8192
+_WIDE_BOMS = (codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
 _COPY_CHUNK = 1 << 16
-_CONTROL = re.compile('[\x01-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
+# C0 y C1, más los invisibles que permiten disfrazar un valor: separadores de línea Unicode,
+# controles de dirección de texto, BOM dentro de una celda y no-caracteres.
+_CONTROL = re.compile('[\x01-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f'
+                      '\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff\ufff9-\ufffb\ufffe\uffff]')
+_FORMULA_HEADS = ('=', '+', '-', '@')
 # Inyección al reabrir en una planilla. Deja pasar negativos, teléfonos y el marcador «-».
 _FORMULA = re.compile(r'=.|@\w+\(|[+-][^\W\d_]|[+-][0-9.,]+\s*[+*/^&=<>]', re.DOTALL)
 _TOKEN = re.compile(r'[0-9a-f]{32}')
@@ -40,10 +46,17 @@ class FileLimits:
     compression_ratio: int = 100
     zip_parts: int = 2_048
     zip_directory_bytes: int = 1_048_576
-    # openpyxl arma estas partes enteras en memoria; las hojas se recorren en flujo.
+    # Una parte chica muy repetida es inofensiva: la razón por parte rige desde este tamaño.
+    ratio_floor_bytes: int = 1_048_576
+    # Tipos, libro, relaciones y estilos: openpyxl arma estas partes enteras en memoria.
     part_bytes: int = 8_000_000
-    shared_strings_bytes: int = 32_000_000
-    workbook_sheets: int = 32
+    part_elements: int = 500_000
+    # Hojas y cadenas se recorren en flujo: solo vive en memoria la fila o la cadena en curso.
+    xml_depth: int = 64
+    unit_elements: int = 65_536
+    other_elements: int = 2_000_000
+    shared_strings: int = 4_000_000
+    workbook_sheets: int = 256
     read_seconds: float = 120.0
     temp_ttl_seconds: int = 86_400
 
@@ -67,8 +80,9 @@ class Deadline:
 
 
 def source_error(code, kind, line=0, field='*'):
-    # kind/field son nombres del contrato, nunca rutas o valores municipales.
-    raise ValidationError(f'{code}: archivo={kind}, linea={line}, campo={field}')
+    # kind/field son nombres del contrato, nunca rutas o valores municipales. ``from None``:
+    # un traceback en un log no debe arrastrar la excepción original, que puede citar un valor.
+    raise ValidationError(f'{code}: archivo={kind}, linea={line}, campo={field}') from None
 
 
 def reject_xls():
@@ -84,7 +98,16 @@ def reject_forbidden_name(name):
         raise ValidationError('MACRO_NO_PERMITIDA')
 
 
-def open_source(path, kind, source_type, limits):
+def _check_text_head(head, encoding, kind):
+    # Un NUL en una fila posterior es un defecto ubicable de esa fila, no un binario.
+    if head.startswith(_WIDE_BOMS) or b'\x00' in head.partition(b'\n')[0]:
+        source_error('CONTENIDO_NO_TEXTO', kind)
+    # Declarar cp1252 y mandar UTF-8 daría texto ilegible sin ningún error.
+    if head.startswith(codecs.BOM_UTF8) and not encoding.startswith('utf-8'):
+        source_error('CODIFICACION_NO_COINCIDE', kind)
+
+
+def open_source(path, kind, source_type, limits, encoding='utf-8'):
     """Abre una ruta del servidor y detecta el tipo por contenido; devuelve el flujo binario."""
     try:
         path = Path(path)
@@ -105,9 +128,8 @@ def open_source(path, kind, source_type, limits):
             reject_xls()
         if head.startswith(ZIP_SIGNATURES) != (source_type == 'xlsx'):
             source_error('FORMATO_NO_SOPORTADO', kind)
-        # Un NUL en una fila posterior es un defecto ubicable de esa fila, no un binario.
-        if source_type != 'xlsx' and b'\x00' in head.partition(b'\n')[0]:
-            source_error('CONTENIDO_NO_TEXTO', kind)
+        if source_type != 'xlsx':
+            _check_text_head(head, encoding, kind)
     except BaseException:
         stream.close()
         raise
@@ -116,13 +138,15 @@ def open_source(path, kind, source_type, limits):
 
 def check_cells(values, kind, line, limits):
     for value in values:
+        if len(value) > limits.cell:
+            source_error('CELDA_EXCEDE_LIMITE', kind, line)
         if '\x00' in value or '\n' in value or '\r' in value:
             source_error('ESTRUCTURA_INVALIDA', kind, line)
         if _CONTROL.search(value):
             source_error('CARACTER_CONTROL', kind, line)
-        if len(value) > limits.cell:
-            source_error('CELDA_EXCEDE_LIMITE', kind, line)
-        if value[:1] in ('=', '+', '-', '@') and _FORMULA.match(value):
+        # Los espacios no protegen: el motor y las planillas los recortan antes de usar el valor.
+        head = value.lstrip()
+        if head[:1] in _FORMULA_HEADS and _FORMULA.match(head):
             source_error('FORMULA_EN_CELDA', kind, line)
 
 
@@ -140,7 +164,7 @@ def sanitize_filename(name, limit=120):
     text = unicodedata.normalize('NFKC', str(name))
     text = re.split(r'[\\/]', text)[-1]
     text = ''.join(char for char in text if unicodedata.category(char)[0] != 'C')
-    text = re.sub(r'[^\w .()-]', '_', text).strip(' .')
+    text = re.sub(r'[^\w .()-]', '_', text).strip(' .-')
     stem, suffix = os.path.splitext(text)
     suffix = suffix[:12]
     return (stem[:limit - len(suffix)] + suffix) or 'archivo'
@@ -198,11 +222,13 @@ class PrivateUploadStore:
                     if size > self.limits.file_bytes:
                         raise ValidationError('LIMITE_ARCHIVO_EXCEDIDO')
                     target.write(chunk)
+            created = self._clock()
+            os.utime(path, (created, created))  # El vencimiento se mide contra este mismo reloj.
         except BaseException:
             path.unlink(missing_ok=True)
             raise
         return StoredUpload(token, sanitize_filename(original_name), path, size,
-                            self._clock() + self.limits.temp_ttl_seconds)
+                            created + self.limits.temp_ttl_seconds)
 
     def resolve(self, token):
         path = self._path(token)
@@ -222,9 +248,12 @@ class PrivateUploadStore:
     def purge_expired(self):
         removed = 0
         for entry in os.scandir(self.root):
-            if entry.stat(follow_symlinks=False).st_mtime + self.limits.temp_ttl_seconds <= self._clock():
-                Path(entry.path).unlink(missing_ok=True)
-                removed += 1
+            try:
+                if entry.stat(follow_symlinks=False).st_mtime + self.limits.temp_ttl_seconds <= self._clock():
+                    Path(entry.path).unlink(missing_ok=True)
+                    removed += 1
+            except FileNotFoundError:  # Otro proceso ya lo publicó o lo descartó.
+                continue
         return removed
 
     def close(self):

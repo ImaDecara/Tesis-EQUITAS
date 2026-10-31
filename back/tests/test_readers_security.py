@@ -9,6 +9,8 @@ import re
 import struct
 import subprocess
 import sys
+import time
+import traceback
 import zipfile
 from dataclasses import replace
 from datetime import date, datetime
@@ -27,7 +29,14 @@ from ETL.readers.limits import (
     PrivateUploadStore,
     sanitize_filename,
 )
-from ETL.validate_source import ValidationError, load_contract, load_mapping, validate_batch
+from ETL.validate_source import (
+    SourceRow,
+    SourceTable,
+    ValidationError,
+    load_contract,
+    load_mapping,
+    validate_batch,
+)
 
 BACK = Path(__file__).resolve().parents[1]
 FIXTURE = Path(__file__).parent / 'fixtures/sintetico-v1'
@@ -35,13 +44,16 @@ GENERATOR = BACK.parent / 'quality/fixtures/synthetic_portfolio.py'
 KINDS = ('cabecera', 'detalle')
 SHEETS = {'cabecera': 'cabecera', 'detalle': 'detalle'}
 SENTINEL = 'CENTINELA-EQUITAS'
-# Presupuesto de cada rechazo en un proceso propio, medido sobre el corpus (tabla en la evidencia).
-MAX_SECONDS = 5.0
+# Presupuesto de cada rechazo en un proceso propio, medido sobre el corpus (tabla en la evidencia):
+# el mayor es de 3,6 s y 106 MiB en macOS; el margen de tiempo es para un servidor de CI más lento.
+MAX_SECONDS = 15.0
 MAX_RSS_GROWTH_MIB = 128
-# Partes que openpyxl arma enteras, en el tope que permiten los límites: no se pueden interrumpir.
-AT_LIMIT_MAX_SECONDS = 30.0
+# Lo más caro que los límites dejan pasar: estilos (no interrumpibles) y cadenas (millones de textos).
+AT_LIMIT_CASES = ('estilos-al-limite.xlsx', 'cadenas-al-limite.xlsx', 'cadenas-demasiadas.xlsx')
+AT_LIMIT_MAX_SECONDS = 60.0
 AT_LIMIT_MAX_RSS_GROWTH_MIB = 512
 MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+HEADER_ROW = '<row r="1"><c r="A1" t="inlineStr"><is><t>A</t></is></c></row>'
 LAUGHS = (b'<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">'
           b'<!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;">]>')
 
@@ -98,7 +110,7 @@ def rewrite_zip(data, *, replace_parts=None, add=None, drop=(), compression=zipf
                 target.writestr(name, replace_parts.get(name, source.read(name)),
                                 zipfile.ZIP_STORED if name in stored else None)
         for name, content in add.items():
-            target.writestr(name, content)
+            target.writestr(name, content, zipfile.ZIP_STORED if name in stored else None)
     return output.getvalue()
 
 
@@ -128,6 +140,29 @@ def with_shared_strings(rows_xml, strings_xml, **kwargs):
                      b'.spreadsheetml.sharedStrings+xml"/></Types>')
     return rewrite_zip(book, replace_parts={'[Content_Types].xml': types, 'xl/worksheets/sheet1.xml': raw_sheet(rows_xml)},
                        add={'xl/sharedStrings.xml': strings_xml}, **kwargs)
+
+
+def noisy(unit, total, every=40_000):
+    """Repite ``unit`` intercalando comentarios incompresibles: la razón de compresión queda bajo 100."""
+    repeats = every // len(unit)
+    blocks, size = [], 0
+    while size < total:
+        blocks.append(unit * repeats + b'<!--' + os.urandom(600).hex().encode() + b'-->')
+        size += len(blocks[-1])
+    return b''.join(blocks)
+
+
+def with_styles(styles):
+    return rewrite_zip(minimal_workbook(), replace_parts={'xl/styles.xml': styles}, stored=('xl/styles.xml',))
+
+
+def hidden_zip64_directory(data):
+    """Fin de ZIP chico delante del cual un registro Zip64 declara otro directorio: ZipFile le cree a éste."""
+    position = data.rindex(b'PK\x05\x06')
+    entries, directory, offset = struct.unpack('<HII', data[position + 10:position + 20])
+    record = (b'PK\x06\x06' + struct.pack('<QHHIIQQQQ', 44, 45, 45, 0, 0, entries, entries, directory, offset)
+              + b'PK\x06\x07' + struct.pack('<IQI', 0, position, 1))
+    return data[:position] + record + data[position:]
 
 
 def declared_size(data, part, size):
@@ -420,16 +455,15 @@ def _hostile_cases():
     book = minimal_workbook()
     rows_default = ''.join(f'<row r="{n}"><c r="A{n}"><v>1</v></c></row>' for n in range(1, 300_003))
     columns_default = ''.join(f'<c r="{_letters(n)}1"><v>1</v></c>' for n in range(1, 62))
-    many_sheets = workbook_bytes({f'h{n}': [['x']] for n in range(31)} | {name: [['A']] for name in SHEETS})
+    many_sheets = workbook_bytes({f'h{n}': [['x']] for n in range(255)} | {name: [['A']] for name in SHEETS})
     many_parts = rewrite_zip(book, add={f'xl/media/{n}.bin': b'x' for n in range(2100)})
     big_part = rewrite_zip(book, replace_parts={'xl/styles.xml': b'<a/>' * 2_100_000}, compression=zipfile.ZIP_STORED)
     # Peor memoria aceptada por los límites: openpyxl arma estas partes enteras antes de leer la hoja.
-    style_tree = b'<styleSheet xmlns="' + MAIN_NS.encode() + b'">' + b'<a/>' * 1_990_000 + b'</styleSheet>'
-    tree_at_limit = rewrite_zip(book, replace_parts={'xl/styles.xml': style_tree}, compression=zipfile.ZIP_STORED)
-    strings = b''.join(b'<si><t>%07d</t></si>' % number for number in range(1_390_000))
-    strings_part = b'<sst xmlns="' + MAIN_NS.encode() + b'">' + strings + b'</sst>'
-    strings_at_limit = with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', strings_part)
-    both_at_limit = rewrite_zip(strings_at_limit, replace_parts={'xl/styles.xml': style_tree}, stored=('xl/styles.xml',))
+    # Cada formato de celda al tope de Excel apunta a un código que maximiza la expresión de openpyxl.
+    worst_styles = (f'<styleSheet xmlns="{MAIN_NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="{"[" * 255}"/></numFmts>'
+                    f'<cellXfs count="65490">{chr(60)}xf numFmtId="164"/>'.encode()
+                    + b'<xf numFmtId="164"/>' * 65_489 + b'</cellXfs>' + b'<a/>' * 430_000 + b'</styleSheet>')
+    strings_at_limit = b''.join(b'<si><t>%07d</t></si>' % number for number in range(3_999_000))
     random_block = os.urandom(1 << 20)
     oversized = rewrite_zip(book, add={'xl/media/grande.bin': random_block})
     no_types = rewrite_zip(book, drop=('[Content_Types].xml',))
@@ -482,9 +516,9 @@ def _hostile_cases():
          xlsx_profile(), 'XML_ENTIDAD_EXTERNA', None),
         ('indice-cadena.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>99</v></c></row>', b'<sst><si><t>A</t></si></sst>'),
          xlsx_profile(), 'ARCHIVO_NO_LEIBLE', None),
-        ('estilos-al-limite.xlsx', tree_at_limit, xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
-        ('cadenas-al-limite.xlsx', strings_at_limit, xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
-        ('ambas-al-limite.xlsx', both_at_limit, xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        ('estilos-al-limite.xlsx', with_styles(worst_styles), xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        ('cadenas-al-limite.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(strings_at_limit)),
+         xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
         ('entidad-hoja.xlsx', rewrite_zip(book, replace_parts={'xl/worksheets/sheet1.xml': LAUGHS + raw_sheet('').split(b'?>', 1)[1]}),
          xlsx_profile(), 'XML_ENTIDAD_EXTERNA', None),
         ('entidad-utf16.xlsx', rewrite_zip(book, replace_parts={'xl/worksheets/sheet1.xml': (
@@ -507,14 +541,90 @@ def _hostile_cases():
                                            '<row r="2"><c r="A2"><v>1E+999</v></c></row>'), xlsx_profile(), 'CELDA_TIPO_NO_SOPORTADO', None),
         ('formula-sin-v.xlsx', with_sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>A</t></is></c></row>'
                                           '<row r="2"><c r="A2"><f>1+1</f></c></row>'), xlsx_profile(), 'FORMULA_SIN_VALOR', None),
-        ('formula-prefijo.xlsx', with_sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>A</t></is></c></row>'
-                                            '<row r="2"><x:c xmlns:x="urn:x" r="A2"><x:f>1</x:f><x:v></x:v></x:c></row>'),
-         xlsx_profile(), 'FORMULA_SIN_VALOR', None),
+        ('celda-otro-espacio.xlsx', with_sheet(HEADER_ROW + '<row r="2"><x:c xmlns:x="urn:x" r="A2"><x:f>1</x:f><x:v></x:v></x:c></row>'),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('elemento-en-fila.xlsx', with_sheet(HEADER_ROW + '<row r="2"><zz r="A2"><f>1+1</f></zz></row>'), xlsx_profile(),
+         'ESTRUCTURA_INVALIDA', None),
+        ('fila-repetida.xlsx', with_sheet(HEADER_ROW + '<row r="5"><c r="A5"><v>5</v></c></row><row r="5"><c r="A5"><v>6</v></c></row>'),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('fila-desordenada.xlsx', with_sheet(HEADER_ROW + '<row r="5"><c r="A5"><v>5</v></c></row><row r="3"><c r="A3"><v>3</v></c></row>'),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('celda-repetida.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2"><v>1</v></c><c r="A2"><v>2</v></c></row>'),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('celda-desordenada.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="B2"><v>1</v></c><c r="A2"><v>2</v></c></row>'),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('celda-otra-fila.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A9"><v>1</v></c></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('celda-fuera-de-excel.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="XFE2"/></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('coordenada-rota.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="!!"><v>1</v></c></row>'), xlsx_profile(), 'ARCHIVO_NO_LEIBLE', None),
+        ('celda-escape-control.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2" t="inlineStr"><is><t>a_x0007_b</t></is></c></row>'),
+         xlsx_profile(), 'CARACTER_CONTROL', None),
+        ('numero-enorme.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2"><v>' + '9' * 5000 + '</v></c></row>'), xlsx_profile(),
+         'ARCHIVO_NO_LEIBLE', None),
+        ('valor-enorme.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2"><v>' + '9' * 40_000 + '</v></c></row>'), xlsx_profile(),
+         'CELDA_EXCEDE_LIMITE', None),
+        # Con ZIP mínimo: pocos MB que openpyxl sin acotar convertía en más de 3 GiB o en un cuelgue.
+        ('hoja-ignorada-sin-dimension.xlsx', rewrite_zip(book, add={'xl/worksheets/sheet9.xml': _worksheet(noisy(b'<a/>', 150_000_000))}),
+         xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        ('hoja-elementos-extra.xlsx', with_raw_sheet(_worksheet(noisy(b'<a/>', 150_000_000))), xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('hoja-profunda.xlsx', with_raw_sheet(_worksheet(noisy(b'<a>', 150_000_000))), xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('fila-millones-de-celdas.xlsx', with_raw_sheet(_worksheet(b'<sheetData><row r="1">' + noisy(b'<c/>', 150_000_000))), xlsx_profile(),
+         'LIMITE_XML_EXCEDIDO', None),
+        ('fila-sin-fin.xlsx', with_raw_sheet(_worksheet(b'<sheetData><row r="1"><c r="A1" t="inlineStr"><is>' + noisy(b'<r><t>x</t></r>', 150_000_000))),
+         xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('filas-vacias-repetidas.xlsx', with_raw_sheet(_worksheet(b'<sheetData>' + noisy(b'<row r="1"/>', 150_000_000))), xlsx_profile(),
+         'ESTRUCTURA_INVALIDA', None),
+        ('filas-vacias-hasta-excel.xlsx', with_raw_sheet(_worksheet(b'<sheetData>' + b''.join(
+            b'<row r="%d"/>' % n for n in range(1, 1_048_577)) + b'</sheetData>'), stored=('xl/worksheets/sheet1.xml',)), xlsx_profile(),
+         'ESTRUCTURA_INVALIDA', None),
+        ('estilos-con-tipo-de-hoja.xlsx', rewrite_zip(book, replace_parts={
+            'xl/styles.xml': _sst(noisy(b'<a/>', 150_000_000)),
+            '[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
+                b'</Types>', b'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument'
+                             b'.spreadsheetml.worksheet+xml"/></Types>')}), xlsx_profile(), 'LIMITE_PARTE_ZIP_EXCEDIDO', None),
+        ('estilos-demasiados-elementos.xlsx', with_styles(_sst(b'<a/>' * 500_001)), xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('estilos-formato-cuadratico.xlsx', with_styles(f'<styleSheet xmlns="{MAIN_NS}"><numFmts><numFmt numFmtId="164" '
+                                                        f'formatCode="{"[" * 5_000_000}"/></numFmts><cellXfs><xf numFmtId="164"/>'
+                                                        '</cellXfs></styleSheet>'.encode()), xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('estilos-demasiados-formatos.xlsx', with_styles(_sst(b'<xf numFmtId="164"/>' * 65_491)), xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('nombre-definido-cuadratico.xlsx', rewrite_zip(book, replace_parts={'xl/workbook.xml': _part(book, 'xl/workbook.xml').replace(
+            b'</workbook>', b'<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">' + b'a' * 5_000_000
+            + b'</definedName></definedNames></workbook>')}, stored=('xl/workbook.xml',)), xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
+        ('cadenas-demasiadas.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(b'<si/>' * 4_000_001),
+                                                        stored=('xl/sharedStrings.xml',)), xlsx_profile(), 'LIMITE_CADENAS_EXCEDIDO', None),
+        ('cadenas-elementos-sueltos.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(noisy(b'<a/>', 150_000_000))),
+         xlsx_profile(), 'LIMITE_XML_EXCEDIDO', None),
+        ('cadena-mayor-a-celda.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>',
+                                                          _sst(b'<si><t>' + os.urandom(16_384).hex().encode() + b'</t></si>')),
+         xlsx_profile(), 'CELDA_EXCEDE_LIMITE', None),
+        ('zip64-oculto.xlsx', hidden_zip64_directory(book), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('plantilla-y-libro.xlsx', rewrite_zip(book, replace_parts={'[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
+            b'</Types>', b'<Override PartName="/xl/otro.xml" ContentType="application/vnd.openxmlformats-officedocument'
+                         b'.spreadsheetml.template.main+xml"/></Types>')}), xlsx_profile(), 'FORMATO_NO_SOPORTADO', None),
+        ('solo-plantilla.xlsx', rewrite_zip(book, replace_parts={'[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
+            b'spreadsheetml.sheet.main+xml', b'spreadsheetml.template.main+xml')}), xlsx_profile(), 'FORMATO_NO_SOPORTADO', None),
+        ('hoja-de-macros.xlsx', rewrite_zip(book, replace_parts={'[Content_Types].xml': _part(book, '[Content_Types].xml').replace(
+            b'</Types>', b'<Override PartName="/xl/macrosheets/sheet1.xml" ContentType="application/vnd.ms-excel.macrosheet+xml"/></Types>')},
+            add={'xl/macrosheets/sheet1.xml': b'<a/>'}), xlsx_profile(), 'MACRO_NO_PERMITIDA', None),
+        ('relacion-a-macro.xlsx', rewrite_zip(book, replace_parts={'xl/_rels/workbook.xml.rels': _part(book, 'xl/_rels/workbook.xml.rels').replace(
+            b'</Relationships>', b'<Relationship Id="rId99" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" '
+                                 b'Target="otro.dat"/></Relationships>')}), xlsx_profile(), 'MACRO_NO_PERMITIDA', None),
         ('formula-texto.xlsx', with_sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>A</t></is></c></row>'
                                           '<row r="2"><c r="A2" t="inlineStr"><is><t>=1+1</t></is></c></row>'),
          xlsx_profile(), 'FORMULA_EN_CELDA', None),
         ('demasiadas-filas.xlsx', with_sheet(rows_default), xlsx_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('demasiadas-filas.csv', b'A\n' + b'1\n' * 300_001, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
+        ('lineas-en-blanco.csv', b'A\n' + b'\n' * 24_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
+        ('una-linea-enorme.csv', b'ab,' * 8_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
+        ('fila-multilinea-enorme.csv', b'A\n' + b'"\n",' * 4_000_000, csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
+        ('celda-enorme-entre-comillas.csv', b'A\n"' + b'x' * 200_000 + b'"\n', csv_profile(), 'CELDA_EXCEDE_LIMITE', None),
+        ('bom-utf8-declarado-cp1252.csv', b'\xef\xbb\xbfA\n1\n', _csv_encoding('cp1252'), 'CODIFICACION_NO_COINCIDE', None),
+        ('bom-utf16-declarado-cp1252.csv', b'\xff\xfeA\xe9\n', _csv_encoding('cp1252'), 'CONTENIDO_NO_TEXTO', None),
+        ('bom-utf16-sin-nul.csv', b'\xff\xfeA\n', csv_profile(), 'CONTENIDO_NO_TEXTO', None),
+        ('bom-doble.csv', b'\xef\xbb\xbf\xef\xbb\xbfA\n1\n', csv_profile(), 'CARACTER_CONTROL', None),
+        ('c1-en-latin1.csv', b'A\n\x80\n', _csv_encoding('latin-1'), 'CARACTER_CONTROL', None),
+        ('control-bidireccional.csv', 'A\nnombre\u202egnp\n'.encode(), csv_profile(), 'CARACTER_CONTROL', None),
+        ('separador-linea-unicode.csv', 'A\nuno\u2028dos\n'.encode(), csv_profile(), 'CARACTER_CONTROL', None),
+        ('formula-con-espacios.csv', b'A\n"  =1+1"\n', csv_profile(), 'FORMULA_EN_CELDA', None),
         ('demasiadas-columnas.xlsx', with_sheet(f'<row r="1">{columns_default}</row>'), xlsx_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('demasiadas-columnas.csv', b','.join(f'c{n}'.encode() for n in range(61)) + b'\n', csv_profile(), 'LIMITE_ARCHIVO_EXCEDIDO', None),
         ('fila-fuera-de-excel.xlsx', with_sheet('<row r="1048577"><c r="A1048577"><v>1</v></c></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
@@ -528,6 +638,25 @@ def _hostile_cases():
         ('utf16.csv', 'ClaveAgrupacion,Cuenta\n1,2\n'.encode('utf-16'), csv_profile(), 'CONTENIDO_NO_TEXTO', None),
         ('gzip.csv', b'\x1f\x8b\x08\x00' + bytes(40), csv_profile(), 'CONTENIDO_NO_TEXTO', None),
     ]
+
+
+def _worksheet(body):
+    return b'<?xml version="1.0"?><worksheet xmlns="' + MAIN_NS.encode() + b'">' + body
+
+
+def _sst(body):
+    return b'<sst xmlns="' + MAIN_NS.encode() + b'">' + body + b'</sst>'
+
+
+def with_raw_sheet(sheet, **kwargs):
+    # Cerrado o no: el rechazo debe llegar antes que el error de XML.
+    return rewrite_zip(minimal_workbook(), replace_parts={'xl/worksheets/sheet1.xml': sheet}, **kwargs)
+
+
+def _csv_encoding(encoding):
+    mapping = csv_profile()
+    mapping['formato']['codificacion'] = encoding
+    return mapping
 
 
 def _letters(number):
@@ -556,7 +685,7 @@ def hostile_cases():
 
 def test_own_hostile_corpus_is_rejected_with_its_code(tmp_path, hostile_cases):
     outcomes = {}
-    cases = [case for case in hostile_cases if 'al-limite' not in case[0]]  # Costosos: se miden en un proceso propio.
+    cases = [case for case in hostile_cases if case[0] not in AT_LIMIT_CASES]  # Costosos: se miden en un proceso propio.
     for name, data, mapping, code, limits in cases:
         path = write(tmp_path, name, data)
         try:
@@ -596,7 +725,7 @@ def measure(path, mapping, limits=None):
     overrides = {} if limits is None else {
         name: getattr(limits, name) for name in ('uncompressed_bytes', 'compression_ratio', 'read_seconds')}
     result = subprocess.run([sys.executable, '-B', '-c', CHILD, str(BACK), str(path), json.dumps(mapping), json.dumps(overrides)],
-                            capture_output=True, text=True, cwd=BACK, timeout=120)
+                            capture_output=True, text=True, cwd=BACK, timeout=120, check=False)
     assert result.returncode == 0, result.stderr[-400:]
     assert 'Traceback' not in result.stderr
     assert SENTINEL not in result.stdout + result.stderr
@@ -610,7 +739,7 @@ def test_hostile_files_stay_within_the_measured_memory_and_time_budget(tmp_path,
     cases += [(write(tmp_path, name, data), mapping, code, limits) for name, data, mapping, code, limits in hostile_cases]
     for path, mapping, code, limits in cases:
         outcome = measure(path, mapping, limits)
-        at_limit = 'al-limite' in path.name
+        at_limit = path.name in AT_LIMIT_CASES
         assert outcome['codigo'] == code, path.name
         assert outcome['segundos'] <= (AT_LIMIT_MAX_SECONDS if at_limit else MAX_SECONDS), (path.name, outcome)
         assert outcome['memoria_mib'] <= (AT_LIMIT_MAX_RSS_GROWTH_MIB if at_limit else MAX_RSS_GROWTH_MIB), (path.name, outcome)
@@ -623,7 +752,7 @@ def test_size_and_ratio_are_verified_before_opening_any_part(tmp_path, monkeypat
     by_size = write(tmp_path, 'libro', declared_size(rewrite_zip(book, add={'xl/media/a.bin': os.urandom(1 << 16)}),
                                                      'xl/media/a.bin', 400_000_000))
     by_ratio = write(tmp_path, 'libro2', rewrite_zip(book, add={'xl/media/a.bin': bytes(1 << 20)}))
-    monkeypatch.setattr('ETL.readers.xlsx.load_workbook', forbidden)
+    monkeypatch.setattr('ETL.readers.xlsx._check_parts', forbidden)
     monkeypatch.setattr(zipfile.ZipFile, 'open', forbidden)
     reject(by_size, xlsx_profile(), 'TAMANO_DESCOMPRIMIDO_EXCEDIDO')
     reject(by_ratio, xlsx_profile(), 'RAZON_COMPRESION_EXCEDIDA')
@@ -642,7 +771,7 @@ def test_directory_is_measured_before_zipfile_builds_it(tmp_path, monkeypatch):
     lying = data[:position + 8] + struct.pack('<HH', 1, 1) + data[position + 12:]
     by_count = write(tmp_path, 'libro', data)
     by_bytes = write(tmp_path, 'libro2', lying)
-    monkeypatch.setattr('ETL.readers.xlsx.zipfile.ZipFile', forbidden)
+    monkeypatch.setattr('ETL.readers.xlsx._PackageReader', forbidden)
     reject(by_count, xlsx_profile(), 'LIMITE_PARTES_ZIP_EXCEDIDO')
     reject(by_bytes, xlsx_profile(), 'LIMITE_PARTES_ZIP_EXCEDIDO', limits=replace(FileLimits(), zip_directory_bytes=1024))
 
@@ -752,7 +881,7 @@ def test_profile_schema_rules_for_xlsx():
     extract.validate_source_profile(good)
     assert extract.load_source_profile(extract.MAPPING_SCHEMA.parent / 'source-mapping.sintetico-xlsx.v1.json')['formato']['tipo'] == 'xlsx'
     for change in ({'separador': ','}, {'hojas': None}, {'hojas': {'cabecera': 'a'}}, {'fecha_serial': '1901'},
-                   {'hojas': {'cabecera': 'a', 'detalle': 'a'}}, {'hojas': {'cabecera': 'a', 'detalle': 'b', 'x': 'c'}}):
+                   {'hojas': {'cabecera': 'a', 'detalle': 'b', 'x': 'c'}}):
         mapping = copy.deepcopy(good)
         mapping['formato'].update(change)
         with pytest.raises(ValidationError, match='^PERFIL_INVALIDO$'):
@@ -768,18 +897,129 @@ def test_profile_schema_rules_for_xlsx():
         extract.validate_source_profile(mapping)
 
 
+def test_two_workbooks_may_use_the_same_sheet_name_but_one_workbook_may_not(tmp_path):
+    sheets = fixture_sheets()
+    files = {kind: write(tmp_path, kind, workbook_bytes({'Hoja1': sheets[kind]})) for kind in KINDS}
+    profile = xlsx_profile()
+    profile['formato']['hojas'] = {'cabecera': 'Hoja1', 'detalle': 'Hoja1'}
+    assert extract.validate_source_files(files, profile, cut_off=profile['fecha_corte']) == tsv_reference()[2]
+    with pytest.raises(ValidationError, match='^PERFIL_INVALIDO$'):
+        extract.read_source_tables(dict.fromkeys(KINDS, files['cabecera']), profile)
+
+
+def test_two_sheet_names_cannot_point_to_the_same_part(tmp_path):
+    book = minimal_workbook()
+    relations = _part(book, 'xl/_rels/workbook.xml.rels').replace(b'worksheets/sheet2.xml', b'worksheets/sheet1.xml')
+    path = write(tmp_path, 'libro', rewrite_zip(book, replace_parts={'xl/_rels/workbook.xml.rels': relations}))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+def test_the_guarded_part_is_the_one_openpyxl_reads_even_with_a_decoy_id(tmp_path):
+    """Un atributo ``id`` en otro espacio de nombres no puede desviar la hoja que se controla."""
+    book = minimal_workbook()
+    workbook = _part(book, 'xl/workbook.xml')
+    decoy = re.sub(rb'<sheet ([^>]*name="cabecera"[^>]*)/>', rb'<sheet xmlns:z="urn:z" z:id="rId2" \1/>', workbook)
+    assert decoy != workbook
+    formula = raw_sheet(HEADER_ROW + '<row r="2"><c r="A2"><f>1+1</f></c></row>')
+    path = write(tmp_path, 'libro', rewrite_zip(book, replace_parts={'xl/workbook.xml': decoy, 'xl/worksheets/sheet1.xml': formula}))
+    reject(path, xlsx_profile(), 'FORMULA_SIN_VALOR')
+
+
+def test_ignored_sheets_are_not_interpreted_at_all(tmp_path, monkeypatch):
+    """Nada de ``load_workbook``: ni la hoja ignorada, ni propiedades, tema o nombres definidos."""
+    from openpyxl.reader.excel import ExcelReader
+    from openpyxl.reader.workbook import WorkbookParser
+    opened = []
+    original = zipfile.ZipFile.open
+    def spy(self, name, *args, **kwargs):
+        opened.append(name.filename if isinstance(name, zipfile.ZipInfo) else name)
+        return original(self, name, *args, **kwargs)
+    def forbidden(*_, **__):
+        pytest.fail('no debe interpretarse')
+    for method in ('read_properties', 'read_custom', 'read_theme', 'read_worksheets', 'read_chartsheet'):
+        monkeypatch.setattr(ExcelReader, method, forbidden)
+    monkeypatch.setattr(WorkbookParser, 'assign_names', forbidden)
+    data = workbook_bytes({'cabecera': [['A'], ['1']], 'detalle': [['A'], ['2']], 'otra': [['x']]})
+    mapping = xlsx_profile()
+    monkeypatch.setattr(zipfile.ZipFile, 'open', spy)
+    result = extract.read_workbook(io.BytesIO(data), SHEETS, mapping['formato'], {'cabecera': {}, 'detalle': {}},
+                                   FileLimits(), Deadline(60))
+    assert result.ignored_sheets == ['otra']
+    # Se abre una sola vez, para el CRC y el prólogo; las elegidas, una vez más para leerlas.
+    assert opened.count('xl/worksheets/sheet3.xml') == 1
+    assert opened.count('xl/worksheets/sheet1.xml') == 2
+
+
+def test_chart_sheets_are_listed_and_ignored(tmp_path):
+    book = workbook_bytes({'cabecera': [['A'], ['1']], 'detalle': [['A'], ['2']], 'grafico': [['x']]})
+    relations = _part(book, 'xl/_rels/workbook.xml.rels').replace(b'relationships/worksheet" Target="/xl/worksheets/sheet3.xml',
+                                                                  b'relationships/chartsheet" Target="/xl/worksheets/sheet3.xml')
+    assert relations != _part(book, 'xl/_rels/workbook.xml.rels')
+    data = rewrite_zip(book, replace_parts={'xl/_rels/workbook.xml.rels': relations, 'xl/worksheets/sheet3.xml': b'<chartsheet/>'})
+    result = extract.read_workbook(io.BytesIO(data), SHEETS, xlsx_profile()['formato'], {'cabecera': {}, 'detalle': {}},
+                                   FileLimits(), Deadline(60))
+    assert result.ignored_sheets == ['grafico']
+
+
+def test_serial_60_of_the_1900_system_does_not_exist(tmp_path):
+    path, mapping = typed_cells(tmp_path, ['K', 60, 1, 'x'], fecha_serial='1900')
+    assert read_detail(path, mapping)['NOTD_vencimiento'] == '60'
+    path, mapping = typed_cells(tmp_path, ['K', 61, 1, 'x'], fecha_serial='1900')
+    assert read_detail(path, mapping)['NOTD_vencimiento'] == '01/03/1900'
+
+
+def test_latin_1_is_read_only_when_declared(tmp_path):
+    files = {}
+    for kind in KINDS:
+        buffer = io.StringIO()
+        csv.writer(buffer, lineterminator='\n').writerows(fixture_records(kind))
+        files[kind] = write(tmp_path, f'{kind}.csv', buffer.getvalue().encode('latin-1'))
+    reject(files['cabecera'], csv_profile(), 'ARCHIVO_NO_LEIBLE')  # Sin declararla no se adivina.
+    mapping = _csv_encoding('latin-1')
+    extract.validate_source_profile(mapping)
+    assert extract.validate_source_files(files, mapping, cut_off=mapping['fecha_corte']) == tsv_reference()[2]
+
+
+def test_error_chain_never_carries_the_original_exception(tmp_path):
+    """Un traceback completo en un log tampoco debe traer valores ni rutas del archivo."""
+    secret = SENTINEL.lower()
+    cases = [(write(tmp_path, 'a.csv', b'ok\n\xff' + secret.encode() + b'\n'), csv_profile()),
+             (write(tmp_path, 'b', with_sheet(HEADER_ROW + f'<row r="2"><c r="{secret}2"><v>1</v></c></row>')), xlsx_profile()),
+             (tmp_path / secret / 'no-existe.csv', csv_profile())]
+    for path, mapping in cases:
+        with pytest.raises(ValidationError) as error:
+            extract.read_source_tables(dict.fromkeys(KINDS, path), mapping)
+        rendered = ''.join(traceback.format_exception(error.value))
+        assert secret not in rendered and 'During handling' not in rendered, rendered
+
+
+def test_contact_regex_does_not_blow_up_on_a_giant_cell():
+    """La expresión del motor es cuadrática: una celda de 32 767 caracteres tardaba 2 s."""
+    mapping = load_mapping(FIXTURE)
+    header, detail = fixture_records('cabecera'), fixture_records('detalle')
+    values = dict(zip(header[0], header[1], strict=True))
+    values['Destinatario_Email'] = 'a@' + '.' * 32_760 + ' '
+    rows = [SourceRow(line, dict(values)) for line in range(2, 202)]
+    start = time.perf_counter()
+    report = validate_batch({'cabecera': SourceTable(header[0], rows),
+                             'detalle': SourceTable(detail[0], [SourceRow(2, dict(zip(detail[0], detail[1], strict=True)))])},
+                            mapping, load_contract(), mapping['fecha_corte'])
+    assert time.perf_counter() - start < 5
+    assert report['resultado_lote'] == 'BLOQUEADO'
+
+
 def test_cli_reads_a_single_workbook_for_both_logical_files(tmp_path):
     book = write(tmp_path, 'libro', workbook_bytes(fixture_sheets()))
     profile = write(tmp_path, 'perfil.json', json.dumps(xlsx_profile()).encode())
     result = subprocess.run([sys.executable, '-B', '-m', 'ETL.extract', '--cabecera', str(book), '--detalle', str(book),
                              '--mapping', str(profile), '--cut-off', '2026-09-30'],
-                            capture_output=True, text=True, cwd=BACK, env={})
+                            capture_output=True, text=True, cwd=BACK, env={}, check=False)
     assert result.returncode == 1  # La fixture está bloqueada a propósito.
     assert 'BLOQUEADO' in result.stdout and 'Traceback' not in result.stderr
     bad = write(tmp_path, 'viejo.xls', b'x')
     result = subprocess.run([sys.executable, '-B', '-m', 'ETL.extract', '--cabecera', str(bad), '--detalle', str(bad),
                              '--mapping', str(profile), '--cut-off', '2026-09-30'],
-                            capture_output=True, text=True, cwd=BACK, env={})
+                            capture_output=True, text=True, cwd=BACK, env={}, check=False)
     assert result.returncode == 2
     assert XLS_MESSAGE in result.stdout
 
@@ -811,7 +1051,7 @@ def test_openpyxl_warnings_never_reach_the_caller(tmp_path, recwarn):
 @pytest.mark.parametrize(('name', 'expected'), [
     ('../../etc/passwd', 'passwd'), ('..\\..\\windows\\system32\\cmd.exe', 'cmd.exe'), ('/abs/ruta/lote.xlsx', 'lote.xlsx'),
     ('C:\\Users\\persona\\cartera.csv', 'cartera.csv'), ('a\x00b\x07.csv', 'ab.csv'), ('..', 'archivo'), ('', 'archivo'),
-    ('=1+1.csv', '_1_1.csv'), ('nombre\u202egnp.exe', 'nombregnp.exe'), ('／etc／passwd', 'passwd'), ('x' * 500 + '.xlsx', 'x' * 115 + '.xlsx'),
+    ('=1+1.csv', '_1_1.csv'), ('-cmd.csv', 'cmd.csv'), ('nombre\u202egnp.exe', 'nombregnp.exe'), ('／etc／passwd', 'passwd'), ('x' * 500 + '.xlsx', 'x' * 115 + '.xlsx'),
 ])
 def test_file_names_are_sanitized(name, expected):
     assert sanitize_filename(name) == expected
@@ -862,7 +1102,6 @@ def test_no_temporary_file_remains_after_publish_discard_failure_or_ttl(tmp_path
     assert os.listdir(root) == []
     # Lo abandonado vence a las 24 h; en cada save y en resolve.
     abandoned = store.save(io.BytesIO(b'A\n'), 'lote.csv')
-    os.utime(abandoned.path, (now[0], now[0]))
     assert abandoned.expires_at == now[0] + 86_400
     now[0] += 86_399
     assert store.purge_expired() == 0
@@ -873,8 +1112,7 @@ def test_no_temporary_file_remains_after_publish_discard_failure_or_ttl(tmp_path
     assert os.listdir(root) == []
     with pytest.raises(ValidationError, match='TEMPORAL_INEXISTENTE'):
         store.resolve(abandoned.token)
-    expired = store.save(io.BytesIO(b'A\n'), 'lote.csv')
-    os.utime(expired.path, (now[0], now[0]))
+    store.save(io.BytesIO(b'A\n'), 'lote.csv')
     now[0] += 86_400
     fresh = store.save(io.BytesIO(b'A\n'), 'lote.csv')
     assert os.listdir(root) == [fresh.token]
