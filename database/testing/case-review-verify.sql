@@ -9,7 +9,8 @@ with nueva(nombre) as (
     ('person'), ('person_status'), ('person_type'), ('province'), ('role'), ('tenant'), ('tenant_user'), ('user')
 ), tabla_nueva as (
   select c.oid, c.relname as nombre, c.relrowsecurity as rls, c.relforcerowsecurity as forzada,
-    (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', c.relname), false, true, '')))[1]::text::bigint as filas
+    (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', c.relname), false, true, '')))[1]::text::bigint as filas,
+    (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I where supersedes >= id', c.relname), false, true, '')))[1]::text::bigint as filas_cadena_invalida
   from pg_class c join pg_namespace n on n.oid = c.relnamespace join nueva on nueva.nombre = c.relname
   where n.nspname = 'public' and c.relkind = 'r'
 ), politica_nueva as (
@@ -28,6 +29,13 @@ with nueva(nombre) as (
     and f.proname in ('record_case_review', 'record_case_review_approval', 'read_case_review_reason_text', 'record_import_batch', 'equitas_member_role', 'equitas_append_only')
 ), funcion_servidor as (
   select * from funcion where definer
+), rol_nuevo(rol) as (
+  values ('equitas_write_definer'), ('equitas_review_server'), ('equitas_import_server')
+), membresia_nueva as (
+  select r.rolname as rol, m.rolname as miembro, a.admin_option, a.inherit_option, a.set_option
+  from pg_auth_members a join pg_roles r on r.oid = a.roleid join pg_roles m on m.oid = a.member join rol_nuevo on rol_nuevo.rol = r.rolname
+), restriccion_nueva as (
+  select k.conname from pg_constraint k join tabla_nueva t on t.oid = k.conrelid where k.contype = 'c' and k.convalidated
 )
 select 'migraciones', (select string_agg(version, ',' order by version) from supabase_migrations.schema_migrations)
 union all select 'tablas_nuevas', count(*)::text from tabla_nueva
@@ -40,7 +48,7 @@ union all select 'politicas_nuevas_anon_o_public', count(*) filter (where roles 
 union all select 'politicas_nuevas_sin_tenant', count(*) filter (where qual is null or qual not like '%tenant%')::text from politica_nueva
 union all select 'privilegios_escritura_clientes', count(*) filter (where has_table_privilege(r.rol, t.oid, a.p))::text
   from rol_presente r cross join tabla_nueva t cross join privilegio a
-union all select 'privilegios_escritura_definidor', (select count(*)::text from tabla_nueva t cross join privilegio a
+union all select 'privilegios_definidor_distintos_de_insert', (select count(*)::text from tabla_nueva t cross join privilegio a
   where a.p <> 'INSERT' and exists(select 1 from pg_roles where rolname = 'equitas_write_definer') and has_table_privilege('equitas_write_definer', t.oid, a.p))
 union all select 'select_tabla_anon_authenticated', count(*)::text from information_schema.role_table_grants g join nueva on nueva.nombre = g.table_name
   where g.table_schema = 'public' and g.grantee in ('anon', 'authenticated') and g.privilege_type = 'SELECT'
@@ -64,13 +72,17 @@ union all select 'roles_servidor_con_login_o_bypass', count(*)::text from pg_rol
   where rolname in ('equitas_review_server', 'equitas_import_server') and (rolcanlogin or rolbypassrls or rolsuper or rolcreaterole or rolcreatedb)
 union all select 'rol_definidor_con_login_o_super', count(*)::text from pg_roles
   where rolname = 'equitas_write_definer' and (rolcanlogin or rolsuper or rolcreaterole or rolcreatedb)
-union all select 'definidor_miembro_de', count(*)::text from pg_auth_members a join pg_roles r on r.oid = a.roleid
-  where r.rolname = 'equitas_write_definer' and (a.set_option or a.inherit_option)
+union all select 'definidor_miembros_con_set_o_inherit', count(*)::text from membresia_nueva where rol = 'equitas_write_definer' and (set_option or inherit_option)
+union all select 'roles_nuevos_miembros_con_set_o_inherit', coalesce(string_agg(rol || '>' || miembro, ',' order by rol, miembro), '') from membresia_nueva where set_option or inherit_option
+union all select 'roles_nuevos_miembros_con_admin_option', coalesce(string_agg(rol || '>' || miembro, ',' order by rol, miembro), '') from membresia_nueva where admin_option
 union all select 'definidor_create_en_public', (select count(*)::text from pg_roles where rolname = 'equitas_write_definer' and has_schema_privilege(rolname, 'public', 'CREATE'))
 union all select 'grants_columna_definidor_en_existentes', (select count(*)::text from information_schema.column_privileges g join existente on existente.nombre = g.table_name
   where g.table_schema = 'public' and g.grantee = 'equitas_write_definer')
 union all select 'grants_columna_clientes_en_existentes', (select count(*)::text from pg_attribute a join pg_class c on c.oid = a.attrelid join existente on existente.nombre = c.relname, aclexplode(a.attacl) x
-  where c.relnamespace = 'public'::regnamespace and x.grantee <> 0 and pg_get_userbyid(x.grantee) in ('anon', 'authenticated', 'service_role', 'equitas_review_server', 'equitas_import_server'))
+  where c.relnamespace = 'public'::regnamespace and (x.grantee = 0 or pg_get_userbyid(x.grantee) in ('anon', 'authenticated', 'service_role', 'equitas_review_server', 'equitas_import_server')))
+union all select 'restricciones_supersedes_anterior', count(*)::text from restriccion_nueva where conname like '%\_supersedes\_anterior'
+union all select 'restricciones_reason_text', coalesce(string_agg(conname, ',' order by conname), '') from restriccion_nueva where conname like 'case\_review\_reason\_text\_%'
+union all select 'filas_con_cadena_invalida', coalesce(sum(filas_cadena_invalida), 0)::text from tabla_nueva
 union all select 'triggers_append_only', count(*)::text from pg_trigger g join tabla_nueva t on t.oid = g.tgrelid
   where not g.tgisinternal and (g.tgname like '%\_append\_only' or g.tgname like '%\_no\_truncate')
 union all select 'politicas_23', count(*)::text from politica_existente

@@ -78,8 +78,9 @@ create table public."case_review" (
   constraint "case_review_tenant_id_key" unique (tenant, id),
   constraint "case_review_supersedes_fkey" foreign key (tenant, debtor, supersedes) references public."case_review"(tenant, debtor, id),
   constraint "case_review_supersedes_key" unique (supersedes),
+  constraint "case_review_supersedes_anterior" check (supersedes is null or supersedes < id),
   constraint "case_review_idempotency_key" unique (tenant, idempotency_key),
-  constraint "case_review_rules_version_format" check (rules_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$'),
+  constraint "case_review_rules_version_format" check (rules_version ~ '^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$'),
   constraint "case_review_inputs_hash_format" check (inputs_hash ~ '^[0-9a-f]{64}$'),
   constraint "case_review_suggested_intervention_format" check (suggested_intervention ~ '^[A-Z][A-Z0-9_]{0,63}$'),
   constraint "case_review_suggested_intensity_range" check (suggested_intensity between 0 and 2),
@@ -93,14 +94,15 @@ create table public."case_review" (
   constraint "case_review_modifica_changes_suggestion" check (decision <> 'MODIFICA' or (decided_intensity is not null and (decided_intervention, decided_intensity) is distinct from (suggested_intervention, suggested_intensity))),
   constraint "case_review_no_action_without_decided" check (decision not in ('RECHAZA', 'POSPONE') or decided_intensity is null),
   constraint "case_review_reason_code_format" check (reason_code ~ '^[A-Z][A-Z0-9_]{0,63}$'),
-  constraint "case_review_reason_text_length" check (char_length(btrim(reason_text)) between 1 and 500),
+  constraint "case_review_reason_text_length" check (char_length(reason_text) <= 500),
+  constraint "case_review_reason_text_not_blank" check (reason_text ~ '[^[:space:]]'),
   constraint "case_review_reason_text_requires_code" check (reason_text is null or reason_code is not null),
   constraint "case_review_intense_requires_checklist" check (coalesce(decided_intensity, 0) < 3 or (checklist ? 'situacion_hogar' and checklist @> '{"estado_juridico_verificado": true, "canal_valido": true, "alternativa_asistida_ofrecida": true}'))
 );
 
 comment on table public."case_review" is 'ALIGN-018. Decision humana append-only: las correcciones son un evento nuevo con supersedes.';
 
-comment on column public."case_review"."reason_text" is 'Motivo libre, 500 caracteres como maximo. Advertencia al ingresarlo: no incluir datos personales ni informacion del hogar. Sin SELECT para roles de cliente: excluido por defecto de evidencias y exportaciones.';
+comment on column public."case_review"."reason_text" is 'Motivo libre: se guarda tal como llega, 500 caracteres como maximo contando los espacios y con algun caracter visible. Advertencia al ingresarlo: no incluir datos personales ni informacion del hogar. Sin SELECT para roles de cliente: excluido por defecto de evidencias y exportaciones.';
 
 comment on column public."case_review"."checklist" is 'Lista de control de ALIGN-003: solo casillas y codigos, sin texto sobre el hogar.';
 
@@ -124,6 +126,7 @@ create table public."case_review_approval" (
   constraint "case_review_approval_tenant_review_id_key" unique (tenant, case_review, id),
   constraint "case_review_approval_supersedes_fkey" foreign key (tenant, case_review, supersedes) references public."case_review_approval"(tenant, case_review, id),
   constraint "case_review_approval_supersedes_key" unique (supersedes),
+  constraint "case_review_approval_supersedes_anterior" check (supersedes is null or supersedes < id),
   constraint "case_review_approval_idempotency_key" unique (tenant, idempotency_key),
   constraint "case_review_approval_decision_valid" check (decision in ('APRUEBA', 'OBJETA')),
   constraint "case_review_approval_reason_code_format" check (reason_code ~ '^[A-Z][A-Z0-9_]{0,63}$'),
@@ -157,11 +160,12 @@ create table public."import_batch" (
   constraint "import_batch_tenant_id_key" unique (tenant, id),
   constraint "import_batch_supersedes_fkey" foreign key (tenant, supersedes) references public."import_batch"(tenant, id),
   constraint "import_batch_supersedes_key" unique (supersedes),
+  constraint "import_batch_supersedes_anterior" check (supersedes is null or supersedes < id),
   constraint "import_batch_idempotency_key" unique (tenant, idempotency_key),
   constraint "import_batch_source_format" check (source ~ '^[A-Z][A-Z0-9_]{0,63}$'),
-  constraint "import_batch_file_hashes_format" check (jsonb_typeof(file_hashes) = 'object' and file_hashes <> '{}'::jsonb and not jsonb_path_exists(file_hashes, '$.keyvalue() ? (!(@.key like_regex "^[a-z][a-z0-9_]{0,63}$") || @.value.type() != "string" || !(@.value like_regex "^[0-9a-f]{64}$"))')),
-  constraint "import_batch_rules_version_format" check (rules_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$'),
-  constraint "import_batch_counts_format" check (jsonb_typeof(counts) = 'object' and not jsonb_path_exists(counts, '$.** ? (@.type() == "string" || (@.type() == "number" && @ < 0))')),
+  constraint "import_batch_file_hashes_format" check (jsonb_typeof(file_hashes) = 'object' and file_hashes <> '{}'::jsonb and octet_length(file_hashes::text) <= 16384 and not jsonb_path_exists(file_hashes, '$.keyvalue() ? (!(@.key like_regex "^[a-z][a-z0-9_]{0,63}$") || @.value.type() != "string" || !(@.value like_regex "^[0-9a-f]{64}$"))')),
+  constraint "import_batch_rules_version_format" check (rules_version ~ '^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$'),
+  constraint "import_batch_counts_format" check (jsonb_typeof(counts) = 'object' and octet_length(counts::text) <= 16384 and not jsonb_path_exists(counts, 'strict $.** ? (@.type() != "object" && (@.type() != "number" || @ < 0 || @ != @.floor()))') and not jsonb_path_exists(counts, 'strict $.** ? (@.type() == "object").keyvalue() ? (!(@.key like_regex "^[a-z][a-z0-9_]{0,63}$"))')),
   constraint "import_batch_status_valid" check (status in ('RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO', 'FALLIDO', 'DESCARTADO', 'REQUIERE_NUEVO_PREVIEW'))
 );
 
@@ -276,6 +280,9 @@ begin
     pending_supervisor := coalesce(v_existing.decided_intensity, 0) >= 3;
     return;
   end if;
+  if p_supersedes is not null and not exists(select 1 from public.case_review r where r.id = p_supersedes and r.tenant = p_tenant and r.debtor = p_debtor) then
+    raise exception 'SUPERSEDES_NOT_FOUND';
+  end if;
   begin
     insert into public.case_review(tenant, debtor, rules_version, as_of, inputs_hash, suggested_intervention, suggested_intensity,
       explanation, decision, decided_intervention, decided_intensity, reason_code, reason_text, checklist, reviewer, reviewer_role,
@@ -301,6 +308,8 @@ declare
   v_role text := public.equitas_member_role(p_approver_user, p_tenant);
   v_review public.case_review;
   v_existing public.case_review_approval;
+  v_chain_invalid boolean;
+  v_is_proponent boolean;
   v_violation text;
 begin
   if v_role is null then raise exception 'ACTOR_NOT_ACTIVE_MEMBER'; end if;
@@ -308,15 +317,17 @@ begin
   select * into v_review from public.case_review r where r.id = p_case_review and r.tenant = p_tenant;
   if not found then raise exception 'REVIEW_NOT_IN_TENANT'; end if;
   perform pg_advisory_xact_lock(hashtextextended(format('case_review:%s:%s', p_tenant, v_review.debtor), 0));
-  -- Distinto de quien propuso esta version o una anterior de la misma cadena.
-  if exists(
-    with recursive chain as (
-      select r.reviewer, r.supersedes from public.case_review r where r.id = p_case_review
-      union all
-      select r.reviewer, r.supersedes from public.case_review r join chain c on r.id = c.supersedes
-    )
-    select 1 from chain c where c.reviewer = p_approver_user
-  ) then raise exception 'APPROVER_IS_PROPONENT'; end if;
+  -- Distinto de quien propuso esta version o una anterior de la misma cadena. Los IDs bajan en cada paso: el recorrido termina aunque
+  -- la tabla tuviera un ciclo, y todo ciclo o antecedente posterior tiene un eslabon con supersedes >= id, que se rechaza.
+  with recursive chain as (
+    select r.id, r.reviewer, r.supersedes from public.case_review r where r.id = p_case_review
+    union all
+    select r.id, r.reviewer, r.supersedes from public.case_review r join chain c on r.id = c.supersedes and r.id < c.id
+  )
+  select coalesce(bool_or(c.supersedes >= c.id), false), coalesce(bool_or(c.reviewer = p_approver_user), false)
+  into v_chain_invalid, v_is_proponent from chain c;
+  if v_chain_invalid then raise exception 'SUPERSEDES_CHAIN_INVALID'; end if;
+  if v_is_proponent then raise exception 'APPROVER_IS_PROPONENT'; end if;
   if coalesce(v_review.decided_intensity, 0) < 3 then raise exception 'APPROVAL_NOT_REQUIRED'; end if;
   select * into v_existing from public.case_review_approval a where a.tenant = p_tenant and a.idempotency_key = p_idempotency_key;
   if found then
@@ -329,6 +340,9 @@ begin
     return;
   end if;
   if exists(select 1 from public.case_review r where r.supersedes = p_case_review) then raise exception 'REVIEW_SUPERSEDED'; end if;
+  if p_supersedes is not null and not exists(select 1 from public.case_review_approval a where a.id = p_supersedes and a.tenant = p_tenant and a.case_review = p_case_review) then
+    raise exception 'SUPERSEDES_NOT_FOUND';
+  end if;
   begin
     insert into public.case_review_approval(tenant, case_review, decision, reason_code, checklist, approver, approver_role, supersedes, idempotency_key)
     values (p_tenant, p_case_review, p_decision, p_reason_code, p_checklist, p_approver_user, v_role, p_supersedes, p_idempotency_key)
@@ -355,7 +369,7 @@ begin
   return v_text;
 end $$;
 
--- importador "puede coincidir con supervisor" (ALIGN-003) y la membresia admite un solo rol por tenant: por eso supervisor tambien registra lotes.
+-- Solo importador e importador_sistema (ALIGN-003). "Puede coincidir con supervisor" no da importacion a todo supervisor: quien cumpla ambas funciones necesita una membresia importador explicita.
 
 create function public.record_import_batch(
   p_actor_user bigint, p_tenant bigint, p_source text, p_file_hashes jsonb, p_as_of date, p_rules_version text, p_status text, p_idempotency_key uuid,
@@ -368,7 +382,7 @@ declare
   v_violation text;
 begin
   if v_role is null then raise exception 'ACTOR_NOT_ACTIVE_MEMBER'; end if;
-  if v_role not in ('importador', 'importador_sistema', 'supervisor') then raise exception 'ROLE_NOT_ALLOWED'; end if;
+  if v_role not in ('importador', 'importador_sistema') then raise exception 'ROLE_NOT_ALLOWED'; end if;
   perform pg_advisory_xact_lock(hashtextextended(format('import_batch:%s', p_tenant), 0));
   select * into v_existing from public.import_batch b where b.tenant = p_tenant and b.idempotency_key = p_idempotency_key;
   if found then
@@ -381,6 +395,9 @@ begin
     created := false;
     return;
   end if;
+  if p_supersedes is not null and not exists(select 1 from public.import_batch b where b.id = p_supersedes and b.tenant = p_tenant) then
+    raise exception 'SUPERSEDES_NOT_FOUND';
+  end if;
   begin
     insert into public.import_batch(tenant, source, file_hashes, as_of, source_updated_at, rules_version, counts, status, created_by, created_by_role, supersedes, idempotency_key)
     values (p_tenant, p_source, p_file_hashes, p_as_of, p_source_updated_at, p_rules_version, p_counts, p_status, p_actor_user, v_role, p_supersedes, p_idempotency_key)
@@ -392,7 +409,8 @@ begin
   created := true;
 end $$;
 
--- 9. Dueno y ejecucion. El definidor no conserva CREATE sobre public ni postgres queda como miembro suyo.
+-- 9. Dueno y ejecucion. El definidor no conserva CREATE sobre public y postgres no conserva SET ni INHERIT sobre el.
+-- postgres si conserva ADMIN OPTION sobre los tres roles nuevos: PostgreSQL lo otorga a quien crea un rol (grantor supabase_admin). case-review-verify.sql lo informa aparte.
 
 grant equitas_write_definer to postgres;
 

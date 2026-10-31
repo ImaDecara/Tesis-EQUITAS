@@ -31,6 +31,8 @@ OPEN_URL = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
 
 TENANT_A, TENANT_B, OBJECT_A, OBJECT_B = 920001, 920002, 920001, 920002
 USER_CONSULTA, USER_OPERADOR, USER_SUPERVISOR, USER_IMPORTADOR, USER_SIN = 920001, 920002, 920003, 920004, 920005
+USER_SISTEMA = 920009
+MISSING_ID = 999999999
 READY_CHECKLIST = {'situacion_hogar': 'NO_DISPONIBLE', 'estado_juridico_verificado': True,
                    'canal_valido': True, 'alternativa_asistida_ofrecida': True}
 
@@ -153,10 +155,12 @@ def approval_body(user, tenant, review, decision='APRUEBA', **extra):
     return body
 
 
-def batch_body(user, tenant):
-    return {'p_actor_user': user, 'p_tenant': tenant, 'p_source': 'ETL_CLI', 'p_file_hashes': {'cabecera': 'b' * 64},
+def batch_body(user, tenant, **extra):
+    body = {'p_actor_user': user, 'p_tenant': tenant, 'p_source': 'ETL_CLI', 'p_file_hashes': {'cabecera': 'b' * 64},
             'p_as_of': '2026-10-30', 'p_rules_version': '1.0.0', 'p_status': 'RECIBIDO',
             'p_idempotency_key': str(uuid.uuid4()), 'p_counts': {'filas': 1}}
+    body.update(extra)
+    return body
 
 
 def login_all(api, report):
@@ -229,12 +233,72 @@ def check_write_flow(api, report, review_jwt, import_jwt):
     report.expect('lote por el servidor de importacion', '200-True', f"{status}-{batch.get('created')}")
 
 
+def check_chains(api, report, review_jwt, import_jwt):
+    """Tras una insercion valida con id=n, el siguiente es n+1: pedirlo como antecedente seria reemplazarse a si misma."""
+    _, review = api.rpc('record_case_review', review_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A))
+    report.rejected('revision que se reemplaza a si misma', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_case_review', review_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A, p_supersedes=review.get('review_id') + 1)))
+    report.rejected('revision con antecedente inexistente', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_case_review', review_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A, p_supersedes=MISSING_ID)))
+    _, proposal = api.rpc('record_case_review', review_jwt, review_body(
+        USER_OPERADOR, TENANT_A, OBJECT_A, 'MODIFICA', p_decided_intervention='INTIMACION_ADMINISTRATIVA', p_decided_intensity=3,
+        p_reason_code='MOTIVO_SINTETICO', p_checklist=READY_CHECKLIST))
+    target = proposal.get('review_id')
+    status, approval = api.rpc('record_case_review_approval', review_jwt, approval_body(USER_SUPERVISOR, TENANT_A, target))
+    report.expect('aprobacion base de la cadena', '200-True', f"{status}-{approval.get('created')}")
+    report.rejected('aprobacion que se reemplaza a si misma', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_case_review_approval', review_jwt, approval_body(USER_SUPERVISOR, TENANT_A, target, p_supersedes=approval.get('approval_id') + 1)))
+    report.rejected('aprobacion con antecedente inexistente', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_case_review_approval', review_jwt, approval_body(USER_SUPERVISOR, TENANT_A, target, p_supersedes=MISSING_ID)))
+    _, batch = api.rpc('record_import_batch', import_jwt, batch_body(USER_IMPORTADOR, TENANT_A))
+    report.rejected('lote que se reemplaza a si mismo', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_import_batch', import_jwt, batch_body(USER_IMPORTADOR, TENANT_A, p_supersedes=batch.get('batch_id') + 1)))
+    report.rejected('lote con antecedente inexistente', 'SUPERSEDES_NOT_FOUND', api.rpc(
+        'record_import_batch', import_jwt, batch_body(USER_IMPORTADOR, TENANT_A, p_supersedes=MISSING_ID)))
+
+
+def check_reason_length(api, report, review_jwt):
+    """El limite de 500 mide lo que se guarda: los espacios cuentan y el texto no se normaliza."""
+    too_long = 'INVALID_CASE_REVIEW:case_review_reason_text_length'
+    blank = 'INVALID_CASE_REVIEW:case_review_reason_text_not_blank'
+
+    def reason(text):
+        return api.rpc('record_case_review', review_jwt, review_body(
+            USER_OPERADOR, TENANT_A, OBJECT_A, 'RECHAZA', p_reason_code='MOTIVO_SINTETICO', p_reason_text=text))
+
+    report.rejected('501 espacios y una letra', too_long, reason(' ' * 501 + 'x'))
+    report.rejected('una letra y 500 espacios', too_long, reason('x' + ' ' * 500))
+    report.rejected('relleno a ambos lados, 501 en total', too_long, reason(' ' * 250 + 'x' + ' ' * 250))
+    report.rejected('motivo solo con espacios', blank, reason('   '))
+    report.rejected('motivo vacio', blank, reason(''))
+    report.rejected('motivo de tabulaciones y saltos', blank, reason('\t\n '))
+    padded = ' ' * 250 + 'x' + ' ' * 249
+    status, created = reason(padded)
+    report.expect('relleno a ambos lados, 500 en total', '200-True', f"{status}-{created.get('created')}")
+    status, text = api.rpc('read_case_review_reason_text', review_jwt, {
+        'p_actor_user': USER_OPERADOR, 'p_tenant': TENANT_A, 'p_case_review': created.get('review_id')})
+    report.expect('se guarda igual a como llego', '200-500-True', f"{status}-{len(text)}-{text == padded}")
+
+
+def check_import_permission(api, report, review_jwt, import_jwt):
+    """ALIGN-003: solo importador e importador_sistema. Supervisor no adquiere el permiso por serlo."""
+    for status_name in ('RECIBIDO', 'CONFIRMADO', 'PUBLICADO'):
+        report.rejected(f'supervisor sin permiso de importacion, {status_name}', 'ROLE_NOT_ALLOWED', api.rpc(
+            'record_import_batch', import_jwt, batch_body(USER_SUPERVISOR, TENANT_A, p_status=status_name)))
+    report.rejected('operador sin permiso de importacion', 'ROLE_NOT_ALLOWED', api.rpc('record_import_batch', import_jwt, batch_body(USER_OPERADOR, TENANT_A)))
+    report.rejected('consulta sin permiso de importacion', 'ROLE_NOT_ALLOWED', api.rpc('record_import_batch', import_jwt, batch_body(USER_CONSULTA, TENANT_A)))
+    status, machine = api.rpc('record_import_batch', import_jwt, batch_body(USER_SISTEMA, TENANT_A))
+    report.expect('importador_sistema registra lotes', '200-True', f"{status}-{machine.get('created')}")
+    report.error('credencial de revision no registra lotes de supervisor', '42501', api.rpc('record_import_batch', review_jwt, batch_body(USER_SUPERVISOR, TENANT_A)))
+
+
 def check_reads(api, report, sessions):
     def count(table, token):
         status, rows = api.rows(table, 'id', token)
         return len(rows) if status == 200 and isinstance(rows, list) else f'http-{status}'
 
-    expected = {'case_review': 3, 'case_review_approval': 1, 'import_batch': 1}
+    # Filas de check_write_flow, check_chains, check_reason_length y check_import_permission.
+    expected = {'case_review': 6, 'case_review_approval': 2, 'import_batch': 3}
     for table, rows in expected.items():
         for label in ('consulta', 'operador', 'supervisor', 'importador'):
             report.expect(f'lectura {label} {table}', rows, count(table, sessions[label]))
@@ -256,6 +320,9 @@ def http_check():
                                        ('service_role', env['SERVICE_ROLE_KEY'], env['SERVICE_ROLE_KEY'])])
     check_server_credential(api, report, env, review_jwt, import_jwt)
     check_write_flow(api, report, review_jwt, import_jwt)
+    check_chains(api, report, review_jwt, import_jwt)
+    check_reason_length(api, report, review_jwt)
+    check_import_permission(api, report, review_jwt, import_jwt)
     check_reads(api, report, sessions)
     return report.finish()
 

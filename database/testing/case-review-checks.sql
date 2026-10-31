@@ -1,7 +1,7 @@
 -- ALIGN-018. Pruebas de comportamiento por rol. SOLO base local aislada, con case-review-fixtures.sql cargado.
 -- docker exec -i supabase_db_equitas-tp-testing psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -At -F '|' < database/testing/case-review-checks.sql
 -- Se conecta como superusuario local solo para simular roles con SET LOCAL ROLE: el superusuario no ejecuta las pruebas.
--- Todo corre en una transaccion que termina en ROLLBACK: no deja filas. Publica solo codigos y conteos, sin valores de filas.
+-- Todo corre en una transaccion que termina en ROLLBACK: no deja filas ni cambios de esquema. Publica solo codigos y conteos, sin valores de filas.
 -- Sale con error si algun caso no da lo esperado.
 begin;
 
@@ -74,6 +74,29 @@ language sql as $f$
     p_user, p_tenant, replace(p_hashes, 'bbbb', repeat('b', 64)), p_status, coalesce(', ' || p_extra, ''));
 $f$;
 
+-- Filas con ID explicito, sin pasar por las funciones: para probar las restricciones por debajo de las RPC y para inyectar cadenas invalidas.
+create function pg_temp.raw_review(p_rows text) returns text
+language sql as $f$
+  select format($s$insert into public.case_review(id, supersedes, tenant, debtor, rules_version, as_of, inputs_hash, suggested_intervention, suggested_intensity, explanation, decision, decided_intervention, decided_intensity, reason_code, checklist, reviewer, reviewer_role, idempotency_key)
+    overriding system value select v.id, v.supersedes, 920001, 920001, '1.0.0', '2026-10-30'::date, repeat('a', 64), 'RECORDATORIO_INFORMATIVO', 1, '{}'::jsonb, 'MODIFICA', 'INTIMACION_ADMINISTRATIVA', 3, 'X',
+      '{"situacion_hogar":"CONSULTADA","estado_juridico_verificado":true,"canal_valido":true,"alternativa_asistida_ofrecida":true}'::jsonb, 920002, 'operador', gen_random_uuid()
+    from (values %s) v(id, supersedes)$s$, p_rows);
+$f$;
+
+create function pg_temp.raw_approval(p_review bigint, p_rows text) returns text
+language sql as $f$
+  select format($s$insert into public.case_review_approval(id, supersedes, tenant, case_review, decision, reason_code, approver, approver_role, idempotency_key)
+    overriding system value select v.id, v.supersedes, 920001, %s, 'OBJETA', 'X', 920003, 'supervisor', gen_random_uuid()
+    from (values %s) v(id, supersedes)$s$, p_review, p_rows);
+$f$;
+
+create function pg_temp.raw_batch(p_rows text) returns text
+language sql as $f$
+  select format($s$insert into public.import_batch(id, supersedes, tenant, source, file_hashes, as_of, rules_version, status, created_by, created_by_role, idempotency_key)
+    overriding system value select v.id, v.supersedes, 920001, 'ETL_CLI', jsonb_build_object('cabecera', repeat('b', 64)), '2026-10-30'::date, '1.0.0', 'RECIBIDO', 920004, 'importador', gen_random_uuid()
+    from (values %s) v(id, supersedes)$s$, p_rows);
+$f$;
+
 do $body$
 declare
   -- IDs reservados de case-review-fixtures.sql.
@@ -95,6 +118,8 @@ declare
   invalid constant text := 'INVALID_CASE_REVIEW:';
   invalid_ap constant text := 'INVALID_CASE_REVIEW_APPROVAL:';
   invalid_b constant text := 'INVALID_IMPORT_BATCH:';
+  not_found constant text := 'SUPERSEDES_NOT_FOUND';
+  d_a2 constant bigint := 920003;
   rol text;
   tbl text;
   sub_op uuid;
@@ -110,6 +135,10 @@ declare
   prop2 bigint;
   prop3 bigint;
   appr bigint;
+  appr_otra bigint;
+  appr_b bigint;
+  prop_b bigint;
+  siguiente bigint;
   bat bigint;
   bat_b bigint;
   key1 uuid := gen_random_uuid();
@@ -190,11 +219,27 @@ begin
   perform pg_temp.expect('el sistema no sugiere intensidad 3', invalid || 'case_review_suggested_intensity_range', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', 'p_reason_code => ''X'', p_decided_intervention => ''SEGUIMIENTO'', p_decided_intensity => 0'), 'p_suggested_intensity => 1', 'p_suggested_intensity => 3')));
   perform pg_temp.expect('hash de insumos invalido', invalid || 'case_review_inputs_hash_format', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), 'repeat(''a'', 64)', '''abc''')));
   perform pg_temp.expect('version de reglas invalida', invalid || 'case_review_rules_version_format', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''1.0.0''', '''v1''')));
+  perform pg_temp.expect('version de reglas de longitud ilimitada', invalid || 'case_review_rules_version_format', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''1.0.0''', quote_literal(repeat('1', 7) || '.0.0'))));
+  perform pg_temp.expect('version de reglas con salto final', invalid || 'case_review_rules_version_format', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''1.0.0''', quote_literal(E'1.0.0\n'))));
+  perform pg_temp.expect('explicacion de mas de 16384 bytes', invalid || 'case_review_explanation_object', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''{"factores":[]}''', quote_literal(jsonb_build_object('f', repeat('z', 16384))::text))));
+  perform pg_temp.expect('codigo de motivo de 65 caracteres', invalid || 'case_review_reason_code_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => %L', 'X' || repeat('Y', 64)))));
+  perform pg_temp.expect('codigo de motivo con salto final', invalid || 'case_review_reason_code_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => %L', E'X\n'))));
+  perform pg_temp.expect('intervencion de 65 caracteres', invalid || 'case_review_decided_intervention_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'DERIVA', format('p_reason_code => ''X'', p_decided_intervention => %L, p_decided_intensity => 1', 'X' || repeat('Y', 64)))));
   perform pg_temp.expect('explicacion no es objeto', invalid || 'case_review_explanation_object', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''{"factores":[]}''', '''[]''')));
   perform pg_temp.expect('corte nulo', invalid || 'not_null', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''2026-10-30''', 'null')));
   perform pg_temp.expect('texto de 501 caracteres', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat('x', 501)))));
   perform pg_temp.expect('texto de 500 caracteres', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat('x', 500)))));
-  perform pg_temp.expect('texto en blanco', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''X'', p_reason_text => ''   ''')));
+  perform pg_temp.expect('texto en blanco', invalid || 'case_review_reason_text_not_blank', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''X'', p_reason_text => ''   ''')));
+  perform pg_temp.expect('texto vacio', invalid || 'case_review_reason_text_not_blank', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''X'', p_reason_text => ''''')));
+  perform pg_temp.expect('texto de tabulaciones y saltos', invalid || 'case_review_reason_text_not_blank', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', E'\t\n '))));
+  -- El limite mide lo que se guarda: los espacios cuentan y el texto no se normaliza.
+  perform pg_temp.expect('501 espacios y una letra', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat(' ', 501) || 'x'))));
+  perform pg_temp.expect('una letra y 500 espacios', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', 'x' || repeat(' ', 500)))));
+  perform pg_temp.expect('relleno a ambos lados, 501 en total', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat(' ', 250) || 'x' || repeat(' ', 250)))));
+  perform pg_temp.expect('relleno a ambos lados, 500 en total', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat(' ', 250) || 'x' || repeat(' ', 249))), true));
+  perform pg_temp.expect('se guarda sin normalizar: 500 con los espacios', '500', (select char_length(reason_text)::text from public.case_review where id = current_setting('a018.id')::bigint));
+  perform pg_temp.expect('500 caracteres multibyte', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat(chr(241), 500)))));
+  perform pg_temp.expect('501 caracteres multibyte', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat(chr(241), 501)))));
   perform pg_temp.expect('texto sin codigo de motivo', invalid || 'case_review_reason_text_requires_code', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', 'p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_reason_text => ''libre''')));
   perform pg_temp.expect('codigo de motivo con texto libre', invalid || 'case_review_reason_code_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''la familia no puede''')));
   perform pg_temp.expect('lista con clave desconocida', invalid || 'case_review_checklist_shape', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', 'p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_checklist => ''{"nota":"sobre el hogar"}''')));
@@ -221,8 +266,20 @@ begin
   perform pg_temp.expect('correccion como evento nuevo', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', review_ok)), true));
   perform pg_temp.expect('la fila corregida no cambia', '2', (select count(*)::text from public.case_review where id in (review_ok, current_setting('a018.id')::bigint) and decision = 'ACEPTA'));
   perform pg_temp.expect('cada evento se corrige una vez', invalid || 'case_review_supersedes_key', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', review_ok))));
-  perform pg_temp.expect('supersedes de otro tenant', invalid || 'case_review_supersedes_fkey', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', review_b))));
-  perform pg_temp.expect('supersedes inexistente', invalid || 'case_review_supersedes_fkey', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', 'p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => 1')));
+  perform pg_temp.expect('supersedes de otro tenant', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', review_b))));
+  perform pg_temp.expect('supersedes inexistente', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', 'p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => 999999999')));
+  insert into public.debtor(id, tenant, external_id, identifier, description) values (d_a2, t_a, d_a2, 'TP-A018-3', 'Objeto sintetico de la cadena');
+  perform pg_temp.expect('supersedes de otro objeto del tenant', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a2, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', review_nota))));
+  -- Reproduce la revision: el siguiente ID de la secuencia seria el de la fila nueva, que asi se reemplazaria a si misma.
+  select last_value + 1 into siguiente from public.case_review_id_seq;
+  perform pg_temp.expect('revision que se reemplaza a si misma', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', siguiente))));
+  perform pg_temp.expect('revision con antecedente futuro', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'ACEPTA', format('p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1, p_supersedes => %s', siguiente + 5))));
+  -- La tabla lo impide tambien por debajo de la funcion, con el propio definidor.
+  perform pg_temp.expect('tabla: revision autorreferente', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_review('(910001::bigint, 910001::bigint)')));
+  perform pg_temp.expect('tabla: revision con antecedente posterior', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_review('(910001::bigint, 910002::bigint), (910002::bigint, null)')));
+  perform pg_temp.expect('tabla: revisiones en ciclo de 2', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_review('(910001::bigint, 910002::bigint), (910002::bigint, 910001::bigint)')));
+  perform pg_temp.expect('tabla: revisiones en ciclo de 3', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_review('(910001::bigint, 910003::bigint), (910002::bigint, 910001::bigint), (910003::bigint, 910002::bigint)')));
+  perform pg_temp.expect('tabla: la FK sigue cubriendo otro tenant', '23503', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_review(format('(910001::bigint, %s::bigint)', review_b))));
 
   -- F. Aprobacion de intensidad >= 3.
   perform pg_temp.expect('propuesta de intensidad 3', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa), true));
@@ -231,6 +288,7 @@ begin
   perform pg_temp.expect('aprobacion por operador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop)));
   perform pg_temp.expect('aprobacion por consulta', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_a, prop)));
   perform pg_temp.expect('aprobacion por importador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_importador, t_a, prop)));
+  perform pg_temp.expect('aprobacion por importador_sistema', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_sistema, t_a, prop)));
   perform pg_temp.expect('aprobacion sin membresia', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_sin, t_a, prop)));
   perform pg_temp.expect('aprobacion membresia inactiva', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_inactivo, t_a, prop)));
   perform pg_temp.expect('aprobacion supervisor de otro tenant', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_otro_sup, t_a, prop)));
@@ -257,6 +315,12 @@ begin
   appr := current_setting('a018.id')::bigint;
   perform pg_temp.expect('rol del aprobador fijado por el servidor', '1', (select count(*)::text from public.case_review_approval where id = appr and approver = u_supervisor and approver_role = 'supervisor'));
   perform pg_temp.expect('segunda cadena sobre la misma revision', invalid_ap || 'case_review_approval_single_head', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop)));
+  select last_value + 1 into siguiente from public.case_review_approval_id_seq;
+  perform pg_temp.expect('aprobacion que se reemplaza a si misma', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', siguiente))));
+  perform pg_temp.expect('aprobacion con antecedente futuro', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', siguiente + 5))));
+  perform pg_temp.expect('aprobacion con supersedes inexistente', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', 'p_reason_code => ''X'', p_supersedes => 999999999')));
+  perform pg_temp.expect('tabla: aprobacion autorreferente', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_approval(prop, '(910001::bigint, 910001::bigint)')));
+  perform pg_temp.expect('tabla: aprobaciones en ciclo de 2', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_approval(prop, '(910001::bigint, 910002::bigint), (910002::bigint, 910001::bigint)')));
   perform pg_temp.expect('correccion de aprobacion como evento nuevo', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr))));
   perform pg_temp.expect('idempotencia de aprobacion: crea', 'OK', pg_temp.probe('equitas_review_server', null, replace(pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr)), 'gen_random_uuid()', quote_literal(key2)), true));
   perform pg_temp.expect('idempotencia de aprobacion: repetir no crea', 'false', pg_temp.scalar('equitas_review_server', null, replace(replace(pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr)), 'gen_random_uuid()', quote_literal(key2)), $s$select set_config('a018.id', r.approval_id::text, true)$s$, 'select r.created::text')));
@@ -266,14 +330,33 @@ begin
   perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa || format(', p_supersedes => %s', prop2)), true);
   prop3 := current_setting('a018.id')::bigint;
   perform pg_temp.expect('aprobar una propuesta ya corregida', 'REVIEW_SUPERSEDED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop2)));
-  perform pg_temp.expect('aprobar la propuesta vigente', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop3)));
+  perform pg_temp.expect('aprobar la propuesta vigente', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop3), true));
+  appr_otra := current_setting('a018.id')::bigint;
+  perform pg_temp.expect('aprobacion con supersedes de otra revision', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr_otra))));
+  perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_otro_op, t_b, d_b, 'MODIFICA', intensa), true);
+  prop_b := current_setting('a018.id')::bigint;
+  perform pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_otro_sup, t_b, prop_b), true);
+  appr_b := current_setting('a018.id')::bigint;
+  perform pg_temp.expect('aprobacion con supersedes de otro tenant', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr_b))));
 
   -- G. Lote.
   perform pg_temp.expect('lote por importador', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a), true));
   bat := current_setting('a018.id')::bigint;
   perform pg_temp.expect('rol del lote fijado por el servidor', '1', (select count(*)::text from public.import_batch where id = bat and created_by = u_importador and created_by_role = 'importador'));
   perform pg_temp.expect('lote por credencial de maquina', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_sistema, t_a)));
-  perform pg_temp.expect('lote por supervisor', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
+  -- ALIGN-003: supervisor aprueba u objeta. Sin membresia importador no registra lotes en ningun estado.
+  perform pg_temp.expect('lote por supervisor sin permiso de importacion', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
+  perform pg_temp.expect('lote CONFIRMADO por supervisor', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a, 'CONFIRMADO')));
+  perform pg_temp.expect('lote PUBLICADO por supervisor', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a, 'PUBLICADO')));
+  perform pg_temp.expect('lote por supervisor de otro tenant', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_otro_sup, t_b)));
+  -- Caso combinado: la funcion de importar sale de una membresia explicita, por tenant, y no se infiere de otra.
+  insert into public.tenant_user(tenant, "user", role, status) values (t_b, u_supervisor, 920004, true);
+  perform pg_temp.expect('supervisor con membresia importador explicita importa en ese tenant', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_b), true));
+  bat_b := current_setting('a018.id')::bigint;
+  perform pg_temp.expect('rol del lote combinado es importador', '1', (select count(*)::text from public.import_batch where id = bat_b and created_by = u_supervisor and created_by_role = 'importador'));
+  perform pg_temp.expect('la membresia importador de otro tenant no se hereda', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
+  perform pg_temp.expect('la membresia importador no aprueba en ese tenant', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_b, prop_b)));
+  delete from public.tenant_user where tenant = t_b and "user" = u_supervisor;
   perform pg_temp.expect('lote por operador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_operador, t_a)));
   perform pg_temp.expect('lote por consulta', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a)));
   perform pg_temp.expect('lote sin membresia', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_sin, t_a)));
@@ -289,9 +372,25 @@ begin
   perform pg_temp.expect('lote con conteo negativo', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":-1}''')));
   perform pg_temp.expect('cambio de estado como evento nuevo', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'VALIDADO', format('p_supersedes => %s', bat)), true));
   perform pg_temp.expect('cada estado se reemplaza una vez', invalid_b || 'import_batch_supersedes_key', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', format('p_supersedes => %s', bat))));
-  perform pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_otro_sup, t_b), true);
-  bat_b := current_setting('a018.id')::bigint;
-  perform pg_temp.expect('supersedes de lote de otro tenant', invalid_b || 'import_batch_supersedes_fkey', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', format('p_supersedes => %s', bat_b))));
+  perform pg_temp.expect('supersedes de lote de otro tenant', not_found, pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', format('p_supersedes => %s', bat_b))));
+  perform pg_temp.expect('supersedes de lote inexistente', not_found, pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', 'p_supersedes => 999999999')));
+  select last_value + 1 into siguiente from public.import_batch_id_seq;
+  perform pg_temp.expect('lote que se reemplaza a si mismo', not_found, pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', format('p_supersedes => %s', siguiente))));
+  perform pg_temp.expect('lote con antecedente futuro', not_found, pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'FALLIDO', format('p_supersedes => %s', siguiente + 5))));
+  perform pg_temp.expect('tabla: lote autorreferente', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_batch('(910001::bigint, 910001::bigint)')));
+  perform pg_temp.expect('tabla: lotes en ciclo de 2', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_batch('(910001::bigint, 910002::bigint), (910002::bigint, 910001::bigint)')));
+  perform pg_temp.expect('tabla: lotes en ciclo de 3', '23514', pg_temp.probe('equitas_write_definer', null, pg_temp.raw_batch('(910001::bigint, 910003::bigint), (910002::bigint, 910001::bigint), (910003::bigint, 910002::bigint)')));
+  -- Longitudes y texto libre por otros campos del lote.
+  perform pg_temp.expect('lote con version de reglas de longitud ilimitada', invalid_b || 'import_batch_rules_version_format', pg_temp.probe('equitas_import_server', null, replace(pg_temp.batch(u_importador, t_a), '''1.0.0''', quote_literal(repeat('1', 7) || '.0.0'))));
+  perform pg_temp.expect('lote con hashes de mas de 16384 bytes', invalid_b || 'import_batch_file_hashes_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', null, (select jsonb_object_agg('h' || n, repeat('b', 64))::text from generate_series(1, 300) n))));
+  perform pg_temp.expect('lote con conteos de mas de 16384 bytes', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', format('p_counts => %L', (select jsonb_object_agg('filas_' || n, 1)::text from generate_series(1, 2000) n)))));
+  perform pg_temp.expect('lote con texto libre como clave de conteo', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"la familia no puede pagar":1}''')));
+  perform pg_temp.expect('lote con texto libre como clave anidada', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":{"Juan Perez":1}}''')));
+  perform pg_temp.expect('lote con conteo decimal', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":1.5}''')));
+  perform pg_temp.expect('lote con conteo en lista', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":[1,2]}''')));
+  perform pg_temp.expect('lote con conteo nulo', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":null}''')));
+  perform pg_temp.expect('lote con conteo booleano', invalid_b || 'import_batch_counts_format', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":true}''')));
+  perform pg_temp.expect('lote con conteos anidados validos', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'RECIBIDO', 'p_counts => ''{"filas":10,"rechazos":{"importe_invalido":0}}''')));
   perform pg_temp.expect('idempotencia de lote: crea', 'OK', pg_temp.probe('equitas_import_server', null, replace(pg_temp.batch(u_importador, t_a), 'gen_random_uuid()', quote_literal(key1)), true));
   perform pg_temp.expect('idempotencia de lote: repetir no crea', 'false', pg_temp.scalar('equitas_import_server', null, replace(replace(pg_temp.batch(u_importador, t_a), 'gen_random_uuid()', quote_literal(key1)), $s$select set_config('a018.id', r.batch_id::text, true)$s$, 'select r.created::text')));
   perform pg_temp.expect('idempotencia de lote: otra carga rechazada', 'IDEMPOTENCY_KEY_CONFLICT', pg_temp.probe('equitas_import_server', null, replace(pg_temp.batch(u_importador, t_a, 'VALIDADO'), 'gen_random_uuid()', quote_literal(key1))));
@@ -333,6 +432,8 @@ begin
   perform pg_temp.expect('motivo: operador lo lee por funcion', 'true', pg_temp.scalar('equitas_review_server', null, format($s$select public.read_case_review_reason_text(%s, %s, %s) = 'Texto sintetico'$s$, u_operador, t_a, review_nota)));
   perform pg_temp.expect('motivo: supervisor lo lee por funcion', 'true', pg_temp.scalar('equitas_review_server', null, format($s$select public.read_case_review_reason_text(%s, %s, %s) = 'Texto sintetico'$s$, u_supervisor, t_a, review_nota)));
   perform pg_temp.expect('motivo: consulta no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_consulta, t_a, review_nota)));
+  perform pg_temp.expect('motivo: importador no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_importador, t_a, review_nota)));
+  perform pg_temp.expect('motivo: importador_sistema no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_sistema, t_a, review_nota)));
   perform pg_temp.expect('motivo: sin membresia no lo lee', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_sin, t_a, review_nota)));
   perform pg_temp.expect('motivo: otro tenant no lo lee', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_a, review_nota)));
   perform pg_temp.expect('motivo: revision de otro tenant', 'REVIEW_NOT_IN_TENANT', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_b, review_nota)));
@@ -350,6 +451,52 @@ begin
     end;
   end;
   execute 'reset role';
+
+  -- K. Lo que dejaron las RPC: ninguna fila con antecedente que no sea anterior.
+  foreach tbl in array array['case_review', 'case_review_approval', 'import_batch'] loop
+    execute format('select count(*)::text from public.%I where supersedes >= id', tbl) into total_a;
+    perform pg_temp.expect(format('%s sin antecedente posterior ni propio', tbl), '0', total_a);
+  end loop;
+
+  -- L. postgres sin SET ni INHERIT sobre el definidor; authenticator sin ninguna membresia. El ADMIN OPTION residual se informa en case-review-verify.sql.
+  perform pg_temp.expect('postgres sin SET sobre el definidor', 'false', pg_has_role('postgres', 'equitas_write_definer', 'SET')::text);
+  perform pg_temp.expect('postgres sin INHERIT sobre el definidor', 'false', pg_has_role('postgres', 'equitas_write_definer', 'USAGE')::text);
+  perform pg_temp.expect('authenticator sin SET sobre el definidor', 'false', pg_has_role('authenticator', 'equitas_write_definer', 'SET')::text);
+  perform pg_temp.expect('authenticator sin ADMIN sobre el definidor', 'false', pg_has_role('authenticator', 'equitas_write_definer', 'MEMBER WITH ADMIN OPTION')::text);
+end $body$;
+
+-- M. Cadena invalida preexistente. Por las funciones y por la tabla ya no se puede crear (bloques E, F y G): se retiran aca sus restricciones,
+-- solo dentro de esta transaccion, para comprobar que la aprobacion igual termina y la rechaza. El limite de tiempo convierte una regresion en falla.
+set local statement_timeout = '20s';
+
+alter table public.case_review drop constraint case_review_supersedes_anterior, drop constraint case_review_supersedes_key;
+
+do $body$
+declare
+  invalida constant text := 'SUPERSEDES_CHAIN_INVALID';
+  u_supervisor constant bigint := 920003;
+  u_operador constant bigint := 920002;
+  t_a constant bigint := 920001;
+begin
+  execute pg_temp.raw_review('(910001::bigint, 910001::bigint)');
+  execute pg_temp.raw_review('(910002::bigint, 910003::bigint), (910003::bigint, 910002::bigint)');
+  execute pg_temp.raw_review('(910004::bigint, 910006::bigint), (910005::bigint, 910004::bigint), (910006::bigint, 910005::bigint)');
+  -- Antecedente posterior sin ciclo, y una cola que entra en un ciclo (por eso se retira tambien la unica).
+  execute pg_temp.raw_review('(910007::bigint, 910008::bigint), (910008::bigint, null)');
+  execute pg_temp.raw_review('(910010::bigint, 910011::bigint), (910011::bigint, 910010::bigint), (910012::bigint, 910011::bigint)');
+  perform pg_temp.expect('aprobacion sobre ciclo de 1', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910001)));
+  perform pg_temp.expect('aprobacion sobre ciclo de 2, primer eslabon', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910002)));
+  perform pg_temp.expect('aprobacion sobre ciclo de 2, segundo eslabon', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910003)));
+  perform pg_temp.expect('aprobacion sobre ciclo de 3, eslabon 1', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910004)));
+  perform pg_temp.expect('aprobacion sobre ciclo de 3, eslabon 2', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910005)));
+  perform pg_temp.expect('aprobacion sobre ciclo de 3, eslabon 3', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910006)));
+  perform pg_temp.expect('aprobacion sobre antecedente posterior sin ciclo', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910007)));
+  perform pg_temp.expect('aprobacion sobre cola que entra en un ciclo', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910012)));
+  -- La cadena invalida se rechaza antes que cualquier otra conclusion: tampoco el proponente recibe otra respuesta.
+  update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_operador;
+  perform pg_temp.expect('proponente sobre ciclo de 2', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, 910002)));
+  update public.tenant_user set role = 920002 where tenant = t_a and "user" = u_operador;
+  perform pg_temp.expect('ninguna aprobacion sobre cadenas invalidas', '0', (select count(*)::text from public.case_review_approval where case_review between 910001 and 910012));
 end $body$;
 
 select caso, esperado, obtenido, case when esperado is not distinct from obtenido then 'OK' else 'FALLA' end from a018_result order by n;
