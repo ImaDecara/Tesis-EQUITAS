@@ -221,16 +221,40 @@ Los usa la persona operadora para preparar la devolución manual (ALIGN-066). `{
 
 ### 7.1 Campos
 
-| Campo | Control | Obligatorio | Personal | Validación (tras normalizar) | Para qué se pide |
+| Campo | Control | Obligatorio | Personal | Validación (ver normalización, abajo) | Para qué se pide |
 |---|---|---|---|---|---|
 | `nombre` | Texto, `autocomplete=name` | No | Sí | `NOMBRE`: 1–80 letras Unicode, espacio, punto, apóstrofo o guion | Saber cómo dirigirse a la persona al responder |
 | `medio_preferido` | Opción única (grupo con leyenda) | Sí | No | `TELEFONO` o `EMAIL` | Responder por el medio elegido |
-| `contacto` | Texto, `autocomplete=tel` o `email` según el medio | Sí | Sí | `TELEFONO`: hasta 25 caracteres, 8–15 dígitos, `+` solo al inicio · `EMAIL`: hasta 254 ASCII, una `@`, dominio con TLD de letras | Hacer la devolución manual. **No se verifica** ni se envían códigos |
+| `contacto` | Texto, `autocomplete=tel` o `email` según el medio | Sí | Sí | Sobre el valor recibido. `TELEFONO`: hasta 25 caracteres, 8–15 dígitos ASCII, `+` solo al inicio · `EMAIL`: hasta 254 ASCII, una `@`, dominio con TLD de letras | Hacer la devolución manual. **No se verifica** ni se envían códigos |
 | `motivo` | Lista cerrada | Sí | No | Uno de los siete motivos (§7.2) | Elegir plantilla y medir demanda agregada |
-| `referencia` | Texto, `autocomplete=off` | No | Sí | `REFERENCIA`: 1–30 ASCII, letras sin tilde, dígitos, espacio, `-`, `/`, `.` | Orientar a la persona operadora **después** de una identificación oficial; **nunca** se consulta contra la base |
+| `referencia` | Texto, `autocomplete=off` | No | Sí | Sobre el valor recibido. `REFERENCIA`: 1–30 ASCII, letras sin tilde, dígitos, espacio, `-`, `/`, `.` | Orientar a la persona operadora **después** de una identificación oficial; **nunca** se consulta contra la base |
 | `consentimiento` | Casilla, **sin marcar** al inicio | Sí | No | Debe estar marcada | Constancia de la versión del aviso aceptada |
 
-Normalización común: Unicode NFC, recorte de espacios y espacios repetidos reducidos a uno; un carácter de control o de formato invalida el campo; todo se guarda y se muestra como **texto plano**. Esta forma normalizada es la que se guarda y ve la persona operadora. El contrato trae vectores válidos e inválidos por formato (`solicitud_contacto.formatos`), que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar en sus pruebas.
+**Normalización por formato.** Cada formato tiene su propio tratamiento. TELEFONO, EMAIL y REFERENCIA se validan sobre el valor recibido, sin transformarlo antes: un carácter fuera de su alfabeto ASCII invalida el campo con FORMATO y nunca se convierte en otro. A esos tres no se les aplica NFC, NFKC, cambios de mayúsculas ni un recorte general de espacios Unicode. Solo NOMBRE, que no forma parte de ninguna clave, pasa por NFC.
+
+| Formato | Transformaciones, en orden |
+|---|---|
+| `NOMBRE` | `NFC` → `RECORTE_ESPACIOS` → `COLAPSO_ESPACIOS` |
+| `TELEFONO` | `RECORTE_ESPACIOS` → `COLAPSO_ESPACIOS` |
+| `EMAIL` | `RECORTE_ESPACIOS` |
+| `REFERENCIA` | `RECORTE_ESPACIOS` → `COLAPSO_ESPACIOS` |
+
+| Transformación | Qué hace | Por qué |
+|---|---|---|
+| `NFC` | Lleva el nombre a la forma Unicode NFC. | Una misma letra con tilde puede llegar compuesta o descompuesta. El nombre solo se muestra: no se usa para deduplicar ni para contar. |
+| `RECORTE_ESPACIOS` | Quita los espacios U+0020 del inicio y del final. No quita ningún otro carácter, aunque se vea como un espacio. | Un espacio en un extremo no forma parte de ningún valor admitido y suele venir del teclado o de pegar el texto. |
+| `COLAPSO_ESPACIOS` | Reduce a uno los espacios U+0020 repetidos dentro del valor. | Es presentación: en un teléfono o una referencia el espacio solo separa, y en un nombre no cambia a quién se llama. |
+
+Un carácter de control o de formato (categorías Unicode Cc, Cf, Cs, Co, Cn) invalida NOMBRE antes de cualquier transformación; en los otros formatos ya queda fuera del alfabeto. Las longitudes máximas se miden después de estas transformaciones. Todo se guarda y se muestra como texto plano, nunca como HTML. La persona operadora ve el contacto como se escribió, con estas transformaciones y ninguna otra; la clave canónica es otra cosa y no se muestra. `patron_crudo` da, para `TELEFONO`, `EMAIL` y `REFERENCIA`, el patrón que debe cumplir el valor recibido, sin banderas: con la bandera de mayúsculas, `U+212A` coincidiría con `[a-z]` en varios motores. El contrato trae vectores válidos e inválidos por formato (`solicitud_contacto.formatos`), que la prueba contrasta con una implementación de referencia y que ALIGN-065 debe reutilizar en sus pruebas.
+
+Entradas no ASCII que deben rechazarse, escritas con escapes porque varias no se distinguen a simple vista (`\u212a` se ve igual que una K):
+
+| Formato | Entrada rechazada, tal como llega |
+|---|---|
+| `NOMBRE` | `\u00a0Ana`, `Ana\u2028`, `Ana\u200b`, `\ufeffAna` |
+| `TELEFONO` | `\u0660\u0660\u0660\u0660\u0660\u0660\u0660\u0660`, `\uff10\uff10\uff10\uff10\uff10\uff10\uff10\uff10`, `\u00b2\u00b2\u00b2\u00b2\u00b2\u00b2\u00b2\u00b2`, `\uff0b54 000 000 0000`, `+54\u2011000\u2011000\u20110000`, `+54\u00a0000\u00a0000\u00a00000`, `\u00a0+54 000 000-0000`, `+54 000 000-0000\u00a0`, `\u3000+54 000 000-0000`, `+54 000 000-0000\u2028`, `+54 000\u200b000 0000` |
+| `EMAIL` | `\u212a@example.org`, `K\u212a@example.org`, `\u212a+uno@example.org`, `\u212ab@gmail.com`, `persona@\u212a.example.org`, `persona@example.or\u212a`, `\uff50ersona@example.com`, `Jos\u00e9@example.com`, `Jose\u0301@example.com`, `persona@b\u00fccher.example`, `persona@example\uff0ecom`, `persona\uff20example.com`, `\u00a0persona@example.com`, `persona@example.com\u00a0`, `\u2003persona@example.com`, `\u3000persona@example.com`, `persona@example.com\u2028`, `persona@example.com\u2029`, `persona\u200b@example.com`, `persona\u00ad@example.com`, `\ufeffpersona@example.com` |
+| `REFERENCIA` | `\u00d1and\u00fa 1`, `\u212a-0001`, `\uff33\uff29\uff2e\uff34-0001`, `\u00a0SINT-0001`, `SINT-0001\u2028`, `SINT\u200b-0001` |
 
 **Campos prohibidos** (no existen en el formulario): documento, DNI, CUIT, domicilio, fecha de nacimiento, mensaje o comentario libre, adjuntos, situación del hogar, ingresos e importes. El campo trampa `sitio_web` está oculto a personas y lectores de pantalla.
 
@@ -260,11 +284,27 @@ La casilla `CAN-CAMPO-CONSENTIMIENTO-v1` no viene marcada; sin ella el envío es
 
 ### 7.5 Clave canónica del contacto
 
-La normalización común conserva espacios, guiones y paréntesis: es la presentación que ve la persona operadora, y no sirve para reconocer a un mismo destinatario. El límite por contacto y la deduplicación usan otra cosa: una **clave canónica por medio**, derivada del contacto ya validado (`solicitud_contacto.clave_canonica`). La clave nunca se muestra ni se guarda en claro: solo su HMAC, en contadores de 24 horas.
+El contacto que se guarda conserva espacios, guiones y paréntesis: es la presentación que ve la persona operadora, y no sirve para reconocer a un mismo destinatario. El límite por contacto y la deduplicación usan otra cosa: una **clave canónica por medio**, derivada solo de un contacto ya validado, con una función por medio separada de la normalización de `NOMBRE` (`solicitud_contacto.clave_canonica`). La clave nunca se muestra ni se guarda en claro: solo su HMAC, en contadores de 24 horas.
+
+**Regla de diseño.** Una equivalencia entra a la clave solo si una regla de reglas_listadas la justifica. Ante la duda, dos claves distintas: un alias no detectado es una limitación declarada; unir a dos personas es un defecto.
+
+| Regla | Medio | Qué hace | Por qué se justifica | Ejemplo → clave |
+|---|---|---|---|---|
+| `TEL-PRESENTACION` | Teléfono | Quita espacios, guiones y paréntesis. | Son presentación: no cambian los dígitos que se marcan. | `+54 (000) 000-0000` → `+540000000000` |
+| `TEL-PREFIJO-INTERNACIONAL` | Teléfono | Lee + y 00 seguido de un dígito distinto de 0 como el mismo prefijo internacional. | Son dos escrituras del mismo prefijo: los dígitos que siguen llevan el prefijo de país. | `0034 555 000 000` → `+34555000000` |
+| `TEL-PAIS-IMPLICITO` | Teléfono | Sin + ni 00, antepone 54, salvo que los dígitos ya empiecen con 54 y sean al menos 12. | El plan tiene ámbito argentino; el número extranjero sin prefijo queda como limitación declarada. | `555 000 0000` → `+545550000000` |
+| `TEL-TRONCAL` | Teléfono | Con prefijo 54 y más de 10 dígitos nacionales, quita un 0 inicial. | El prefijo troncal no forma parte del número nacional. | `0555 000 0000` → `+545550000000` |
+| `TEL-CELULAR` | Teléfono | Con prefijo 54 y más de 10 dígitos nacionales, quita un 9 inicial. | Es la marca de celular para llamadas internacionales; ningún código de área empieza con 9. | `+54 9 555 000 0000` → `+545550000000` |
+| `TEL-QUINCE` | Teléfono | Con prefijo 54 y exactamente 12 dígitos nacionales, quita el primer 15 que empiece en la posición 2, 3 o 4. | Es la marca local de celular; un número de 10 dígitos que contenga 15 no se toca. | `555 15 000 0000` → `+545550000000` |
+| `EMAIL-RECORTE` | Correo | Quita los espacios U+0020 de los extremos. | Ninguna dirección admitida tiene espacios, así que no puede convertirse en otra. | `\u0020Persona@example.com\u0020` → `Persona@example.com` |
+| `EMAIL-DOMINIO-MINUSCULAS` | Correo | Pasa a minúsculas el dominio, ya validado como ASCII. | Los nombres de dominio no distinguen mayúsculas (DNS), también en su forma xn--. | `Persona@EXAMPLE.COM` → `Persona@example.com` |
+| `EMAIL-POLITICA-PROVEEDOR` | Correo | Aplica lo que declara politicas_por_proveedor, solo con coincidencia exacta del dominio. | Cada política lleva su propia justificación; sin política, la parte local no cambia. | `A.B+chat@GMAIL.COM` → `ab@gmail.com` |
+
+Cada entrada aceptada solo cambia por estas reglas y por las transformaciones de §7.1. La prueba lo verifica como propiedad: barre todo Unicode en una posición por formato, y los caracteres que una forma Unicode, un cambio de mayúsculas o un recorte acercan al alfabeto en varias posiciones; compara además todos los pares de un conjunto de correos con una formulación independiente de estas reglas.
 
 **Teléfono** (forma `+<prefijo de país><dígitos>`, Argentina por el ámbito del plan):
 
-1. Quitar espacios, guiones y paréntesis; queda un + opcional y dígitos.
+1. Partir del valor ya validado. Quitar espacios, guiones y paréntesis; queda un + opcional y dígitos.
 2. Con +: los dígitos ya llevan el prefijo de país. Con 00 seguido de un dígito distinto de 0: se quita el 00 y los dígitos llevan el prefijo. Sin ninguno de los dos, si empiezan con 54 y tienen al menos 12 dígitos, también lo llevan. En otro caso se antepone 54.
 3. Si el prefijo no es 54, la clave es + y los dígitos.
 4. Con prefijo 54, sobre los dígitos nacionales: quitar un 0 inicial (prefijo troncal) si hay más de 10; después, quitar un 9 inicial (marca de celular) si hay más de 10; después, si hay exactamente 12, quitar el primer 15 que empiece en la posición 2, 3 o 4 contando desde 0 (el 15 sigue al código de área, de 2 a 4 dígitos).
@@ -274,10 +314,10 @@ Un número nacional de 10 dígitos queda intacto y cada variante (+, 00, 0 tronc
 
 **Correo** (forma `<parte local>@<dominio en minúsculas>`):
 
-1. Separar la parte local y el dominio, y pasar el dominio a minúsculas.
+1. Partir del valor ya validado, sin los espacios U+0020 de los extremos. Separar la parte local y el dominio, y pasar el dominio a minúsculas.
 2. Buscar el dominio, con coincidencia exacta, en politicas_por_proveedor.
 3. Sin política: conservar la parte local tal cual; la clave es esa parte local, @ y el dominio en minúsculas.
-4. Con política: aplicar solo lo que esa política declara (parte local en minúsculas, quitar desde el primer + salvo que esté al inicio, quitar puntos) y usar su dominio canónico.
+4. Con política: aplicar solo lo que esa política declara (parte local en minúsculas, quitar desde el primer + salvo que esté al inicio, quitar puntos salvo que no quede nada) y usar su dominio canónico.
 
 Sin política conocida para el dominio, la parte local se conserva tal cual: admitir mayúsculas o un + no demuestra que el servidor los ignore, y un mismo dominio puede tener buzones independientes de personas distintas. Las equivalencias de la parte local y del dominio valen solo para los proveedores de politicas_por_proveedor, con coincidencia exacta del dominio.
 
@@ -289,11 +329,12 @@ Vectores del contrato, que la prueba contrasta con una implementación de refere
 
 | Medio | Clave | Formas equivalentes |
 |---|---|---|
-| Teléfono | `+540000000000` | `+54 000 000-0000`, `+54(000)0000000`, `+54-000-000-0000`, `+54 000 000 0000`, `(000) 0000-0000` |
+| Teléfono | `+540000000000` | `+54 000 000-0000`, `+54(000)0000000`, `+54-000-000-0000`, `+54 000 000 0000`, `(000) 0000-0000`, `\u0020+54  000 000 0000\u0020` |
 | Teléfono | `+545550000000` | `+54 555 000-0000`, `+54 9 555 000 0000`, `+54 0 555 000 0000`, `+54 555 15 000 0000`, `54 555 000 0000`, `0054 555 000 0000`, `555 000 0000`, `0555 000 0000`, `0555 15 000 0000`, `555 15 000 0000` |
 | Teléfono | `+545515000000` | `+54 5515 000000`, `5515 15 000000`, `0 5515 15 000000`, `+54 9 5515 000000` |
 | Teléfono | `+34555000000` | `+34 555 000 000`, `0034 555 000 000` |
-| Correo | `Persona@example.com` | `Persona@example.com`, `Persona@EXAMPLE.COM`, `Persona@Example.Com` |
+| Correo | `Persona@example.com` | `Persona@example.com`, `Persona@EXAMPLE.COM`, `Persona@Example.Com`, `\u0020Persona@example.com\u0020` |
+| Correo | `Persona@xn--bcher-kva.example` | `Persona@xn--bcher-kva.example`, `Persona@XN--BCHER-KVA.EXAMPLE` |
 | Correo | `ab@gmail.com` | `a.b@gmail.com`, `ab@googlemail.com`, `A.B+chat@GMAIL.COM`, `AB@gmail.com` |
 
 Pares que **no** deben unirse (unirlos perdería la consulta de otra persona o le haría compartir un límite):
@@ -314,6 +355,11 @@ Pares que **no** deben unirse (unirlos perdería la consulta de otra persona o l
 | Correo | `+a@example.com` | `+b@example.com` |
 | Correo | `a.b@gmail.com.example.org` | `ab@gmail.com.example.org` |
 | Correo | `ab@gmail.com` | `ab@example.org` |
+| Correo | `K@example.org` | `k@example.org` |
+| Correo | `KK@example.org` | `Kk@example.org` |
+| Correo | `K+uno@example.org` | `K@example.org` |
+| Correo | `a%b@example.org` | `a@example.org` |
+| Correo | `a.b@xn--bcher-kva.example` | `ab@xn--bcher-kva.example` |
 
 Escenarios exigidos a ALIGN-065 y ALIGN-071 (`escenarios_equivalencia`):
 
@@ -326,12 +372,20 @@ Escenarios exigidos a ALIGN-065 y ALIGN-071 (`escenarios_equivalencia`):
 | `ESC-BUZONES-MISMO-MOTIVO` | Contraejemplo: cuatro buzones independientes de un dominio sin política, con el mismo motivo, no se deduplican. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 4 |
 | `ESC-BUZONES-MOTIVOS-DISTINTOS` | Contraejemplo: cuatro buzones independientes de un dominio sin política, con motivos distintos, no comparten el límite. | RECIBIDA, RECIBIDA, RECIBIDA, RECIBIDA | 4 |
 | `ESC-BUZONES-MAYUSCULAS` | Contraejemplo: en un dominio sin política, Buzon@ y buzon@ pueden ser buzones distintos y no se deduplican. | RECIBIDA, RECIBIDA | 2 |
+| `ESC-UNICODE-MISMO-MOTIVO` | U+212A no se convierte en K: se rechaza y no se toma por un duplicado de K@example.org. | RECIBIDA, INVALIDA | 1 |
+| `ESC-UNICODE-NO-COMPARTE-LIMITE` | Con el cupo de K@example.org agotado, U+212A se rechaza por formato: no recibe LIMITE, porque no es ese contacto. | RECIBIDA, RECIBIDA, RECIBIDA, INVALIDA | 3 |
+| `ESC-UNICODE-NO-CONSUME-CUPO` | Dos envíos rechazados con U+212A no consumen el cupo de K@example.org, que conserva sus tres solicitudes. | INVALIDA, INVALIDA, RECIBIDA, RECIBIDA, RECIBIDA | 3 |
+| `ESC-UNICODE-PARTES-LOCALES` | De las cuatro combinaciones de K y U+212A en dos posiciones, solo KK@example.org se acepta. | RECIBIDA, INVALIDA, INVALIDA, INVALIDA | 1 |
+| `ESC-ESPACIO-DURO-TELEFONO` | Un espacio duro (U+00A0) en el extremo de un teléfono se rechaza: no se recorta como si fuera U+0020. | RECIBIDA, INVALIDA | 1 |
+| `ESC-ESPACIO-DURO-CORREO` | Un espacio duro (U+00A0) o un separador de línea (U+2028) en el extremo de un correo se rechazan. | RECIBIDA, INVALIDA, INVALIDA | 1 |
+| `ESC-RECORTE-ESPACIOS` | Regla listada: un espacio U+0020 en los extremos no cambia el contacto y se deduplica. | RECIBIDA, RECIBIDA | 1 |
+| `ESC-OTRO-CAMPO-INVALIDO` | Un contacto válido con otro campo inválido se rechaza sin consumir el cupo de ese contacto. | INVALIDA, RECIBIDA, RECIBIDA, RECIBIDA | 3 |
 
-**Limitaciones.** No se unifican un teléfono sin código de área con el mismo número con código, ni un número extranjero escrito sin + ni 00, que se lee como argentino. Por eso comparten clave, en casos muy poco probables, dos números locales iguales sin código de área o ese número extranjero y un argentino que se lea igual: la persona operadora tampoco podría distinguirlos al marcar. Los alias de correo de proveedores sin política conocida no se unifican, incluidos los dominios que aceptan cualquier dirección: pueden crear más de una solicitud para un mismo destinatario. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO. Se acepta porque la alternativa podría unir buzones de personas distintas, perder sus consultas y hacerles compartir un límite.
+**Limitaciones.** No se unifican un teléfono sin código de área con el mismo número con código, ni un número extranjero escrito sin + ni 00, que se lee como argentino. Por eso comparten clave, en casos muy poco probables, dos números locales iguales sin código de área o ese número extranjero y un argentino que se lea igual: la persona operadora tampoco podría distinguirlos al marcar. Los alias de correo de proveedores sin política conocida no se unifican, incluidos los dominios que aceptan cualquier dirección y las variantes de mayúsculas, etiquetas o puntos en la parte local: pueden crear más de una solicitud para un mismo destinatario. Esos casos quedan cubiertos solo por los límites por IP y por municipio y por el cierre ABUSO. Se acepta porque la alternativa podría unir buzones de personas distintas, perder sus consultas y hacerles compartir un límite. Un correo con caracteres fuera de ASCII (tildes, ñ o un dominio escrito en Unicode) y un teléfono o una referencia con caracteres no ASCII (dígitos de otros alfabetos, espacio duro, guion tipográfico) se rechazan con FORMATO, aunque ese contacto exista: la persona puede elegir el otro medio o la atención oficial. Un dominio escrito en su forma xn-- se acepta y no se une con su forma Unicode, que no se admite; un dominio de nivel superior xn-- se rechaza. NOMBRE admite cualquier letra Unicode, incluidas algunas que no se ven: no afecta ninguna clave y solo se muestra.
 
 ## 8. No revelación: respuesta idéntica
 
-El servidor evalúa el envío en este orden (`orden_de_evaluacion`): tamaño (más de 4096 bytes → `ERROR`), campo trampa (con valor → `RECIBIDA` sin guardar), límites por IP y por municipio (→ `LIMITE`), formato (→ `INVALIDA` con `{campo, codigo}`), duplicado por clave canónica y motivo en 24 h (→ `RECIBIDA` sin crear otra ni contar para el límite por contacto), límite por contacto sobre la clave canónica (→ `LIMITE`) y guardado (→ `RECIBIDA` o `ERROR`). El límite por contacto va después del formato porque solo un contacto válido tiene clave canónica.
+El servidor evalúa el envío en este orden (`orden_de_evaluacion`): tamaño (más de 4096 bytes → `ERROR`), campo trampa (con valor → `RECIBIDA` sin guardar), límites por IP y por municipio (→ `LIMITE`), formato, con el contacto validado sobre el valor recibido (→ `INVALIDA` con `{campo, codigo}`, sin derivar la clave ni tocar el contador por contacto), duplicado por clave canónica y motivo en 24 h (→ `RECIBIDA` sin crear otra ni contar para el límite por contacto), límite por contacto sobre la clave canónica (→ `LIMITE`) y guardado (→ `RECIBIDA` o `ERROR`). El límite por contacto va después del formato porque solo un contacto válido tiene clave canónica.
 
 | Resultado | Cuerpo | Cuándo | Estado del chat |
 |---|---|---|---|
@@ -426,7 +480,7 @@ La regla central es `RO-02`: la persona que responde **tampoco** da información
 | Texto plano | Sin HTML, sin caracteres de control | Inyección en la cola del operador |
 | Captcha de terceros | **No** | Enviar datos a un tercero y excluir a personas con discapacidad |
 
-Los envíos inválidos también cuentan para los límites por IP y por municipio (evita sondear formatos). El secreto del HMAC vive en el servidor por entorno, nunca en el navegador ni en el repositorio.
+Los envíos inválidos también cuentan para los límites por IP y por municipio (evita sondear formatos), pero nunca para el límite por contacto: se rechazan antes de derivar la clave. El secreto del HMAC vive en el servidor por entorno, nunca en el navegador ni en el repositorio.
 
 ## 13. Accesibilidad y lenguaje claro
 
@@ -475,14 +529,15 @@ Los envíos inválidos también cuentan para los límites por IP y por municipio
 | RC-19 | Datos personales en registros técnicos | El servidor guarda cuerpos o IP | `no_se_guarda`; IP solo como HMAC; errores con códigos | 065 y 071: revisión de registros | Bajo |
 | RC-20 | Configuración del municipio falsa o incompleta | Un teléfono oficial equivocado deriva llamadas a un tercero | Configuración obligatoria con formato; sin ella la ruta no se publica | 065 | Medio: requiere control humano de los valores |
 | RC-21 | Unión indebida de destinatarios | Dos buzones de personas distintas dan la misma clave: se descarta una consulta como duplicada o una persona agota el límite de otra | La parte local del correo se conserva salvo política explícita del proveedor; un número nacional de 10 dígitos queda intacto | Prueba de este contrato; 065 y 071: `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS` | Bajo |
+| RC-22 | Transformación silenciosa del contacto | Una normalización general convierte `U+212A` en K, o un recorte general quita un espacio duro: el contacto escrito se vuelve otro, se pierde una consulta o se comparte un cupo, y la persona operadora responde a otro destino | El contacto se valida sobre el valor recibido; ninguna transformación Unicode antes de validar; recorte solo de `U+0020`; regla de diseño y reglas listadas (§7.5) | Prueba de propiedad de este contrato; 065 y 071: escenarios `ESC-UNICODE-*` y `ESC-ESPACIO-DURO-*`, desde el valor recibido hasta el contacto guardado y mostrado | Bajo; una biblioteca o un navegador pueden transformar antes del servidor (§15) |
 
 ## 15. Obligaciones para los consumidores
 
 | Ticket | Debe |
 |---|---|
-| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; clave canónica de §7.5 con sus vectores `equivalencias` y `distintos`, separada del contacto que ve el operador; función de servidor de envío con el orden y las respuestas de §8; pruebas ejecutables de todos los `escenarios_equivalencia`, incluidos los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS`: buzones independientes no se deduplican ni comparten el límite; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
-| ALIGN-066 | Cola con los estados, transiciones y motivos de cierre de §9.1; purga inmediata para `SUPRESION_SOLICITADA` y `CONTACTO_NO_CORRESPONDE` (reutilizando la función de purga de 065); plantillas `OPE-*` del catálogo; mostrar el contacto normalizado, nunca la clave canónica; eventos de §10 sin nombre, contacto ni referencia; solo `RESPUESTA_REALIZADA` cuenta como respuesta; acceso de §9.3; vinculación manual auditada con ALIGN-069 |
-| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12) con todos los `escenarios_equivalencia` contra el endpoint: `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` (un mismo teléfono) y los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS` (buzones independientes), permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
+| ALIGN-065 | Leer el flujo y los textos de `contracts/channel-flow.v1.json` (sin textos propios) y negarse a publicar si `estado` no es `APROBADO`; navegación en el navegador sin registro; formulario con los seis campos, normalización y vectores de `formatos`; clave canónica de §7.5 con sus vectores `equivalencias` y `distintos`, separada del contacto que ve el operador; función de servidor de envío con el orden y las respuestas de §8; pruebas ejecutables de todos los `escenarios_equivalencia`, incluidos los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS`: buzones independientes no se deduplican ni comparten el límite; y `ESC-UNICODE-MISMO-MOTIVO`, `ESC-UNICODE-NO-COMPARTE-LIMITE`, `ESC-UNICODE-NO-CONSUME-CUPO`, `ESC-UNICODE-PARTES-LOCALES`, `ESC-ESPACIO-DURO-TELEFONO`, `ESC-ESPACIO-DURO-CORREO`, `ESC-RECORTE-ESPACIOS` y `ESC-OTRO-CAMPO-INVALIDO`: lo rechazado no crea solicitud ni toca el cupo de otro contacto; validar `patron_crudo` en el servidor, sobre el valor recibido, sin banderas de mayúsculas; el recorte quita solo `U+0020`, no `trim()` ni `strip()` sin argumento, que también quitan `U+00A0` y `U+2028`; el contacto no pasa por `normalize()`, `toLowerCase()`, una columna `citext` ni una intercalación que ignore mayúsculas; el campo es `type=text`, no `type=email`, porque el navegador puede convertir el dominio antes de enviarlo; sin `INSERT`/`SELECT` directos para `anon`; límites y campo trampa de §12; purga programada con reloj simulado (§11); accesibilidad de §13 en 360 px; ruta oculta si falta la configuración del municipio |
+| ALIGN-066 | Cola con los estados, transiciones y motivos de cierre de §9.1; purga inmediata para `SUPRESION_SOLICITADA` y `CONTACTO_NO_CORRESPONDE` (reutilizando la función de purga de 065); plantillas `OPE-*` del catálogo; mostrar el contacto como se guardó (§7.1), nunca la clave canónica; eventos de §10 sin nombre, contacto ni referencia; solo `RESPUESTA_REALIZADA` cuenta como respuesta; acceso de §9.3; vinculación manual auditada con ALIGN-069 |
+| ALIGN-071 | Verificar sobre la integración: no revelación (§8), abuso (§12) con todos los `escenarios_equivalencia` contra el endpoint: `ESC-TEL-MISMO-MOTIVO` y `ESC-TEL-MOTIVOS-DISTINTOS` (un mismo teléfono), los contraejemplos `ESC-BUZONES-MISMO-MOTIVO`, `ESC-BUZONES-MOTIVOS-DISTINTOS` y `ESC-BUZONES-MAYUSCULAS` (buzones independientes) y `ESC-UNICODE-MISMO-MOTIVO`, `ESC-UNICODE-NO-COMPARTE-LIMITE`, `ESC-UNICODE-NO-CONSUME-CUPO`, `ESC-UNICODE-PARTES-LOCALES`, `ESC-ESPACIO-DURO-TELEFONO`, `ESC-ESPACIO-DURO-CORREO`, `ESC-RECORTE-ESPACIOS` y `ESC-OTRO-CAMPO-INVALIDO` (validación sobre el valor recibido, también en el contacto guardado y mostrado), permisos (§9.3), purga (§11), recorrido de derivación (§9) y que los textos publicados sean los de la versión aprobada |
 
 ## 16. Decisiones de interpretación (lectura más acotada)
 
@@ -509,6 +564,10 @@ Los envíos inválidos también cuentan para los límites por IP y por municipio
 | D19 | Controles de lenguaje | Son una comprobación parcial; no reemplazan la revisión semántica humana de cada versión aprobada |
 | D20 | Equivalencias de correo | Solo con política explícita por proveedor y coincidencia exacta del dominio (hoy, Gmail); en otro dominio la parte local se conserva tal cual. Un falso positivo pierde una consulta; un alias no detectado solo consume otro cupo, así que se prefiere no unir |
 | D21 | Variantes de teléfono | Se mantienen `+`, `00`, 0 troncal, 9 y 15: se revisaron con el mismo criterio y no unen números nacionales distintos (§7.5) |
+| D22 | Orden entre validar y normalizar | Teléfono, correo y referencia se validan sobre el valor recibido; solo `NOMBRE` pasa por NFC, porque no forma parte de ninguna clave. Las variantes de teléfono y de correo revisadas no cambian |
+| D23 | Cuándo dos contactos son el mismo | Solo si una regla listada lo justifica (§7.5). Ante la duda, dos claves: un alias no detectado es una limitación declarada; unir a dos personas es un defecto |
+| D24 | Espacios en los extremos | Se mantiene el recorte, pero solo de `U+0020`: el teclado del celular suele agregar uno y ninguna dirección admitida lo contiene. Un espacio duro u otro separador se rechaza, porque antes se quitaba sin regla que lo justificara |
+| D25 | Direcciones con caracteres no ASCII | Se rechazan con error de formato; no se agrega soporte de correo internacional. La persona puede usar el teléfono o la atención oficial (§7.5, limitaciones) |
 
 ## 17. Aprobación
 
@@ -532,3 +591,4 @@ Al aprobar, un commit nuevo cambia `estado` a `APROBADO` y completa `aprobacion`
 | 1.0.0 (borrador) | 30/10/2026 | Versión inicial para aprobación (ALIGN-047). Sin consumidores |
 | 1.0.0 (borrador, corrección 1) | 30/10/2026 | Sin consumidores, se corrige la misma versión tras la revisión independiente: clave canónica del contacto con vectores y escenarios (B1), afirmaciones e importes literales en el control de lenguaje, descrito como parcial (M1), igualdad JSON en el validador de la prueba (M2), alcance de la purga y texto `CAN-PRIVACIDAD-VINCULO-v1` (M3) y atención presencial en los resultados (M4) |
 | 1.0.0 (borrador, corrección 2) | 30/10/2026 | Sin consumidores, se corrige la misma versión tras la segunda revisión: en el correo, la parte local solo cambia con política explícita del proveedor, con contraejemplos de buzones independientes (B2); `CAN-PRIVACIDAD-DETALLE-v1` sin «En ese caso» (M5) |
+| 1.0.0 (borrador, corrección 3) | 31/10/2026 | Sin consumidores, se corrige la misma versión tras la tercera revisión: teléfono, correo y referencia se validan sobre el valor recibido; la normalización se separa por formato; la clave se deriva solo de un contacto validado; regla de diseño y reglas listadas (B3). También se rechaza lo que un recorte general quitaba sin regla, como `U+00A0` y `U+2028` en los extremos. Ningún texto del catálogo cambia |

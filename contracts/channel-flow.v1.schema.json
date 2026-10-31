@@ -259,13 +259,72 @@
             }
           }
         },
-        "normalizacion": {"$ref": "#/$defs/texto_no_vacio"},
+        "normalizacion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["principio", "transformaciones", "por_formato", "validacion", "presentacion"],
+          "properties": {
+            "principio": {"$ref": "#/$defs/texto_no_vacio"},
+            "transformaciones": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["codigo", "efecto", "justificacion"],
+                "properties": {
+                  "codigo": {"enum": ["NFC", "RECORTE_ESPACIOS", "COLAPSO_ESPACIOS"]},
+                  "efecto": {"$ref": "#/$defs/texto_no_vacio"},
+                  "justificacion": {"$ref": "#/$defs/texto_no_vacio"}
+                }
+              }
+            },
+            "por_formato": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["NOMBRE", "TELEFONO", "EMAIL", "REFERENCIA"],
+              "properties": {
+                "NOMBRE": {"type": "array", "uniqueItems": true, "items": {"enum": ["NFC", "RECORTE_ESPACIOS", "COLAPSO_ESPACIOS"]}},
+                "TELEFONO": {"$ref": "#/$defs/transformaciones_sin_unicode"},
+                "EMAIL": {"$ref": "#/$defs/transformaciones_sin_unicode"},
+                "REFERENCIA": {"$ref": "#/$defs/transformaciones_sin_unicode"}
+              }
+            },
+            "validacion": {"$ref": "#/$defs/texto_no_vacio"},
+            "presentacion": {"$ref": "#/$defs/texto_no_vacio"}
+          }
+        },
         "clave_canonica": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["uso", "TELEFONO", "EMAIL", "limitaciones"],
+          "required": ["uso", "regla_de_diseno", "reglas_listadas", "TELEFONO", "EMAIL", "limitaciones"],
           "properties": {
             "uso": {"$ref": "#/$defs/texto_no_vacio"},
+            "regla_de_diseno": {"$ref": "#/$defs/texto_no_vacio"},
+            "reglas_listadas": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["codigo", "medio", "efecto", "justificacion", "ejemplo"],
+                "properties": {
+                  "codigo": {"type": "string", "pattern": "^(TEL|EMAIL)-[A-Z0-9]+(-[A-Z0-9]+)*$"},
+                  "medio": {"enum": ["TELEFONO", "EMAIL"]},
+                  "efecto": {"$ref": "#/$defs/texto_no_vacio"},
+                  "justificacion": {"$ref": "#/$defs/texto_no_vacio"},
+                  "ejemplo": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["contacto", "clave"],
+                    "properties": {
+                      "contacto": {"$ref": "#/$defs/texto_no_vacio"},
+                      "clave": {"$ref": "#/$defs/texto_no_vacio"}
+                    }
+                  }
+                }
+              }
+            },
             "limitaciones": {"$ref": "#/$defs/texto_no_vacio"},
             "TELEFONO": {
               "type": "object",
@@ -334,11 +393,12 @@
                   "required": ["contacto", "motivo"],
                   "properties": {
                     "contacto": {"$ref": "#/$defs/texto_no_vacio"},
-                    "motivo": {"$ref": "#/$defs/codigo"}
+                    "motivo": {"$ref": "#/$defs/codigo"},
+                    "referencia": {"$ref": "#/$defs/texto_no_vacio"}
                   }
                 }
               },
-              "resultados": {"type": "array", "minItems": 2, "items": {"enum": ["RECIBIDA", "LIMITE"]}},
+              "resultados": {"type": "array", "minItems": 2, "items": {"enum": ["RECIBIDA", "LIMITE", "INVALIDA"]}},
               "solicitudes_creadas": {"type": "integer", "minimum": 1, "maximum": 4}
             }
           }
@@ -349,9 +409,9 @@
           "required": ["NOMBRE", "TELEFONO", "EMAIL", "REFERENCIA"],
           "properties": {
             "NOMBRE": {"$ref": "#/$defs/formato"},
-            "TELEFONO": {"$ref": "#/$defs/formato"},
-            "EMAIL": {"$ref": "#/$defs/formato"},
-            "REFERENCIA": {"$ref": "#/$defs/formato"}
+            "TELEFONO": {"$ref": "#/$defs/formato_crudo"},
+            "EMAIL": {"$ref": "#/$defs/formato_crudo"},
+            "REFERENCIA": {"$ref": "#/$defs/formato_crudo"}
           }
         },
         "errores": {
@@ -612,6 +672,19 @@
         "invalidos": {"type": "array", "minItems": 1, "items": {"type": "string"}}
       }
     },
+    "formato_crudo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["regla", "error", "patron_crudo", "validos", "invalidos"],
+      "properties": {
+        "regla": {"$ref": "#/$defs/texto_no_vacio"},
+        "error": {"$ref": "#/$defs/id_texto"},
+        "patron_crudo": {"$ref": "#/$defs/texto_no_vacio"},
+        "validos": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "invalidos": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "transformaciones_sin_unicode": {"type": "array", "uniqueItems": true, "items": {"enum": ["RECORTE_ESPACIOS", "COLAPSO_ESPACIOS"]}},
     "respuesta": {
       "type": "object",
       "additionalProperties": false,

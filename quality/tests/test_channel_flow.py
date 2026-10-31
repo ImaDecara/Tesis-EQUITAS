@@ -1,6 +1,7 @@
 """Contrato del canal con el deudor ALIGN-047: esquema, flujo, textos, datos mínimos, retención y documento."""
 
 import copy
+import functools
 import itertools
 import json
 import random
@@ -29,6 +30,34 @@ REQUIRED_NOT_DONE = {'NO_INFORMA_DEUDA', 'NO_CONFIRMA_EXISTENCIA', 'NO_CONSULTA_
 # Contraejemplos de buzones independientes: no se deduplican ni comparten el límite.
 MAILBOX_SCENARIOS = {'ESC-BUZONES-MISMO-MOTIVO': (['RECIBIDA'] * 4, 4), 'ESC-BUZONES-MOTIVOS-DISTINTOS': (['RECIBIDA'] * 4, 4),
                      'ESC-BUZONES-MAYUSCULAS': (['RECIBIDA'] * 2, 2)}
+# Validación sobre el valor recibido: lo rechazado no crea solicitud ni toca el cupo del contacto parecido.
+RAW_SCENARIOS = {'ESC-UNICODE-MISMO-MOTIVO': (['RECIBIDA', 'INVALIDA'], 1),
+                 'ESC-UNICODE-NO-COMPARTE-LIMITE': (['RECIBIDA'] * 3 + ['INVALIDA'], 3),
+                 'ESC-UNICODE-NO-CONSUME-CUPO': (['INVALIDA'] * 2 + ['RECIBIDA'] * 3, 3),
+                 'ESC-UNICODE-PARTES-LOCALES': (['RECIBIDA'] + ['INVALIDA'] * 3, 1),
+                 'ESC-ESPACIO-DURO-TELEFONO': (['RECIBIDA', 'INVALIDA'], 1),
+                 'ESC-ESPACIO-DURO-CORREO': (['RECIBIDA', 'INVALIDA', 'INVALIDA'], 1),
+                 'ESC-RECORTE-ESPACIOS': (['RECIBIDA'] * 2, 1),
+                 'ESC-OTRO-CAMPO-INVALIDO': (['INVALIDA'] + ['RECIBIDA'] * 3, 3)}
+# Vectores negativos de review-3.md y del recorte general: su retirada del contrato debe notarse.
+REQUIRED_NEGATIVE_VECTORS = {
+    'NOMBRE': {'\u00a0Ana', 'Ana\u2028'},
+    'TELEFONO': {'\u00a0+54 000 000-0000', '+54 000 000-0000\u2028', '\u0660' * 8, '\uff10' * 8},
+    'EMAIL': {'\u212a@example.org', 'K\u212a@example.org', '\u212a+uno@example.org', '\u212ab@gmail.com',
+              '\u00a0persona@example.com', 'persona@example.com\u2028'},
+    'REFERENCIA': {'\u212a-0001', '\u00a0SINT-0001'},
+}
+# Reglas de equivalencia de la clave: agregar una exige una justificación nueva en el contrato y cambiar esta lista.
+LISTED_KEY_RULES = {'TEL-PRESENTACION', 'TEL-PREFIJO-INTERNACIONAL', 'TEL-PAIS-IMPLICITO', 'TEL-TRONCAL', 'TEL-CELULAR',
+                    'TEL-QUINCE', 'EMAIL-RECORTE', 'EMAIL-DOMINIO-MINUSCULAS', 'EMAIL-POLITICA-PROVEEDOR'}
+# Posiciones donde un carácter ajeno podría colarse: la primera de cada formato se barre con todo Unicode.
+PROBE_TEMPLATES = {
+    'EMAIL': ('{}@example.org', 'a{}@example.org', 'a{}b@example.org', '{}a@example.org', 'a@example.org{}', 'a@{}.example.org',
+              'a@e{}ample.org', 'a@example.or{}', 'a{}example.org'),
+    'TELEFONO': ('{}+54 000 000 0000', '+54 000 000 0000{}', '+54 000{}000 0000', '+54 000 000 000{}', '{}00000000',
+                 '+54{}000 000 0000'),
+    'REFERENCIA': ('{}-0001', '{}SINT-0001', 'SINT-0001{}', 'SINT{}0001'),
+}
 # Datos mínimos de la solicitud (plan v2 §7.9, ALIGN-065): campo → obligatorio.
 MINIMAL_FIELDS = {'nombre': False, 'medio_preferido': True, 'contacto': True, 'motivo': True, 'referencia': False,
                   'consentimiento': True}
@@ -133,32 +162,54 @@ def fold(text: str) -> str:
     return ''.join(ch for ch in unicodedata.normalize('NFD', text) if unicodedata.category(ch) != 'Mn').lower()
 
 
-def normalize(value: str):
-    """Normalización común del formulario; None si hay caracteres de control o de formato."""
-    value = unicodedata.normalize('NFC', value)
+def trim_spaces(value: str) -> str:
+    """RECORTE_ESPACIOS: solo U+0020; str.strip() sin argumento también quitaría U+00A0, U+2028 y otros."""
+    return value.strip(' ')
+
+
+def collapse_spaces(value: str) -> str:
+    """COLAPSO_ESPACIOS: solo U+0020."""
+    return re.sub(' +', ' ', value)
+
+
+def normalize_name(value: str):
+    """Solo para NOMBRE, que no forma parte de ninguna clave; None si hay caracteres de control o de formato."""
     if any(unicodedata.category(ch) in CONTROL for ch in value):
         return None
-    return re.sub(' +', ' ', value).strip()
+    return collapse_spaces(trim_spaces(unicodedata.normalize('NFC', value)))
+
+
+def stored_value(name: str, value: str) -> str:
+    """Forma que se guarda y ve la persona operadora de un valor ya validado."""
+    if name == 'NOMBRE':
+        return normalize_name(value)
+    return trim_spaces(value) if name == 'EMAIL' else collapse_spaces(trim_spaces(value))
 
 
 def valid_nombre(value: str) -> bool:
-    value = normalize(value)
+    value = normalize_name(value)
     return (value is not None and 1 <= len(value) <= 80
             and any(unicodedata.category(ch).startswith('L') for ch in value)
             and all(unicodedata.category(ch)[0] in 'LM' or ch in " .'’-" for ch in value))
 
 
-def valid_telefono(value: str) -> bool:
-    value = normalize(value)
-    if value is None or len(value) > 25:
+def valid_telefono(raw: str) -> bool:
+    """Valida el valor recibido: nada no ASCII llega a una transformación."""
+    if not raw.isascii():
+        return False
+    value = collapse_spaces(trim_spaces(raw))
+    if len(value) > 25:
         return False
     body = value.removeprefix('+')
     return all(ch in '0123456789 -()' for ch in body) and 8 <= sum(ch.isdigit() for ch in body) <= 15
 
 
-def valid_email(value: str) -> bool:
-    value = normalize(value)
-    if value is None or len(value) > 254 or not value.isascii() or ' ' in value or value.count('@') != 1:
+def valid_email(raw: str) -> bool:
+    """Valida el valor recibido: nada no ASCII llega a una transformación."""
+    if not raw.isascii():
+        return False
+    value = trim_spaces(raw)
+    if len(value) > 254 or ' ' in value or value.count('@') != 1:
         return False
     local, domain = value.split('@')
     labels = domain.split('.')
@@ -167,15 +218,20 @@ def valid_email(value: str) -> bool:
             and labels[-1].isalpha() and len(labels[-1]) >= 2)
 
 
-def valid_referencia(value: str) -> bool:
-    value = normalize(value)
-    return (value is not None and 1 <= len(value) <= 30 and value.isascii()
-            and all(ch.isalnum() or ch in ' -/.' for ch in value) and any(ch.isalnum() for ch in value))
+def valid_referencia(raw: str) -> bool:
+    """Valida el valor recibido: nada no ASCII llega a una transformación."""
+    if not raw.isascii():
+        return False
+    value = collapse_spaces(trim_spaces(raw))
+    return (1 <= len(value) <= 30 and all(ch.isalnum() or ch in ' -/.' for ch in value)
+            and any(ch.isalnum() for ch in value))
 
 
-def canonical_phone(value: str, rule: dict) -> str:
-    """Clave canónica de un teléfono válido (solicitud_contacto.clave_canonica.TELEFONO)."""
-    compact = re.sub(r'[ ()-]', '', normalize(value))
+def canonical_phone(raw: str, rule: dict) -> str:
+    """Clave canónica de un teléfono validado (solicitud_contacto.clave_canonica.TELEFONO)."""
+    if not valid_telefono(raw):
+        raise ValueError('la clave canónica solo se deriva de un contacto validado')
+    compact = re.sub(r'[ ()-]', '', raw)
     digits = compact.removeprefix('+')
     prefix, national_length = rule['prefijo_pais'], rule['digitos_nacionales']
     if compact.startswith('+'):
@@ -200,9 +256,11 @@ def canonical_phone(value: str, rule: dict) -> str:
     return f'+{prefix}{national}'
 
 
-def canonical_email(value: str, rule: dict) -> str:
-    """Clave canónica de un correo válido: la parte local solo cambia con una política explícita del proveedor."""
-    local, domain = normalize(value).split('@')
+def canonical_email(raw: str, rule: dict) -> str:
+    """Clave canónica de un correo validado: la parte local solo cambia con una política explícita del proveedor."""
+    if not valid_email(raw):
+        raise ValueError('la clave canónica solo se deriva de un contacto validado')
+    local, domain = trim_spaces(raw).split('@')
     domain = domain.lower()
     policy = next((item for item in rule['politicas_por_proveedor'] if domain in item['dominios']), None)
     if policy is None:
@@ -219,11 +277,22 @@ def canonical_email(value: str, rule: dict) -> str:
 CANONICAL = {'TELEFONO': canonical_phone, 'EMAIL': canonical_email}
 
 
+def valid_submission(medium: str, item: dict) -> bool:
+    """Paso FORMATO de un envío del modelo: el contacto según su medio y, si vino, la referencia."""
+    return VALIDATORS[medium](item['contacto']) and ('referencia' not in item or VALIDATORS['REFERENCIA'](item['referencia']))
+
+
 def submit_all(scenario: dict, keys: dict, limit: int) -> tuple[list[str], int]:
-    """Modelo de referencia de los pasos DUPLICADO, LIMITE_CONTACTO y GUARDAR sobre envíos válidos."""
+    """Modelo de referencia de los pasos FORMATO, DUPLICADO, LIMITE_CONTACTO y GUARDAR, en ese orden.
+
+    Un envío inválido termina en FORMATO: no llega a derivar la clave ni a tocar lo que cuenta el límite por contacto.
+    """
     rule = keys[scenario['medio']]
     created, results = set(), []
     for item in scenario['envios']:
+        if not valid_submission(scenario['medio'], item):
+            results.append('INVALIDA')
+            continue
         key = CANONICAL[scenario['medio']](item['contacto'], rule)
         if (key, item['motivo']) in created:
             results.append('RECIBIDA')
@@ -233,6 +302,51 @@ def submit_all(scenario: dict, keys: dict, limit: int) -> tuple[list[str], int]:
             created.add((key, item['motivo']))
             results.append('RECIBIDA')
     return results, len(created)
+
+
+def visible(value: str) -> str:
+    """Escritura de un vector en el documento: U+212A se ve igual que K y los espacios de los extremos no se verían."""
+    core = value.strip(' ')
+    start = len(value) - len(value.lstrip(' '))
+    shown = ''.join(ch if ' ' <= ch <= '~' else f'\\u{ord(ch):04x}' for ch in core)
+    return '\\u0020' * start + shown + '\\u0020' * (len(value) - len(core) - start)
+
+
+@functools.cache
+def lookalikes() -> frozenset[str]:
+    """Caracteres no ASCII que una forma Unicode, un cambio de mayúsculas, quitar tildes o un recorte acercan al alfabeto.
+
+    También dígitos de otros alfabetos, guiones, espacios, separadores y controles, que pueden pasar inadvertidos.
+    """
+    found = set()
+    for code in range(0x80, 0x110000):
+        ch = chr(code)
+        category = unicodedata.category(ch)
+        if category in {'Cn', 'Co', 'Cs'}:
+            continue
+        if (category in {'Cc', 'Cf', 'Zs', 'Zl', 'Zp', 'Nd', 'No', 'Pd'} or ch == '\u2212' or not ch.strip() or ch.isdigit()
+                or ch.lower().isascii() or ch.upper().isascii() or ch.casefold().isascii()
+                or unicodedata.normalize('NFKC', ch).isascii() or unicodedata.normalize('NFC', ch).isascii()
+                or fold(unicodedata.normalize('NFKD', ch)).isascii()):
+            found.add(ch)
+    return frozenset(found)
+
+
+def explained_by_listed_rule(left: str, right: str, rule: dict) -> bool:
+    """¿Una regla listada justifica que dos correos validados compartan clave? Se escribe sin usar canonical_email."""
+    def provider_form(local):
+        untagged = re.sub(r'^([^+]+)\+.*$', r'\1', local).lower()
+        return untagged.replace('.', '') or untagged
+
+    local_left, domain_left = left.strip(' ').split('@')
+    local_right, domain_right = right.strip(' ').split('@')
+    domain_left, domain_right = domain_left.lower(), domain_right.lower()
+    policies = {domain: policy for policy in rule['politicas_por_proveedor'] for domain in policy['dominios']}
+    if domain_left not in policies or domain_right not in policies:
+        return domain_left == domain_right and local_left == local_right
+    if policies[domain_left] is not policies[domain_right]:
+        return False
+    return provider_form(local_left) == provider_form(local_right)
 
 
 def language_violations(text: str, kind: str, rules: dict) -> list[str]:
@@ -357,6 +471,14 @@ class ChannelFlowContract(unittest.TestCase):
             'límite sin unidad de cuenta': lambda d: d['antiabuso']['limites'][2].pop('cuenta'),
             'sin clave canónica': lambda d: d['solicitud_contacto'].pop('clave_canonica'),
             'captcha de terceros': lambda d: d['antiabuso'].update(captcha_de_terceros=True),
+            'normalización común otra vez': lambda d: d['solicitud_contacto'].update(normalizacion='NFC antes de validar.'),
+            'NFC en el correo': lambda d: d['solicitud_contacto']['normalizacion']['por_formato']['EMAIL'].insert(0, 'NFC'),
+            'NFC en el teléfono': lambda d: d['solicitud_contacto']['normalizacion']['por_formato']['TELEFONO'].insert(0, 'NFC'),
+            'NFC en la referencia': lambda d: d['solicitud_contacto']['normalizacion']['por_formato']['REFERENCIA'].insert(0, 'NFC'),
+            'NFKC como transformación': lambda d: d['solicitud_contacto']['normalizacion']['transformaciones'][0].update(codigo='NFKC'),
+            'sin patrón sobre el valor recibido': lambda d: d['solicitud_contacto']['formatos']['EMAIL'].pop('patron_crudo'),
+            'sin reglas listadas': lambda d: d['solicitud_contacto']['clave_canonica'].pop('reglas_listadas'),
+            'sin regla de diseño': lambda d: d['solicitud_contacto']['clave_canonica'].pop('regla_de_diseno'),
             'contacto verificado': lambda d: d['solicitud_contacto']['campos'][2].update(verificado=True),
             'consentimiento premarcado': lambda d: d['solicitud_contacto']['campos'][5].update(valor_inicial=True),
             'estado desconocido': lambda d: d.update(estado='PUBLICADO'),
@@ -530,9 +652,9 @@ class ChannelFlowContract(unittest.TestCase):
                 with self.subTest(medium=medium, left=left, right=right):
                     self.assertTrue(VALIDATORS[medium](left) and VALIDATORS[medium](right))
                     self.assertNotEqual(canonical(left, rule), canonical(right, rule))
-        # La normalización común conserva la presentación que ve el operador: por eso hace falta otra clave.
+        # Lo que se guarda conserva la presentación que ve el operador: por eso hace falta otra clave.
         reported = keys['TELEFONO']['equivalencias'][0]['formas'][:4]
-        self.assertEqual(len({normalize(form) for form in reported}), 4)
+        self.assertEqual(len({stored_value('TELEFONO', form) for form in reported}), 4)
         self.assertEqual(len({canonical_phone(form, keys['TELEFONO']) for form in reported}), 1)
 
     def test_independent_mailboxes_keep_their_own_key(self):
@@ -550,7 +672,7 @@ class ChannelFlowContract(unittest.TestCase):
                                      ('gmail.com.example.org', 'gmail.com.example.org')):
                 self.assertEqual(canonical_email(f'{local}@{domain}', rule), f'{local}@{expected}')
         forms = {item for group in rule['equivalencias'] if 'gmail.com' not in group['clave'] for item in group['formas']}
-        self.assertEqual({item.split('@')[0] for item in forms}, {'Persona'})
+        self.assertEqual({trim_spaces(item).split('@')[0] for item in forms}, {'Persona'})
         scenarios = {item['id']: item for item in self.form['escenarios_equivalencia']}
         for scenario_id, expected in MAILBOX_SCENARIOS.items():
             with self.subTest(scenario_id):
@@ -559,7 +681,7 @@ class ChannelFlowContract(unittest.TestCase):
         notes = re.findall(r'^\| ALIGN-0(?:65|71) \|.*$', self.document, flags=re.MULTILINE)
         self.assertEqual(len(notes), 2)
         for note in notes:
-            self.assertEqual([item for item in MAILBOX_SCENARIOS if f'`{item}`' not in note], [])
+            self.assertEqual([item for item in (*MAILBOX_SCENARIOS, *RAW_SCENARIOS) if f'`{item}`' not in note], [])
 
     def test_phone_variants_never_merge_distinct_national_numbers(self):
         rule = self.form['clave_canonica']['TELEFONO']
@@ -586,10 +708,11 @@ class ChannelFlowContract(unittest.TestCase):
         motives = {item['codigo'] for item in self.form['motivos']}
         scenarios = {item['id']: item for item in self.form['escenarios_equivalencia']}
         self.assertTrue({'ESC-TEL-MISMO-MOTIVO', 'ESC-TEL-MOTIVOS-DISTINTOS'} <= set(scenarios))
+        by_ip = min(item['maximo'] for item in self.contract['antiabuso']['limites'] if item['clave'] == 'IP')
         for scenario in scenarios.values():
             with self.subTest(scenario['id']):
                 self.assertTrue({item['motivo'] for item in scenario['envios']} <= motives)
-                self.assertTrue(all(VALIDATORS[scenario['medio']](item['contacto']) for item in scenario['envios']))
+                self.assertLessEqual(len(scenario['envios']), by_ip, 'el escenario no debe depender del límite por IP')
                 results, created = submit_all(scenario, self.form['clave_canonica'], limit['maximo'])
                 self.assertEqual(results, scenario['resultados'])
                 self.assertEqual(created, scenario['solicitudes_creadas'])
@@ -597,6 +720,168 @@ class ChannelFlowContract(unittest.TestCase):
         self.assertEqual(steps, ['TAMANO', 'CAMPO_TRAMPA', 'LIMITES_IP_MUNICIPIO', 'FORMATO', 'DUPLICADO',
                                  'LIMITE_CONTACTO', 'GUARDAR'])
         self.assertIn('clave canónica', self.contract['antiabuso']['seudonimo'])
+        step = next(item for item in self.form['orden_de_evaluacion'] if item.startswith('FORMATO:'))
+        for phrase in ('valor recibido', 'sin derivar la clave canónica', 'sin tocar el contador por contacto'):
+            self.assertIn(phrase, step)
+
+    def accepted_corpus(self) -> dict[str, set[str]]:
+        """Entradas aceptadas de cada formato: vectores del contrato, ejemplos de reglas y variantes con espacios."""
+        keys, formats = self.form['clave_canonica'], self.form['formatos']
+        corpus = {name: set(rule['validos']) for name, rule in formats.items()}
+        for medium in CANONICAL:
+            corpus[medium] |= {form for group in keys[medium]['equivalencias'] for form in group['formas']}
+            corpus[medium] |= {value for pair in keys[medium]['distintos'] for value in pair}
+        for item in keys['reglas_listadas']:
+            corpus[item['medio']].add(item['ejemplo']['contacto'])
+        for scenario in self.form['escenarios_equivalencia']:
+            corpus[scenario['medio']] |= {item['contacto'] for item in scenario['envios']}
+        for name in corpus:
+            corpus[name] = {value for value in corpus[name] if VALIDATORS[name](value)}
+            corpus[name] |= {padded for value in corpus[name] for padded in (f' {value}', f'{value}  ')
+                             if VALIDATORS[name](padded)}
+        return corpus
+
+    def test_no_character_outside_the_declared_alphabet_is_accepted(self):
+        marks = lookalikes()
+        self.assertTrue({'\u212a', '\u00a0', '\u2003', '\u3000', '\u2028', '\u2029', '\u200b', '\u00ad', '\ufeff', '\u0085',
+                         '\uff21', '\uff10', '\uff0b', '\uff20', '\uff0e', '\u0660', '\u00b2', '\u017f', '\u0131', '\u0130',
+                         '\u00e9', '\u2011', '\u2212', '\u24b6'} <= marks)
+        for name, required in REQUIRED_NEGATIVE_VECTORS.items():
+            self.assertEqual(required - set(self.form['formatos'][name]['invalidos']), set(), name)
+        for name, templates in PROBE_TEMPLATES.items():
+            valid = VALIDATORS[name]
+            with self.subTest(name):
+                self.assertEqual([hex(code) for code in range(0x80, 0x110000) if valid(templates[0].format(chr(code)))], [])
+                for template in templates:
+                    self.assertEqual([hex(ord(ch)) for ch in marks if valid(template.format(ch))], [], template)
+        ascii_controls = [chr(code) for code in (*range(0x20), 0x7f)]
+        for name, templates in PROBE_TEMPLATES.items():
+            for template, ch in itertools.product(templates, ascii_controls):
+                with self.subTest(name=name, template=template, ch=hex(ord(ch))):
+                    self.assertFalse(VALIDATORS[name](template.format(ch)))
+
+    def test_normalizing_an_accepted_entry_only_applies_listed_rules(self):
+        """Propiedad: normalizar una entrada aceptada no produce otra aceptada distinta, salvo por una regla listada."""
+        rules = {'NFC': lambda value: unicodedata.normalize('NFC', value), 'RECORTE_ESPACIOS': trim_spaces,
+                 'COLAPSO_ESPACIOS': collapse_spaces}
+        normalization = self.form['normalizacion']
+        self.assertEqual({item['codigo'] for item in normalization['transformaciones']}, set(rules))
+        steps = normalization['por_formato']
+        self.assertEqual(steps['EMAIL'], ['RECORTE_ESPACIOS'])
+        self.assertEqual(steps['TELEFONO'], steps['REFERENCIA'])
+        self.assertTrue(all('NFC' not in steps[name] for name in ('TELEFONO', 'EMAIL', 'REFERENCIA')))
+        corpus = self.accepted_corpus()
+        self.assertTrue(all(len(values) >= 3 for values in corpus.values()))
+        for name, values in corpus.items():
+            for raw in values:
+                with self.subTest(name=name, raw=raw):
+                    stored = stored_value(name, raw)
+                    expected = raw
+                    for step in steps[name]:
+                        expected = rules[step](expected)
+                    self.assertEqual(stored, expected)
+                    self.assertTrue(VALIDATORS[name](stored))
+                    self.assertEqual(stored_value(name, stored), stored)
+                    if name == 'NOMBRE':
+                        continue
+                    self.assertTrue(raw.isascii())
+                    self.assertEqual(stored.replace(' ', ''), raw.replace(' ', ''), 'solo pueden cambiar espacios U+0020')
+                    for form in ('NFC', 'NFD', 'NFKC', 'NFKD'):
+                        self.assertEqual(unicodedata.normalize(form, raw), raw)
+                    if name in CANONICAL:
+                        rule = self.form['clave_canonica'][name]
+                        self.assertEqual(CANONICAL[name](stored, rule), CANONICAL[name](raw, rule))
+                        self.assertTrue(CANONICAL[name](raw, rule).isascii())
+
+    def test_equal_email_keys_are_always_explained_by_a_listed_rule(self):
+        rule = self.form['clave_canonica']['EMAIL']
+        locals_ = ('K', 'k', 'KK', 'Kk', 'kk', 'a', 'A', 'ab', 'AB', 'a.b', 'A.B', 'a+b', 'a+c', 'ab+c', '+a', '+b', '+a+b',
+                   'a%b', 'a_b', 'a-b', '.', '..', '.a', 'a.', '.+a', '.+b', 'a..b')
+        domains = ('example.org', 'EXAMPLE.ORG', 'Example.Org', 'example.com', 'gmail.com', 'GMAIL.COM', 'googlemail.com',
+                   'GoogleMail.Com', 'mail.gmail.com', 'gmail.com.example.org', 'notgmail.example', 'gmail-com.example.org',
+                   'xn--bcher-kva.example', 'XN--BCHER-KVA.EXAMPLE')
+        entries = [f'{local}@{domain}' for local in locals_ for domain in domains]
+        self.assertTrue(all(valid_email(entry) for entry in entries))
+        keys = {entry: canonical_email(entry, rule) for entry in entries}
+        for left, right in itertools.combinations(entries, 2):
+            if (keys[left] == keys[right]) != explained_by_listed_rule(left, right, rule):
+                self.fail(f'{left} y {right}: claves {keys[left]} y {keys[right]}')
+        # Una clave de correo es su propia forma canónica; si la política dejara vacía la parte local, se conserva.
+        self.assertEqual([entry for entry, key in keys.items() if canonical_email(key, rule) != key], [])
+        self.assertEqual(canonical_email('.@gmail.com', rule), '.@gmail.com')
+        self.assertEqual(canonical_email('..@gmail.com', rule), '..@gmail.com')
+
+    def test_key_is_derived_only_from_a_validated_contact(self):
+        keys = self.form['clave_canonica']
+        for medium, canonical in CANONICAL.items():
+            for value in self.form['formatos'][medium]['invalidos']:
+                with self.subTest(medium=medium, value=value):
+                    with self.assertRaises(ValueError):
+                        canonical(value, keys[medium])
+
+    def test_name_normalization_does_not_reach_contacts(self):
+        # U+212A es K solo en un nombre, que no forma parte de ninguna clave.
+        self.assertEqual(stored_value('NOMBRE', '\u212aarina'), 'Karina')
+        self.assertEqual(stored_value('NOMBRE', 'Jose\u0301'), 'Jos\u00e9')
+        self.assertEqual(stored_value('NOMBRE', ' Ana  María '), 'Ana María')
+        self.assertFalse(valid_email('\u212a@example.org'))
+        self.assertFalse(valid_referencia('\u212a-0001'))
+        for space in ('\u00a0', '\u2003', '\u3000', '\u2028', '\u2029'):
+            for name in VALIDATORS:
+                sample = self.form['formatos'][name]['validos'][0]
+                self.assertFalse(VALIDATORS[name](space + sample), (name, hex(ord(space))))
+                self.assertFalse(VALIDATORS[name](sample + space), (name, hex(ord(space))))
+        for value in ('Ana\ud800', '\ud800'):
+            self.assertFalse(valid_nombre(value))
+        self.assertFalse(valid_email('\ud800@example.org'))
+        self.assertFalse(valid_telefono('\ud80000000000'))
+
+    def test_contract_declares_design_rule_and_listed_equivalences(self):
+        keys = self.form['clave_canonica']
+        self.assertIn('Ante la duda, dos claves distintas', keys['regla_de_diseno'])
+        self.assertIn('unir a dos personas es un defecto', keys['regla_de_diseno'])
+        self.assertIn('sin transformarlo antes', self.form['normalizacion']['principio'])
+        self.assertEqual({item['codigo'] for item in keys['reglas_listadas']}, LISTED_KEY_RULES)
+        for item in keys['reglas_listadas']:
+            with self.subTest(item['codigo']):
+                self.assertTrue(item['justificacion'])
+                self.assertTrue(VALIDATORS[item['medio']](item['ejemplo']['contacto']))
+                self.assertEqual(CANONICAL[item['medio']](item['ejemplo']['contacto'], keys[item['medio']]),
+                                 item['ejemplo']['clave'])
+        scenarios = {item['id']: item for item in self.form['escenarios_equivalencia']}
+        for scenario_id, expected in RAW_SCENARIOS.items():
+            with self.subTest(scenario_id):
+                self.assertEqual((scenarios[scenario_id]['resultados'], scenarios[scenario_id]['solicitudes_creadas']),
+                                 expected)
+
+    def test_raw_patterns_agree_with_reference_validators(self):
+        formats = self.form['formatos']
+        self.assertNotIn('patron_crudo', formats['NOMBRE'])
+        corpus = self.accepted_corpus()
+        generator = random.Random(47)
+        alphabets = {'EMAIL': 'aZ09._%+-@@.. ', 'TELEFONO': '09 ()-+', 'REFERENCIA': 'aZ09 ./-_'}
+
+        def within_limits(name, raw):
+            value = stored_value(name, raw)
+            if name == 'EMAIL':
+                return len(value) <= 254
+            if name == 'TELEFONO':
+                return len(value) <= 25 and 8 <= sum(ch.isdigit() for ch in value) <= 15
+            return len(value) <= 30 and any(ch.isalnum() for ch in value)
+
+        for name, alphabet in alphabets.items():
+            pattern = ecma_pattern(formats[name]['patron_crudo'])
+            probes = corpus[name] | set(formats[name]['invalidos'])
+            probes |= {''.join(generator.choice(alphabet) for _ in range(generator.randint(1, 22))) for _ in range(6000)}
+            probes |= {template.format(ch) for template in PROBE_TEMPLATES[name] for ch in lookalikes()}
+            probes |= {template.format(ch) for template in PROBE_TEMPLATES[name] for ch in alphabet}
+            for raw in probes:
+                matched = pattern.search(raw) is not None
+                expected = VALIDATORS[name](raw)
+                if matched != expected and not (matched and not within_limits(name, raw)):
+                    self.fail(f'{name}: {raw!r} patrón {matched}, referencia {expected}')
+                if not raw.isascii():
+                    self.assertFalse(matched, raw)
 
     def test_channel_never_reveals_decides_or_intervenes(self):
         codes = [item['codigo'] for item in self.contract['el_canal_no_hace']]
@@ -667,8 +952,19 @@ class ChannelFlowContract(unittest.TestCase):
                  *(item['id'] for item in self.form['escenarios_equivalencia'])]
         self.assertEqual([code for code in codes if f'`{code}`' not in self.document], [])
         keys = self.form['clave_canonica']
-        for text in (keys['limitaciones'], keys['EMAIL']['regla_general'], keys['TELEFONO']['por_que_no_une_personas']):
+        normalization = self.form['normalizacion']
+        for text in (keys['limitaciones'], keys['EMAIL']['regla_general'], keys['TELEFONO']['por_que_no_une_personas'],
+                     keys['regla_de_diseno'], normalization['principio'], normalization['validacion'],
+                     normalization['presentacion']):
             self.assertIn(text, self.document)
+        codes = [*(item['codigo'] for item in keys['reglas_listadas']),
+                 *(item['codigo'] for item in normalization['transformaciones'])]
+        self.assertEqual([code for code in codes if f'`{code}`' not in self.document], [])
+        # Un vector no ASCII solo se escribe escapado: en el documento, U+212A no se distinguiría de K.
+        vectors = [value for rule in self.form['formatos'].values() for value in rule['invalidos'] if not value.isascii()]
+        self.assertGreater(len(vectors), 20)
+        self.assertEqual([value for value in vectors if f'`{visible(value)}`' not in self.document], [])
+        self.assertNotIn('\u212a', self.document)
         for path in ('contracts/channel-flow.v1.json', 'contracts/channel-flow.v1.schema.json',
                      'quality/tests/test_channel_flow.py'):
             self.assertIn(path, self.document)
