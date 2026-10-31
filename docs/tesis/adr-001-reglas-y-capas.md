@@ -201,7 +201,8 @@ la lectura. `front/lib/server/dal.ts` usa `auth.getUser()` con el cliente de ses
 resuelve el usuario de aplicación por `auth_user`, exige `user.status = ACTIVE`,
 una membresía `tenant_user.status = true`, municipio activo y rol aprobado en el
 catálogo `role.name`. No acepta roles enviados por el navegador ni equivalencias
-implícitas (`admin`, `operator` o un ID de rol no conceden permisos).
+implícitas (`admin`, `operator` o un ID de rol no conceden permisos). El catálogo es
+una precondición de despliegue; ver «Precondición de despliegue» más abajo.
 
 Sin selección se exige exactamente una membresía activa. Con varias, se devuelve
 `TENANT_SELECTION_REQUIRED`; el llamador puede indicar `tenantId` o la cookie
@@ -214,9 +215,16 @@ elección antes de guardar la cookie. Ingresar o salir borra la selección anter
 
 `requireTenantAccess({ permission, tenantId? })` devuelve contexto y cliente de
 sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`,
-`supervisor`; registro de decisiones: `operador`, `supervisor`; aprobación y
-supervisión: `supervisor`; importación: `importador`, `supervisor`.
-`importador_sistema` no tiene acceso web. Estos permisos no implementan escrituras.
+`supervisor`; registro de decisiones: `operador`; aprobación y supervisión:
+`supervisor`; importación: `importador`. Coincide con ALIGN-003 y con las funciones
+de ALIGN-018: quien sea supervisor e importe necesita además una membresía
+`importador`. `importador_sistema` no tiene acceso web. Estos permisos no
+implementan escrituras.
+
+Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
+`validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en
+`context.role` el **ID** del rol en texto, sin campos adicionales. El contexto de la
+DAL separa `roleId` y `roleName`, sin un campo `role`, para que nadie lea uno por otro.
 
 `createTenantReader()` es la entrada de los cargadores de objetos y personas.
 Cada consulta de negocio lleva el filtro del municipio autorizado, directamente o
@@ -227,13 +235,62 @@ RLS sigue siendo una segunda barrera, necesaria para las lecturas directas por l
 Data API. La DAL no reemplaza RLS ni audita accesos directos a PostgREST.
 
 Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores de
-consulta conservan `DataWarning` y el tratamiento «no disponible» de ALIGN-011/012
-(contrato §4.1.6); no se convierten en un cero ni en un vacío exitoso. No hay caché
+consulta conservan `DataWarning`: los indicadores dicen «No disponible» y hay aviso,
+sin convertir el fallo en un cero (ALIGN-011/012, contrato §4.1.6). Esa garantía no
+cubre todavía todas las pantallas. Con una lectura fallida, algunas listas muestran
+su texto de vacío («No hay casos sin contacto», «Mostrando 0-0 de 0 casos», «No hay
+objetos…») y, con `debtor` caído, el detalle dice «no encontrado» sin aviso. Ya
+pasaba antes de ALIGN-019, no entrega cartera y se traspasa a ALIGN-014. No hay caché
 de autorización entre solicitudes, clave de servicio ni secretos nuevos.
-En Server Components el error llega al límite `app/error.tsx`; una respuesta
-transmitida puede conservar HTTP 200 e incluir el registro de error de Flight,
-siempre sin cartera. Los futuros Route Handlers deben traducir `error.status`
-a un estado HTTP explícito (401/403/409/503), sin serializar el cliente de sesión.
+
+**Sin sesión** (cookie ausente o rechazada por Auth), `front/proxy.ts` responde 307 a
+`/login?next=<ruta>` en HTML y RSC, antes del streaming. Solo `/login`,
+`/select-tenant` y `/api/build-info` quedan fuera, por ruta exacta. Es una comprobación
+optimista: la DAL sigue siendo la autoridad y no depende de ella. `next` lleva solo
+la ruta, sin consulta, y `safeNextPath` lo valida al crearlo y en `/login`, de modo que
+no puede llevar a otro host. Si Auth no responde (red, 5xx, 429 o respuesta
+ilegible) no se puede saber si hay sesión: el proxy deja seguir la solicitud y la DAL
+falla cerrada con `AUTH_UNAVAILABLE`, sin mandar a nadie a ingresar.
+
+**Con sesión, la denegación es siempre HTTP 200**, en HTML y RSC. `app/loading.tsx`
+inicia el streaming antes de que corra la DAL, así que el error llega al límite
+`app/error.tsx` como registro Flight con digest, sin el mensaje, sin cartera y con
+un `Cache-Control` que incluye `private` y `no-store`. Por eso el estado HTTP no sirve como señal de
+monitoreo: hay que mirar el contenido. Esa pantalla ofrece «Intentar nuevamente», que
+recarga el documento, y «Cerrar sesión», la salida de quien tiene sesión válida y no
+puede leer cartera, como `importador`. Los futuros Route Handlers deben traducir
+`error.status` a un estado HTTP explícito (401/403/409/503), sin serializar el
+cliente de sesión. Un anónimo recibe antes el 307 del proxy; si ALIGN-028 necesita
+responderle 401, debe exceptuar esa ruta en `proxy.ts` y seguir autorizando en el handler.
+
+**Excepción de compatibilidad: `tp_operator` (campaña E06).**
+`E06_READ_ONLY_COMPAT_ROLE` (`front/lib/auth/tenant-access.ts`) admite ese nombre con
+una sola capacidad, `portfolio:read`, igual que `consulta`. **No es un rol aprobado por
+ALIGN-003:** está fuera de `WEB_ROLES`, no aparece en el selector ni en la interfaz
+y no depende del entorno.
+
+- *Por qué existe.* Es el rol de las cuentas sintéticas de `database/testing/fixtures.sql`.
+  Sin esta excepción, esas cuentas no entran y fallan `test:supabase`, obligatoria en
+  `main` y `quality/tp-testing`, y SMOKE-01. El plan congelado prohíbe modificar esa
+  fixture, la campaña de 12 casos y SMOKE-01 (ALIGN-016, ALIGN-022, `TEST-PLAN.md`), y
+  cambiarla exigiría además un paso humano sobre el proyecto de pruebas.
+- *Qué no amplía.* Antes de ALIGN-019 ninguna capa miraba el nombre del rol: estas cuentas
+  ya entraban y leían lo que RLS les permitiera. Ahora leen por la DAL, filtradas por su
+  municipio. No registran, aprueban, supervisan ni importan: la DAL lo deniega y
+  las funciones de ALIGN-018 tampoco aceptan ese nombre. No cambia la Data API.
+- *Riesgo que queda.* Sin interruptor por entorno, una fila `role.name = 'tp_operator'`
+  en cualquier base da lectura de cartera a sus miembros, en su municipio.
+- *Cómo se retira.* Cuando un ticket autorizado pase la campaña E06 a un rol aprobado
+  (fixture, `cleanup.sql`, fila del proyecto de pruebas), se borran
+  `E06_READ_ONLY_COMPAT_ROLE`, `ResolvedRoleName` y su entrada en `portfolio:read`, y su
+  fila en las pruebas de permisos. No requiere migración de datos.
+
+**Precondición de despliegue: el catálogo `role.name`.** La DAL compara el nombre
+exacto y ninguna migración carga los roles aprobados. En el proyecto original se
+desconoce el contenido de `role`, porque el repositorio solo tiene el esquema. Antes
+de apuntar esta versión a una base hay que mapear sus roles a `consulta`, `operador`,
+`supervisor` e `importador`, y comprobar que no exista `tp_operator`. Sin ese mapeo
+el bloqueo es total: toda cuenta recibe `ROLE_FORBIDDEN`, sin datos.
 
 Puntos cubiertos: tablero `/`, objetos `/debtors`, detalle `/debtors/[debtorId]`,
 personas `/people`, colas `/priority-cases`, sin contacto `/no-contact`, mora

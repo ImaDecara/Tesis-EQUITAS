@@ -88,7 +88,7 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   it('AUTH-06: usa el usuario validado por Auth y la pertenencia activa', async () => {
     const { client, queries } = clientWithReplies([ok([{ id: '42', auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     expect(await validateCurrentUserTenantAccess()).toEqual({ isAuthorized: true, requiresLogin: false,
-      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'consulta' } })
+      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' } })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
     expect(queries).toEqual([
       { table: 'user', filters: [['auth_user', 'auth-test']], limit: 2 },
@@ -102,10 +102,18 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
     const { client, queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     browserClient.mockClear()
     expect(await validateAuthUserTenantAccess('auth-test', client as unknown as SupabaseClient)).toMatchObject({
-      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'consulta' },
+      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' },
     })
     expect(browserClient).not.toHaveBeenCalled()
     expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user', 'tenant', 'role'])
+  })
+
+  it('SUP-AUTH-01: el resultado publico lleva el ID del rol y ningun campo mas, tambien con la fixture E06', async () => {
+    clientWithReplies([ok([{ id: 910001, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 910001, tenant: 910001, role: 910001, status: true }]), ok([{ id: 910001, status: 'ACTIVE' }]), ok([{ id: 910001, name: 'tp_operator' }])])
+    expect(await validateAuthUserTenantAccess('auth-test')).toEqual({
+      isAuthorized: true, requiresLogin: false,
+      context: { authUserId: 'auth-test', appUserId: '910001', tenantId: '910001', role: '910001' },
+    })
   })
 
   it.each([

@@ -79,7 +79,7 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
     vi.spyOn(client.auth, 'getSession').mockResolvedValue({ data: { session: { user: { id: 'forged-identity' }, access_token: 'synthetic-token' } }, error: null } as never)
     const result = await requireTenantAccess()
     expect(result.supabase).toBe(client)
-    expect(result.context).toEqual({ authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'consulta' })
+    expect(result.context).toEqual({ authUserId: 'auth-test', appUserId: '42', tenantId: '7', roleId: '3', roleName: 'consulta' })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
   })
 
@@ -88,18 +88,44 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
     expect((await loadRawDebtorData()).debtors.map(row => row.id)).toEqual([99])
   })
 
-  it.each([
-    ['consulta', 'decision:record', false], ['operador', 'decision:record', true],
-    ['operador', 'decision:approve', false], ['supervisor', 'decision:approve', true],
-    ['consulta', 'supervision:read', false], ['supervisor', 'supervision:read', true],
-    ['importador', 'portfolio:read', false], ['importador', 'import:write', true],
-    ['consulta', 'import:write', false], ['supervisor', 'import:write', true],
-  ] as const)('%s / %s: permitido=%s', async (name, permission: DalPermission, allowed) => {
+  // Matriz completa: ALIGN-003 y las funciones de ALIGN-018@76863d7. Lo que no figura se deniega.
+  const CAPABILITIES: Record<string, readonly DalPermission[]> = {
+    consulta: ['portfolio:read'],
+    operador: ['portfolio:read', 'decision:record'],
+    supervisor: ['portfolio:read', 'decision:approve', 'supervision:read'],
+    importador: ['import:write'],
+    tp_operator: ['portfolio:read'],
+  }
+  const PERMISSIONS: readonly DalPermission[] = ['portfolio:read', 'decision:record', 'decision:approve', 'supervision:read', 'import:write']
+  it.each(Object.entries(CAPABILITIES).flatMap(([name, allowed]) =>
+    PERMISSIONS.map(permission => [name, permission, allowed.includes(permission)] as const)))('%s / %s: permitido=%s', async (name, permission, allowed) => {
     const { requests } = clientFor({ role: [{ id: 3, name }] })
     const result = requireTenantAccess({ permission })
-    if (allowed) expect((await result).context.role).toBe(name)
+    if (allowed) expect((await result).context.roleName).toBe(name)
     else await expect(result).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN', status: 403 })
     expect(requests.every(request => ['user', 'tenant_user', 'tenant', 'role'].includes(request.table))).toBe(true)
+  })
+
+  it('tp_operator lee cartera de su municipio y su contexto no lo presenta como rol de producto', async () => {
+    const { requests } = clientFor({ role: [{ id: 3, name: 'tp_operator' }], debtor: [{ id: 99, tenant: 7 }, { id: 100, tenant: 8, identifier: 'AJENO' }] })
+    expect((await loadRawDebtorData()).debtors.map(row => row.id)).toEqual([99])
+    expect(requests.find(request => request.table === 'debtor')?.filters).toEqual({ tenant: 'eq.7' })
+    expect((await requireTenantAccess()).context).toEqual({ authUserId: 'auth-test', appUserId: '42', tenantId: '7', roleId: '3', roleName: 'tp_operator' })
+    const { WEB_ROLES, E06_READ_ONLY_COMPAT_ROLE } = await import('@/lib/auth/tenant-access')
+    expect(E06_READ_ONLY_COMPAT_ROLE).toBe('tp_operator')
+    expect(WEB_ROLES).not.toContain(E06_READ_ONLY_COMPAT_ROLE)
+  })
+
+  it.each([
+    'TP_OPERATOR', 'tp_operator ', ' tp_operator', 'tp-operator', 'operator', 'tp_operator2', 'admin', '910001', '3', 'importador_sistema', '', null,
+  ])('el nombre de rol debe coincidir exactamente; %j se deniega', async name => {
+    clientFor({ role: [{ id: 3, name }] })
+    await expect(requireTenantAccess()).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
+  })
+
+  it('un permiso desconocido en tiempo de ejecucion se deniega', async () => {
+    clientFor({ role: [{ id: 3, name: 'supervisor' }] })
+    await expect(requireTenantAccess({ permission: 'export:all' as DalPermission })).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
   })
 
   it('dos membresias: solo la eleccion explicita determina el tenant y su rol', async () => {
@@ -108,7 +134,7 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
       tenant: [{ id: 7, status: 'ACTIVE' }, { id: 8, status: 'ACTIVE' }],
       role: [{ id: 3, name: 'consulta' }, { id: 4, name: 'operador' }],
     })
-    expect((await requireTenantAccess({ tenantId: '8', permission: 'decision:record' })).context).toMatchObject({ tenantId: '8', role: 'operador' })
+    expect((await requireTenantAccess({ tenantId: '8', permission: 'decision:record' })).context).toMatchObject({ tenantId: '8', roleId: '4', roleName: 'operador' })
     expect(requests.find(request => request.table === 'tenant_user')?.filters).toEqual({ user: 'eq.42', status: 'eq.true', tenant: 'eq.8' })
   })
 

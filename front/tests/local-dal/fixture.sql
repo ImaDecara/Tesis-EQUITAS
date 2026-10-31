@@ -28,12 +28,16 @@ INSERT INTO public.debtor (id,tenant,external_id,type,identifier) VALUES
 INSERT INTO public.debt (id,external_id,debtor,original_amount,current_amount,due_date,status) VALUES
   (9801901,9801901,9801901,101,101,'2026-01-01',9801901), (9801902,9801902,9801902,202,202,'2026-01-01',9801901);
 INSERT INTO public.person (id,external_id,full_name) VALUES
-  (9801901,9801901,'ALIGN019_PERSON_A'), (9801902,9801902,'ALIGN019_PERSON_B');
+  (9801901,9801901,'ALIGN019_PERSON_A'), (9801902,9801902,'ALIGN019_PERSON_B'),
+  (9801903,9801903,'ALIGN019_PERSON_SHARED');
 INSERT INTO public.debtor_person (id,debtor,person,priority) VALUES
-  (9801901,9801901,9801901,100), (9801902,9801902,9801902,100);
+  (9801901,9801901,9801901,100), (9801902,9801902,9801902,100),
+  (9801903,9801901,9801903,90), (9801904,9801902,9801903,90);
 INSERT INTO public.debtor_contact (id,person,type,value) VALUES
-  (9801901,9801901,9801901,'align019-a@example.test'), (9801902,9801902,9801901,'align019-b@example.test');
+  (9801901,9801901,9801901,'align019-a@example.test'), (9801902,9801902,9801901,'align019-b@example.test'),
+  (9801903,9801903,9801901,'align019-shared@example.test');
 INSERT INTO public.debtor_profile (id,debtor,total_debt_amount) VALUES (9801901,9801901,101), (9801902,9801902,202);
 INSERT INTO public.debtor_profile_detail (id,debtor_profile,person,risk_value) VALUES
-  (9801901,9801901,9801901,10), (9801902,9801902,9801902,20);
+  (9801901,9801901,9801901,10), (9801902,9801902,9801902,20),
+  (9801903,9801901,9801903,33), (9801904,9801902,9801903,77);
 COMMIT;

@@ -3,6 +3,19 @@ import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 
 export const WEB_ROLES = ['consulta', 'operador', 'supervisor', 'importador'] as const
 export type WebRole = (typeof WEB_ROLES)[number]
+
+// COMPATIBILIDAD CON LA CAMPANA E06: NO es un rol aprobado por ALIGN-003 ni un rol
+// del producto. `database/testing/fixtures.sql` lo asigna a las cuentas sinteticas
+// del proyecto de pruebas, y el plan prohibe tocar esa fixture y SMOKE-01. Da solo
+// lectura de cartera, igual que `consulta`, y ninguna otra capacidad (`lib/server/dal.ts`).
+// Sin interruptor por entorno. Se retira con su fixture: ver ADR-001, seccion 9.
+export const E06_READ_ONLY_COMPAT_ROLE = 'tp_operator'
+export type ResolvedRoleName = WebRole | typeof E06_READ_ONLY_COMPAT_ROLE
+
+function isResolvedRoleName(name: unknown): name is ResolvedRoleName {
+  return name === E06_READ_ONLY_COMPAT_ROLE || (WEB_ROLES as readonly unknown[]).includes(name)
+}
+
 export const TENANT_COOKIE = 'equitas_tenant_id'
 
 export type AuthValidationErrorCode =
@@ -15,7 +28,9 @@ export type TenantAccessContext = {
   authUserId: string
   appUserId: string
   tenantId: string
-  role: WebRole
+  // ID de `role` en texto, contrato de SUP-AUTH-01. No es el nombre y no decide
+  // permisos: las capacidades se resuelven por nombre solo en la DAL.
+  role: string
 }
 export type TenantChoice = { id: string; name: string }
 export type TenantAccessValidation = {
@@ -44,6 +59,27 @@ export async function resolveTenantAccess(
   supabase: SupabaseClient | null,
   selectedTenantId?: string,
 ): Promise<TenantAccessValidation> {
+  return (await resolveTenantAccessWithRoleName(authUserId, supabase, selectedTenantId)).access
+}
+
+// Para la DAL: el nombre viaja aparte, de la misma lectura de `role`, y nunca en
+// `access.context`. Un ID de rol no puede confundirse con un nombre ni otorgar permisos.
+export type TenantAccessWithRoleName = { access: TenantAccessValidation; roleName: ResolvedRoleName | null }
+
+export async function resolveTenantAccessWithRoleName(
+  authUserId: string,
+  supabase: SupabaseClient | null,
+  selectedTenantId?: string,
+): Promise<TenantAccessWithRoleName> {
+  const { roleName, ...access } = await checkTenantAccess(authUserId, supabase, selectedTenantId)
+  return { access, roleName: roleName ?? null }
+}
+
+async function checkTenantAccess(
+  authUserId: string,
+  supabase: SupabaseClient | null,
+  selectedTenantId?: string,
+): Promise<TenantAccessValidation & { roleName?: ResolvedRoleName }> {
   if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'Supabase no esta configurado.')
   try {
     const app = await supabase.from('user').select('id,auth_user,status', { count: 'exact' }).eq('auth_user', authUserId).limit(2)
@@ -99,11 +135,11 @@ export async function resolveTenantAccess(
     }
     const role = await supabase.from('role').select('id,name').eq('id', roleId).limit(1)
     if (role.error || !Array.isArray(role.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el rol.')
-    const name = role.data[0]?.name
-    if (databaseId(role.data[0]?.id) !== roleId || !WEB_ROLES.includes(name)) {
+    const name: unknown = role.data[0]?.name
+    if (databaseId(role.data[0]?.id) !== roleId || !isResolvedRoleName(name)) {
       return denied('ROLE_FORBIDDEN', 'El rol no tiene acceso a la aplicacion web.')
     }
-    return { isAuthorized: true, requiresLogin: false, context: { authUserId, appUserId, tenantId, role: name } }
+    return { isAuthorized: true, requiresLogin: false, context: { authUserId, appUserId, tenantId, role: roleId }, roleName: name }
   } catch {
     return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el acceso.')
   }

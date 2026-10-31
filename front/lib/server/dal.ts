@@ -1,19 +1,26 @@
 import 'server-only'
 
 import { cookies } from 'next/headers'
-import { resolveTenantAccess, TENANT_COOKIE, type AuthValidationErrorCode, type WebRole } from '@/lib/auth/tenant-access'
+import { E06_READ_ONLY_COMPAT_ROLE, resolveTenantAccessWithRoleName, TENANT_COOKIE, type AuthValidationErrorCode, type ResolvedRoleName, type TenantAccessContext } from '@/lib/auth/tenant-access'
+import { isAuthServiceUnavailable } from '@/lib/auth/session-routing'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-scope'
 
+// ALIGN-003 y funciones de ALIGN-018: `operador` registra, `supervisor` aprueba y
+// no importa. `importador_sistema` es de maquina y no entra por la web. La lectura
+// tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
 const PERMISSIONS = {
-  'portfolio:read': ['consulta', 'operador', 'supervisor'],
-  'decision:record': ['operador', 'supervisor'],
+  'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
+  'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
-  'import:write': ['importador', 'supervisor'],
-} as const satisfies Record<string, readonly WebRole[]>
+  'import:write': ['importador'],
+} as const satisfies Record<string, readonly ResolvedRoleName[]>
 export type DalPermission = keyof typeof PERMISSIONS
+
+// `role` del contexto publico es un ID: aca se separa para que nadie lo lea como nombre.
+export type DalContext = Omit<TenantAccessContext, 'role'> & { roleId: string; roleName: ResolvedRoleName }
 
 export class DataAccessError extends Error {
   readonly status: number
@@ -38,15 +45,18 @@ export async function requireTenantAccess(options: { permission?: DalPermission;
   } catch {
     throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesion.')
   }
+  if (isAuthServiceUnavailable(identity.error)) throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesion.')
   if (identity.error || !identity.data.user) throw new DataAccessError('AUTH_REQUIRED', 'Debes iniciar sesion para continuar.')
   const tenantId = options.tenantId ?? cookieStore.get(TENANT_COOKIE)?.value
-  const access = await resolveTenantAccess(identity.data.user.id, supabase, tenantId)
+  const { access, roleName } = await resolveTenantAccessWithRoleName(identity.data.user.id, supabase, tenantId)
   if (!access.isAuthorized || !access.context) {
     throw new DataAccessError(access.code!, access.message!)
   }
-  const roles: readonly WebRole[] = PERMISSIONS[options.permission ?? 'portfolio:read'] ?? []
-  if (!roles.includes(access.context.role)) throw new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.')
-  return { supabase, context: access.context }
+  const roles: readonly ResolvedRoleName[] = PERMISSIONS[options.permission ?? 'portfolio:read'] ?? []
+  if (!roleName || !roles.includes(roleName)) throw new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.')
+  const { role: roleId, ...identityContext } = access.context
+  const context: DalContext = { ...identityContext, roleId, roleName }
+  return { supabase, context }
 }
 
 // Solo devuelve filas de tablas declaradas y del municipio verificado. Los errores

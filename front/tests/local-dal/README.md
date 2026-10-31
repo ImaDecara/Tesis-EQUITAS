@@ -1,8 +1,7 @@
 # ALIGN-019: prueba directa local
 
 El 30/10 el orquestador autorizó el uso exclusivo temporal del stack mediante lock.
-Las corridas con Next dev y con compilación de producción pasaron los ocho casos;
-los resultados definitivos y los gates
+Los resultados definitivos y los gates (`evidence-ciclo1.json`, `criterios-ciclo1.md`)
 están en `execution/evidence/ALIGN-019/` del paquete externo del plan.
 Esta suite es independiente de Vitest: usa Auth, REST y HTTP HTML/RSC reales.
 No se omite si falta configuración: falla antes de arrancar Next o crear clientes.
@@ -49,9 +48,11 @@ Procedimiento autorizado (solo cuando el stack esté disponible):
    `rmdir /tmp/equitas-local-db/lock` y conservar solo evidencia depurada. No usar
    `stop`; no imprimir las claves de `supabase-local.env`.
 
-Cobertura escrita: nueve rutas, HTML y RSC sin JavaScript para anónimo, sin
-membresía, usuario inactivo y membresías múltiples sin selección; controles
-positivos A/B; selección explícita A/B; cookie de tenant ajeno; detalle ajeno;
-personas separadas por municipio; sesiones alternadas sobre la misma URL.
+Cobertura escrita: nueve rutas, HTML y RSC sin JavaScript. El anónimo recibe 307 a
+`/login?next=<ruta>`; sin membresía, usuario inactivo y membresías múltiples sin
+selección reciben 200 con denegación y sin cartera. Controles positivos A/B con
+detalle propio, contactos y riesgo de una persona compartida; selección explícita
+A/B; cookie de tenant ajeno; detalle ajeno; personas separadas por municipio;
+`next` y cabeceras que intentan llevar a otro host.
 Los controles positivos rechazan también los avisos de error de lectura, para
 evitar que un join PostgREST roto produzca un verde con datos parciales.

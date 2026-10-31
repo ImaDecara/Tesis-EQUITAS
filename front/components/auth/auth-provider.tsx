@@ -27,6 +27,7 @@ type AuthContextValue = {
   session: Session | null
   appUser: AuthAppUser | null
   tenant: AuthTenant | null
+  // ID del rol en texto. No es el nombre ni autoriza: las capacidades las decide la DAL.
   role: string | null
   isAuthenticated: boolean
   isAuthReady: boolean

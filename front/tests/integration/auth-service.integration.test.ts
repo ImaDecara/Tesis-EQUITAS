@@ -68,7 +68,7 @@ describe('integracion simulada de autorizacion con Supabase', () => {
         authUserId: 'auth-user-1',
         appUserId: '42',
         tenantId: '7',
-        role: 'operador',
+        role: '3',
       },
     })
     expect(client.from).toHaveBeenCalledWith('user')
