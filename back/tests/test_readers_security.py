@@ -158,6 +158,16 @@ def with_styles(styles):
     return rewrite_zip(minimal_workbook(), replace_parts={'xl/styles.xml': styles}, stored=('xl/styles.xml',))
 
 
+def central_flags(data, flags=None, method=None):
+    """Cambia en el directorio central las banderas o el método de compresión de la primera parte."""
+    start = data.index(b'PK\x01\x02')
+    if flags is not None:
+        data = data[:start + 8] + struct.pack('<H', flags) + data[start + 10:]
+    if method is not None:
+        data = data[:start + 10] + struct.pack('<H', method) + data[start + 12:]
+    return data
+
+
 def overlapping_entry(data):
     """Segunda entrada del directorio central que apunta a los mismos bytes de otra parte."""
     start = data.index(b'PK\x01\x02')
@@ -437,6 +447,38 @@ def test_package_with_everything_excel_writes_is_read(tmp_path):
     assert [(row.line, row.values) for row in table.rows] == [(3, {'A': '2', 'B': 'x'})]
 
 
+def test_workbook_without_styles_and_blank_rows_are_read(tmp_path):
+    rows = (HEADER_ROW + '<row r="2"><c r="A2"/></row><row r="3"><c r="A3" t="inlineStr"><is><t>K</t></is></c></row>')
+    book = rewrite_zip(minimal_workbook(), replace_parts={'xl/worksheets/sheet1.xml': raw_sheet(rows)}, drop=('xl/styles.xml',))
+    mapping = xlsx_profile()
+    table = extract.read_workbook(io.BytesIO(book), {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                                  FileLimits(), Deadline(60)).tables['cabecera']
+    assert [(row.line, row.values) for row in table.rows] == [(3, {'A': 'K'})]
+
+
+def test_percentage_without_percent_format_keeps_its_value(tmp_path):
+    data = workbook_bytes({'cabecera': [['ClaveAgrupacion', 'Destinatario_Porcentaje'], ['K', 12.5]], 'detalle': [['A'], ['1']]})
+    mapping = xlsx_profile()
+    tables = extract.read_workbook(io.BytesIO(data), {'cabecera': 'cabecera'}, mapping['formato'],
+                                   {'cabecera': extract._physical_types('cabecera', mapping, load_contract())},
+                                   FileLimits(), Deadline(60))
+    assert tables.tables['cabecera'].rows[0].values['Destinatario_Porcentaje'] == '12,5'
+
+
+def test_shared_string_limit_and_its_forms(tmp_path):
+    rows = '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>2</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c><c r="B2" t="s"><v>3</v></c></row>'
+    strings = (f'<sst xmlns="{MAIN_NS}"><si><t>A</t></si><si/><si><t>B</t></si><si><r><t>c</t></r><r><t>d</t></r></si><otro/></sst>').encode()
+    book = with_shared_strings(rows, strings)
+    mapping = xlsx_profile()
+    table = extract.read_workbook(io.BytesIO(book), {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                                  FileLimits(), Deadline(60)).tables['cabecera']
+    assert table.columns == ['A', 'B']
+    assert table.rows[0].values == {'A': '', 'B': 'cd'}
+    with pytest.raises(ValidationError, match='LIMITE_CADENAS_EXCEDIDO'):
+        extract.read_workbook(io.BytesIO(book), {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                              replace(FileLimits(), shared_strings=3), Deadline(60))
+
+
 def test_transformations_and_aliases_apply_to_xlsx(tmp_path):
     sheets = fixture_sheets()
     header = sheets['detalle'][0]
@@ -639,6 +681,13 @@ def _hostile_cases():
                                                           _sst(b'<si><t>' + os.urandom(16_384).hex().encode() + b'</t></si>')),
          xlsx_profile(), 'CELDA_EXCEDE_LIMITE', None),
         ('zip64-oculto.xlsx', hidden_zip64_directory(book), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('zip-cifrado.xlsx', central_flags(book, flags=0x1), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('zip-otra-compresion.xlsx', central_flags(book, method=zipfile.ZIP_BZIP2), xlsx_profile(), 'ZIP_CORRUPTO', None),
+        ('hoja-vacia.xlsx', with_sheet(''), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('sin-fila-1.xlsx', with_sheet('<row r="2"><c r="A2" t="inlineStr"><is><t>A</t></is></c></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
+        ('hojas-mismo-nombre.xlsx', rewrite_zip(workbook_bytes({'cabecera': [['A']], 'detalle': [['A']]}), replace_parts={
+            'xl/workbook.xml': _part(workbook_bytes({'cabecera': [['A']], 'detalle': [['A']]}), 'xl/workbook.xml').replace(b'name="detalle"', b'name="cabecera"')}),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
         ('zip-entradas-superpuestas.xlsx', overlapping_entry(book), xlsx_profile(), 'ZIP_CORRUPTO', None),
         ('texto-190mb.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2" t="inlineStr"><is><t>' + solid_text + '</t></is></c></row>'),
          xlsx_profile(), 'CELDA_EXCEDE_LIMITE', None),
@@ -813,6 +862,17 @@ def test_size_and_ratio_are_verified_before_opening_any_part(tmp_path, monkeypat
     monkeypatch.setattr(zipfile.ZipFile, 'open', forbidden)
     reject(by_size, xlsx_profile(), 'TAMANO_DESCOMPRIMIDO_EXCEDIDO')
     reject(by_ratio, xlsx_profile(), 'RAZON_COMPRESION_EXCEDIDA')
+
+
+def test_count_in_the_end_record_can_lie_but_the_directory_cannot(tmp_path):
+    many = io.BytesIO()
+    with zipfile.ZipFile(many, 'w') as archive:
+        for number in range(2100):
+            archive.writestr(str(number), b'')
+    data = many.getvalue()
+    position = data.rindex(b'PK\x05\x06')
+    lying = data[:position + 8] + struct.pack('<HH', 1, 1) + data[position + 12:]
+    reject(write(tmp_path, 'libro', lying), xlsx_profile(), 'LIMITE_PARTES_ZIP_EXCEDIDO')
 
 
 def test_directory_is_measured_before_zipfile_builds_it(tmp_path, monkeypatch):
@@ -1176,6 +1236,30 @@ def test_no_temporary_file_remains_after_publish_discard_failure_or_ttl(tmp_path
     assert store.purge_expired() == 0
     store.close()
     assert not root.exists()
+
+
+def test_purge_tolerates_a_file_another_process_just_removed(tmp_path, monkeypatch):
+    now = [1_000_000_000.0]
+    with PrivateUploadStore(tmp_path / 'privado', clock=lambda: now[0]) as store:
+        upload = store.save(io.BytesIO(b'A\n'), 'lote.csv')
+        real = os.scandir
+        def vanishing(path):
+            for entry in list(real(path)):
+                entry_path = Path(entry.path)
+                entry_path.unlink()
+                yield entry
+        monkeypatch.setattr('ETL.readers.limits.os.scandir', vanishing)
+        now[0] += 86_400
+        assert store.purge_expired() == 0
+        monkeypatch.undo()
+        assert not upload.path.exists()
+
+
+def test_unreadable_paths_have_a_safe_code(tmp_path):
+    reject_values = [None, tmp_path, tmp_path / 'no-existe.csv']
+    for value in reject_values:
+        with pytest.raises(ValidationError, match='^ARCHIVO_NO_LEIBLE: archivo=cabecera'):
+            extract.read_source_tables(dict.fromkeys(KINDS, value), csv_profile())
 
 
 def test_store_refuses_a_shared_or_forged_directory(tmp_path):

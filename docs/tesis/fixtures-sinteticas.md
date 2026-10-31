@@ -101,7 +101,7 @@ La misma tabla se escribe en TSV, CSV con `,` y `;` en UTF-8 con BOM y en Window
 | `formulas.xlsx` / `.csv` | Fórmulas sin valor guardado; `=`, `+`, `-`, `@` al inicio | `FORMULA_SIN_VALOR` / `FORMULA_EN_CELDA` |
 | `hojas-extra.xlsx` | Hojas `notas` y `oculta` además de las esperadas | `HOJAS_EXTRA_IGNORADAS` |
 
-Los códigos son sugerencias; ALIGN-053 fija los definitivos. Ningún archivo supera 1 MB en disco y no se versiona ninguno.
+ALIGN-053 adoptó estos códigos sin cambios ([`importacion-web.md`](importacion-web.md)); `HOJAS_EXTRA_IGNORADAS` no es un rechazo: las hojas se listan e ignoran y la lectura sigue. Ningún archivo supera 1 MB en disco y no se versiona ninguno.
 
 **Centinelas.** Cada archivo lleva al menos un centinela con el prefijo `CENTINELA-EQUITAS-SINTETICO`, distinto por archivo y ubicación (`CENTINELA-EQUITAS-SINTETICO-<ARCHIVO>-<LUGAR>`), sin alterar su condición hostil. `hostil/manifest.json` declara por archivo `centinelas[]` con `valor`, `partes` (partes del ZIP que lo contienen; vacío = bytes del archivo) y `en_preview_autorizado`:
 

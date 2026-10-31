@@ -71,6 +71,7 @@ MAX_SHEET_ROW = 1_048_576
 MAX_SHEET_COLUMN = 16_384
 CELL_TAG = f'{{{SHEET_MAIN_NS}}}c'
 STRING_TAG = f'{{{SHEET_MAIN_NS}}}si'
+TEXT_TAG = f'{{{SHEET_MAIN_NS}}}t'
 # Topes de Excel; openpyxl aplica a cada formato una expresión regular cuadrática.
 MAX_FORMAT_CODE = 255
 MAX_CELL_FORMATS = 65_490
@@ -235,6 +236,15 @@ def _check_styles(root, kind):
         source_error('LIMITE_XML_EXCEDIDO', kind)
 
 
+def _string_text(unit):
+    # Las formas habituales evitan armar un objeto por cadena: son millones y sin esto tarda 5 veces más.
+    if not len(unit):
+        return ''
+    if len(unit) == 1 and unit[0].tag == TEXT_TAG:
+        return unit[0].text or ''
+    return Text.from_tree(unit).content
+
+
 class _SelectedSheet(ReadOnlyWorksheet):
     def _get_size(self):
         """La dimensión declarada puede mentir, y buscarla recorre la hoja entera."""
@@ -308,7 +318,7 @@ class _PackageReader(ExcelReader):
         with self.archive.open(part.PartName[1:]) as source:
             for unit in _units(source, STRING_TAG, kind, limits, self.deadline):
                 self.deadline.check(kind)
-                text = Text.from_tree(unit).content.replace('x005F_', '')
+                text = _string_text(unit).replace('x005F_', '')
                 if len(text) > limits.cell:
                     source_error('CELDA_EXCEDE_LIMITE', kind)
                 if len(strings) >= limits.shared_strings:

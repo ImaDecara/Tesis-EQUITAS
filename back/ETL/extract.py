@@ -187,7 +187,7 @@ def _read_delimited(path, kind, mapping, contract, limits, deadline):
             raise
         except csv.Error as error:
             # csv corta antes de nuestro límite de celda si el campo supera su propio tope global.
-            source_error('CELDA_EXCEDE_LIMITE' if 'field larger' in str(error) else 'ARCHIVO_NO_LEIBLE', kind, reader.line_num)
+            source_error('CELDA_EXCEDE_LIMITE' if 'field larger' in str(error) else 'ARCHIVO_NO_LEIBLE', kind, lines.line)
         except (OSError, UnicodeError, TypeError, ValueError):
             source_error('ARCHIVO_NO_LEIBLE', kind)
     return _finish_table(SourceTable(columns, rows), kind, mapping, contract)
