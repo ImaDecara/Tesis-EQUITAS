@@ -313,7 +313,8 @@ Validación del 31/10, ciclo de corrección 1. La revisión independiente pidió
 por dos regresiones sin fuga: la fixture E06 quedaba sin acceso y sin sesión no se
 llegaba a `/login`. Con la fixture E06 sin tocar, `test:supabase` da 12/12 y SMOKE-01
 5/5, igual que la base; corrieron en copias locales, sin ningún proyecto remoto. Sobre
-`USING(true)` pasan los diez casos directos y un barrido de contextos denegados y
-positivos en HTML y RSC. Con la cuenta E06 se comprobó que solo lee: la DAL deniega
+`USING(true)` pasan los diez casos directos en HTML y RSC. El barrido adicional de
+contextos quedó no concluyente por la carga de la máquina: sin hallazgos, pero con
+sesión no llegó a medir. Con la cuenta E06 se comprobó que solo lee: la DAL deniega
 los demás permisos, la Data API con RLS rechaza sus escrituras y las funciones de
 ALIGN-018 responden `ROLE_NOT_ALLOWED`. Falta la re-revisión independiente.
