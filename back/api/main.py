@@ -27,18 +27,34 @@ from services.scoring_service import (
 )
 
 logger = logging.getLogger("equitas.api")
+# Uvicorn solo configura sus propios registros: sin esto, los de la API no salen a ningún lado.
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
 
 LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"]
+# Una ruta nueva que no se agregue acá se ve como `<x>` en el registro: nunca al revés.
+LOGGABLE_SEGMENTS = frozenset(
+    {"", "health", "case-groups", "summary", "definitions", "imports", "discard"}
+)
 
 
-class DropQueryString(logging.Filter):
-    """El registro de acceso de uvicorn imprime la consulta, y `search` puede traer datos."""
+class SafeAccessPath(logging.Filter):
+    """El registro de acceso de uvicorn imprime la ruta y la consulta tal como llegaron, y
+    ambas las escribe el cliente: `search` o un segmento pueden traer datos. Se conserva la
+    forma de la ruta y lo que no está en la lista cerrada se reemplaza."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         arguments = record.args
         if isinstance(arguments, tuple) and len(arguments) == 5:
             path = str(arguments[2]).split("?", 1)[0]
-            record.args = (*arguments[:2], path, *arguments[3:])
+            safe = "/".join(
+                part if part in LOGGABLE_SEGMENTS or part.isdecimal() else "<x>"
+                for part in path.split("/")
+            )
+            record.args = (*arguments[:2], safe, *arguments[3:])
         return True
 
 
@@ -57,7 +73,7 @@ class DropTraceback(logging.Filter):
         return True
 
 
-logging.getLogger("uvicorn.access").addFilter(DropQueryString())
+logging.getLogger("uvicorn.access").addFilter(SafeAccessPath())
 logging.getLogger("uvicorn.error").addFilter(DropTraceback())
 # httpx anuncia en INFO cada URL saliente, con sus filtros.
 for _noisy in ("httpx", "httpcore", "hpack"):

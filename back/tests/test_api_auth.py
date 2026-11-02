@@ -667,21 +667,39 @@ def test_uvicorn_error_log_keeps_only_the_exception_class():
     assert plain.getMessage() == "Started server"
 
 
-def test_access_log_filter_removes_the_query_string():
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/case-groups?search=CENTINELA", "/case-groups"),
+        ("/imports/12/discard", "/imports/12/discard"),
+        ("/imports/CENTINELA", "/imports/<x>"),
+        ("/imports/12/CENTINELA?x=CENTINELA", "/imports/12/<x>"),
+        ("/CENTINELA/health", "/<x>/health"),
+    ],
+)
+def test_access_log_keeps_only_the_shape_of_the_path(path, expected):
     record = logging.LogRecord(
         "uvicorn.access",
         logging.INFO,
         __file__,
         1,
         '%s - "%s %s HTTP/%s" %d',
-        ("127.0.0.1:1", "GET", "/case-groups?search=CENTINELA_BUSQUEDA", "1.1", 200),
+        ("127.0.0.1:1", "GET", path, "1.1", 200),
         None,
     )
-    assert main.DropQueryString().filter(record) is True
+    assert main.SafeAccessPath().filter(record) is True
     assert "CENTINELA" not in record.getMessage()
-    assert "/case-groups" in record.getMessage()
-    other = SimpleNamespace(args=None)
-    assert main.DropQueryString().filter(other) is True
+    assert f"GET {expected} HTTP" in record.getMessage()
+
+
+def test_access_log_filter_ignores_other_records():
+    assert main.SafeAccessPath().filter(SimpleNamespace(args=None)) is True
+
+
+def test_api_logger_writes_somewhere_without_extra_configuration():
+    api_logger = logging.getLogger("equitas.api")
+    assert api_logger.handlers
+    assert api_logger.isEnabledFor(logging.INFO)
 
 
 def test_noisy_loggers_do_not_print_outgoing_urls():

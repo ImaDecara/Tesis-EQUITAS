@@ -1,0 +1,590 @@
+"""ALIGN-052: criterios de aceptación contra Auth, PostgREST y RLS reales del stack local."""
+
+import concurrent.futures
+import hashlib
+import os
+import stat
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
+
+import httpx
+import jwt
+import pytest
+from conftest import BACK, GENERAL_KEYS, free_port, psql, wait_for_port
+from cryptography.hazmat.primitives.asymmetric import ec
+from jwt.algorithms import ECAlgorithm
+
+ASOF = {"as_of": "2026-09-30"}
+TENANT_A, TENANT_B = 920001, 920002
+USER_IMPORTADOR = 920004
+SENTINELS = {
+    "file_person": "CENTINELA_A052_ARCHIVO_PERSONA",
+    "file_document": "CENTINELA_A052_ARCHIVO_DOCUMENTO",
+    "file_mail": "centinela-a052-archivo@example.invalid",
+    "filename": "CENTINELA_A052_NOMBRE_ARCHIVO",
+    "field": "CENTINELA_A052_CAMPO",
+    "query": "CENTINELA_A052_CONSULTA",
+    "header": "CENTINELA_A052_ENCABEZADO",
+    "as_of": "CENTINELA_A052_FECHA",
+}
+ALL_ROUTES = [
+    ("GET", "/health"),
+    ("GET", "/case-groups"),
+    ("GET", "/case-groups/summary"),
+    ("GET", "/case-groups/definitions"),
+    ("POST", "/imports"),
+    ("GET", "/imports/1"),
+    ("POST", "/imports/1/discard"),
+]
+
+
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def multipart(*parts, boundary="limiteSinteticoA052"):
+    body = b""
+    for name, value, filename in parts:
+        disposition = f'form-data; name="{name}"'
+        if filename:
+            disposition += f'; filename="{filename}"'
+        body += f"--{boundary}\r\nContent-Disposition: {disposition}\r\n\r\n".encode()
+        body += value + b"\r\n"
+    return body + f"--{boundary}--\r\n".encode(), {
+        "Content-Type": f"multipart/form-data; boundary={boundary}"
+    }
+
+
+CABECERA = (
+    f"Cuenta\tNombre\tDocumento\tCorreo\n1\t{SENTINELS['file_person']}\t"
+    f"{SENTINELS['file_document']}\t{SENTINELS['file_mail']}\n"
+).encode()
+DETALLE = b"Cuenta\tDEUD_id\n1\t9\n"
+
+
+def batch(*extra, cabecera=CABECERA, detalle=DETALLE, as_of=b"2026-09-30"):
+    return multipart(
+        ("as_of", as_of, None),
+        ("cabecera", cabecera, f"{SENTINELS['filename']}.tsv"),
+        ("detalle", detalle, "detalle.tsv"),
+        *extra,
+    )
+
+
+def post_batch(http, token, *extra, headers=None, params=None, **files):
+    body, content_type = batch(*extra, **files)
+    return http.post(
+        "/imports",
+        content=body,
+        headers={**bearer(token), **content_type, **(headers or {})},
+        params=params,
+    )
+
+
+def batch_rows(root: int) -> str:
+    return psql(
+        "with recursive c as (select * from public.import_batch where id = %d "
+        "union all select b.* from public.import_batch b join c on b.supersedes = c.id) "
+        "select count(*) from c" % root
+    ).strip()
+
+
+# ---- Precondición: las pruebas apuntan a lo que dicen
+
+
+def test_environment_has_no_general_key_and_targets_loopback(api_server):
+    assert not set(GENERAL_KEYS) & set(api_server.environment)
+    assert "127.0.0.1" in api_server.environment["SUPABASE_URL"]
+    assert api_server.url.startswith("http://127.0.0.1:")
+
+
+def test_real_sessions_are_es256_and_the_issuer_publishes_the_key(env, login):
+    header = jwt.get_unverified_header(login("operador"))
+    assert header["alg"] == "ES256"
+    published = httpx.get(f"{env['API_URL']}/auth/v1/.well-known/jwks.json", trust_env=False)
+    assert header["kid"] in {key["kid"] for key in published.json()["keys"]}
+    assert all("d" not in key for key in published.json()["keys"])
+
+
+# ---- 401
+
+
+def signed(signing_key, env, login, **overrides):
+    claims = jwt.decode(login("operador"), options={"verify_signature": False})
+    claims.update(overrides)
+    claims = {name: value for name, value in claims.items() if value is not None}
+    key = ECAlgorithm.from_jwk(signing_key)
+    return jwt.encode(claims, key, "ES256", headers={"kid": signing_key["kid"]})
+
+
+@pytest.mark.parametrize(("method", "path"), ALL_ROUTES)
+def test_every_route_without_token_is_401(http, method, path):
+    response = http.request(method, path, params=ASOF)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "AUTH_REQUIRED"}
+
+
+@pytest.mark.parametrize(("method", "path"), ALL_ROUTES)
+def test_every_route_with_expired_token_is_401(http, signing_key, env, login, method, path):
+    token = signed(signing_key, env, login, exp=int(time.time()) - 60)
+    assert http.request(method, path, params=ASOF, headers=bearer(token)).status_code == 401
+
+
+def test_properly_signed_token_is_accepted_so_the_rejections_below_are_meaningful(
+    http, signing_key, env, login
+):
+    token = signed(signing_key, env, login)
+    assert http.get("/health", headers=bearer(token)).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"iss": "https://otro-emisor.example.invalid/auth/v1"},
+        {"iss": "http://127.0.0.1:54321/auth/v1/"},
+        {"iss": None},
+        {"aud": "otra-audiencia"},
+        {"aud": None},
+        {"exp": None},
+        {"sub": None},
+        {"role": "service_role"},
+        {"role": "anon"},
+    ],
+    ids=str,
+)
+def test_token_signed_with_the_real_key_but_wrong_claims_is_401(
+    http, signing_key, env, login, overrides
+):
+    token = signed(signing_key, env, login, **overrides)
+    assert http.get("/health", headers=bearer(token)).status_code == 401
+
+
+def test_disallowed_algorithm_is_401_even_if_postgrest_would_accept_it(http, env, login):
+    claims = jwt.decode(login("operador"), options={"verify_signature": False})
+    token = jwt.encode(claims, env["JWT_SECRET"], "HS256")
+    # Precondición: esa firma es válida para la base. La API la rechaza por el algoritmo.
+    direct = httpx.get(
+        f"{env['API_URL']}/rest/v1/tenant_user",
+        params={"select": "id"},
+        headers={"apikey": env["PUBLISHABLE_KEY"], **bearer(token)},
+        trust_env=False,
+    )
+    assert direct.status_code == 200
+    assert http.get("/health", headers=bearer(token)).status_code == 401
+
+
+def test_alg_none_and_foreign_key_are_401(http, signing_key, env, login):
+    claims = jwt.decode(login("operador"), options={"verify_signature": False})
+    none = jwt.encode(claims, None, "none", headers={"kid": signing_key["kid"]})
+    assert http.get("/health", headers=bearer(none)).status_code == 401
+    other = ec.generate_private_key(ec.SECP256R1())
+    forged = jwt.encode(claims, other, "ES256", headers={"kid": signing_key["kid"]})
+    assert http.get("/health", headers=bearer(forged)).status_code == 401
+
+
+def test_project_keys_and_server_credential_are_not_sessions(http, env, import_jwt):
+    for credential in (env["ANON_KEY"], env["SERVICE_ROLE_KEY"], env["PUBLISHABLE_KEY"], import_jwt):
+        assert http.get("/health", headers=bearer(credential)).status_code == 401
+
+
+def test_closed_session_is_401_before_the_token_expires(http, env, login):
+    token = login("de-sesion")
+    assert http.get("/health", headers=bearer(token)).status_code == 200
+    closed = httpx.post(
+        f"{env['API_URL']}/auth/v1/logout",
+        headers={"apikey": env["PUBLISHABLE_KEY"], **bearer(token)},
+        trust_env=False,
+    )
+    assert closed.status_code == 204
+    assert jwt.decode(token, options={"verify_signature": False})["exp"] > time.time()
+    assert http.get("/health", headers=bearer(token)).status_code == 401
+
+
+# ---- 403 y 404 en lotes
+
+
+@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor", "otro-operador"])
+def test_roles_without_import_get_403(http, login, label):
+    before = psql("select count(*) from public.import_batch").strip()
+    response = post_batch(http, login(label))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+    assert http.get("/imports/1", headers=bearer(login(label))).status_code == 403
+    assert http.post("/imports/1/discard", headers=bearer(login(label))).status_code == 403
+    assert psql("select count(*) from public.import_batch").strip() == before
+
+
+@pytest.mark.parametrize("label", ["sin-membresia", "inactivo", "usuario-inactivo"])
+def test_without_active_membership_get_403(http, login, label):
+    response = post_batch(http, login(label))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "MEMBERSHIP_REQUIRED"}
+
+
+def test_two_memberships_require_a_selection_and_return_nothing(http, login):
+    response = post_batch(http, login("multi"))
+    assert response.status_code == 409
+    assert response.json() == {"detail": "TENANT_SELECTION_REQUIRED"}
+    scoring = http.get("/case-groups", params=ASOF, headers=bearer(login("multi")))
+    assert scoring.status_code == 409
+    assert "CENTINELA" not in scoring.text
+
+
+def test_importer_creates_a_received_batch_with_the_dedicated_credential(http, login):
+    response = post_batch(http, login("importador"))
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "RECIBIDO"
+    assert body["tenant"] == TENANT_A
+    assert body["created"] is True
+    assert body["file_hashes"]["cabecera"] == hashlib.sha256(CABECERA).hexdigest()
+    row = psql(
+        "select tenant,status,created_by,created_by_role,source,rules_version,as_of,"
+        f"counts->>'archivos' from public.import_batch where id = {body['id']}"
+    ).strip()
+    assert row == f"{TENANT_A}|RECIBIDO|{USER_IMPORTADOR}|importador|WEB_UPLOAD|1.0.0|2026-09-30|2"
+
+
+def test_client_supplied_tenant_is_ignored_in_body_query_and_headers(http, login):
+    response = post_batch(
+        http,
+        login("importador"),
+        ("tenant", str(TENANT_B).encode(), None),
+        ("tenant_id", str(TENANT_B).encode(), None),
+        ("p_tenant", str(TENANT_B).encode(), None),
+        params={"tenant": TENANT_B, "tenant_id": TENANT_B},
+        headers={"X-Tenant": str(TENANT_B), "X-Tenant-Id": str(TENANT_B)},
+    )
+    assert response.status_code == 201
+    assert response.json()["tenant"] == TENANT_A
+    identifier = response.json()["id"]
+    assert psql(f"select tenant from public.import_batch where id = {identifier}").strip() == str(
+        TENANT_A
+    )
+
+
+def test_batch_of_another_tenant_is_404_for_read_and_discard(http, login):
+    identifier = post_batch(http, login("importador")).json()["id"]
+    other = bearer(login("otro-importador"))
+    foreign = http.get(f"/imports/{identifier}", headers=other)
+    missing = http.get("/imports/900000000", headers=other)
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {"detail": "BATCH_NOT_FOUND"}
+    assert http.post(f"/imports/{identifier}/discard", headers=other).status_code == 404
+    assert batch_rows(identifier) == "1"
+    # El dueño sigue viéndolo intacto.
+    own = http.get(f"/imports/{identifier}", headers=bearer(login("importador")))
+    assert own.json()["status"] == "RECIBIDO"
+
+
+def test_rls_alone_would_show_the_row_to_a_multi_tenant_member(env, login):
+    """Precondición del filtro explícito: con dos membresías RLS muestra ambos municipios."""
+    rows = httpx.get(
+        f"{env['API_URL']}/rest/v1/debtor",
+        params={"select": "tenant", "id": "in.(952001,952002)"},
+        headers={"apikey": env["PUBLISHABLE_KEY"], **bearer(login("multi"))},
+        trust_env=False,
+    ).json()
+    assert {row["tenant"] for row in rows} == {TENANT_A, TENANT_B}
+
+
+# ---- Scoring con el contexto del usuario
+
+
+def identifiers(response) -> set[str]:
+    return {case["debtor_identifier"] for case in response.json()["items"]}
+
+
+@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor"])
+def test_scoring_of_a_tenant_shows_only_its_rows_and_counts(http, login, label):
+    headers = bearer(login(label))
+    cases = http.get("/case-groups", params={**ASOF, "limit": 500}, headers=headers)
+    assert cases.status_code == 200
+    assert "CENTINELA_A052_OBJETO_A" in identifiers(cases)
+    assert "CENTINELA_A052_OBJETO_B" not in cases.text
+    assert "777777" not in cases.text
+    assert all(str(case["debtor_id"]) != "952002" for case in cases.json()["items"])
+    summary = http.get("/case-groups/summary", params=ASOF, headers=headers).json()
+    assert summary["total_cases"] == cases.json()["total"]
+    expected = psql(f"select count(*) from public.debtor where tenant = {TENANT_A}").strip()
+    assert str(summary["total_cases"]) == expected
+
+
+def test_scoring_of_the_other_tenant_shows_only_its_rows_and_counts(http, login):
+    headers = bearer(login("otro-operador"))
+    cases = http.get("/case-groups", params={**ASOF, "limit": 500}, headers=headers)
+    assert "CENTINELA_A052_OBJETO_B" in identifiers(cases)
+    assert "CENTINELA_A052_OBJETO_A" not in cases.text
+    summary = http.get("/case-groups/summary", params=ASOF, headers=headers).json()
+    expected = psql(f"select count(*) from public.debtor where tenant = {TENANT_B}").strip()
+    assert str(summary["total_cases"]) == expected
+
+
+def test_client_supplied_tenant_does_not_change_scoring(http, login):
+    cases = http.get(
+        "/case-groups",
+        params={**ASOF, "tenant": TENANT_B, "tenant_id": TENANT_B},
+        headers={**bearer(login("operador")), "X-Tenant": str(TENANT_B)},
+    )
+    assert "CENTINELA_A052_OBJETO_B" not in cases.text
+
+
+@pytest.mark.parametrize("path", ["/case-groups", "/case-groups/summary", "/case-groups/definitions"])
+@pytest.mark.parametrize("label", ["sin-membresia", "inactivo", "usuario-inactivo"])
+def test_scoring_without_membership_returns_no_rows_or_counts(http, login, path, label):
+    response = http.get(path, params=ASOF, headers=bearer(login(label)))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "MEMBERSHIP_REQUIRED"}
+
+
+def test_importer_does_not_read_the_portfolio(http, login):
+    response = http.get("/case-groups", params=ASOF, headers=bearer(login("importador")))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+
+
+def test_revoking_a_membership_applies_on_the_next_request(http, login):
+    token = login("revocable")
+    headers = bearer(token)
+    assert http.get("/case-groups", params=ASOF, headers=headers).status_code == 200
+    psql("update public.tenant_user set status = false where id = 952005")
+    try:
+        revoked = http.get("/case-groups", params=ASOF, headers=headers)
+        assert revoked.status_code == 403
+        assert "CENTINELA" not in revoked.text
+    finally:
+        psql("update public.tenant_user set status = true where id = 952005")
+    assert http.get("/case-groups", params=ASOF, headers=headers).status_code == 200
+
+
+def test_service_scoped_to_one_tenant_for_a_multi_tenant_session(api_server, env, login, monkeypatch):
+    """El servicio con el cliente de sesión real: RLS muestra dos municipios, sale uno."""
+    from api import auth
+    from services import scoring_service as scoring
+
+    config = auth.ApiConfig(env["API_URL"], env["PUBLISHABLE_KEY"])
+    client = auth.data_client(config, login("multi"))
+    for tenant, own, foreign in (
+        (TENANT_A, "CENTINELA_A052_OBJETO_A", "CENTINELA_A052_OBJETO_B"),
+        (TENANT_B, "CENTINELA_A052_OBJETO_B", "CENTINELA_A052_OBJETO_A"),
+    ):
+        text = str(scoring.build_all_case_groups(client, tenant=tenant, as_of="2026-09-30"))
+        assert own in text
+        assert foreign not in text
+
+
+# ---- Cadena, descarte y temporal
+
+
+def test_validated_batch_is_read_at_its_head_and_can_be_discarded(http, env, login, import_jwt, api_server):
+    identifier = post_batch(http, login("importador")).json()["id"]
+    row = http.get(f"/imports/{identifier}", headers=bearer(login("importador"))).json()
+    advanced = httpx.post(
+        f"{env['API_URL']}/rest/v1/rpc/record_import_batch",
+        headers={"apikey": env["PUBLISHABLE_KEY"], **bearer(import_jwt)},
+        json={
+            "p_actor_user": USER_IMPORTADOR,
+            "p_tenant": TENANT_A,
+            "p_source": row["source"],
+            "p_file_hashes": row["file_hashes"],
+            "p_as_of": row["as_of"],
+            "p_rules_version": row["rules_version"],
+            "p_status": "VALIDADO",
+            "p_idempotency_key": str(uuid.uuid4()),
+            "p_counts": row["counts"],
+            "p_supersedes": identifier,
+        },
+        trust_env=False,
+    ).json()
+    headers = bearer(login("importador"))
+    head = http.get(f"/imports/{identifier}", headers=headers).json()
+    assert head["status"] == "VALIDADO"
+    assert head["id"] == advanced["batch_id"]
+    assert head["root_id"] == identifier
+    discarded = http.post(f"/imports/{identifier}/discard", headers=headers)
+    assert discarded.status_code == 200
+    assert discarded.json()["status"] == "DESCARTADO"
+    assert batch_rows(identifier) == "3"
+    assert not (api_server.store_root / "lotes" / str(TENANT_A) / str(identifier)).exists()
+
+
+def test_published_batch_cannot_be_discarded(http, env, login, import_jwt, api_server):
+    identifier = post_batch(http, login("importador")).json()["id"]
+    row = http.get(f"/imports/{identifier}", headers=bearer(login("importador"))).json()
+    httpx.post(
+        f"{env['API_URL']}/rest/v1/rpc/record_import_batch",
+        headers={"apikey": env["PUBLISHABLE_KEY"], **bearer(import_jwt)},
+        json={
+            "p_actor_user": USER_IMPORTADOR,
+            "p_tenant": TENANT_A,
+            "p_source": row["source"],
+            "p_file_hashes": row["file_hashes"],
+            "p_as_of": row["as_of"],
+            "p_rules_version": row["rules_version"],
+            "p_status": "PUBLICADO",
+            "p_idempotency_key": str(uuid.uuid4()),
+            "p_counts": row["counts"],
+            "p_supersedes": identifier,
+        },
+        trust_env=False,
+    ).raise_for_status()
+    response = http.post(f"/imports/{identifier}/discard", headers=bearer(login("importador")))
+    assert response.status_code == 409
+    assert response.json() == {"detail": "BATCH_NOT_DISCARDABLE"}
+    assert batch_rows(identifier) == "2"
+
+
+def test_eight_concurrent_discards_make_one_event(http, login, api_server):
+    token = login("importador")
+    identifier = post_batch(http, token).json()["id"]
+
+    def discard(_):
+        with httpx.Client(base_url=api_server.url, trust_env=False, timeout=60) as client:
+            return client.post(f"/imports/{identifier}/discard", headers=bearer(token))
+
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        responses = list(pool.map(discard, range(8)))
+    assert {response.status_code for response in responses} == {200}
+    assert {response.json()["id"] for response in responses} == {responses[0].json()["id"]}
+    assert batch_rows(identifier) == "2"
+
+
+def test_replay_with_the_same_key_keeps_one_batch(http, login, api_server):
+    key = str(uuid.uuid4())
+    token = login("importador")
+    first = post_batch(http, token, headers={"Idempotency-Key": key})
+    second = post_batch(http, token, headers={"Idempotency-Key": key})
+    assert (first.status_code, second.status_code) == (201, 200)
+    assert second.json()["id"] == first.json()["id"]
+    conflict = post_batch(http, token, headers={"Idempotency-Key": key}, cabecera=b"otro")
+    assert conflict.status_code == 409
+    assert conflict.json() == {"detail": "IDEMPOTENCY_KEY_CONFLICT"}
+
+
+def test_private_copy_is_intact_with_private_modes(http, login, api_server):
+    identifier = post_batch(http, login("importador")).json()["id"]
+    directory = api_server.store_root / "lotes" / str(TENANT_A) / str(identifier)
+    assert (directory / "cabecera").read_bytes() == CABECERA
+    assert (directory / "detalle").read_bytes() == DETALLE
+    for path in (api_server.store_root, directory):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o700
+    assert stat.S_IMODE((directory / "cabecera").stat().st_mode) == 0o600
+    assert list((api_server.store_root / "incoming").iterdir()) == []
+
+
+def test_oversize_declared_and_streamed_are_413_and_leave_nothing(http, login, api_server):
+    token = login("importador")
+    before = psql("select count(*) from public.import_batch").strip()
+    body, content_type = batch(cabecera=b"x" * 25_000_001, detalle=b"y")
+    streamed = http.post("/imports", content=body, headers={**bearer(token), **content_type})
+    assert streamed.status_code == 413
+    assert streamed.json() == {"detail": "LIMITE_ARCHIVO_EXCEDIDO"}
+
+    def chunks():
+        for _ in range(60):
+            yield b"z" * 1_000_000
+
+    chunked = http.post("/imports", content=chunks(), headers={**bearer(token), **content_type})
+    assert chunked.status_code in {413, 422}
+    assert psql("select count(*) from public.import_batch").strip() == before
+    assert list((api_server.store_root / "incoming").iterdir()) == []
+
+
+def test_file_at_the_limit_is_stored_whole(http, login, api_server):
+    content = os.urandom(25_000_000)
+    response = post_batch(http, login("importador"), cabecera=content)
+    assert response.status_code == 201
+    assert response.json()["file_hashes"]["cabecera"] == hashlib.sha256(content).hexdigest()
+    path = Path(api_server.store_root, "lotes", str(TENANT_A), str(response.json()["id"]), "cabecera")
+    assert path.stat().st_size == 25_000_000
+
+
+def test_expired_temporary_is_purged_on_the_next_upload(http, login, api_server):
+    token = login("importador")
+    identifier = post_batch(http, token).json()["id"]
+    directory = api_server.store_root / "lotes" / str(TENANT_A) / str(identifier)
+    old = time.time() - 86_401
+    os.utime(directory, (old, old))
+    assert post_batch(http, token).status_code == 201
+    assert not directory.exists()
+
+
+# ---- Registros y errores
+
+
+def test_logs_and_errors_carry_no_sentinels_or_credentials(http, login, api_server, accounts, import_jwt):
+    token = login("importador")
+    responses = [
+        post_batch(
+            http,
+            token,
+            ("campo_libre", SENTINELS["field"].encode(), None),
+            headers={"X-Otro": SENTINELS["header"]},
+            params={"nota": SENTINELS["query"]},
+        ),
+        post_batch(http, token, as_of=SENTINELS["as_of"].encode()),
+        post_batch(http, token, ("otro", SENTINELS["file_person"].encode(), SENTINELS["filename"])),
+        http.get(
+            "/case-groups",
+            params={**ASOF, "search": SENTINELS["query"]},
+            headers=bearer(login("operador")),
+        ),
+        http.get(
+            "/case-groups",
+            params={"as_of": SENTINELS["as_of"], "limit": SENTINELS["query"]},
+            headers=bearer(login("operador")),
+        ),
+        http.get("/imports/" + SENTINELS["query"], headers=bearer(token)),
+        http.post(
+            "/imports",
+            content=SENTINELS["file_person"].encode(),
+            headers={**bearer(token), "Content-Type": f"multipart/form-data; boundary={SENTINELS['header']}"},
+        ),
+    ]
+    assert responses[0].status_code == 201
+    assert responses[1].status_code == 422
+    for response in responses:
+        for sentinel in SENTINELS.values():
+            assert sentinel not in response.text
+    logs = api_server.logs()
+    assert "GET /case-groups HTTP" in logs, "El registro de acceso debe estar activo"
+    assert "IMPORT_RECIBIDO" in logs
+    for sentinel in SENTINELS.values():
+        assert sentinel not in logs, sentinel
+    assert "CENTINELA_A052" not in logs
+    for credential in (token, import_jwt, *[password for _, password in accounts.values()]):
+        assert credential not in logs
+    assert "Traceback" not in logs
+    assert str(api_server.store_root) not in logs
+
+
+def test_unhandled_error_gives_500_and_uvicorn_prints_no_traceback(api_server, login, tmp_path):
+    """Uvicorn imprime el traceback real si nadie lo impide. Se usa el servidor de verdad."""
+    log_path = tmp_path / "uvicorn.log"
+    port = free_port()
+    with log_path.open("wb") as log:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "--app-dir", str(Path(__file__).parent), "app_with_failure:app", "--host", "127.0.0.1",
+             "--port", str(port), "--log-level", "debug"],
+            cwd=BACK, env=api_server.environment, stdout=log, stderr=subprocess.STDOUT,
+        )
+    try:
+        wait_for_port(port, process)
+        response = httpx.get(
+            f"http://127.0.0.1:{port}/falla-sin-tratar",
+            headers=bearer(login("operador")),
+            trust_env=False,
+            timeout=30,
+        )
+    finally:
+        process.terminate()
+        process.wait(timeout=20)
+    assert response.status_code == 500
+    assert response.json() == {"detail": "INTERNAL_ERROR"}
+    logs = log_path.read_text(encoding="utf-8", errors="replace")
+    assert "ERROR_NO_TRATADO clase=RuntimeError" in logs
+    assert "CENTINELA_A052_EXCEPCION" not in logs
+    assert "Traceback" not in logs

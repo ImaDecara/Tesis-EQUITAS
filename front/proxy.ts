@@ -46,8 +46,10 @@ export async function proxy(request: NextRequest) {
   return response
 }
 
+// `/api/imports` queda fuera (ALIGN-052): con proxy, Next retiene cada cuerpo en memoria y lo
+// corta en 10 MB sin error (`proxyClientMaxBodySize`). Su Route Handler valida la sesion.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.png|icono.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|api/imports(?:/|$)|favicon.ico|icon.png|icono.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
