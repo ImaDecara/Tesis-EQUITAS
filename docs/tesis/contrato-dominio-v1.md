@@ -470,3 +470,5 @@ Tablas append-only `case_review`, `case_review_approval` e `import_batch`, **sol
 | `import_batch.created_by`, `import_batch.created_by_role`, `import_batch.created_at` | Quién registró el lote, con qué rol en ese momento y cuándo | Base de datos, a partir de la membresía activa | Solo `importador` o `importador_sistema`: `supervisor` no adquiere el permiso por serlo |
 
 **Regla de lectura:** las lecturas de `case_review` listan columnas y no incluyen `reason_text`; solo se obtiene con `read_case_review_reason_text`, para quien decide o supervisa en ese tenant.
+
+**Reportes (ALIGN-028).** Los reportes de decisiones y supervisión leen estas tablas con esa regla, sin `reason_text`, `reviewer`, `approver`, `explanation`, `inputs_hash`, `checklist` ni `idempotency_key` ([catálogo](catalogo-indicadores-v1.md#reportes-csv)). Ninguna pantalla las lee todavía.

@@ -219,7 +219,8 @@ sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`
 `supervisor`; importación: `importador`. Coincide con ALIGN-003 y con las funciones
 de ALIGN-018: quien sea supervisor e importe necesita además una membresía
 `importador`. `importador_sistema` no tiene acceso web. Estos permisos no
-implementan escrituras.
+implementan escrituras. ALIGN-028 agrega `decision:read` (`consulta`, `operador`,
+`supervisor`) para leer decisiones sin texto libre ni identidades.
 
 Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
 `validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en
@@ -299,6 +300,20 @@ Las futuras Server Actions (ALIGN-020), lecturas de revisión (021) y rutas CSV 
 deben autorizar **dentro de cada entrada** y extender el lector con filtros de tenant
 para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
 insertarse después de autorizar y antes de entregar el DTO, sin datos personales.
+
+**Reportes CSV (ALIGN-028).** `front/app/api/reports/*/route.ts` autorizan dentro de cada
+entrada, antes de validar filtros o leer (`csvReportResponse`, `front/lib/server/report-response.ts`):
+`DataAccessError.status` pasa a 401, 403, 409 o 503 con el código y sin datos. La cola y la
+calidad usan `portfolio:read` y el mismo lector de cartera que las pantallas; decisiones usa
+`decision:read` y supervisión, `supervision:read`. `tp_operator` no entra a estas dos: solo lee
+cartera. `case_review` y `case_review_approval` se leen con columnas explícitas y filtro de
+municipio, por `front/lib/server/review-report-reader.ts`; `tenantReadScope` no se abrió a esas
+tablas para que un cargador de cartera no las alcance. **El anónimo sigue recibiendo el 307 del
+proxy:** se conservó porque un enlace de descarga abierto desde el navegador vuelve al reporte
+después de ingresar. Un cliente que siga la redirección recibe HTML, no un CSV. El 401 del handler
+cubre la sesión que vence entre el proxy y la DAL. Con cualquier `DataWarning` el reporte
+responde 503 sin archivo: el CSV viaja fuera de la aplicación, donde el aviso de lectura no se ve.
+Formato y columnas: [catálogo, reportes CSV](catalogo-indicadores-v1.md#reportes-csv).
 
 Validación del 30/10: pruebas negativas y positivas con Auth/REST simulados y ocho
 pruebas directas HTML/RSC sobre Supabase local con `USING(true)`, tanto con Next dev
