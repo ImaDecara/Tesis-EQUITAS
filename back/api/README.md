@@ -69,10 +69,23 @@ EQUITAS_IMPORT_TMP_DIR=<directorio privado, fuera del repositorio> \
 (ALIGN-025) corre en cada solicitud y solo admite loopback. Next necesita, sin prefijo
 `NEXT_PUBLIC_`, `EQUITAS_IMPORT_API_URL=http://127.0.0.1:<puerto>`.
 
-Los registros no llevan datos: la ruta de acceso se reduce a su forma, sin consulta ni
-segmentos del cliente, las URL salientes de `httpx` no se imprimen y un error sin tratar
-deja solo la clase de la excepción. Una ruta nueva debe sumar sus segmentos a
-`LOGGABLE_SEGMENTS`; si no, se ve como `<x>`.
+`EQUITAS_IMPORT_PURGE_SECONDS` fija cada cuánto se purga el temporal: de 1 a 3600, 900 por
+defecto. Un valor inválido no alarga la retención: rige el valor por defecto.
+
+**Los registros no llevan datos del cliente, con o sin sesión** (`api/log_guard.py`). Uvicorn
+imprime lo que recibe antes de que la API decida nada, así que se filtra por lista cerrada:
+
+| Fuente | Qué queda |
+|---|---|
+| Acceso (`uvicorn.access`) | Forma de la ruta: los segmentos fijos, y `<x>` en lugar de cualquier otro, también los numéricos. Sin consulta. Método solo si es uno conocido. La dirección es `-`, porque uvicorn la toma de `X-Forwarded-For` cuando la conexión viene de loopback |
+| Servidor (`uvicorn.error`) | Ciclo de vida. Un error deja solo la clase de la excepción. Handshakes WebSocket y líneas de depuración se descartan |
+| Nivel `trace` (`uvicorn.asgi`) | Nada: imprimiría el scope de cada solicitud |
+| Aplicación (`equitas.api`) | Códigos y números del servidor: `IMPORT_RECIBIDO lote=…`, `AUTH_RECHAZADO motivo=…`, `PURGA_FALLIDA clase=…` |
+
+Un identificador interno que haga falta registrar sale del evento autorizado, nunca de la ruta
+recibida. Una ruta nueva debe sumar sus segmentos fijos a `LOGGABLE_SEGMENTS`; si no, se ve
+como `<x>`. Esto cubre los registros de este proceso: los de Kong y PostgREST en el stack local
+tienen sus propias reglas.
 
 ## Reglas y corte
 

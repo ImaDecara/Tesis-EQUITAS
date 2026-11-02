@@ -1271,10 +1271,18 @@ def test_b1_replace_that_cannot_install_reports_the_failure(store, monkeypatch):
     token = store.begin()
     with store.open_part(token, "cabecera") as handle:
         handle.write(b"x")
-    monkeypatch.setattr(os, "rename", lambda *_args: (_ for _ in ()).throw(OSError(errno.EIO, "x")))
+    original = os.rename
+
+    def rename(source, target):
+        if Path(source).name == token:
+            raise OSError(errno.EIO, "x")
+        return original(source, target)
+
+    monkeypatch.setattr(os, "rename", rename)
     with pytest.raises(OSError):
         store.replace(token, TENANT_A, 1)
     monkeypatch.undo()
+    assert store.files(TENANT_A, 1) == {}
 
 
 def test_b1_verify_rejects_missing_extra_or_altered_files(store):
@@ -1310,6 +1318,18 @@ def test_b1_get_reports_the_state_of_the_copy(client, supabase, store):
 def test_b1_get_with_an_incomplete_set_of_files_reports_no_copy(client, supabase, store):
     identifier = upload(client, supabase).json()["id"]
     store.files(TENANT_A, identifier)["detalle"].unlink()
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is False
+
+
+def test_b1_missing_class_counts_even_without_a_declared_size(client, supabase, store):
+    identifier = supabase.add_batch(
+        TENANT_A, 4, "importador", file_hashes={"cabecera": "a" * 64, "detalle": "b" * 64}
+    )
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(b"x")
+    store.commit(token, TENANT_A, identifier)
     body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
     assert body["copy_available"] is False
 

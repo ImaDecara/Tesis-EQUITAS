@@ -272,6 +272,15 @@ def test_forged_session_cookie_is_rejected_by_fastapi(browser, next_server, sess
     assert response.json() == {"detail": "AUTH_REQUIRED"}
 
 
+def test_b3_number_sent_through_next_does_not_reach_the_api_logs(
+    browser, next_server, api_server, session_cookie
+):
+    response = browser.get("/api/imports/20000000000", headers={"Cookie": session_cookie("importador")})
+    assert response.status_code == 404
+    assert "20000000000" not in api_server.logs()
+    assert "GET /imports/<x> HTTP" in api_server.logs()
+
+
 def test_next_logs_carry_no_sentinels_or_session_data(browser, next_server, session_cookie):
     cookie = session_cookie("importador")
     body, content_type = batch()

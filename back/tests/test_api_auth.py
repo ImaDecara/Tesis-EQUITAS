@@ -703,6 +703,22 @@ def test_uvicorn_error_log_keeps_only_the_exception_class():
     )
 
 
+def test_uvicorn_error_record_loses_the_traceback_itself():
+    """Con exc_info, el formateador imprimiría la pila y los valores que citen sus mensajes."""
+    try:
+        raise RuntimeError("CENTINELA_EXCEPCION")
+    except RuntimeError:
+        record = logging.LogRecord(
+            "uvicorn.error", logging.ERROR, __file__, 1, "x", (), sys.exc_info()
+        )
+    record.exc_text = "CENTINELA_EXCEPCION"
+    record.stack_info = "CENTINELA_EXCEPCION"
+    assert logging.getLogger("uvicorn.error").filter(record)
+    assert record.exc_info is None
+    assert record.exc_text is None
+    assert record.stack_info is None
+
+
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
@@ -819,8 +835,9 @@ def test_api_logger_writes_somewhere_without_extra_configuration():
 
 
 def test_noisy_loggers_do_not_print_outgoing_urls():
+    # El nivel propio: el efectivo saldría WARNING igual, heredado de la raíz.
     for name in ("httpx", "httpcore", "hpack", "websockets"):
-        assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING
+        assert logging.getLogger(name).level >= logging.WARNING
 
 
 def test_auth_rejection_logs_only_a_code(client, supabase, caplog):

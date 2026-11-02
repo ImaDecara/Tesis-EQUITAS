@@ -151,6 +151,8 @@ Esta sección amplía §4.6, como ese punto anticipaba. Con ALIGN-052 integrado,
 - **Escritura.** `record_import_batch` con la credencial dedicada `equitas_import_server`.
 - **Next y el proxy.** La ruta queda fuera del matcher de `proxy.ts`, porque el proxy corta los cuerpos en 10 MB sin avisar. Su autoridad es FastAPI: el Route Handler no consulta la DAL de ALIGN-019, y solo extrae el token.
 - **Límites.** Rutas de lote solo para `importador`; un lote ajeno da `404`, igual que uno inexistente. Mapeo, preview y confirmación los agregan sus tickets.
+- **Temporal privado.** Una fila no anuncia una copia que no existe: se reintenta con la misma clave y se restaura mientras el lote siga abierto. Las 24 h rigen sin depender de otras solicitudes: la API purga al arrancar y periódicamente, y no entrega lo vencido.
+- **Registros.** Lo que uvicorn imprime de una solicitud se filtra por lista cerrada, con o sin sesión: ningún valor del cliente, ni siquiera numérico, llega a los registros del proceso.
 
 Contrato, códigos y temporal privado: [`importacion-web.md`](importacion-web.md). Ejecución y permisos de lectura: [`back/api/README.md`](../../back/api/README.md).
 
