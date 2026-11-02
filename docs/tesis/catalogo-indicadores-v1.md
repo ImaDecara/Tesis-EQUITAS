@@ -1017,3 +1017,127 @@ calculan. Sin vencidas observadas y con estados faltantes, la mora del perfil ta
 se muestra como no disponible; con vencidas observadas, es un subtotal con su desglose de faltantes.
 Los datos del original conservan la semántica descrita arriba.
 
+## 19. <a id="reportes-csv"></a>Reportes CSV de servidor (ALIGN-028)
+
+Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
+
+| Reporte | Ruta | Archivo | Roles (permiso en `front/lib/server/dal.ts`) |
+|---|---|---|---|
+| [Cola de trabajo](#reporte-cola) | `/api/reports/queue` | `equitas-cola-de-trabajo.csv` | `consulta`, `operador`, `supervisor`; `tp_operator` por compatibilidad de solo lectura (`portfolio:read`) |
+| [Decisiones](#reporte-decisiones) | `/api/reports/decisions` | `equitas-decisiones.csv` | `consulta`, `operador`, `supervisor` (`decision:read`) |
+| [Supervisión](#reporte-supervision) | `/api/reports/supervision` | `equitas-supervision.csv` | `supervisor` (`supervision:read`) |
+| [Calidad de datos](#reporte-calidad) | `/api/reports/data-quality` | `equitas-calidad-de-datos.csv` | Igual que la cola (`portfolio:read`) |
+
+`importador` e `importador_sistema` no reciben ninguno, porque no leen cartera ([ADR-001][adr]).
+
+### Formato común
+
+- UTF-8 con BOM, separador `;`, fin de línea CRLF y comillas de RFC 4180. Números sin miles, con coma decimal y dos decimales si no son enteros: `1234,50`. Lo generan `serializeCsv` y `formatCsvNumber` (`front/lib/reports/csv.ts`).
+- Cada fila lleva `fecha_corte`, `version_reglas`, `filtros`, `generado_en`, `definiciones` y `tipo_fila`, también en un archivo sin filas de detalle: la fila `TOTAL` o `AGREGADO` nunca falta.
+- `generado_en` es el único valor tomado del reloj (fecha-hora UTC de la generación). `fecha_corte` sale del dato: el `as_of` del manifiesto en la cartera y `case_review.as_of` en las decisiones. Mientras la lectura de cartera no aporte manifiesto (`RawDebtorDataBundle.batch`), vale `NO_INTEGRADO` ([contrato §5][c51]). Una fila que resume varios cortes declara el intervalo (`2026-09-30/2026-10-15`) y las versiones (`1.0.0|1.1.0`); sin filas, `NO_APLICA`.
+- `definiciones` es la ruta de esta sección en el repositorio. No hay un sitio público de documentación; el día que exista, se cambia en `definitionsLink`.
+- `filtros` describe lo aplicado: `SIN_FILTROS` o `clave=valor` separados por `|`, en orden alfabético. El texto de búsqueda `q` no se copia y figura `q=TEXTO_OMITIDO`, porque puede ser el nombre de una persona. `type` se copia solo si es una etiqueta del catálogo leído; si no, filtra igual y figura `type=VALOR_NO_CATALOGADO`.
+- **Ausencias:** una celda nunca queda vacía ni en 0 por falta de dato. Lleva el estado de presencia (`NO_INTEGRADO`, `NO_INFORMADO_EN_ORIGEN`, `INVALIDO`, `NO_APLICA`) según el [contrato §4][c41].
+- **Lectura fallida:** si una tabla no se puede leer, no hay archivo. La respuesta es `503` con `{"error":"LECTURA_FALLIDA","tablas":[…]}`. Un filtro inválido o desconocido responde `400` (`FILTRO_INVALIDO`): un filtro mal escrito no exporta todo ni parece una selección vacía.
+- **Sin autorización:** `401`, `403` o `409` con el código de la DAL y sin datos. Un anónimo que llega por el navegador recibe antes el 307 de `front/proxy.ts` a `/login`.
+
+**Inyección de fórmulas (`neutralizeCsvText`).** Los caracteres de control y separadores de línea de un texto se reemplazan por un espacio: una celda es siempre una línea. Si el primer carácter visible es `=`, `+`, `-`, `@`, sus anchos completos o el signo menos `−`, se antepone un apóstrofo. Los blancos, tabulaciones y caracteres invisibles iniciales no protegen, porque una planilla puede recortarlos: `  =1+1` sale `'  =1+1`. **Números negativos:** un valor de tipo número (importes y conteos) sale sin apóstrofo, `-50`, porque el generador solo puede producir `-?dígitos(,dd)?`, que no es una fórmula, y con apóstrofo dejaría de sumarse. Un *texto* que parece un negativo (`-50` como identificador) sí lleva apóstrofo. El apóstrofo queda visible al abrir el archivo: es la marca de que la celda no se evalúa.
+
+**<a id="codigos-editables"></a>Códigos editables.** La base y las acciones de servidor solo exigen el formato `^[A-Z][A-Z0-9_]{0,63}$`, que también cumple un nombre con su documento. Por eso `reason_code`, `decided_intervention`, `suggested_intervention`, `reviewer_role` y `decision` se exportan solo si están en una lista cerrada (`front/lib/reports/report-codes.ts`). Cualquier otro valor sale como `CODIGO_NO_CATALOGADO`, sin copiarlo, y su fila se sigue contando. Se aplica al leer, así que cubre los eventos ya registrados.
+
+| Campo | Lista cerrada |
+|---|---|
+| Motivos | Once códigos, iguales a la lista **provisional** de ALIGN-021. Esta lista no es el catálogo de motivos ni lo aprueba: solo indica qué cadenas no llevan datos de una persona. Si se aprueba otra, un motivo nuevo sale como `CODIGO_NO_CATALOGADO` hasta agregarlo |
+| Intervenciones | Las de `contracts/decision-rules.v1.json` y `contracts/action-costs.v1.json`, que incluye las de intensidad 3 y 4 |
+| Roles | Los de `WEB_ROLES` |
+| Decisiones | Las cinco de la base |
+
+`rules_version` se exige con su formato numérico; si no lo cumple, `INVALIDO`. Los demás textos de los reportes salen de contratos o de constantes, salvo `tipo` (catálogo `debtor_type`, que no se edita desde la aplicación) y `identificador` (dato de origen).
+
+### <a id="reporte-cola"></a>Cola de trabajo
+
+- **Pantalla equivalente:** `/priority-cases`, con sus mismos filtros (`q`, `risk`, `contact`, `type`, `minAmount`), el mismo orden y sin paginar (`page` y `pageSize` se ignoran).
+- **Filas:** una `DETALLE` por objeto y una `TOTAL`.
+- **Decisión que apoya:** trabajar una lista priorizada fuera de la aplicación y controlar que coincida con la pantalla.
+- **Corte:** `fecha_corte` según el formato común. Si no hay manifiesto, las reglas usan la fecha de cálculo, que se informa aparte en `fecha_calculo_usada`, con el mismo sentido que en la pantalla ([DV03](contrato-dominio-v1.md#712-adaptación-de-reglas-v1--align-010)).
+- **No significa:** una instrucción de gestión ni una probabilidad de pago. `posicion` es el orden operativo de la pantalla: las prioridades de colas distintas no se comparan ([KPI-V1-02](#kpi-v1-prioridad)).
+
+| Columna | Significado | Unidad | Definición | Fila `TOTAL` |
+|---|---|---|---|---|
+| `posicion` | Lugar en el orden de `getPriorityCases` | orden | [KPI-31](#kpi-31) | `NO_APLICA` |
+| `objeto_id`, `identificador`, `tipo` | Clave interna, identificador de origen y tipo. Sin identificador o sin tipo, `NO_INFORMADO_EN_ORIGEN`, aunque la pantalla muestre `OBJ-<id>` o «Sin tipo». `Identificador` es texto libre del archivo municipal: solo lo reciben `operador` y `supervisor`; `consulta` y `tp_operator` reciben `OMITIDO_POR_ROL` y ubican el caso por `objeto_id` | texto | [OB01, OB04, OB03][c72] | `NO_APLICA` |
+| `intervencion_codigo`, `intervencion`, `intensidad` | Sugerencia de reglas v1 | código, etiqueta, 0–4 | [KPI-V1-03](#kpi-v1-intervencion) | `NO_APLICA` |
+| `revision_requerida` | La pantalla pide evaluar con supervisor: `SI`/`NO` | booleano | `isUrgentRecommendation` | `NO_APLICA` |
+| `severidad_puntos`, `severidad_banda`, `severidad_estado` | Severidad v1 | puntos 0–100, **no %** | [KPI-V1-01](#kpi-v1-severidad) | `NO_APLICA` |
+| `prioridad_puntos` | Prioridad dentro de la cola | puntos 0–100, **no %** | [KPI-V1-02](#kpi-v1-prioridad) | `NO_APLICA` |
+| `deuda_total_ars`, `deuda_vencida_ars` | Importes del objeto | ARS | [KPI-01](#kpi-01), [KPI-02](#kpi-02) | Suma de `buildDebtAgingSummary`, igual que `/debt-aging`; sin filas observadas, el estado |
+| `monto_evaluable_ars` | Importes evaluables por reglas v1 | ARS | [KPI-V1-05](#kpi-v1-monto-cola) | Suma por objeto |
+| `dias_atraso_max` | Mayor atraso | días | [KPI-03](#kpi-03) | `NO_APLICA` |
+| `obligaciones` | Obligaciones leídas | obligaciones | [KPI-05](#kpi-05) | Suma |
+| `contactos_disponibles`, `con_contacto` | Contactos con valor cargado, **no verificados** | contactos, `SI`/`NO` | [KPI-07](#kpi-07), [KPI-08](#kpi-08) | `NO_APLICA`: una persona con varios objetos se contaría varias veces |
+| `banderas` | Banderas v1 separadas por `\|`, o `SIN_BANDERAS` | códigos | [reglas §5][r5] | `NO_APLICA` |
+| `fecha_calculo_usada` | Fecha del reloj que usaron las reglas si no hay manifiesto; con manifiesto, `NO_APLICA` | fecha | [DV03](contrato-dominio-v1.md#712-adaptación-de-reglas-v1--align-010) | Igual |
+| `objetos` | 1 en cada `DETALLE`; en `TOTAL`, las filas de detalle | objetos | Igual que el contador de `/priority-cases`, [KPI-51](#kpi-51) | Conteo; una selección vacía de un universo leído da 0 derivado |
+| `faltantes` | Filas fuera de cada suma: `columna:ESTADO=n` separados por `\|`, o `NINGUNO` | obligaciones | [KPI-60](#kpi-60) | Acumulado |
+
+### <a id="reporte-decisiones"></a>Decisiones
+
+- **Fuente:** `case_review` y `case_review_approval`, con columnas explícitas (`front/lib/server/review-report-reader.ts`). No se piden `reason_text`, `reviewer`, `approver`, `explanation`, `inputs_hash`, `checklist` ni `idempotency_key`.
+- **Filtros:** `desde` y `hasta` (día UTC de `created_at`, inclusive), `corte` (`as_of` exacto), `decision` y `vigente` (`si`/`no`).
+- **Filas:** una `DETALLE` por evento, también los reemplazados, y una `TOTAL`. En cada `DETALLE`, `fecha_corte` y `version_reglas` son los de esa decisión.
+- **Decisión que apoya:** rendir cuentas de lo decidido.
+- **Limitación:** todavía no hay una pantalla de decisiones con la cual conciliar. Las cifras se concilian con el reporte de supervisión y con la base.
+- **No significa:** una acción ejecutada. Es una decisión registrada ([contrato §13](contrato-dominio-v1.md#13-decisión-humana-aprobación-y-lote-align-018)).
+
+| Columna | Significado | Faltantes |
+|---|---|---|
+| `decision_id`, `objeto_id` | Claves internas del evento y del objeto | — |
+| `fecha` | `created_at`, en UTC | Ilegible: `INVALIDO` |
+| `rol` | `reviewer_role`, rol en ese momento. Sin identidad de la persona | Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `decision` | `ACEPTA`, `MODIFICA`, `RECHAZA`, `POSPONE` o `DERIVA` | Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `codigo_motivo` | `reason_code`. Nunca el texto libre | `NO_APLICA` si no hay código (solo `ACEPTA` puede no tenerlo). Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `intervencion_sugerida`, `intensidad_sugerida` | Sugerencia de reglas | Intervención fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `intervencion_decidida`, `intensidad_decidida` | Lo decidido | `NO_APLICA`: sin intervención decidida, **nunca intensidad 0**. Intervención fuera de lista: `CODIGO_NO_CATALOGADO`, y la intensidad se conserva |
+| `reemplaza_a` | `supersedes`: evento anterior | `NO_APLICA` |
+| `vigente` | `SI` si ningún evento lo reemplaza, sobre todo lo leído, antes de filtrar | — |
+| `aprobacion` | `NO_REQUERIDA` (intensidad < 3 o sin decidir), `PENDIENTE`, `APRUEBA`, `OBJETA` (aprobación vigente) o `REEMPLAZADA` (intensa, reemplazada sin aprobación) | — |
+| `decisiones`, `vigentes` | En `DETALLE`, 1 y 1/0. En `TOTAL`, los conteos de las filas | Sin eventos: 0 derivado |
+
+### <a id="reporte-supervision"></a>Supervisión
+
+- **Formato:** filas `AGREGADO` con `indicador`, `categoria`, `valor`, `numerador`, `denominador`, `unidad` y `estado`. `numerador` y `denominador` valen `NO_APLICA` en los totales simples. Sin objetos ni personas.
+- **Filtros:** `desde`, `hasta` y `corte`, iguales a los de decisiones. Con los mismos filtros, sus cifras coinciden con las de ese reporte.
+- **Población:** decisiones vigentes del municipio. Un evento reemplazado por otro que quedó fuera del filtro sigue sin ser vigente.
+- **Decisión que apoya:** observar si la supervisión ocurre: cuánto se aparta la persona de la sugerencia, con qué motivos y qué sigue pendiente.
+- **No significa:** error de la persona ni del sistema, ni evaluación de desempeño. Un porcentaje alto o bajo no prueba por sí solo la calidad de la revisión.
+
+| `indicador` | `categoria` | Fórmula | Unidad |
+|---|---|---|---|
+| `decisiones_vigentes` | `TOTAL` | Eventos que ningún otro reemplaza | decisiones |
+| `eventos_reemplazados` | `TOTAL` | Eventos seleccionados − vigentes | eventos |
+| `decisiones_por_tipo` | Cada decisión; las cinco siempre aparecen, y `CODIGO_NO_CATALOGADO` solo si hay alguna | Conteo sobre vigentes | decisiones |
+| `porcentaje_discrepancia` | `TOTAL` | 100 · vigentes con `decision` distinta de `ACEPTA` / vigentes, dos decimales. Incluye `POSPONE` y `DERIVA`, porque no aceptan la sugerencia y la base les exige motivo (`case_review_decision_requires_reason`); el desglose permite recalcularlo. Sin vigentes: `NO_APLICA`, **no 0** | % |
+| `motivos_decision` | Cada `reason_code` de la lista cerrada, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo sobre vigentes; las categorías suman `decisiones_vigentes` | decisiones |
+| `aprobacion_requerida` | `TOTAL` | Vigentes con intensidad decidida ≥ 3 | decisiones |
+| `pendientes_aprobacion` | `TOTAL` | De las anteriores, sin aprobación vigente | decisiones |
+| `aprobaciones_vigentes` | `APRUEBA`, `OBJETA` | De las anteriores, por aprobación vigente | decisiones |
+| `motivos_objecion` | Cada `reason_code` de la lista cerrada de una objeción vigente, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo | decisiones |
+
+### <a id="reporte-calidad"></a>Calidad de datos
+
+- **Formato:** filas `AGREGADO`, con las mismas columnas que supervisión. Sin filtros. Solo conteos y códigos: los ids de obligación de `decisionIssues` no se copian.
+- **Población:** todos los objetos del municipio leídos para las pantallas.
+- **Corte:** `fecha_corte` según el formato común. Los estados de obligación y los importes dependen de la procedencia del [contrato §5.1][c51].
+- **Decisión que apoya:** saber qué datos faltan y en cuántos objetos antes de confiar en una cifra.
+- **No significa:** errores de la cartera municipal: `NO_INTEGRADO` puede ser un dato que EQUITAS todavía no lee ([KPI-60](#kpi-60)).
+
+| `indicador` | `categoria` | Fórmula | Unidad |
+|---|---|---|---|
+| `objetos_leidos` | `TOTAL` | Objetos del universo, [AG01][c78] | objetos |
+| `presencia_deuda_total`, `presencia_deuda_vencida`, `presencia_contactos`, `presencia_atraso`, `presencia_severidad` | `OBSERVADO`, `OBSERVADO_PARCIAL` y cada estado sin dato | Objetos por estado de su indicador ([KPI-01](#kpi-01), [KPI-02](#kpi-02), [KPI-07](#kpi-07), [KPI-03](#kpi-03), [KPI-V1-01](#kpi-v1-severidad)). `OBSERVADO_PARCIAL`: tiene valor, pero alguna fila quedó fuera. Las categorías suman `objetos_leidos` | objetos |
+| `obligaciones_leidas` | `TOTAL` | Σ [KPI-05](#kpi-05) | obligaciones |
+| `obligaciones_no_evaluables` | `TOTAL` y `MOTIVO:ESTADO` | Obligaciones que reglas v1 no evalúa, por motivo ([reglas][reglas]). Solo lista motivos presentes | obligaciones |
+| `incidencias_decision` | `TOTAL` y `campo:ESTADO:MOTIVO` | Entradas de `decisionIssues` ([DV06](contrato-dominio-v1.md#712-adaptación-de-reglas-v1--align-010)). Solo lista las presentes | incidencias |
+| `severidad_estado` | `COMPLETA`, `PARCIAL`, `NO_DISPONIBLE`, `SIN_DECISION` | Objetos por estado de la severidad. `SIN_DECISION`: las reglas no pudieron evaluar. Suman `objetos_leidos` | objetos |
+| `banderas` | Cada bandera de reglas v1; todas aparecen | Objetos con esa bandera, sobre los objetos con decisión ([reglas §5][r5]) | objetos |
+| `objetos_sin_contacto` | `TOTAL` | Objetos sin contacto activo con valor; igual que `/no-contact`, [KPI-48](#kpi-48) | objetos |

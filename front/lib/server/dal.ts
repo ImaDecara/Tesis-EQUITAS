@@ -12,12 +12,22 @@ import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-s
 // tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
 const PERMISSIONS = {
   'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
+  // ALIGN-028: leer decisiones sin texto libre ni identidades. La compatibilidad E06 no entra:
+  // solo lee cartera. La politica de `case_review` admite a todo miembro activo.
+  'decision:read': ['consulta', 'operador', 'supervisor'],
+  // ALIGN-028: el identificador de origen es texto libre; solo lo exporta quien gestiona casos.
+  'report:object-identifier': ['operador', 'supervisor'],
   'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
   'import:write': ['importador'],
 } as const satisfies Record<string, readonly ResolvedRoleName[]>
 export type DalPermission = keyof typeof PERMISSIONS
+
+export function roleHasPermission(roleName: ResolvedRoleName, permission: DalPermission) {
+  const roles: readonly ResolvedRoleName[] = PERMISSIONS[permission] ?? []
+  return roles.includes(roleName)
+}
 
 // `role` del contexto publico es un ID: aca se separa para que nadie lo lea como nombre.
 export type DalContext = Omit<TenantAccessContext, 'role'> & { roleId: string; roleName: ResolvedRoleName }
@@ -52,8 +62,7 @@ export async function requireTenantAccess(options: { permission?: DalPermission;
   if (!access.isAuthorized || !access.context) {
     throw new DataAccessError(access.code!, access.message!)
   }
-  const roles: readonly ResolvedRoleName[] = PERMISSIONS[options.permission ?? 'portfolio:read'] ?? []
-  if (!roleName || !roles.includes(roleName)) throw new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.')
+  if (!roleName || !roleHasPermission(roleName, options.permission ?? 'portfolio:read')) throw new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.')
   const { role: roleId, ...identityContext } = access.context
   const context: DalContext = { ...identityContext, roleId, roleName }
   return { supabase, context }
