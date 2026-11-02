@@ -25,6 +25,7 @@ const CASE = {
   reject: { id: 920013, identifier: 'TP-A020-3' },
   tabs: { id: 920014, identifier: 'TP-A020-4' },
   midLoad: { id: 920016, identifier: 'TP-A020-6' },
+  focus: { id: 920021, identifier: 'TP-A020-10' },
   objected: { id: 920017, identifier: 'TP-A020-7' },
   outdated: { id: 920018, identifier: 'TP-A020-8' },
 }
@@ -311,6 +312,25 @@ async function run() {
   await expect(panel.getByRole('radiogroup', { name: 'Decisión' })).toBeVisible()
   await assertLayout(page, output, '[role="tabpanel"]', 'revision-vacia')
   pass('revision_vacia_sin_superposiciones', { controles_con_nombre: initialNames })
+
+  // A 360 px la barra superior es fija. Saltar desde el resumen o volver con Shift+Tab no deja el foco debajo.
+  await page.setViewportSize({ width: 360, height: 800 })
+  await page.goto(reviewUrl(base, CASE.focus))
+  const narrow = panelOf(page)
+  await chooseRadio(page, narrow.getByRole('radio', { name: 'Aceptar la sugerencia' }), narrow.getByRole('radio', { name: 'Rechazar la sugerencia' }), 2)
+  await tabTo(page, narrow.getByRole('button', { name: 'Registrar decisión' }))
+  await page.keyboard.press('Enter')
+  await expect(narrow.locator('#rv-summary')).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(narrow.locator('#rv-summary a').first()).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(narrow.getByLabel('Motivo', { exact: true })).toBeFocused()
+  await expect.poll(() => focusObscured(page)).toBeNull()
+  await tabTo(page, narrow.getByRole('radio', { name: 'Rechazar la sugerencia' }), 'Shift+Tab')
+  if (operador.posts.length !== 0) throw Error('Salió una acción sin motivo.')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto(reviewUrl(base, CASE.intense))
+  pass('foco_visible_bajo_la_barra_fija_a_360', 'Tras el enlace del resumen y con Shift+Tab, el control con foco queda a la vista.')
 
   // ≥3 sin lista de control: no sale del navegador.
   await chooseRadio(page, panel.getByRole('radio', { name: 'Aceptar la sugerencia' }), panel.getByRole('radio', { name: 'Modificar la acción' }), 1)

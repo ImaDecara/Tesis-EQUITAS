@@ -57,7 +57,7 @@ Evidencia depurada: `execution/evidence/ALIGN-020/` del paquete del plan, fuera 
 
 ## ALIGN-021: recorrido de la pantalla con teclado
 
-`tests/smoke/review-a11y.mjs` recorre la pestaña "Revisión" y las colas en Chromium, solo con teclado, contra `next start` y esta misma cartera. Comprueba nombre accesible de cada control, errores asociados, ausencia de superposiciones a 360, 768 y 1440 px y que intensidad 3 no salga sin lista de control. Registra sus propios lotes por la función real.
+`tests/smoke/review-a11y.mjs` recorre la pestaña "Revisión" y las colas en Chromium, solo con teclado, contra `next start` y esta misma cartera. Comprueba nombre accesible de cada control, errores asociados, ausencia de superposiciones a 360, 768 y 1440 px, foco visible bajo la barra fija y que intensidad 3 no salga sin lista de control. Registra sus propios lotes por la función real. **Cada corrida completa exige una base recién sembrada:** una segunda corrida encuentra las filas de la primera y falla por eso, no por la pantalla.
 
 Con la base del paso 2, y compilado como en el paso 4 pero **sin** la sonda: ahora `/debtors/[debtorId]` importa las acciones, así que la búsqueda en el bundle ya no la necesita.
 
