@@ -43,7 +43,7 @@ from api.multipart import MultipartError, PartEnd, PartStart, multipart_events
 from api.upload_store import FILE_KINDS, UploadStore, UploadStoreError
 from ETL.config import PROJECT_ROOT
 from services.decision_rules_v1 import RULES_VERSION, parse_date
-from services.paginated_reader import DataReadError, row_id
+from services.paginated_reader import DataReadError, read_all_by_id, row_id
 
 logger = logging.getLogger("equitas.api")
 
@@ -58,7 +58,6 @@ MAX_REQUEST_BYTES: int = 2 * MAX_FILE_BYTES + 1_048_576
 MAX_FIELD_BYTES = 1024
 UPLOAD_SECONDS = 300.0
 SOURCE_WEB = "WEB_UPLOAD"
-MAX_CHAIN_LENGTH = 256
 MAX_BIGINT = 2**63 - 1
 
 BOUNDARY = re.compile(
@@ -208,26 +207,23 @@ def _write_batch(
 # ---- Lectura de la cadena de eventos
 
 
-def _one(
-    client: SyncPostgrestClient, tenant: int, column: str, value: int
-) -> dict[str, Any] | None:
+def _tenant_batches(client: SyncPostgrestClient, tenant: int) -> dict[int, dict[str, Any]]:
+    """Todos los eventos del municipio, leídos con el token del usuario.
+
+    El identificador que pide el cliente se busca acá, en memoria, y **no viaja en la URL**:
+    como filtro de PostgREST (`id=eq.<valor>`) quedaría en el registro de Kong, y puede ser
+    cualquier número, también un DNI. Los lotes de un municipio son pocos, y la lectura pagina.
+    """
+    rows = read_all_by_id(
+        "import_batch",
+        lambda: client.table("import_batch").select(BATCH_COLUMNS).eq("tenant", tenant),
+    )
     try:
-        rows = (
-            client.table("import_batch")
-            .select(BATCH_COLUMNS)
-            .eq("tenant", tenant)
-            .eq(column, value)
-            .limit(1)
-            .execute()
-            .data
-        )
-        if not isinstance(rows, list):
-            raise TypeError("Respuesta inválida")
-        if rows and row_id(rows[0]["id"]) and rows[0]["tenant"] != tenant:
+        if any(row["tenant"] != tenant for row in rows):
             raise ValueError("Fila de otro municipio")
-    except (APIError, httpx.HTTPError, KeyError, TypeError, ValueError, AttributeError):
+        return {row_id(row["id"]): row for row in rows}
+    except (KeyError, TypeError, ValueError):
         raise DataReadError("import_batch") from None
-    return rows[0] if rows else None
 
 
 def _resolve_chain(
@@ -235,22 +231,26 @@ def _resolve_chain(
 ) -> tuple[int, dict[str, Any]]:
     """Devuelve el id de origen y el evento vigente. `import_batch` es append-only:
     cada cambio de estado es una fila que reemplaza a la anterior (`supersedes`)."""
-    row = _one(client, tenant, "id", batch_id)
+    rows = _tenant_batches(client, tenant)
+    row = rows.get(batch_id)
     if row is None:
         # Inexistente y ajeno son indistinguibles: RLS y el filtro dan lo mismo.
         raise HTTPException(404, "BATCH_NOT_FOUND")
+    successors = {
+        event["supersedes"]: event for event in rows.values() if event["supersedes"] is not None
+    }
     origin = row
-    for _ in range(MAX_CHAIN_LENGTH):
+    for _ in rows:
         if origin["supersedes"] is None:
             break
-        origin = _one(client, tenant, "id", origin["supersedes"])
+        origin = rows.get(origin["supersedes"])
         if origin is None:
             raise DataReadError("import_batch")
     else:
         raise DataReadError("import_batch")
     current = row
-    for _ in range(MAX_CHAIN_LENGTH):
-        following = _one(client, tenant, "supersedes", row_id(current["id"]))
+    for _ in rows:
+        following = successors.get(current["id"])
         if following is None:
             return row_id(origin["id"]), current
         current = following
@@ -479,24 +479,28 @@ def _settle_copy(
     client: SyncPostgrestClient,
     tenant: int,
     batch_id: int,
-    created: bool,
     form: ReceivedForm,
-) -> tuple[int, dict[str, Any]]:
-    """La fila ya está registrada: no se anuncia éxito sin copia. Un reintento del mismo
-    contenido (la base garantizó que los hashes coinciden) restaura una copia perdida o
-    vencida mientras el lote siga abierto. Lo cerrado no se resucita."""
-    if created:
-        _install_copy(store, form, tenant, batch_id)
-        return _resolve_chain(client, tenant, batch_id)
-    origin, row = _resolve_chain(client, tenant, batch_id)
-    if row["status"] not in OPEN_STATES:
-        return origin, row
-    _install_copy(store, form, tenant, origin)
-    # Un descarte pudo ganar la carrera y borrar antes de que esta copia llegara.
-    origin, row = _resolve_chain(client, tenant, batch_id)
-    if row["status"] == STATUS_DISCARDED:
-        store.release(tenant, origin)
-    return origin, row
+) -> dict[str, Any]:
+    """La fila ya está registrada: la primera creación y un reintento hacen lo mismo. Bajo la
+    exclusión del lote se lee el estado vigente y se decide la copia con ese estado: abierto,
+    se instala y se verifica; descartado, se retira. Un descarte confirmado antes ya se ve
+    acá, y uno posterior espera a que esto termine y borra lo instalado. Otros estados
+    cerrados no recuperan copia. Estado y copia se leen dentro de la misma exclusión."""
+    try:
+        with store.lock(tenant, batch_id):
+            origin, row = _resolve_chain(client, tenant, batch_id)
+            if origin != batch_id:
+                raise DataReadError("import_batch")
+            if row["status"] in OPEN_STATES:
+                _install_copy(store, form, tenant, origin)
+                # Un cierre que no pase por esta exclusión (otro servicio, un evento directo
+                # en la base) se ve acá: la copia no sobrevive a su lote.
+                origin, row = _resolve_chain(client, tenant, batch_id)
+            if row["status"] == STATUS_DISCARDED:
+                store.release(tenant, origin)
+            return _batch_view(store, tenant, origin, row)
+    except STORE_ERRORS:
+        raise _store_unavailable() from None
 
 
 @router.post("", status_code=201)
@@ -532,8 +536,8 @@ async def create_import(
             source_updated_at=source_updated_at,
             counts={"archivos": len(form.hashes), "bytes": sum(form.sizes.values())},
         )
-        origin, row = await run_in_threadpool(
-            _settle_copy, store, client, context.tenant_id, batch_id, created, form
+        view = await run_in_threadpool(
+            _settle_copy, store, client, context.tenant_id, batch_id, form
         )
     finally:
         store.discard(form.token)
@@ -546,7 +550,6 @@ async def create_import(
     )
     if not created:
         response.status_code = 200
-    view = await run_in_threadpool(_batch_view, store, context.tenant_id, origin, row)
     return {**view, "created": created}
 
 
@@ -556,6 +559,12 @@ def read_import(
 ) -> dict[str, Any]:
     store = load_store()
     origin, row = _resolve_chain(client, context.tenant_id, batch_id)
+    # DESCARTADO no se reabre: lo que quedó de un descarte interrumpido se retira.
+    if row["status"] == STATUS_DISCARDED and store.files(context.tenant_id, origin):
+        try:
+            store.release(context.tenant_id, origin)
+        except STORE_ERRORS:
+            pass
     return _batch_view(store, context.tenant_id, origin, row)
 
 
@@ -568,29 +577,37 @@ def discard_import(
 ) -> dict[str, Any]:
     store = load_store()
     purge_once()
-    origin, current = _resolve_chain(client, context.tenant_id, batch_id)
-    if current["status"] == STATUS_DISCARDED:
-        store.release(context.tenant_id, origin)
-        return _batch_view(store, context.tenant_id, origin, current)
-    if current["status"] not in OPEN_STATES:
-        raise HTTPException(409, "BATCH_NOT_DISCARDABLE")
-    current_id = row_id(current["id"])
-    # Clave derivada: un reintento o dos clics concurrentes producen un solo evento.
-    key = uuid.uuid5(uuid.NAMESPACE_URL, f"equitas:discard:{context.tenant_id}:{current_id}")
-    event_id, _created = _write_batch(
-        session.config,
-        context,
-        file_hashes=current["file_hashes"],
-        as_of=current["as_of"],
-        status=STATUS_DISCARDED,
-        idempotency_key=str(key),
-        source=current["source"],
-        rules_version=current["rules_version"],
-        source_updated_at=current["source_updated_at"],
-        counts=current["counts"],
-        supersedes=current_id,
-    )
-    store.release(context.tenant_id, origin)
-    logger.info("IMPORT_DESCARTADO lote=%s evento=%s", origin, event_id)
-    origin, row = _resolve_chain(client, context.tenant_id, event_id)
-    return _batch_view(store, context.tenant_id, origin, row)
+    tenant = context.tenant_id
+    # El origen de una cadena no cambia: se resuelve afuera para saber qué lote tomar.
+    origin, _ = _resolve_chain(client, tenant, batch_id)
+    try:
+        # El evento y el borrado van juntos: quien instala, o ve el evento, o espera esto.
+        with store.lock(tenant, origin):
+            origin, current = _resolve_chain(client, tenant, batch_id)
+            if current["status"] == STATUS_DISCARDED:
+                store.release(tenant, origin)
+                return _batch_view(store, tenant, origin, current)
+            if current["status"] not in OPEN_STATES:
+                raise HTTPException(409, "BATCH_NOT_DISCARDABLE")
+            current_id = row_id(current["id"])
+            # Clave derivada: un reintento o dos clics concurrentes producen un solo evento.
+            key = uuid.uuid5(uuid.NAMESPACE_URL, f"equitas:discard:{tenant}:{current_id}")
+            event_id, _created = _write_batch(
+                session.config,
+                context,
+                file_hashes=current["file_hashes"],
+                as_of=current["as_of"],
+                status=STATUS_DISCARDED,
+                idempotency_key=str(key),
+                source=current["source"],
+                rules_version=current["rules_version"],
+                source_updated_at=current["source_updated_at"],
+                counts=current["counts"],
+                supersedes=current_id,
+            )
+            store.release(tenant, origin)
+            logger.info("IMPORT_DESCARTADO lote=%s evento=%s", origin, event_id)
+            origin, row = _resolve_chain(client, tenant, event_id)
+            return _batch_view(store, tenant, origin, row)
+    except STORE_ERRORS:
+        raise _store_unavailable() from None

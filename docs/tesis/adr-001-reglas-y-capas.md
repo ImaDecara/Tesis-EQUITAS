@@ -152,7 +152,8 @@ Esta sección amplía §4.6, como ese punto anticipaba. Con ALIGN-052 integrado,
 - **Next y el proxy.** La ruta queda fuera del matcher de `proxy.ts`, porque el proxy corta los cuerpos en 10 MB sin avisar. Su autoridad es FastAPI: el Route Handler no consulta la DAL de ALIGN-019, y solo extrae el token.
 - **Límites.** Rutas de lote solo para `importador`; un lote ajeno da `404`, igual que uno inexistente. Mapeo, preview y confirmación los agregan sus tickets.
 - **Temporal privado.** Una fila no anuncia una copia que no existe: se reintenta con la misma clave y se restaura mientras el lote siga abierto. Las 24 h rigen sin depender de otras solicitudes: la API purga al arrancar y periódicamente, y no entrega lo vencido.
-- **Registros.** Lo que uvicorn imprime de una solicitud se filtra por lista cerrada, con o sin sesión: ningún valor del cliente, ni siquiera numérico, llega a los registros del proceso.
+- **Concurrencia.** Instalar, retirar y cerrar un lote ocurren bajo una exclusión por lote, entre hilos y procesos; nada se borra por el nombre del lote, sino por la generación movida a un nombre privado.
+- **Registros.** Lo que uvicorn imprime de una solicitud se filtra por lista cerrada, con o sin sesión, y ninguna consulta de esta API lleva un valor del cliente en su URL: ni siquiera uno numérico llega a los registros del proceso ni a los de Kong.
 
 Contrato, códigos y temporal privado: [`importacion-web.md`](importacion-web.md). Ejecución y permisos de lectura: [`back/api/README.md`](../../back/api/README.md).
 

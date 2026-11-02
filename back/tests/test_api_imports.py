@@ -8,6 +8,9 @@ import os
 import random
 import shutil
 import stat
+import subprocess
+import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -35,6 +38,7 @@ from fake_supabase_http import (
 )
 
 from api import auth, imports, main
+from api import upload_store as store_module
 from api.multipart import MultipartError, PartEnd, PartStart, multipart_events
 from api.upload_store import UploadStore, UploadStoreError
 
@@ -118,7 +122,10 @@ def upload(client, supabase, body=None, *, user=AUTH_IMPORTADOR, headers=None, *
 
 
 def stored_files(root) -> list:
-    return sorted(path for path in root.rglob("*") if path.is_file())
+    """Bytes de archivos recibidos: los archivos de exclusión no guardan nada."""
+    return sorted(
+        path for path in root.rglob("*") if path.is_file() and "bloqueos" not in path.parts
+    )
 
 
 # ---- Parser
@@ -880,12 +887,11 @@ def test_broken_chain_is_503_and_not_a_shorter_history(client, supabase):
     assert response.status_code == 503
 
 
-def test_too_long_a_chain_fails_closed(client, supabase, monkeypatch):
-    monkeypatch.setattr(imports, "MAX_CHAIN_LENGTH", 2)
-    previous = None
-    for _ in range(4):
-        previous = supabase.add_batch(TENANT_A, 4, "importador", supersedes=previous)
-    response = client.get(f"/imports/{previous}", headers=auth_headers(supabase))
+def test_a_cycle_in_the_chain_fails_closed(client, supabase):
+    first = supabase.add_batch(TENANT_A, 4, "importador")
+    second = supabase.add_batch(TENANT_A, 4, "importador", supersedes=first)
+    supabase.tables["import_batch"][0]["supersedes"] = second
+    response = client.get(f"/imports/{second}", headers=auth_headers(supabase))
     assert response.status_code == 503
 
 
@@ -1561,3 +1567,570 @@ def test_b2_purge_interval_has_a_bounded_value(monkeypatch, value, expected):
     else:
         monkeypatch.setenv("EQUITAS_IMPORT_PURGE_SECONDS", value)
     assert imports.purge_interval_seconds() == expected
+
+
+# ---- Ciclo 2, R1: una creación pendiente no reinstala la copia de un lote ya descartado
+
+
+def test_r1_pending_creation_does_not_bring_back_a_discarded_copy(
+    client, supabase, store, monkeypatch
+):
+    """Crear pendiente → reintentar → descartar → termina la creación."""
+    original = imports._settle_copy
+    nested = []
+
+    def creation_still_pending(*args):
+        if not nested:
+            nested.append(True)
+            retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+            assert retry.status_code == 200
+            assert retry.json()["copy_available"] is True
+            discarded = client.post("/imports/1/discard", headers=auth_headers(supabase))
+            assert discarded.json()["status"] == "DESCARTADO"
+            assert not batch_dir(store).exists()
+        return original(*args)
+
+    monkeypatch.setattr(imports, "_settle_copy", creation_still_pending)
+    first = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert first.status_code == 201
+    assert first.json()["status"] == "DESCARTADO"
+    assert first.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+    assert client.get("/imports/1", headers=auth_headers(supabase)).json()["copy_available"] is False
+    again = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert (again.status_code, again.json()["copy_available"]) == (200, False)
+    assert [row["status"] for row in supabase.tables["import_batch"]] == ["RECIBIDO", "DESCARTADO"]
+    assert incoming_is_empty(store)
+
+
+def test_r1_discard_cannot_interleave_with_an_installation(client, supabase, store, monkeypatch):
+    original = UploadStore.commit
+    results = {}
+
+    def discard_request():
+        other = TestClient(main.app, base_url="http://127.0.0.1", raise_server_exceptions=False)
+        results["discard"] = other.post("/imports/1/discard", headers=auth_headers(supabase))
+
+    worker = threading.Thread(target=discard_request)
+
+    def commit_while_a_discard_arrives(self, *args):
+        if worker.ident is None:
+            worker.start()
+            worker.join(0.3)
+            results["waited"] = worker.is_alive()
+        return original(self, *args)
+
+    monkeypatch.setattr(UploadStore, "commit", commit_while_a_discard_arrives)
+    first = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    worker.join()
+    assert results["waited"] is True, "El descarte debe esperar a que termine la instalación"
+    assert first.status_code == 201
+    assert results["discard"].json()["status"] == "DESCARTADO"
+    assert results["discard"].json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+def test_r1_retry_removes_the_copy_left_by_an_interrupted_discard(client, supabase, store):
+    """Proceso caído entre el evento y el borrado: queda DESCARTADO con copia."""
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    root = supabase.tables["import_batch"][0]
+    supabase.add_batch(
+        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        file_hashes=root["file_hashes"], counts=root["counts"],
+    )
+    assert len(stored_files(store.root)) == 2
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+def test_r1_get_removes_the_copy_left_by_an_interrupted_discard(client, supabase, store):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    root = supabase.tables["import_batch"][0]
+    supabase.add_batch(
+        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        file_hashes=root["file_hashes"], counts=root["counts"],
+    )
+    body = client.get("/imports/1", headers=auth_headers(supabase)).json()
+    assert body["status"] == "DESCARTADO"
+    assert body["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+def test_r1_response_of_a_retry_is_a_consistent_snapshot(client, supabase, store, monkeypatch):
+    """Estado y copia se leen dentro de la exclusión: no se contradicen en la misma respuesta."""
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    original = imports._batch_view
+    held = []
+
+    def view(view_store, tenant, origin, row):
+        with pytest.raises(store_module.UploadStoreBusy):
+            _other_thread_tries_the_lock(view_store, tenant, origin)
+        held.append(True)
+        return original(view_store, tenant, origin, row)
+
+    monkeypatch.setattr(imports, "_batch_view", view)
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 200
+    assert held
+
+
+# ---- Ciclo 2, exclusión por lote
+
+
+def _other_thread_tries_the_lock(store, tenant, batch) -> None:
+    errors = []
+
+    def attempt():
+        try:
+            with store.lock(tenant, batch, wait=0):
+                pass
+        except store_module.UploadStoreBusy as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=attempt)
+    thread.start()
+    thread.join()
+    if errors:
+        raise errors[0]
+
+
+class hold_lock:
+    """Sostiene el lote desde otro hilo hasta salir del bloque."""
+
+    def __init__(self, store, tenant=TENANT_A, batch=1):
+        self.args = (store, tenant, batch)
+        self.ready = threading.Event()
+        self.leave = threading.Event()
+        self.thread = threading.Thread(target=self._run)
+
+    def _run(self):
+        store, tenant, batch = self.args
+        with store.lock(tenant, batch):
+            self.ready.set()
+            self.leave.wait()
+
+    def __enter__(self):
+        self.thread.start()
+        assert self.ready.wait(10)
+        return self
+
+    def __exit__(self, *_):
+        self.leave.set()
+        self.thread.join()
+
+
+def test_lock_excludes_other_threads_and_is_reentrant_in_the_same_one(store):
+    with store.lock(TENANT_A, 1):
+        with store.lock(TENANT_A, 1):
+            with pytest.raises(store_module.UploadStoreBusy):
+                _other_thread_tries_the_lock(store, TENANT_A, 1)
+        with pytest.raises(store_module.UploadStoreBusy):
+            _other_thread_tries_the_lock(store, TENANT_A, 1)
+    _other_thread_tries_the_lock(store, TENANT_A, 1)
+
+
+def test_lock_is_shared_by_every_store_instance_on_the_same_root(store):
+    other = UploadStore(store.root)
+    with store.lock(TENANT_A, 1), pytest.raises(store_module.UploadStoreBusy):
+        _other_thread_tries_the_lock(other, TENANT_A, 1)
+
+
+LOCK_HOLDER = """
+import sys
+from pathlib import Path
+from api.upload_store import UploadStore
+with UploadStore(Path(sys.argv[1])).lock(1, 1):
+    print("LISTO", flush=True)
+    sys.stdin.read()
+"""
+
+
+def _holder_process(store):
+    process = subprocess.Popen(
+        [sys.executable, "-c", LOCK_HOLDER, str(store.root)],
+        cwd=Path(__file__).resolve().parents[1],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout.readline().strip() == "LISTO"
+    return process
+
+
+def test_lock_excludes_other_processes_and_dies_with_its_holder(store):
+    """Con más de un worker también rige. Un proceso que muere no deja el lote tomado."""
+    process = _holder_process(store)
+    try:
+        with pytest.raises(store_module.UploadStoreBusy):
+            with store.lock(1, 1, wait=0):
+                pass
+    finally:
+        process.kill()
+        process.wait()
+        process.stdin.close()
+        process.stdout.close()
+    with store.lock(1, 1, wait=5):
+        pass
+
+
+def test_lock_wait_is_bounded_and_the_upload_can_be_retried(
+    client, supabase, store, monkeypatch
+):
+    monkeypatch.setattr(store_module, "LOCK_WAIT_SECONDS", 0.05)
+    with hold_lock(store):
+        first = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert first.status_code == 503
+    assert first.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert incoming_is_empty(store)
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["copy_available"] is True
+    assert_whole_copy(store)
+
+
+def test_lock_busy_on_discard_is_503_and_changes_nothing(client, supabase, store, monkeypatch):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    monkeypatch.setattr(store_module, "LOCK_WAIT_SECONDS", 0.05)
+    with hold_lock(store):
+        response = client.post("/imports/1/discard", headers=auth_headers(supabase))
+    assert response.status_code == 503
+    assert [row["status"] for row in supabase.tables["import_batch"]] == ["RECIBIDO"]
+    assert_whole_copy(store)
+
+
+def test_lock_file_planted_as_symlink_is_refused(store, tmp_path):
+    outside = tmp_path / "fuera"
+    outside.write_bytes(b"x")
+    for index in range(store_module.LOCK_STRIPES):
+        path = store.root / "bloqueos" / f"{index:02d}.lock"
+        path.unlink(missing_ok=True)
+        path.symlink_to(outside)
+    with pytest.raises(OSError):
+        with store.lock(1, 1, wait=0):
+            pass
+    assert outside.read_bytes() == b"x"
+
+
+# ---- Ciclo 2, R2: la purga no borra una generación nueva
+
+
+def test_r2_stale_purge_decision_does_not_delete_the_new_copy(
+    client, supabase, store, monkeypatch
+):
+    """La purga decidió sobre la copia vencida; el reintento instala otra en la misma ruta."""
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    age_copy(batch_dir(store))
+    original = UploadStore._expired
+    fired = []
+
+    def decided_then_retry(self, entry):
+        result = original(self, entry)
+        if result and entry.name == "1" and not fired:
+            fired.append(True)
+            retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+            assert retry.status_code == 200
+            assert retry.json()["copy_available"] is True
+        return result
+
+    monkeypatch.setattr(UploadStore, "_expired", decided_then_retry)
+    UploadStore(store.root).purge_expired()
+    assert fired
+    body = client.get("/imports/1", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is True
+    assert_whole_copy(store)
+    assert incoming_is_empty(store)
+
+
+def test_r2_read_cleanup_does_not_delete_a_new_generation(store, monkeypatch, tmp_path):
+    """Lo mismo en la limpieza al leer: decidió con un `stat` viejo."""
+    stored(store, TENANT_A, 1, b"vieja")
+    target = batch_dir(store)
+    age_copy(target)
+    original = os.lstat
+    fired = []
+
+    def stale_stat(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        if Path(path) == target and not fired:
+            fired.append(True)
+            os.rename(target, tmp_path / "vieja-apartada")
+            os.mkdir(target, 0o700)
+            (target / "cabecera").write_bytes(b"nueva")
+        return result
+
+    monkeypatch.setattr(os, "lstat", stale_stat)
+    found = store.files(TENANT_A, 1)
+    monkeypatch.undo()
+    assert fired
+    assert (target / "cabecera").read_bytes() == b"nueva"
+    assert found["cabecera"].read_bytes() == b"nueva"
+
+
+def test_r2_busy_batch_is_left_for_the_next_purge_and_stays_unreadable(store):
+    stored(store, TENANT_A, 1)
+    age_copy(batch_dir(store))
+    with hold_lock(store):
+        assert store.purge_expired() == 0
+        assert batch_dir(store).exists()
+        assert store.files(TENANT_A, 1) == {}
+        assert batch_dir(store).exists()
+    assert store.purge_expired() == 1
+    assert not batch_dir(store).exists()
+
+
+def test_r2_expired_generation_is_retired_to_a_private_name_before_deleting(store, monkeypatch):
+    stored(store, TENANT_A, 1)
+    age_copy(batch_dir(store))
+    deleted = []
+    original = shutil.rmtree
+
+    def recording(path, *args, **kwargs):
+        deleted.append(Path(path))
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", recording)
+    assert store.purge_expired() == 1
+    assert batch_dir(store) not in deleted
+    assert all(path.parent == store.root / "retirados" for path in deleted)
+    assert list((store.root / "retirados").iterdir()) == []
+
+
+def test_r2_release_retires_to_a_private_name_before_deleting(store, monkeypatch):
+    stored(store, TENANT_A, 1)
+    deleted = []
+    original = shutil.rmtree
+
+    def recording(path, *args, **kwargs):
+        deleted.append(Path(path))
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", recording)
+    store.release(TENANT_A, 1)
+    assert batch_dir(store) not in deleted
+    assert not batch_dir(store).exists()
+    store.release(TENANT_A, 1)
+
+
+def test_r2_a_generation_left_half_way_is_swept_by_the_next_purge(store):
+    leftover = store.root / "retirados" / ("a" * 32)
+    leftover.mkdir(mode=0o700)
+    (leftover / "cabecera").write_bytes(b"resto de un proceso caido")
+    assert store.purge_expired() == 1
+    assert list((store.root / "retirados").iterdir()) == []
+
+
+def test_r2_generation_that_cannot_be_retired_is_reported_and_stays_unreadable(
+    store, monkeypatch, caplog
+):
+    stored(store, TENANT_A, 1)
+    age_copy(batch_dir(store))
+    original = os.rename
+
+    def refuses(source, target):
+        if Path(source) == batch_dir(store):
+            raise PermissionError(errno.EACCES, "negado")
+        return original(source, target)
+
+    monkeypatch.setattr(os, "rename", refuses)
+    with caplog.at_level(logging.WARNING, logger="equitas.api"):
+        assert store.purge_expired() == 0
+    assert "PURGA_INCOMPLETA pendientes=1" in caplog.text
+    assert store.files(TENANT_A, 1) == {}
+    monkeypatch.undo()
+    assert store.purge_expired() == 1
+
+
+def test_r2_release_that_cannot_retire_is_reported(store, monkeypatch, caplog):
+    stored(store, TENANT_A, 1)
+    original = os.rename
+
+    def refuses(source, target):
+        if Path(source) == batch_dir(store):
+            raise PermissionError(errno.EACCES, "negado")
+        return original(source, target)
+
+    monkeypatch.setattr(os, "rename", refuses)
+    with caplog.at_level(logging.WARNING, logger="equitas.api"):
+        store.release(TENANT_A, 1)
+    assert "RETIRO_INCOMPLETO" in caplog.text
+
+
+# ---- Ciclo 2, otras carreras del mismo tipo
+
+
+def test_race_copy_vanishing_while_verifying_is_no_copy_not_an_error(store, monkeypatch):
+    stored(store, TENANT_A, 1)
+    original = UploadStore.files
+
+    def vanish_after_listing(self, tenant, batch):
+        found = original(self, tenant, batch)
+        self.release(tenant, batch)
+        return found
+
+    monkeypatch.setattr(UploadStore, "files", vanish_after_listing)
+    assert store.verify(TENANT_A, 1, {"cabecera": hashlib.sha256(b"x").hexdigest()}) is False
+
+
+def test_race_copy_vanishing_while_describing_is_no_copy_not_an_error(store, monkeypatch):
+    stored(store, TENANT_A, 1)
+    original = UploadStore.files
+
+    def vanish_after_listing(self, tenant, batch):
+        found = original(self, tenant, batch)
+        self.release(tenant, batch)
+        return found
+
+    monkeypatch.setattr(UploadStore, "files", vanish_after_listing)
+    assert store.describe(TENANT_A, 1, {"cabecera": "a" * 64}, None) == (False, None)
+
+
+def test_race_get_during_a_discard_waits_and_never_says_discarded_with_a_copy(
+    client, supabase, store, monkeypatch
+):
+    identifier = upload(client, supabase).json()["id"]
+    original = UploadStore.release
+    seen = {}
+
+    def get_request():
+        other = TestClient(main.app, base_url="http://127.0.0.1", raise_server_exceptions=False)
+        seen["get"] = other.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+
+    worker = threading.Thread(target=get_request)
+
+    def read_in_the_middle(self, tenant, batch):
+        # El evento ya está registrado y la copia todavía no se retiró.
+        if worker.ident is None:
+            worker.start()
+            worker.join(0.3)
+            seen["waited"] = worker.is_alive()
+        return original(self, tenant, batch)
+
+    monkeypatch.setattr(UploadStore, "release", read_in_the_middle)
+    assert client.post(f"/imports/{identifier}/discard", headers=auth_headers(supabase)).status_code == 200
+    worker.join()
+    assert seen["waited"] is True
+    assert seen["get"]["status"] == "DESCARTADO"
+    assert seen["get"]["copy_available"] is False
+
+
+def test_race_two_discards_of_different_events_make_one_event(client, supabase, store):
+    identifier = upload(client, supabase).json()["id"]
+    original = imports._write_batch
+    results = []
+
+    def second_discard_arrives(*args, **kwargs):
+        results.append(original(*args, **kwargs))
+        return results[-1]
+
+    imports._write_batch, restore = second_discard_arrives, original
+    try:
+        first = client.post(f"/imports/{identifier}/discard", headers=auth_headers(supabase))
+        second = client.post(f"/imports/{first.json()['id']}/discard", headers=auth_headers(supabase))
+    finally:
+        imports._write_batch = restore
+    assert first.status_code == second.status_code == 200
+    assert len(results) == 1
+    assert len(supabase.tables["import_batch"]) == 2
+
+
+def test_race_reception_whose_temporary_was_purged_fails_cleanly_and_retries(
+    client, supabase, store, monkeypatch
+):
+    original = imports._settle_copy
+    fired = []
+
+    def purged_meanwhile(*args):
+        if not fired:
+            fired.append(True)
+            for path in (store.root / "incoming").iterdir():
+                age_copy(path)
+            store.purge_expired()
+        return original(*args)
+
+    monkeypatch.setattr(imports, "_settle_copy", purged_meanwhile)
+    first = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert first.status_code == 503
+    assert first.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert_whole_copy(store)
+
+
+def test_race_replace_keeps_the_old_generation_out_of_the_name_before_installing(store):
+    stored(store, TENANT_A, 1, b"danada")
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(b"entera")
+    store.replace(token, TENANT_A, 1)
+    assert (batch_dir(store) / "cabecera").read_bytes() == b"entera"
+    assert list((store.root / "retirados").iterdir()) == []
+
+
+# ---- Ciclo 2, R3: el número del cliente no sale en una URL
+
+
+NUMBER = "20000000009"
+
+
+def _outgoing(supabase):
+    return [f"{call.url} {dict(call.headers)}" for call in supabase.calls]
+
+
+def test_r3_batch_number_of_the_client_never_reaches_an_outgoing_request(client, supabase):
+    identifier = upload(client, supabase).json()["id"]
+    supabase.calls.clear()
+    headers = auth_headers(supabase)
+    assert client.get(f"/imports/{NUMBER}", headers=headers).status_code == 404
+    assert client.get(f"/imports/000{NUMBER}", headers=headers).status_code == 404
+    assert client.post(f"/imports/{NUMBER}/discard", headers=headers).status_code == 404
+    assert supabase.calls
+    assert not [line for line in _outgoing(supabase) if NUMBER in line]
+    # Tampoco un id existente: lo que viaja son filtros resueltos en el servidor.
+    supabase.calls.clear()
+    assert client.get(f"/imports/{identifier}", headers=headers).status_code == 200
+    for call in supabase.calls:
+        if call.url.path.endswith("/import_batch"):
+            assert "id=eq." not in str(call.url)
+            assert "supersedes=eq." not in str(call.url)
+            assert f"tenant=eq.{TENANT_A}" in str(call.url)
+
+
+def test_r3_lookup_is_resolved_over_more_than_one_page(client, supabase, monkeypatch):
+    """Sin filtro por id hay que leer todo lo del municipio, sin cortarse en una página."""
+    first = None
+    for index in range(1, 2502):
+        last = supabase.add_batch(TENANT_A, 4, "importador")
+        first = first or last
+    response = client.get(f"/imports/{last}", headers=auth_headers(supabase))
+    assert response.status_code == 200
+    assert response.json()["id"] == last
+    assert client.get(f"/imports/{last + 1}", headers=auth_headers(supabase)).status_code == 404
+    pages = [c for c in supabase.calls if c.url.path.endswith("/import_batch")]
+    assert len(pages) >= 3
+
+
+def test_r3_scoring_filters_of_the_client_never_reach_an_outgoing_request(client, supabase):
+    supabase.calls.clear()
+    response = client.get(
+        "/case-groups",
+        params={
+            "as_of": "2026-09-30",
+            "search": NUMBER,
+            "group_key": NUMBER,
+            "severity_band": NUMBER,
+            "tag": NUMBER,
+        },
+        headers=auth_headers(supabase, AUTH_OPERADOR),
+    )
+    assert response.status_code == 200
+    assert supabase.calls
+    assert not [line for line in _outgoing(supabase) if NUMBER in line]
+
+
+def test_r3_upload_data_of_the_client_travels_only_in_the_body(client, supabase):
+    key = f"{NUMBER[:8]}-{NUMBER[8:]}0-4000-8000-000000000000"
+    supabase.calls.clear()
+    assert upload(client, supabase, headers={"Idempotency-Key": key}).status_code == 201
+    assert not [line for line in _outgoing(supabase) if NUMBER[:8] in line]
+    assert any(NUMBER[:8] in c.content.decode() for c in supabase.calls if c.content)

@@ -69,6 +69,13 @@ Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda.
 - Si una purga falla, queda `PURGA_FALLIDA clase=…` o `PURGA_INCOMPLETA pendientes=…` en el registro, sin rutas, y la siguiente vuelve a intentar. Lo que no se pudo borrar sigue sin entregarse.
 - **Límite:** con el proceso detenido nada purga hasta el próximo arranque. Es la condición de esta versión local; un despliegue (ALIGN-050) debe decidir si además hace falta una tarea externa.
 
+**Concurrencia: fila, copia y purga no se contradicen, en ningún orden.** El nombre de un lote puede ir ocupándolo una copia tras otra, así que:
+
+- `UploadStore.lock(tenant, lote)` da exclusión real por lote, con `flock`: rige entre hilos y entre procesos, y el núcleo la suelta si el proceso muere. La espera tiene tope: 30 s y `503 ALMACEN_TEMPORAL_NO_DISPONIBLE`, y el mismo envío se reintenta.
+- **Instalar** lee el estado bajo la exclusión y decide con él: abierto, instala y verifica; descartado, retira. **Descartar** escribe el evento y retira la copia bajo la misma exclusión. Una creación pendiente que llega después de un descarte ya ve `DESCARTADO`.
+- **Nada se borra por el nombre del lote.** Bajo la exclusión, la generación se mueve a `retirados/` con un nombre privado, y recién ahí se borra. La purga solo toma una candidata al recorrer: vuelve a decidir bajo la exclusión. Una decisión vieja no alcanza a una copia nueva. Si el lote está ocupado, queda para la próxima purga, sin entregarse.
+- Un descarte interrumpido entre el evento y el borrado se repara en el siguiente `GET`, reintento o descarte.
+
 **Para quien lea el archivo (ALIGN-054, 056).** `UploadStore.files(tenant, root_id)` devuelve las rutas de la copia vigente y `verify(tenant, root_id, file_hashes)` comprueba el contenido antes de confiar en él. Si no están, se perdió o venció: hay que pedir que se reenvíe con la misma clave. Cuando ALIGN-053 esté integrado, el lector corre **en un proceso aparte, con tope de memoria y de tiempo**, y hay que decidir si este almacén se unifica con `PrivateUploadStore`, que resuelve lo mismo por token.
 
 ## Lo que esta versión no hace
@@ -76,4 +83,5 @@ Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda.
 - **Usuario con dos membresías activas:** recibe `409 TENANT_SELECTION_REQUIRED`, sin filas. El ticket pide ignorar cualquier municipio enviado por el cliente, así que no se usa la cookie de selección de la web. Si esas personas deben importar o leer por esta API, hace falta una decisión expresa sobre cómo llega la selección.
 - **`importador_sistema`:** credencial de máquina, por ALIGN-060.
 - **Cuota por municipio:** un importador autorizado puede ocupar disco hasta que venza el TTL. Lo cubre la campaña de tamaño y tiempo de ALIGN-059.
+- **Registros de Kong fuera de esta API.** Esta API no pone ningún valor del cliente en una URL (`back/api/README.md`). La web sí lee por la Data API con la DAL de ALIGN-019: `front/lib/auth/tenant-access.ts` filtra por el municipio de la cookie de selección, después de validar que sea un número, y Kong registra ese número aunque el usuario no sea miembro. Cerrarlo exige cambiar ese ticket y queda fuera de este. Tampoco se cambia la configuración de Kong: la genera la CLI de Supabase del stack local.
 - **Despliegue fuera de loopback:** ALIGN-050. El origen se compara entero contra el esquema con que Next recibió la solicitud y el `Host`. Detrás de otro proxy hay que fijar el origen confiable de la aplicación y revisar `X-Forwarded-*`.

@@ -9,7 +9,15 @@ import uuid
 
 import httpx
 import pytest
-from test_imports_api import CABECERA, DETALLE, SENTINELS, batch
+from test_imports_api import (
+    CABECERA,
+    DETALLE,
+    INFRASTRUCTURE,
+    SENTINELS,
+    batch,
+    flushed_infrastructure_logs,
+    fresh_number,
+)
 
 TENANT_A = 920001
 
@@ -279,6 +287,24 @@ def test_b3_number_sent_through_next_does_not_reach_the_api_logs(
     assert response.status_code == 404
     assert "20000000000" not in api_server.logs()
     assert "GET /imports/<x> HTTP" in api_server.logs()
+
+
+def test_r3_number_through_next_does_not_reach_any_log_of_the_route(
+    browser, next_server, api_server, session_cookie, env
+):
+    since = time.time()
+    number = fresh_number()
+    cookie = session_cookie("importador")
+    assert browser.get(f"/api/imports/{number}", headers={"Cookie": cookie}).status_code == 404
+    assert browser.post(
+        f"/api/imports/{number}/discard", headers=as_browser(next_server, cookie, write=True)
+    ).status_code == 404
+    logs = flushed_infrastructure_logs(env, since)
+    assert "/rest/v1/import_batch" in logs[INFRASTRUCTURE[0]]
+    for container, text in logs.items():
+        assert number not in text, container
+    assert number not in next_server.logs()
+    assert number not in api_server.logs()
 
 
 def test_next_logs_carry_no_sentinels_or_session_data(browser, next_server, session_cookie):

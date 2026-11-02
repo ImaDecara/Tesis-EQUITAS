@@ -682,6 +682,284 @@ def test_b2_idle_process_purges_without_any_request(api_server, tmp_path):
         process.wait(timeout=20)
 
 
+# ---- Ciclo 2, R1 y R2: carreras con un orden fijado, contra Auth, PostgREST y uvicorn reales
+
+
+class BarrierServer:
+    def __init__(self, api_server, tmp_path, point, *, purge_seconds="3600"):
+        self.point = point
+        self.directory = tmp_path / "barreras"
+        self.directory.mkdir(mode=0o700)
+        self.root = tmp_path / "almacen"
+        self.log_path = tmp_path / "uvicorn.log"
+        self.port = free_port()
+        self.url = f"http://127.0.0.1:{self.port}"
+        os.chmod(tmp_path, 0o700)
+        self.environment = {
+            **api_server.environment,
+            "EQUITAS_IMPORT_TMP_DIR": str(self.root),
+            "EQUITAS_IMPORT_PURGE_SECONDS": purge_seconds,
+            "EQUITAS_TEST_BARRIER_DIR": str(self.directory),
+            "EQUITAS_TEST_BARRIER": point,
+            "PYTHONPATH": str(BACK),
+        }
+
+    def __enter__(self):
+        with self.log_path.open("wb") as log:
+            self.process = subprocess.Popen(
+                [sys.executable, "-m", "uvicorn", "--app-dir", str(Path(__file__).parent),
+                 "app_with_barriers:app", "--host", "127.0.0.1", "--port", str(self.port),
+                 "--log-level", "info"],
+                cwd=BACK, env=self.environment, stdout=log, stderr=subprocess.STDOUT,
+            )
+        wait_for_port(self.port, self.process)
+        return self
+
+    def __exit__(self, *_):
+        self.resume()
+        self.process.terminate()
+        self.process.wait(timeout=20)
+
+    def wait_paused(self):
+        marker = self.directory / f"{self.point}.paused"
+        deadline = time.monotonic() + 60
+        while not marker.exists():
+            assert time.monotonic() < deadline, "La barrera no se alcanzó"
+            time.sleep(0.01)
+
+    def resume(self):
+        (self.directory / f"{self.point}.resume").touch()
+
+    def copy(self, identifier):
+        return self.root / "lotes" / str(TENANT_A) / str(identifier)
+
+    def client(self):
+        return httpx.Client(base_url=self.url, trust_env=False, timeout=120)
+
+
+def send_batch(server, token, key):
+    body, content_type = batch()
+    with server.client() as client:
+        return client.post(
+            "/imports",
+            content=body,
+            headers={**bearer(token), **content_type, "Idempotency-Key": key},
+        )
+
+
+def test_r1_pending_creation_does_not_bring_back_a_discarded_copy(api_server, login, tmp_path):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    with BarrierServer(api_server, tmp_path, "settle") as server:
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            pending = pool.submit(send_batch, server, token, key)
+            server.wait_paused()
+            retry = send_batch(server, token, key)
+            assert retry.status_code == 200
+            assert retry.json()["copy_available"] is True
+            identifier = retry.json()["id"]
+            with server.client() as client:
+                discarded = client.post(f"/imports/{identifier}/discard", headers=bearer(token))
+            assert discarded.status_code == 200
+            assert discarded.json()["status"] == "DESCARTADO"
+            assert not server.copy(identifier).exists()
+            server.resume()
+            first = pending.result(timeout=60)
+        assert first.status_code == 201
+        assert first.json()["status"] == "DESCARTADO"
+        assert first.json()["copy_available"] is False
+        assert not server.copy(identifier).exists()
+        with server.client() as client:
+            state = client.get(f"/imports/{identifier}", headers=bearer(token)).json()
+        assert state["copy_available"] is False
+        again = send_batch(server, token, key)
+        assert (again.status_code, again.json()["copy_available"]) == (200, False)
+        assert not server.copy(identifier).exists()
+        assert rows_with_key(key) == "1"
+        assert batch_rows(identifier) == "2"
+        assert list((server.root / "incoming").iterdir()) == []
+
+
+def test_r1_discard_and_retry_wait_for_an_installation_in_progress(api_server, login, tmp_path):
+    """Pausa dentro de la instalación: los demás esperan, y el resultado es el mismo."""
+    token = login("importador")
+    key = str(uuid.uuid4())
+    with BarrierServer(api_server, tmp_path, "commit") as server:
+        with concurrent.futures.ThreadPoolExecutor(3) as pool:
+            pending = pool.submit(send_batch, server, token, key)
+            server.wait_paused()
+            identifier = int(psql(
+                f"select id from public.import_batch where idempotency_key = '{key}'"
+            ).strip())
+
+            def discard():
+                with server.client() as client:
+                    return client.post(f"/imports/{identifier}/discard", headers=bearer(token))
+
+            retrying = pool.submit(send_batch, server, token, key)
+            discarding = pool.submit(discard)
+            with pytest.raises(concurrent.futures.TimeoutError):
+                discarding.result(timeout=1.5)
+            assert batch_rows(identifier) == "1", "El descarte no debe adelantarse a la instalación"
+            server.resume()
+            first, retried, discarded = pending.result(60), retrying.result(60), discarding.result(60)
+        assert first.status_code == 201
+        assert retried.status_code == 200
+        assert discarded.status_code == 200
+        assert not server.copy(identifier).exists()
+        with server.client() as client:
+            state = client.get(f"/imports/{identifier}", headers=bearer(token)).json()
+        assert state["status"] == "DESCARTADO"
+        assert state["copy_available"] is False
+
+
+def test_r2_stale_purge_decision_does_not_delete_the_new_copy(api_server, login, tmp_path):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    with BarrierServer(api_server, tmp_path, "expired", purge_seconds="1") as server:
+        created = send_batch(server, token, key)
+        assert created.status_code == 201
+        identifier = created.json()["id"]
+        age_copy(server.copy(identifier))
+        # La purga periódica decide que venció y queda detenida antes de retirarla.
+        server.wait_paused()
+        retry = send_batch(server, token, key)
+        assert retry.status_code == 200
+        assert retry.json()["copy_available"] is True
+        count = server.directory / "purges.count"
+        finished = int(count.read_text())
+        server.resume()
+        deadline = time.monotonic() + 30
+        while int(count.read_text()) <= finished:
+            assert time.monotonic() < deadline, "La purga detenida no terminó"
+            time.sleep(0.01)
+        with server.client() as client:
+            state = client.get(f"/imports/{identifier}", headers=bearer(token)).json()
+        assert state["copy_available"] is True
+        assert_whole_copy(server.copy(identifier))
+        assert rows_with_key(key) == "1"
+
+
+def test_race_real_retries_and_discards_at_once_end_without_a_copy(login, api_server):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    identifier = post_batch(http_client_for(api_server), token, headers={"Idempotency-Key": key}).json()["id"]
+    body, content_type = batch()
+
+    def retry(_):
+        with httpx.Client(base_url=api_server.url, trust_env=False, timeout=60) as client:
+            return client.post(
+                "/imports", content=body,
+                headers={**bearer(token), **content_type, "Idempotency-Key": key},
+            )
+
+    def discard(_):
+        with httpx.Client(base_url=api_server.url, trust_env=False, timeout=60) as client:
+            return client.post(f"/imports/{identifier}/discard", headers=bearer(token))
+
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        retries = [pool.submit(retry, index) for index in range(5)]
+        discards = [pool.submit(discard, index) for index in range(3)]
+        results = [future.result(60) for future in (*retries, *discards)]
+    assert {response.status_code for response in results} == {200}
+    assert batch_rows(identifier) == "2"
+    assert not copy_dir(api_server, identifier).exists()
+
+
+def http_client_for(api_server):
+    return httpx.Client(base_url=api_server.url, trust_env=False, timeout=60)
+
+
+# ---- Ciclo 2, R3: el número del cliente no llega a los registros de la infraestructura
+
+INFRASTRUCTURE = (
+    "supabase_kong_equitas-tp-testing",
+    "supabase_rest_equitas-tp-testing",
+    "supabase_auth_equitas-tp-testing",
+    "supabase_db_equitas-tp-testing",
+)
+
+
+def docker_logs(container: str, since: float) -> str:
+    done = subprocess.run(
+        ["docker", "logs", "--since", str(int(since) - 1), container],
+        capture_output=True, check=False,
+    )
+    return (done.stdout + done.stderr).decode(errors="replace")
+
+
+def flushed_infrastructure_logs(env, since: float) -> dict[str, str]:
+    """Una marca directa a Kong confirma que su registro ya llegó y que esta captura ve la
+    consulta de una URL: sin ese control positivo, una captura vacía parecería un acierto."""
+    marker = f"marca{uuid.uuid4().hex}"
+    response = httpx.get(
+        f"{env['API_URL']}/rest/v1/role",
+        params={"select": "id", "limit": "1", "nota": f"eq.{marker}"},
+        headers={"apikey": env["PUBLISHABLE_KEY"]},
+        trust_env=False,
+    )
+    assert response.status_code in {200, 400}
+    deadline = time.monotonic() + 20
+    while marker not in docker_logs(INFRASTRUCTURE[0], since):
+        assert time.monotonic() < deadline, "La marca no llegó al registro de Kong"
+        time.sleep(0.1)
+    return {container: docker_logs(container, since) for container in INFRASTRUCTURE}
+
+
+def fresh_number() -> str:
+    return f"2{uuid.uuid4().int % 10**10:010d}"
+
+
+def test_r3_number_of_the_client_does_not_reach_kong_postgrest_auth_or_the_database(
+    http, env, login
+):
+    since = time.time()
+    number = fresh_number()
+    token = login("importador")
+    operator = login("operador")
+    headers = bearer(token)
+    identifier = post_batch(http, token).json()["id"]
+    assert http.get(f"/imports/{number}", headers=headers).status_code == 404
+    assert http.get(f"/imports/000{number}", headers=headers).status_code == 404
+    assert http.post(f"/imports/{number}/discard", headers=headers).status_code == 404
+    other = bearer(login("otro-importador"))
+    assert http.get(f"/imports/{number}", headers=other).status_code == 404
+    assert http.get(f"/imports/{identifier}", headers=other).status_code == 404
+    scoring = http.get(
+        "/case-groups",
+        params={**ASOF, "search": number, "group_key": number, "severity_band": number, "tag": number},
+        headers=bearer(operator),
+    )
+    assert scoring.status_code == 200
+    # También con errores que la base rechaza: una clave repetida con otro contenido.
+    key = f"{number[:8]}-{number[8:]}0-4000-8000-000000000000"
+    assert post_batch(http, token, headers={"Idempotency-Key": key}).status_code == 201
+    conflict = post_batch(http, token, cabecera=number.encode(), headers={"Idempotency-Key": key})
+    assert conflict.status_code == 409
+    logs = flushed_infrastructure_logs(env, since)
+    assert "/rest/v1/import_batch" in logs[INFRASTRUCTURE[0]], "Kong debe haber registrado la lectura"
+    assert f"tenant=eq.{TENANT_A}" in logs[INFRASTRUCTURE[0]]
+    for container, text in logs.items():
+        assert number not in text, container
+        assert number[:8] not in text, container
+        assert token not in text, container
+    assert f"id=eq.{identifier}" not in logs[INFRASTRUCTURE[0]]
+
+
+def test_r3_control_a_number_in_a_url_is_visible_in_the_capture(env):
+    """Si esta captura no viera el dato, la prueba anterior no probaría nada."""
+    since = time.time()
+    number = fresh_number()
+    httpx.get(
+        f"{env['API_URL']}/rest/v1/import_batch",
+        params={"select": "id", "id": f"eq.{number}"},
+        headers={"apikey": env["PUBLISHABLE_KEY"]},
+        trust_env=False,
+    )
+    logs = flushed_infrastructure_logs(env, since)
+    assert number in logs[INFRASTRUCTURE[0]]
+
+
 def test_expired_temporary_is_purged_on_the_next_upload(http, login, api_server):
     token = login("importador")
     identifier = post_batch(http, token).json()["id"]

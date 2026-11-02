@@ -191,7 +191,7 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
    const { data, error } = await writer.rpc('record_case_review', { p_reviewer_user, p_tenant, /* … */ })
    ```
 
-5. `error.message` trae el código estable de la tabla anterior; se traduce a un mensaje de pantalla sin mostrar valores. La lectura del historial usa el cliente de sesión con columnas explícitas. El servicio de importación usa `equitas_import_server` de la misma forma. Es la API interna de ALIGN-052, con la variable `EQUITAS_IMPORT_SERVER_JWT`: rechaza una credencial con otro `role`, y sus lecturas van con el token del usuario ([`back/api/README.md`](back/api/README.md)).
+5. `error.message` trae el código estable de la tabla anterior; se traduce a un mensaje de pantalla sin mostrar valores. La lectura del historial usa el cliente de sesión con columnas explícitas. El servicio de importación usa `equitas_import_server` de la misma forma.
 
 ### Semillas y escenarios
 

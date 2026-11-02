@@ -50,7 +50,7 @@ No hay cliente global ni respaldo en la clave de servicio general: el módulo no
 |---|---|---|
 | `user`, `tenant_user`, `tenant`, `role` (contexto) | Token del usuario | RLS de `20261021221030_active_membership_rls.sql` |
 | `debtor` filtrado por `tenant`; `debt`, `debtor_profile`, `debtor_person`, `person`, `debtor_contact` por ids de esos objetos; `person_type` | Token del usuario | RLS más el filtro: con dos membresías RLS muestra ambos municipios |
-| `import_batch` filtrado por `tenant` | Token del usuario | `member_read_import_batch` más el filtro |
+| `import_batch` filtrado por `tenant`, todo el municipio y paginado | Token del usuario | `member_read_import_batch` más el filtro. El lote pedido se busca en memoria: su número no viaja en la URL |
 | `record_import_batch` | JWT dedicado `equitas_import_server` (`EQUITAS_IMPORT_SERVER_JWT`) | Solo `EXECUTE` de esa función; no lee ni escribe tablas. Otro `role` se rechaza |
 
 ## Ejecución local
@@ -84,8 +84,17 @@ imprime lo que recibe antes de que la API decida nada, así que se filtra por li
 
 Un identificador interno que haga falta registrar sale del evento autorizado, nunca de la ruta
 recibida. Una ruta nueva debe sumar sus segmentos fijos a `LOGGABLE_SEGMENTS`; si no, se ve
-como `<x>`. Esto cubre los registros de este proceso: los de Kong y PostgREST en el stack local
-tienen sus propias reglas.
+como `<x>`.
+
+**Registros de la infraestructura.** Kong registra la URL de cada consulta que emite esta API.
+Por eso **ningún valor del cliente viaja en una URL**: el `{id}` de un lote se busca en memoria
+sobre lo leído del municipio; `search`, `group_key`, `severity_band` y `tag` se aplican en Python
+sobre la cartera leída; lo demás va en el cuerpo de `record_import_batch`, que Kong no registra.
+`tests_real` lo comprueba capturando Kong, PostgREST, Auth y Postgres, con un control positivo.
+En esas URL sí quedan valores **resueltos en el servidor**: `tenant=eq.<municipio>`,
+`auth_user=eq.<sujeto verificado del token>`, `user=eq.<id>`, `id=in.(…)` con ids de la cartera y
+el cursor de paginación. Ninguno lo escribe el cliente. Fuera de esta API, las lecturas de la web
+por la DAL de ALIGN-019 son otro recorrido: ver `importacion-web.md`.
 
 ## Reglas y corte
 
