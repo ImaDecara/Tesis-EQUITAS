@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
+import { DebtsTable } from '@/components/debtors/debts-table'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
+import { reviewDifferenceNotice, ReviewPanel } from '@/components/review/review-panel'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -19,7 +21,8 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getDebtorDetailData } from '@/lib/equitas-data'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { loadCaseReviewScreen } from '@/lib/server/case-review-screen'
+import { formatCurrency } from '@/lib/utils'
 
 const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
   'Llamado prioritario': 'danger',
@@ -30,21 +33,26 @@ const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'succ
 
 export default async function DebtorDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ debtorId: string }>
+  searchParams?: Promise<{ tab?: string }>
 }) {
   const { debtorId } = await params
+  const requestedTab = (await searchParams)?.tab
   const { detail, warnings } = await getDebtorDetailData(debtorId)
 
   if (!detail) {
     notFound()
   }
 
+  const reviewScreen = await loadCaseReviewScreen(debtorId)
+  const reviewNotice = reviewDifferenceNotice(detail.debtor, reviewScreen)
+
   const { debtor, debts, people, contacts, profile } = detail
   const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
   const personCatalogReadFailed = readingFailed(warnings, 'person')
   const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
-  const debtsReadFailed = readingFailed(warnings, 'debtor', 'debt')
   const decisionReadFailed = !debtor.decision && debtor.decisionIssues?.some(issue => issue.reason === 'LECTURA_FALLIDA')
   const percentages = people.map(person => numericData(person.priority).value)
   const percentageTotal = relationsReadFailed || percentages.some(value => value === null)
@@ -91,6 +99,7 @@ export default async function DebtorDetailPage({
         <p className="text-xs text-slate-600">
           Severidad y prioridad: puntos de 0 a 100; no son porcentajes ni probabilidades de pago.
         </p>
+        {reviewNotice && <p role="status" className="text-sm text-amber-800">{reviewNotice}</p>}
         <p className="text-sm text-slate-700">Vulnerabilidad: no informada</p>
         <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>
         <p className="text-xs text-slate-600">{missingSummary(debtor.metrics)}</p>
@@ -147,14 +156,15 @@ export default async function DebtorDetailPage({
           </Card>
         </section>
 
-        <Tabs defaultValue="summary">
-          <TabsList>
+        <Tabs defaultValue={requestedTab === 'revision' ? 'review' : 'summary'}>
+          <TabsList aria-label="Secciones del objeto">
             <TabsTrigger value="summary">Resumen</TabsTrigger>
             <TabsTrigger value="people">Personas asociadas</TabsTrigger>
             <TabsTrigger value="contacts">Contactos</TabsTrigger>
             <TabsTrigger value="debts">Deudas</TabsTrigger>
             <TabsTrigger value="risk">Perfil / Severidad</TabsTrigger>
             <TabsTrigger value="recommendation">Recomendacion</TabsTrigger>
+            <TabsTrigger value="review">Revisión</TabsTrigger>
           </TabsList>
 
           <TabsContent value="summary">
@@ -324,37 +334,7 @@ export default async function DebtorDetailPage({
                 <CardTitle>Deudas asociadas</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Monto original</TableHead>
-                      <TableHead>Monto actualizado</TableHead>
-                      <TableHead>ID externo de la obligación</TableHead>
-                      <TableHead>Vencimiento</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {debts.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-slate-500">
-                          {debtsReadFailed ? 'No disponible: no se pudo leer la lista de obligaciones.' : 'Sin deudas visibles.'}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {debts.map((debt) => (
-                      <TableRow key={debt.id}>
-                        <TableCell>{formatCurrency(debt.originalAmount)}</TableCell>
-                        <TableCell>{formatCurrency(debt.updatedAmount)}</TableCell>
-                        <TableCell>{debt.period}</TableCell>
-                        <TableCell>{formatDate(debt.dueDate)}</TableCell>
-                        <TableCell>
-                          <Badge variant="neutral">{debt.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <DebtsTable debts={debts} readFailed={readingFailed(warnings, 'debtor', 'debt')} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -429,8 +409,13 @@ export default async function DebtorDetailPage({
                   deuda total: {formatCurrency(debtor.totalDebt)}, atraso: {formatWithUnit(debtor.maxDaysOverdue, 'dias')} y
                   contacto: {debtor.hasContact === null ? 'no disponible' : debtor.hasContact ? 'disponible' : 'faltante'}.
                 </p>
+                <p>Para decidir sobre este caso, abre la pestaña Revisión.</p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="review">
+            <ReviewPanel screen={reviewScreen} detail={detail} warnings={warnings} />
           </TabsContent>
         </Tabs>
       </div>

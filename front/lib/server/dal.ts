@@ -10,8 +10,10 @@ import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-s
 // ALIGN-003 y funciones de ALIGN-018: `operador` registra, `supervisor` aprueba y
 // no importa. `importador_sistema` es de maquina y no entra por la web. La lectura
 // tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
+// `review:read` (ALIGN-021): las decisiones son para los roles aprobados que leen cartera.
 const PERMISSIONS = {
   'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
+  'review:read': ['consulta', 'operador', 'supervisor'],
   'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
@@ -31,6 +33,11 @@ export class DataAccessError extends Error {
       code === 'TENANT_SELECTION_REQUIRED' ? 409 :
       ['DATABASE_ERROR', 'AUTH_UNAVAILABLE', 'SUPABASE_NOT_CONFIGURED'].includes(code) ? 503 : 403
   }
+}
+
+// Para que la pantalla ofrezca solo lo que la accion va a aceptar, con la misma tabla.
+export function roleHasPermission(role: ResolvedRoleName, permission: DalPermission): boolean {
+  return (PERMISSIONS[permission] as readonly ResolvedRoleName[]).includes(role)
 }
 
 // Por solicitud, sin cache global ni identidad/rol suministrados por el navegador.

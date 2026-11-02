@@ -164,6 +164,16 @@ export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: 
   })
 }
 
+// ALIGN-021. Cada cola es la intervención; el grupo sin decisión también se puede abrir.
+export const NO_QUEUE_PARAM = 'SIN_COLA'
+type QueueGroup = { interventionCode: InterventionCode | null; cases: DebtorListItem[] }
+export const queueParam = (group: Pick<QueueGroup, 'interventionCode'>) => group.interventionCode ?? NO_QUEUE_PARAM
+
+// Un valor desconocido no es un error: se abre la primera cola con casos.
+export function selectQueueGroup<T extends QueueGroup>(groups: readonly T[], requested: string | undefined): T {
+  return groups.find(group => queueParam(group) === requested) ?? groups.find(group => group.cases.length > 0) ?? groups[0]
+}
+
 // Misma definición de obligación evaluable que evaluateSeverity, solo para el vencimiento.
 function dueDateNotEvaluable(due: RuleDatum<string>) {
   return due.estado !== 'OBSERVADO' || due.valor < decisionRules.evaluabilidad.fecha_minima_plausible
