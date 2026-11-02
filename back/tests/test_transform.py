@@ -24,6 +24,7 @@ from ETL.transform import (
     build_debtor_profile_payload,
     build_person_payload,
     build_transform_summary,
+    clean_text,
     debt_status_key,
     infer_debt_type_key,
     infer_document_type_key,
@@ -35,23 +36,28 @@ from ETL.transform import (
     parse_int,
     parse_object_status,
     parse_optional_decimal,
-    resolve_origin_state,
     with_catalog_ids,
 )
 from ETL.validate_source import SourceTable, ValidationError, load_contract, load_mapping, validate_batch
 
 CUT_OFF = date(2026, 9, 30)
-STATES = {'NOTD_ESTA_id': {'10': 'PENDIENTE', '20': 'PAGADA', '30': 'ANULADA', '40': 'SUSPENDIDA', '99': 'UNKNOWN'},
-          'NOTD_SITU_id': {'A': 'PENDIENTE', 'B': 'PAGADA', 'U': 'UNKNOWN'}}
 
 
 def debt_row(**overrides):
     return {'DEUD_id': '9001', 'Tipo_Ingreso_Id': '801', 'NOTD_capital': '1000.50', 'NOTD_totalActualizado': '1200.75',
-            'NOTD_vencimiento': '01/01/2000', 'NOTD_ESTA_id': '10', **overrides}
+            'NOTD_vencimiento': '01/01/2000', **overrides}
 
 
-def build_debt(**overrides):
-    return build_debt_payload(debt_row(**overrides), debtor_id=77, cut_off=CUT_OFF, state_catalogs=STATES, currency_code='ARS')
+def build_debt(origin_state='PENDIENTE', **overrides):
+    return build_debt_payload(debt_row(**overrides), debtor_id=77, cut_off=CUT_OFF, origin_state=origin_state, currency_code='ARS')
+
+
+@pytest.mark.parametrize(('value', 'expected'), [
+    (None, None), ('', None), ('   ', None), (float('nan'), None), ('  x ', 'x'), (0, '0'),
+    ('null', 'null'), ('None', 'None'), ('NaN', 'NaN'), ('NULL', 'NULL'),
+])
+def test_solo_es_ausencia_lo_vacio_o_un_nulo_real(value, expected):
+    assert clean_text(value) == expected
 
 
 @pytest.mark.parametrize(('value', 'expected'), [
@@ -152,9 +158,19 @@ def test_tipo_de_documento_no_se_fuerza_a_cuit(document, expected):
     assert infer_document_type_key(document) == expected
 
 
-@pytest.mark.parametrize(('document', 'expected'), [('20-1', 'INDIVIDUAL'), ('30-1', 'LEGAL_PERSON'), ('99-1', 'UNKNOWN'), ('', 'UNKNOWN'), (None, 'UNKNOWN')])
-def test_tipo_de_persona_por_prefijo(document, expected):
+@pytest.mark.parametrize(('document', 'expected'), [
+    ('20-00000000-1', 'INDIVIDUAL'), ('20000000001', 'INDIVIDUAL'), ('30-00000000-7', 'LEGAL_PERSON'),
+    ('20-1', 'UNKNOWN'), ('ABC20-00000000-1XYZ', 'UNKNOWN'), ('20-00000000-9', 'UNKNOWN'), ('99-1', 'UNKNOWN'),
+    ('', 'UNKNOWN'), (None, 'UNKNOWN'),
+])
+def test_tipo_de_persona_solo_con_documento_de_estructura_valida(document, expected):
     assert infer_person_type_key(document) == expected
+
+
+@pytest.mark.parametrize('document', ['ABC20-00000000-1XYZ', '20-00000000-1X', 'X20000000001', '20.00000000.1',
+                                      '２０-００００００００-１', '2000000000１'])
+def test_tipo_de_documento_mira_el_valor_tal_como_llego(document):
+    assert infer_document_type_key(document) == 'UNKNOWN'
 
 
 def test_persona_sin_estado_de_origen_no_queda_activa():
@@ -221,27 +237,12 @@ def test_pendiente_sin_vencimiento_no_se_clasifica():
     assert error.value.code == 'FECHA_VACIA'
 
 
-@pytest.mark.parametrize(('row', 'expected'), [
-    ({'NOTD_ESTA_id': '40'}, 'SUSPENDIDA'), ({'NOTD_ESTA_id': '', 'NOTD_SITU_id': 'B'}, 'PAGADA'),
-    ({'NOTD_ESTA_id': '99', 'NOTD_SITU_id': 'A'}, 'PENDIENTE'), ({'NOTD_ESTA_id': '10', 'NOTD_SITU_id': 'A'}, 'PENDIENTE'),
-    ({}, 'UNKNOWN'), ({'NOTD_ESTA_id': '99'}, 'UNKNOWN'),
-])
-def test_estado_de_origen_por_catalogo(row, expected):
-    assert resolve_origin_state(row, STATES) == expected
-
-
-@pytest.mark.parametrize(('row', 'code'), [({'NOTD_ESTA_id': '77'}, 'ESTADO_ORIGEN_DESCONOCIDO'),
-                                           ({'NOTD_ESTA_id': '10', 'NOTD_SITU_id': 'B'}, 'ESTADOS_ORIGEN_CONFLICTIVOS')])
-def test_estado_de_origen_inconsistente_se_rechaza(row, code):
-    with pytest.raises(SemanticRejection) as error:
-        resolve_origin_state(row, STATES)
-    assert error.value.code == code
-
-
-def test_tipo_de_tributo_no_acepta_id_no_canonico():
+def test_tipo_de_tributo_conserva_el_codigo_sin_mapeo():
     assert infer_debt_type_key('801') == 'water_connection'
     assert infer_debt_type_key('905') == 'unknown_905'
-    assert infer_debt_type_key('0801') == 'unknown'
+    assert infer_debt_type_key('0801') == 'unknown_0801'
+    assert infer_debt_type_key('null') == 'unknown_null'
+    assert infer_debt_type_key('') == 'unknown'
 
 
 @pytest.mark.parametrize('mutation', [
@@ -281,13 +282,46 @@ def test_perfil_agrega_al_corte_sin_indice_heredado():
     assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (10, 5)
     assert (profile['active_person_count'], profile['available_contact_count']) == (2, 3)
     assert profile['socioeconomic_risk_level'] is None
-    assert 'previous_contact_count' not in profile
+    assert profile['previous_contact_count'] is None and profile['previous_response_count'] is None
 
 
 def test_detalle_por_persona_conserva_la_fila_sin_indice_heredado():
     detail = build_debtor_profile_detail_payload(11, 22)
     assert (detail['debtor_profile'], detail['person'], detail['risk_value']) == (11, 22, None)
     assert 'no calculado' in detail['reason']
+
+
+def test_perfil_sin_ningun_estado_observado_no_publica_cero_de_vencido():
+    rows = [{'current_amount': '9.00', 'status': 'UNKNOWN', 'due_date': '2000-01-01'},
+            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+    profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
+    assert profile['total_debt_amount'] == '10.00' and profile['debt_count'] == 2
+    assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
+    assert profile['oldest_debt_days'] is None and profile['average_debt_age_days'] is None
+    assert profile['debt_state_not_observed_count'] == 2
+
+
+def test_perfil_con_estado_faltante_y_sin_vencidas_observadas_no_publica_cero():
+    rows = [{'current_amount': '9.00', 'status': 'ACTIVE', 'due_date': '2027-01-01'},
+            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+    profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
+    assert profile['debt_state_not_observed_count'] == 1
+
+
+def test_perfil_con_estado_faltante_y_vencidas_observadas_conserva_el_subtotal():
+    rows = [{'current_amount': '9.00', 'status': 'OVERDUE', 'due_date': '2026-09-20'},
+            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+    profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('9.00', 1)
+    assert (profile['oldest_debt_days'], profile['debt_state_not_observed_count']) == (10, 1)
+
+
+def test_perfil_sin_obligaciones_mantiene_el_cero_derivado():
+    profile = build_debtor_profile_payload(11, [], 1, None, CUT_OFF)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('0.00', 0)
+    assert profile['debt_state_not_observed_count'] == 0 and profile['available_contact_count'] is None
+    assert profile['previous_contact_count'] is None and profile['previous_response_count'] is None
 
 
 def test_perfil_sin_vencidas_no_inventa_antiguedad():
@@ -306,7 +340,9 @@ def test_conteos_omiten_lo_no_calculado_y_solo_llevan_enteros():
     report = {
         'conteos': {'objetos': None, 'filas_cabecera': 2},
         'filas': {'cabecera': {'leidas': 2, 'aceptadas': 1, 'rechazadas': 1, 'rechazadas_por_codigo': {'CUENTA_NO_CANONICA': 1}}},
-        'objetos': [{'estados_al_corte': {'VENCIDA': 2, 'PAGADA': 0}}, {'estados_al_corte': {'VENCIDA': 1, 'PAGADA': 1}}],
+        'objetos': [{'resultado': 'ACEPTADO', 'estados_al_corte': {'VENCIDA': 2, 'PAGADA': 0}},
+                    {'resultado': 'ACEPTADO', 'estados_al_corte': {'VENCIDA': 1, 'PAGADA': 1}},
+                    {'resultado': 'CUARENTENA', 'estados_al_corte': {'VENCIDA': 5, 'PAGADA': 0}}],
         'hallazgos_por_codigo': {'CUENTA_NO_CANONICA': 1}, 'motivos_bloqueo': ['LOTE_VACIO'],
         'importes': {'actualizado_aceptado': '10.50', 'actualizado_en_cuarentena_observado': None},
     }
@@ -314,6 +350,7 @@ def test_conteos_omiten_lo_no_calculado_y_solo_llevan_enteros():
     assert 'objetos' not in counts and counts['filas_cabecera'] == 2
     assert counts['rechazos_cabecera'] == {'cuenta_no_canonica': 1}
     assert counts['estados_al_corte'] == {'vencida': 3, 'pagada': 1}
+    assert counts['estados_al_corte_en_cuarentena'] == {'vencida': 5}
     assert counts['bloqueos'] == {'lote_vacio': 1}
     assert counts['importe_aceptado_centavos'] == 1050
     assert 'importe_en_cuarentena_centavos' not in counts

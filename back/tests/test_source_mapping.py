@@ -44,12 +44,12 @@ def payloads(files, mapping):
     """ALIGN-026: los builders solo reciben filas aceptadas del puente canónico, sea cual sea el formato."""
     batch = prepare_batch(files, mapping, load_contract(), mapping['fecha_corte'])
     headers = [row.values for item in batch.objects for row in item.headers]
-    details = [row.values for item in batch.objects for row in item.details]
+    details = [row for item in batch.objects for row in item.details]
     return {
         'personas': [build_person_payload(row) for row in headers],
         'objetos': [build_debtor_payload(row, batch.debtor_type_keys) for row in headers],
         'relaciones': [build_debtor_person_payload(row, 1, 2) for row in headers],
-        'obligaciones': [build_debt_payload(row, 1, cut_off=batch.cut_off, state_catalogs=batch.state_catalogs,
+        'obligaciones': [build_debt_payload(row.values, 1, cut_off=batch.cut_off, origin_state=row.origin_state,
                                             currency_code=batch.mapping['moneda']) for row in details],
     }
 

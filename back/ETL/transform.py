@@ -14,7 +14,7 @@ import pandas as pd
 
 from ETL.config import ETLError, settings
 from ETL.extract import canonical_records, extract_from_input_folder, read_source_tables
-from ETL.validate_source import load_contract, validate_batch
+from ETL.validate_source import is_canonical_id, load_contract, validate_batch
 from ETL.validate_source import parse_amount as parse_source_amount
 from ETL.validate_source import parse_date as parse_source_date
 
@@ -51,17 +51,18 @@ CONTACT_TYPE_MOBILE = "MOBILE"
 CONTACT_TYPE_EMAIL = "EMAIL"
 DEBT_STATUS_OVERDUE = "OVERDUE"
 DEBT_STATUS_ACTIVE = "ACTIVE"
+DEBT_STATUS_UNKNOWN = "UNKNOWN"
 ORIGIN_STATE_PENDING = "PENDIENTE"
 ORIGIN_STATE_UNKNOWN = "UNKNOWN"
 
 # Formato del puente canónico (ETL.extract.canonical_records): decimal con punto, sin miles, fecha D/M/A.
 CANONICAL_DATE_FORMAT = "dd/mm/aaaa"
-CANONICAL_ID = re.compile(r"0|[1-9][0-9]{0,18}")
-BIGINT_MAX = 9223372036854775807
 ADDRESS_NUMBER = re.compile(r"[0-9]{1,9}")
 CUIT_PREFIXES_INDIVIDUAL = {"20", "23", "24", "27"}
 CUIT_PREFIXES_LEGAL = {"30", "33", "34"}
 CUIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+# Únicos formatos admitidos, sobre el valor tal como llegó: un carácter ajeno descarta la clasificación.
+CUIT_FORMAT = re.compile(r"[0-9]{2}-[0-9]{8}-[0-9]|[0-9]{11}")
 # El contrato v1 no declara una columna de período fiscal; si ALIGN-046 la homologa, llega con este nombre.
 SOURCE_PERIOD_COLUMN = "Periodo_Fiscal"
 UNUSABLE_CONTACT_CODES = {"CONTACTO_PLACEHOLDER", "CONTACTO_FORMATO_INVALIDO"}
@@ -106,18 +107,14 @@ def source_contract() -> dict:
     return load_contract()
 
 
-# Limpia un valor y lo convierte a texto. Si viene vacío, devuelve None.
+# Recorta un valor y lo convierte a texto. Solo es ausencia lo vacío o un nulo real:
+# "null", "None" o "NaN" son texto del origen y un catálogo del lote puede declararlos.
 def clean_text(value: Any) -> str | None:
 
-    if value is None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
 
-    text = str(value).strip()
-
-    if text == "" or text.lower() in {"nan", "none", "null"}:
-        return None
-
-    return text
+    return str(value).strip() or None
 
 
 # Convierte una fila proveniente de pandas a dict[str, Any],
@@ -138,7 +135,7 @@ def parse_int(value: Any, default: int | None = None) -> int | None:
 
     text = clean_text(value)
 
-    if text is None or not CANONICAL_ID.fullmatch(text) or int(text) > BIGINT_MAX:
+    if text is None or not is_canonical_id(text, source_contract()):
         return default
 
     return int(text)
@@ -236,62 +233,39 @@ def normalize_name(value: Any) -> str | None:
 # REGLAS DE INFERENCIA
 # ============================================================
 
-def _document_digits(document_number: Any) -> str:
-    return re.sub(r"\D", "", clean_text(document_number) or "")
+# Dígitos de un CUIT con estructura válida, o None. Nunca borra caracteres para hacerlo encajar.
+def _cuit_digits(document_number: Any) -> str | None:
 
+    text = clean_text(document_number) or ""
 
-def _has_cuit_structure(digits: str) -> bool:
-    if len(digits) != 11 or digits[:2] not in CUIT_PREFIXES_INDIVIDUAL | CUIT_PREFIXES_LEGAL:
-        return False
+    if not CUIT_FORMAT.fullmatch(text):
+        return None
+
+    digits = text.replace("-", "")
+
+    if digits[:2] not in CUIT_PREFIXES_INDIVIDUAL | CUIT_PREFIXES_LEGAL:
+        return None
 
     remainder = sum(int(digit) * weight for digit, weight in zip(digits, CUIT_WEIGHTS, strict=False)) % 11
     check_digit = {0: 0, 1: 9}.get(remainder, 11 - remainder)
 
-    return int(digits[10]) == check_digit
+    return digits if int(digits[10]) == check_digit else None
 
 
 # La columna se llama Destinatario_CUIT, pero no todo lo que llega es un CUIT: solo se afirma si su estructura lo es.
 def infer_document_type_key(document_number: str | None) -> str:
-    return DOCUMENT_TYPE_CUIT if _has_cuit_structure(_document_digits(document_number)) else DOCUMENT_TYPE_UNKNOWN
+    return DOCUMENT_TYPE_CUIT if _cuit_digits(document_number) else DOCUMENT_TYPE_UNKNOWN
 
 
-# Para este primer MVP, inferimos el tipo de persona a partir del prefijo de su CUIT/CUIL (PE04).
+# Tipo de persona por el prefijo de un CUIT con estructura válida (PE04). Sin eso no se afirma nada.
 def infer_person_type_key(document_number: str | None) -> str:
 
-    prefix = _document_digits(document_number)[:2]
+    digits = _cuit_digits(document_number)
 
-    if prefix in CUIT_PREFIXES_INDIVIDUAL:
-        return PERSON_TYPE_INDIVIDUAL
+    if digits is None:
+        return PERSON_TYPE_UNKNOWN
 
-    if prefix in CUIT_PREFIXES_LEGAL:
-        return PERSON_TYPE_LEGAL_PERSON
-
-    return PERSON_TYPE_UNKNOWN
-
-
-# Estado semántico de la obligación según el catálogo del lote. Nunca se deduce del vencimiento.
-def resolve_origin_state(row: dict[str, Any], state_catalogs: Mapping[str, Mapping[str, str]]) -> str:
-
-    states: set[str] = set()
-
-    for column in ("NOTD_ESTA_id", "NOTD_SITU_id"):
-        code = clean_text(row.get(column))
-
-        if code is None:
-            continue
-
-        state = state_catalogs.get(column, {}).get(code)
-
-        if state is None:
-            raise SemanticRejection("ESTADO_ORIGEN_DESCONOCIDO")
-
-        if state != ORIGIN_STATE_UNKNOWN:
-            states.add(state)
-
-    if len(states) > 1:
-        raise SemanticRejection("ESTADOS_ORIGEN_CONFLICTIVOS")
-
-    return states.pop() if states else ORIGIN_STATE_UNKNOWN
+    return PERSON_TYPE_INDIVIDUAL if digits[:2] in CUIT_PREFIXES_INDIVIDUAL else PERSON_TYPE_LEGAL_PERSON
 
 
 # Clave de debt_status. "Vencida" es un derivado de una obligación pendiente respecto del corte declarado.
@@ -311,30 +285,31 @@ def debt_status_key(origin_state: str, due_date: str | None, cut_off: date) -> s
 
 
 # Convierte el Tipo_Ingreso_Id del archivo origen a una clave textual para debt.type.
-# Para el MVP usamos strings en debt.type, no FK numérica.
+# Para el MVP usamos strings en debt.type, no FK numérica. El código se compara como texto, igual que en el
+# catálogo del lote: uno sin mapeo conserva su identidad y no colapsa en una clave genérica.
 def infer_debt_type_key(tipo_ingreso_id: Any) -> str:
-    tipo_id = parse_int(tipo_ingreso_id)
+    code = clean_text(tipo_ingreso_id)
 
-    debt_type_by_origin_id = {
+    debt_type_by_origin_code = {
         # Inmuebles
-        1: "inmuebles",
+        "1": "inmuebles",
 
         # Rodados
-        100: "vehicle_tax",
-        101: "vehicle_deregistration",
-        102: "vehicle_clearance",
-        109: "vehicle_registration",
+        "100": "vehicle_tax",
+        "101": "vehicle_deregistration",
+        "102": "vehicle_clearance",
+        "109": "vehicle_registration",
 
         # Agua
-        800: "water_service",
-        801: "water_connection",
-        802: "water_connection_70m",
+        "800": "water_service",
+        "801": "water_connection",
+        "802": "water_connection_70m",
     }
 
-    if tipo_id is None:
+    if code is None:
         return "unknown"
 
-    return debt_type_by_origin_id.get(tipo_id, f"unknown_{tipo_id}")
+    return debt_type_by_origin_code.get(code, f"unknown_{code}")
 
 
 # ============================================================
@@ -416,7 +391,7 @@ def build_debt_payload(
     debtor_id: int,
     *,
     cut_off: date,
-    state_catalogs: Mapping[str, Mapping[str, str]],
+    origin_state: str,
     currency_code: str,
 ) -> dict[str, Any]:
 
@@ -426,7 +401,6 @@ def build_debt_payload(
         raise SemanticRejection("IDENTIFICADOR_INVALIDO")
 
     due_date = parse_date(row.get("NOTD_vencimiento"))
-    origin_state = resolve_origin_state(row, state_catalogs)
 
     return {
         "external_id": debt_external_id,
@@ -562,17 +536,26 @@ def _rounded_average(values: list[int]) -> int:
 
 
 # Perfil del objeto: agregados de sus obligaciones respecto del corte. debt_rows lleva claves de catálogo.
-# Antigüedad: días de atraso de las obligaciones vencidas al corte; sin vencidas no aplica (None), nunca 0.
-# El índice heredado no se calcula: dependía del promedio del lote y la severidad la calcula reglas v1 (ALIGN-008).
+# Saber si una obligación está vencida exige su estado de origen (contrato de dominio §4.1):
+# - estados faltantes y ninguna vencida observada: importe y conteo vencidos son nulos. No es un cero legítimo
+#   (regla 2) y coincide con aggregate del contrato, que sin aportes observados no publica una suma;
+# - estados faltantes y alguna vencida observada: subtotal y conteo de lo observado, con
+#   debt_state_not_observed_count al lado (regla 3);
+# - todos los estados observados, o sin obligaciones: suma y conteo son completos, y cero si no hay vencidas.
+# Antigüedad: días de atraso de las vencidas al corte. Nula sin vencidas conocidas; el conteo anterior distingue
+# "no se sabe" de "no aplica". El índice heredado no se calcula: dependía del promedio del lote (ALIGN-008).
+# Las gestiones previas no tienen fuente (PR07): nulas, para que el valor por defecto no se lea como cero gestiones.
 def build_debtor_profile_payload(
     debtor_id: int,
     debt_rows: list[dict[str, Any]],
     active_person_count: int,
-    available_contact_count: int,
+    available_contact_count: int | None,
     cut_off: date | None,
 ) -> dict[str, Any]:
 
     overdue_rows = [row for row in debt_rows if row["status"] == DEBT_STATUS_OVERDUE]
+    not_observed = sum(row["status"] == DEBT_STATUS_UNKNOWN for row in debt_rows)
+    overdue_unknown = not_observed > 0 and not overdue_rows
     days_overdue = [(cut_off - date.fromisoformat(row["due_date"])).days for row in overdue_rows] if cut_off else []
     total = sum((Decimal(str(row["current_amount"])) for row in debt_rows), Decimal(0))
     overdue = sum((Decimal(str(row["current_amount"])) for row in overdue_rows), Decimal(0))
@@ -580,13 +563,16 @@ def build_debtor_profile_payload(
     return {
         "debtor": debtor_id,
         "total_debt_amount": money_text(total),
-        "overdue_debt_amount": money_text(overdue),
+        "overdue_debt_amount": None if overdue_unknown else money_text(overdue),
         "debt_count": len(debt_rows),
-        "overdue_debt_count": len(overdue_rows),
+        "overdue_debt_count": None if overdue_unknown else len(overdue_rows),
+        "debt_state_not_observed_count": not_observed,
         "oldest_debt_days": max(days_overdue) if days_overdue else None,
         "average_debt_age_days": _rounded_average(days_overdue) if days_overdue else None,
         "active_person_count": active_person_count,
         "available_contact_count": available_contact_count,
+        "previous_contact_count": None,
+        "previous_response_count": None,
         "socioeconomic_risk_level": None,
         "profile_generated_at": datetime.now(UTC).isoformat(),
         "active": True,
@@ -610,11 +596,12 @@ def build_debtor_profile_detail_payload(debtor_profile_id: int, person_id: int) 
 
 @dataclass(frozen=True)
 class SourceRowContext:
-    """Fila canónica aceptada, con los hallazgos de sus contactos por columna."""
+    """Fila canónica aceptada, con los hallazgos de sus contactos y el estado que resolvió el validador."""
 
     values: dict[str, Any]
     line: int
     contact_findings: dict[str, str]
+    origin_state: str = ORIGIN_STATE_UNKNOWN
 
 
 @dataclass(frozen=True)
@@ -640,12 +627,14 @@ class PreparedBatch:
         return self.report["publicacion_permitida"] is True
 
     @property
-    def state_catalogs(self) -> dict[str, dict[str, str]]:
-        return {name: self.mapping["catalogos"][name] for name in ("NOTD_ESTA_id", "NOTD_SITU_id")}
-
-    @property
     def debtor_type_keys(self) -> dict[str, str]:
         return self.mapping["catalogos"]["Bien_Tipo_Id"]
+
+    # Sin ninguna columna de contacto en el archivo no se sabe cuántos hay: no son cero contactos.
+    @property
+    def contact_columns_integrated(self) -> bool:
+        present = self.report["columnas"]["cabecera"]["opcionales_presentes"] or []
+        return any(column in present for column, _ in CONTACT_COLUMNS)
 
 
 class StructuralRejection(Exception):
@@ -681,7 +670,12 @@ def _accepted_rows(tables: Mapping[str, Any], report: dict, mapping: dict, contr
         decision = decisions.get(source.line)
 
         if decision and decision["resultado"] == "ACEPTADA":
-            yield decision["objeto"], SourceRowContext(record, source.line, contact_findings.get(source.line, {}))
+            yield decision["objeto"], SourceRowContext(
+                record,
+                source.line,
+                contact_findings.get(source.line, {}),
+                decision.get("estado") or ORIGIN_STATE_UNKNOWN,
+            )
 
 
 def _group_objects(tables, report, mapping, contract) -> tuple[PreparedObject, ...]:
@@ -778,12 +772,16 @@ def batch_counts(report: dict[str, Any]) -> dict[str, Any]:
         counts[f"filas_{kind}_rechazadas"] = rows["rechazadas"]
         counts[f"rechazos_{kind}"] = _lower_keys(rows["rechazadas_por_codigo"])
 
-    states: Counter[str] = Counter()
+    # Lo que se publica y lo que queda en cuarentena, por separado: el primero concilia con las filas de debt.
+    for name, outcome in (("estados_al_corte", "ACEPTADO"), ("estados_al_corte_en_cuarentena", "CUARENTENA")):
+        states: Counter[str] = Counter()
 
-    for item in report["objetos"]:
-        states.update(item["estados_al_corte"])
+        for item in report["objetos"]:
+            if item["resultado"] == outcome:
+                states.update(item["estados_al_corte"])
 
-    counts["estados_al_corte"] = {name.lower(): count for name, count in states.items() if count}
+        counts[name] = {state.lower(): count for state, count in states.items() if count}
+
     counts["hallazgos"] = _lower_keys(report["hallazgos_por_codigo"])
     counts["bloqueos"] = _lower_keys(dict.fromkeys(report["motivos_bloqueo"], 1))
 

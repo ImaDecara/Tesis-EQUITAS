@@ -1,6 +1,8 @@
 """Lotes derivados de sintetico-v1 y comparación de lo persistido contra su oráculo.
 
 No importa nada de ETL: el oráculo (expected.json, ALIGN-023) y los TSV son las únicas fuentes.
+Para un objeto cuyos estados una prueba altera a propósito, oracle_with_file_states recalcula del archivo
+solo estados y atraso, con la regla del oráculo (convenciones.vencida); el resto sigue siendo expected.json.
 Sirve a las pruebas aisladas y a la prueba contra la base local (database/testing/etl_semantic_local.py).
 sintetico-v1 completo siempre queda BLOQUEADO; estos lotes permiten ejercitar uno VALIDADO.
 """
@@ -20,7 +22,7 @@ AS_OF = '2026-09-30'
 ESTADOS_A_CLAVE = {'VENCIDA': 'OVERDUE', 'VIGENTE': 'ACTIVE', 'PAGADA': 'PAID', 'ANULADA': 'CANCELLED',
                    'SUSPENDIDA': 'SUSPENDED', 'UNKNOWN': 'UNKNOWN'}
 BIEN_TIPO_A_CLAVE = {'1': 'INMUEBLE', '3': 'RODADO', '6': 'AGUA'}
-ESTADO_PENDIENTE = '10'
+NO_OBSERVADO = 'NO_INFORMADO_EN_ORIGEN'
 
 
 def oracle(municipio: str = 'municipio-sintetico-a') -> dict:
@@ -33,6 +35,11 @@ def accepted_objects(municipio: str = 'municipio-sintetico-a') -> list[dict]:
 
 def object_by_case(case: str, municipio: str = 'municipio-sintetico-a') -> dict:
     return next(item for item in oracle(municipio)['objetos'] if item['caso'] == case)
+
+
+def manifest_state_catalogs() -> dict[str, dict[str, str]]:
+    catalogs = json.loads((FIXTURE / 'manifest.json').read_text(encoding='utf-8'))['catalogos']
+    return {'NOTD_ESTA_id': catalogs['NOTD_ESTA_id'], 'NOTD_SITU_id': {}}
 
 
 def _filter_file(source: Path, target: Path, keys: set[str], cells: dict, drop_columns: tuple[str, ...],
@@ -56,12 +63,12 @@ def _filter_file(source: Path, target: Path, keys: set[str], cells: dict, drop_c
 
 def derive_lot(destination: Path, extra_cases: tuple[str, ...] = (), *, cabecera_cells: dict | None = None,
                detalle_cells: dict | None = None, drop_detail_columns: tuple[str, ...] = (),
-               detail_renames: dict[str, str] | None = None) -> Path:
+               drop_header_columns: tuple[str, ...] = (), detail_renames: dict[str, str] | None = None) -> Path:
     """Objetos aceptados del oráculo + los casos pedidos, con manifiesto y vigencia de la fixture."""
     selected = accepted_objects() + [object_by_case(case) for case in extra_cases]
     keys = {item['clave_agrupacion'] for item in selected}
     destination.mkdir(parents=True, exist_ok=True)
-    _filter_file(FIXTURE / 'cabecera.tsv', destination / 'cabecera.tsv', keys, cabecera_cells or {}, (), {})
+    _filter_file(FIXTURE / 'cabecera.tsv', destination / 'cabecera.tsv', keys, cabecera_cells or {}, drop_header_columns, {})
     _filter_file(FIXTURE / 'detalle.tsv', destination / 'detalle.tsv', keys, detalle_cells or {},
                  drop_detail_columns, detail_renames or {})
     for name in ('manifest.json', 'contactos-vigencia.json'):
@@ -102,21 +109,55 @@ def _details_by_key(lot: Path) -> dict[str, dict[str, dict]]:
     return result
 
 
-def _overdue_from_file(rows: dict[str, dict], cut_off: date) -> tuple[Decimal, list[int]]:
+def _file_state(row: dict, catalogs: dict[str, dict[str, str]]) -> str | None:
+    """Estado observado de una fila del archivo. Un código fuera del catálogo no llega aquí: va a cuarentena."""
+    states = [catalogs.get(column, {}).get((row.get(column) or '').strip()) for column in ('NOTD_ESTA_id', 'NOTD_SITU_id')]
+    observed = [state for state in states if state not in (None, 'UNKNOWN')]
+    return observed[0] if observed else None
+
+
+def _overdue_from_file(rows: dict[str, dict], cut_off: date,
+                       catalogs: dict[str, dict[str, str]]) -> tuple[Decimal, list[int], int]:
     overdue = [row for row in rows.values()
-               if row.get('NOTD_ESTA_id') == ESTADO_PENDIENTE and _due(row['NOTD_vencimiento']) < cut_off]
+               if _file_state(row, catalogs) == 'PENDIENTE' and _due(row['NOTD_vencimiento']) < cut_off]
     amount = sum((_amount(row['NOTD_totalActualizado']) for row in overdue), Decimal(0))
-    return amount, [(cut_off - _due(row['NOTD_vencimiento'])).days for row in overdue]
+    not_observed = sum(_file_state(row, catalogs) is None for row in rows.values())
+    return amount, [(cut_off - _due(row['NOTD_vencimiento'])).days for row in overdue], not_observed
+
+
+def oracle_with_file_states(item: dict, lot: Path, catalogs: dict[str, dict[str, str]] | None = None,
+                            cut_off: str = AS_OF) -> dict:
+    """Copia de un objeto del oráculo con estados y atraso recalculados del archivo alterado por la prueba."""
+    corte = date.fromisoformat(cut_off)
+    catalogs = catalogs or manifest_state_catalogs()
+    rows = _details_by_key(lot).get(item['clave_agrupacion'], {})
+    states = {name: 0 for name in item['estados_al_corte']}
+    for row in rows.values():
+        state = _file_state(row, catalogs)
+        if state == 'PENDIENTE':
+            state = 'VENCIDA' if _due(row['NOTD_vencimiento']) < corte else 'VIGENTE'
+        states[state or 'UNKNOWN'] += 1
+    _, ages, not_observed = _overdue_from_file(rows, corte, catalogs)
+    presence = 'OBSERVADO' if ages else NO_OBSERVADO if not_observed else 'NO_APLICA'
+    return {**item, 'estados_al_corte': states, 'dias_vencida_mas_antigua': {
+        'valor': max(ages, default=None), 'presencia': presence, 'completo': not not_observed,
+        'filas_no_observadas': {NO_OBSERVADO: not_observed} if not_observed else {},
+    }}
 
 
 def _sum(rows: list[dict], column: str) -> Decimal:
     return sum((Decimal(str(row[column])) for row in rows), Decimal(0))
 
 
+def _optional_decimal(value) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
+
+
 def persisted_mismatches(tables: dict[str, list[dict]], expected: list[dict], catalogs: dict[str, dict[str, int]],
-                         lot: Path, cut_off: str = AS_OF) -> list[str]:
+                         lot: Path, cut_off: str = AS_OF, state_catalogs: dict[str, dict[str, str]] | None = None) -> list[str]:
     """Compara filas persistidas con el oráculo. Devuelve caso, campo, esperado y obtenido; ningún dato personal."""
     corte = date.fromisoformat(cut_off)
+    state_catalogs = state_catalogs or manifest_state_catalogs()
     problems: list[str] = []
     file_details = _details_by_key(lot)
     status_names = {identifier: key for key, identifier in catalogs['debt_status'].items()}
@@ -172,21 +213,28 @@ def persisted_mismatches(tables: dict[str, list[dict]], expected: list[dict], ca
         if profile is None:
             problems.append(f'{case}|perfil|esperado=1|obtenido=0')
             continue
-        amount, ages = _overdue_from_file(file_details.get(item['clave_agrupacion'], {}), corte)
+        amount, ages, not_observed = _overdue_from_file(file_details.get(item['clave_agrupacion'], {}), corte, state_catalogs)
         average = None if not ages else int((Decimal(sum(ages)) / len(ages)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
-        for field, wanted in (
-            ('total_debt_amount', Decimal(item['importe_actualizado']['valor'])),
-            ('overdue_debt_amount', amount),
-        ):
-            check(case, field, wanted, Decimal(str(profile[field])))
+        delay = item['dias_vencida_mas_antigua']
+        # §4.1: un estado faltante impide el cero derivado; con vencidas observadas queda el subtotal y el desglose aparte.
+        no_state = not_observed > 0 and not ages
+        check(case, 'total_debt_amount', Decimal(item['importe_actualizado']['valor']), _optional_decimal(profile['total_debt_amount']))
+        check(case, 'overdue_debt_amount', None if no_state else amount, _optional_decimal(profile['overdue_debt_amount']))
         for field, wanted in (
             ('debt_count', item['obligaciones']),
-            ('overdue_debt_count', item['estados_al_corte']['VENCIDA']),
-            ('oldest_debt_days', item['dias_vencida_mas_antigua']['valor']),
+            ('overdue_debt_count', None if no_state else item['estados_al_corte']['VENCIDA']),
+            ('oldest_debt_days', delay['valor']),
             ('average_debt_age_days', average),
             ('active_person_count', len(item['personas'])),
             ('available_contact_count', item['contactos_utilizables']),
             ('socioeconomic_risk_level', None),
+            ('previous_contact_count', None),
+            ('previous_response_count', None),
+            ('debt_state_not_observed_count', sum(delay['filas_no_observadas'].values())),
         ):
             check(case, field, wanted, profile[field])
+        unobserved = profile['debt_state_not_observed_count']
+        presence = 'OBSERVADO' if profile['oldest_debt_days'] is not None else NO_OBSERVADO if unobserved else 'NO_APLICA'
+        check(case, 'presencia_del_atraso', delay['presencia'], presence)
+        check(case, 'atraso_completo', delay['completo'], unobserved == 0)
     return problems

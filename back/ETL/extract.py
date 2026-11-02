@@ -246,6 +246,9 @@ def _canonical_dataframe(table, kind, mapping, contract):
                 parsed = parse_date(value, fmt['fecha'], contract)
                 if parsed.value is not None:
                     value = parsed.value.strftime('%d/%m/%Y')
+                elif parsed.code == 'FECHA_CENTINELA':
+                    # Queda sin informar en cualquier formato de lote: no se reinterpreta aguas abajo.
+                    value = ''
             record[name] = value
         records.append(record)
     return pd.DataFrame(records, columns=list(columns), dtype=str)

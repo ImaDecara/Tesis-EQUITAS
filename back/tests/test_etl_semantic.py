@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -28,11 +29,12 @@ from oracle_lots import (
     municipio_b_mapping,
     object_by_case,
     oracle,
+    oracle_with_file_states,
     persisted_mismatches,
     synthetic_profile,
 )
 
-from ETL import config, load, run_etl, transform
+from ETL import config, load, run_etl, transform, validate_source
 from ETL.config import ETLError
 
 CATALOGS = {
@@ -402,6 +404,233 @@ def test_objeto_sin_obligaciones_no_inventa_antiguedad(database, tmp_path):
     assert profile['oldest_debt_days'] is None and profile['average_debt_age_days'] is None
 
 
+# ---------------------------------------------------------------- ciclo 1: B1, ausencia de estados
+
+
+def with_altered(item_case, lot, catalogs=None):
+    """Oráculo con el objeto alterado recalculado del archivo; el resto, tal cual en expected.json."""
+    return [oracle_with_file_states(item, lot, catalogs) if item['caso'] == item_case else item for item in accepted_objects()]
+
+
+def test_sin_ningun_estado_observado_el_vencido_queda_no_disponible(database, tmp_path):
+    target = object_by_case('base-valido')
+    lot = derive_lot(tmp_path / 'sin-estados', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_ESTA_id'): ''})
+    execute(lot)
+    debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    profile = profile_of(database, debtor)
+    assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
+    assert profile['oldest_debt_days'] is None and profile['average_debt_age_days'] is None
+    assert profile['debt_state_not_observed_count'] == target['obligaciones']
+    assert profile['total_debt_amount'] == target['importe_actualizado']['valor']
+    assert persisted_mismatches(database.tables, with_altered('base-valido', lot), CATALOGS, lot) == []
+
+
+def test_codigo_catalogado_como_unknown_equivale_a_sin_estado(database, tmp_path):
+    target = object_by_case('base-valido')
+    catalogos = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['catalogos']
+    catalogos['NOTD_ESTA_id']['99'] = 'UNKNOWN'
+    lot = derive_lot(tmp_path / 'unknown', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_ESTA_id'): '99'})
+    execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
+    debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    assert profile_of(database, debtor)['overdue_debt_amount'] is None
+
+
+def test_lote_sin_columnas_de_estado_no_publica_ningun_cero_de_vencido(database, tmp_path):
+    lot = derive_lot(tmp_path / 'sin-columnas', drop_detail_columns=('NOTD_ESTA_id', 'NOTD_SITU_id'))
+    execute(lot)
+    for profile in database.tables['debtor_profile']:
+        if profile['debt_count'] == 0:
+            assert profile['overdue_debt_amount'] == '0.00' and profile['overdue_debt_count'] == 0
+        else:
+            assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
+            assert profile['debt_state_not_observed_count'] == profile['debt_count']
+
+
+def test_mixto_conserva_el_subtotal_y_declara_lo_no_observado(database, tmp_path):
+    expected = object_by_case('estados-origen-vencimiento-viejo')
+    execute(derive_lot(tmp_path / 'mixto'))
+    debtor, _ = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
+    profile = profile_of(database, debtor)
+    assert expected['dias_vencida_mas_antigua']['completo'] is False
+    assert profile['oldest_debt_days'] == expected['dias_vencida_mas_antigua']['valor']
+    assert profile['overdue_debt_count'] == 1
+    assert profile['debt_state_not_observed_count'] == sum(expected['dias_vencida_mas_antigua']['filas_no_observadas'].values())
+
+
+def test_estado_faltante_sin_vencidas_observadas_no_es_un_cero_legitimo(database, tmp_path):
+    target = object_by_case('misma-cuenta-otro-tipo')
+    key = target['clave_agrupacion']
+    lot = derive_lot(tmp_path / 'mixto-cero', detalle_cells={(key, '700004', 'NOTD_ESTA_id'): '',
+                                                             (key, '700005', 'NOTD_vencimiento'): '30/09/2026'})
+    execute(lot)
+    debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    profile = profile_of(database, debtor)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
+    assert profile['debt_state_not_observed_count'] == 1
+    assert persisted_mismatches(database.tables, with_altered('misma-cuenta-otro-tipo', lot), CATALOGS, lot) == []
+
+
+def test_sin_obligaciones_el_cero_sigue_siendo_derivado_y_el_atraso_no_aplica(database, tmp_path):
+    expected = object_by_case('cabecera-sin-detalle')
+    execute(derive_lot(tmp_path / 'vacio'))
+    debtor, _ = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
+    profile = profile_of(database, debtor)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('0.00', 0)
+    assert profile['debt_state_not_observed_count'] == 0 and profile['oldest_debt_days'] is None
+    assert expected['dias_vencida_mas_antigua']['presencia'] == 'NO_APLICA'
+
+
+def test_gestiones_no_integradas_no_quedan_en_cero(database, tmp_path):
+    execute(derive_lot(tmp_path / 'gestiones'))
+    assert {row['previous_contact_count'] for row in database.tables['debtor_profile']} == {None}
+    assert {row['previous_response_count'] for row in database.tables['debtor_profile']} == {None}
+
+
+def test_sin_columnas_de_contacto_el_conteo_no_es_cero(database, tmp_path):
+    lot = derive_lot(tmp_path / 'sin-contactos',
+                     drop_header_columns=('Destinatario_Email', 'Destinatario_Telefono', 'Destinatario_Celular'))
+    execute(lot)
+    assert {row['available_contact_count'] for row in database.tables['debtor_profile']} == {None}
+    assert database.tables['debtor_contact'] == []
+
+
+def test_contacto_vacio_con_columna_presente_es_cero_como_dice_el_oraculo(database, tmp_path):
+    expected = object_by_case('sin-contacto')
+    assert expected['contactos_utilizables'] == 0
+    execute(derive_lot(tmp_path / 'contacto-vacio'))
+    debtor, _ = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
+    assert profile_of(database, debtor)['available_contact_count'] == 0
+
+
+def test_estados_persistidos_coinciden_con_los_conteos_del_lote(database, tmp_path):
+    lot = derive_lot(tmp_path / 'paridad', ('cuenta-ceros-izquierda',))
+    execute(lot)
+    assert_states_match_batch(database)
+    counts = database.batches[-1]['p_counts']
+    assert counts['estados_al_corte_en_cuarentena'] == {'vencida': 1}
+
+
+def assert_states_match_batch(database):
+    names = {identifier: key for key, identifier in CATALOGS['debt_status'].items()}
+    labels = {'OVERDUE': 'vencida', 'ACTIVE': 'vigente', 'PAID': 'pagada', 'CANCELLED': 'anulada',
+              'SUSPENDED': 'suspendida', 'UNKNOWN': 'unknown'}
+    persisted = Counter(labels[names[row['status']]] for row in database.tables['debt'])
+    assert dict(persisted) == database.batches[-1]['p_counts']['estados_al_corte']
+
+
+# ---------------------------------------------------------------- ciclo 1: B2, un solo parser por campo
+
+
+@pytest.mark.parametrize('code', ['null', 'NULL', 'None', 'none', 'NaN', 'nan'])
+@pytest.mark.parametrize('column', ['NOTD_ESTA_id', 'NOTD_SITU_id'])
+def test_estado_catalogado_con_palabra_de_nulo_se_conserva(database, tmp_path, code, column):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+    catalogos = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['catalogos']
+    catalogos[column][code] = 'SUSPENDIDA'
+    cells = {(key, None, column): code}
+    if column == 'NOTD_SITU_id':
+        cells[(key, None, 'NOTD_ESTA_id')] = ''
+    lot = derive_lot(tmp_path / 'palabra', detalle_cells=cells)
+    execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
+    _, debts = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    assert {row['status'] for row in debts} == {CATALOGS['debt_status']['SUSPENDED']}
+    assert_states_match_batch(database)
+    state_catalogs = {name: catalogos[name] for name in ('NOTD_ESTA_id', 'NOTD_SITU_id')}
+    expected = with_altered('base-valido', lot, state_catalogs)
+    assert persisted_mismatches(database.tables, expected, CATALOGS, lot, state_catalogs=state_catalogs) == []
+
+
+@pytest.mark.parametrize('code', ['null', 'None', 'NaN'])
+def test_tipo_de_objeto_catalogado_con_palabra_de_nulo_se_publica(database, tmp_path, code):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+    catalogos = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['catalogos']
+    catalogos['Bien_Tipo_Id'][code] = 'INMUEBLE'
+    lot = derive_lot(tmp_path / 'tipo', cabecera_cells={(key, None, 'Bien_Tipo_Id'): code},
+                     detalle_cells={(key, None, 'Bien_Tipo_Id'): code})
+    execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
+    types = {row['type'] for row in database.tables['debtor'] if row['external_id'] == int(target['cuenta'])}
+    assert CATALOGS['debtor_type']['INMUEBLE'] in types
+
+
+@pytest.mark.parametrize('code', ['null', 'ABC', '0801'])
+def test_tributo_catalogado_no_colapsa_en_una_clave_generica(database, tmp_path, code):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+    catalogos = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['catalogos']
+    catalogos['Tipo_Ingreso_Id'][code] = 'tributo sintetico'
+    lot = derive_lot(tmp_path / 'tributo', detalle_cells={(key, None, 'Tipo_Ingreso_Id'): code})
+    execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
+    _, debts = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    assert {row['type'] for row in debts} == {f'unknown_{code}'}
+
+
+@pytest.mark.parametrize(('column', 'table', 'field'), [
+    ('Destinatario', 'person', 'full_name'), ('Identificador', 'debtor', 'identifier'),
+    ('Bien_Descripcion', 'debtor', 'description'), ('Destinatario_Tipo', 'debtor_person', 'role'),
+])
+@pytest.mark.parametrize('word', ['null', 'None', 'NaN'])
+def test_texto_de_origen_con_palabra_de_nulo_no_se_vuelve_ausencia(database, tmp_path, column, table, field, word):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'texto', cabecera_cells={(target['clave_agrupacion'], None, column): word}))
+    assert word in {row[field] for row in database.tables[table]}
+
+
+@pytest.mark.parametrize('sentinel', ['2999-01-01', '9999-12-31', '1900-01-01', '0000-00-00'])
+def test_fecha_centinela_en_lote_iso_no_es_fecha_real_ni_rompe_la_carga(database, tmp_path, sentinel):
+    keys = {item['clave_agrupacion'] for item in accepted_objects()}
+    lot = derive_lot(tmp_path / 'iso', cabecera_cells={(key, None, 'Fecha_Actualizacion'): sentinel for key in keys})
+    for name in ('detalle',):
+        text = (lot / f'{name}.tsv').read_text(encoding='utf-8')
+        (lot / f'{name}.tsv').write_text(re.sub(r'\b(\d{2})/(\d{2})/(\d{4})\b', r'\3-\2-\1', text), encoding='utf-8')
+    formato = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['formato']
+    profile = synthetic_profile(tmp_path, formato={**formato, 'fecha': 'aaaa-mm-dd'})
+    execute(lot, mapping=profile)
+    assert database.batches[0]['p_status'] == 'VALIDADO'
+    assert database.batches[0]['p_source_updated_at'] is None
+
+
+def test_validador_y_transformacion_comparten_la_regla_de_identificador():
+    contract = validate_source.load_contract()
+    for value in ('0', '1', '000123', '123', 'R-0456', '', '9223372036854775807', '9223372036854775808', '１２３', '+1'):
+        assert (transform.parse_int(value) is not None) == validate_source.is_canonical_id(value, contract), value
+
+
+# ---------------------------------------------------------------- ciclo 1: B3, documento tal como llegó
+
+
+@pytest.mark.parametrize('document', ['ABC20-00000000-1XYZ', 'A20000000001', '20000000001X', '20-0000X0000-1', '20.00000000.1',
+                                      '20 00000000 1', '2-000000000-1', '200-0000000-1', '２０-００００００００-１', '20-00000000-1-'])
+def test_documento_con_caracteres_ajenos_no_se_afirma_cuit(database, tmp_path, document):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'doc', cabecera_cells={(target['clave_agrupacion'], None, 'Destinatario_CUIT'): document}))
+    person = next(row for row in database.tables['person'] if row['external_id'] == target['personas'][0])
+    assert person['document_type'] == CATALOGS['document_type']['UNKNOWN']
+    assert person['type'] == CATALOGS['person_type']['UNKNOWN']
+    assert person['document_number'] == document
+
+
+@pytest.mark.parametrize(('document', 'person_type'), [('20-00000000-1', 'INDIVIDUAL'), ('20000000001', 'INDIVIDUAL'),
+                                                       ('30-00000000-7', 'LEGAL_PERSON'), (' 30-00000000-7 ', 'LEGAL_PERSON')])
+def test_documento_con_estructura_valida_se_clasifica(database, tmp_path, document, person_type):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'doc', cabecera_cells={(target['clave_agrupacion'], None, 'Destinatario_CUIT'): document}))
+    person = next(row for row in database.tables['person'] if row['external_id'] == target['personas'][0])
+    assert person['document_type'] == CATALOGS['document_type']['CUIT']
+    assert person['type'] == CATALOGS['person_type'][person_type]
+    assert person['document_number'] == document.strip()
+
+
+@pytest.mark.parametrize('document', ['20-00000000-9', '30-00000000-2', '99-00000001-1'])
+def test_digito_verificador_o_prefijo_invalido_no_clasifica_documento_ni_persona(database, tmp_path, document):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'doc', cabecera_cells={(target['clave_agrupacion'], None, 'Destinatario_CUIT'): document}))
+    person = next(row for row in database.tables['person'] if row['external_id'] == target['personas'][0])
+    assert person['document_type'] == CATALOGS['document_type']['UNKNOWN']
+    assert person['type'] == CATALOGS['person_type']['UNKNOWN']
+
+
 # ---------------------------------------------------------------- catálogos y mapeos
 
 
@@ -505,7 +734,7 @@ def test_importe_con_mas_digitos_que_un_float_llega_exacto_al_payload():
     payload = transform.build_debt_payload(
         {'DEUD_id': '1', 'NOTD_capital': '9999999999999999.99', 'NOTD_totalActualizado': '1234567890123456.78',
          'NOTD_vencimiento': '01/01/2020', 'Tipo_Ingreso_Id': '1', 'NOTD_ESTA_id': '10'},
-        debtor_id=9, cut_off=date(2026, 9, 30), state_catalogs={'NOTD_ESTA_id': {'10': 'PENDIENTE'}}, currency_code='ARS',
+        debtor_id=9, cut_off=date(2026, 9, 30), origin_state='PENDIENTE', currency_code='ARS',
     )
     assert payload['original_amount'] == '9999999999999999.99'
     assert payload['current_amount'] == '1234567890123456.78'

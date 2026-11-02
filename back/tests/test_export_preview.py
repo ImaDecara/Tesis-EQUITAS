@@ -38,7 +38,8 @@ def test_preview_builders_deduplicate_and_calculate_profiles(
     # Sin perfil de lote no hay corte ni estado: la vista no afirma vencidas ni copia fechas o identificadores.
     assert debt_df['period'].isna().all() and debt_df['issue_date'].isna().all() and debt_df['last_collection_date'].isna().all()
     assert set(debt_df['status']) == {'UNKNOWN'}
-    assert profile_df['overdue_debt_count'].tolist() == [0, 0]
+    assert profile_df['overdue_debt_count'].isna().all() and profile_df['overdue_debt_amount'].isna().all()
+    assert profile_df['debt_state_not_observed_count'].tolist() == [1, 1]
     assert profile_df['socioeconomic_risk_level'].isna().all()
     assert sorted(profile_df['total_debt_amount']) == ['1200.75', '600.00']
 

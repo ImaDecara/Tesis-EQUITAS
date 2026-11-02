@@ -213,6 +213,12 @@ def load_mapping(folder, path=None) -> dict:
     return mapping
 
 
+def is_canonical_id(value: str, contract: dict) -> bool:
+    """Decimal canónico de un bigint no negativo. Es la única regla: el publicador usa esta misma función."""
+    return (re.fullmatch(r'(?:0|[1-9][0-9]{0,18})', value) is not None
+            and int(value) <= int(contract['claves']['bigint_max']))
+
+
 def parse_amount(value: str, decimal: str, thousands: str) -> Cell:
     """Un solo formato por lote; no adivina separadores, moneda ni exponentes."""
     if not value:
@@ -430,7 +436,7 @@ class _Validator:
             raw = row.values.get(name, '')
             kind = spec['tipo']
             if kind in ('id', 'cuenta'):
-                if not re.fullmatch(r'(?:0|[1-9][0-9]{0,18})', raw) or int(raw) > int(self.contract['claves']['bigint_max']):
+                if not is_canonical_id(raw, self.contract):
                     code = 'CUENTA_NO_CANONICA' if kind == 'cuenta' else 'IDENTIFICADOR_INVALIDO'
                     # Cuenta en detalle se compara con la cabecera; el defecto se informa allí una sola vez.
                     if row.kind == 'cabecera' or name == 'DEUD_id':
@@ -697,8 +703,12 @@ class _Validator:
                     accepted_code = warnings.get((kind, row.line)) or (
                         'OBJETO_CON_ALERTAS' if row.obj and row.obj.flags else 'SIN_OBSERVACIONES')
                     accepted[accepted_code] += 1
-                decisions.append({'archivo': kind, 'linea': row.line, 'objeto': row.obj.reference if row.obj else None,
-                                      'resultado': 'RECHAZADA' if code else 'ACEPTADA', 'codigo': code or accepted_code})
+                decision = {'archivo': kind, 'linea': row.line, 'objeto': row.obj.reference if row.obj else None,
+                            'resultado': 'RECHAZADA' if code else 'ACEPTADA', 'codigo': code or accepted_code}
+                # El publicador consume este estado: un segundo parser podría divergir del catálogo del lote.
+                if 'estado' in row.cells:
+                    decision['estado'] = row.cells['estado'].value
+                decisions.append(decision)
             counts[kind] = {'leidas': sum(accepted.values()) + sum(primary.values()), 'aceptadas': sum(accepted.values()),
                                 'aceptadas_por_codigo': dict(sorted(accepted.items())),
                                 'rechazadas': sum(primary.values()), 'rechazadas_por_codigo': dict(sorted(primary.items())),

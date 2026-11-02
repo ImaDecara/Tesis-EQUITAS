@@ -47,7 +47,10 @@ union all select 'external_id_tipos', (select string_agg(table_name || '=' || da
   from information_schema.columns where table_schema = 'public' and column_name = 'external_id')
 union all select 'columnas_nulables_etl', (select string_agg(table_name || '.' || column_name || '=' || is_nullable, ',' order by table_name, column_name)
   from information_schema.columns where table_schema = 'public' and (table_name, column_name) in
-    (('debtor', 'status'), ('debtor_profile', 'socioeconomic_risk_level'), ('debtor_profile', 'oldest_debt_days'), ('debtor_profile', 'average_debt_age_days'), ('debtor_profile_detail', 'risk_value')))
+    (('debtor', 'status'), ('debtor_profile', 'socioeconomic_risk_level'), ('debtor_profile', 'oldest_debt_days'), ('debtor_profile', 'average_debt_age_days'),
+     ('debtor_profile', 'overdue_debt_amount'), ('debtor_profile', 'overdue_debt_count'), ('debtor_profile', 'debt_state_not_observed_count'),
+     ('debtor_profile', 'available_contact_count'), ('debtor_profile', 'previous_contact_count'), ('debtor_profile', 'previous_response_count'),
+     ('debtor_profile_detail', 'risk_value')))
 union all select 'filas_por_tabla', coalesce(string_agg(nombre || '=' || filas, ',' order by nombre), '') from tabla
 union all select 'filas_total', coalesce(sum(filas), 0)::text from tabla
 union all select 'debt_updated_distinto_current', (select count(*)::text from public.debt where updated_amount is distinct from current_amount)

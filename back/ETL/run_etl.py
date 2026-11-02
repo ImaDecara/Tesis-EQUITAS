@@ -333,7 +333,7 @@ def _load_object(
             row.values,
             debtor_id,
             cut_off=batch.cut_off,
-            state_catalogs=batch.state_catalogs,
+            origin_state=row.origin_state,
             currency_code=batch.mapping["moneda"],
         )
         for row in item.details
@@ -374,7 +374,7 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
                 debtor_id=debtor_id,
                 debt_rows=debts,
                 active_person_count=len(person_ids),
-                available_contact_count=usable_contacts,
+                available_contact_count=usable_contacts if batch.contact_columns_integrated else None,
                 cut_off=batch.cut_off,
             )
         )
