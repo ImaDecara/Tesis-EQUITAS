@@ -56,6 +56,10 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
    no se revierte. La publicación atómica, la recuperación y la clave de idempotencia por lote son de ALIGN-032;
    hoy cada ejecución agrega su propia cadena de eventos.
 
+En el perfil, una ausencia queda nula y no en cero: sin vencidas observadas y con estados faltantes no hay importe
+vencido, y `debt_state_not_observed_count` declara cuántas obligaciones no tienen estado. Ver el
+[contrato de dominio §14](../../docs/tesis/contrato-dominio-v1.md). `etl_semantic_local.py` lo verifica contra la base.
+
 Los objetos en cuarentena no se escriben: conservan el estado previo que tuvieran. La marca de actualización
 pendiente, sin columna donde guardarla, queda para ALIGN-032/054; su cantidad está en `import_batch.counts`.
 

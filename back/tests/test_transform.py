@@ -53,7 +53,7 @@ def build_debt(origin_state='PENDIENTE', **overrides):
 
 
 @pytest.mark.parametrize(('value', 'expected'), [
-    (None, None), ('', None), ('   ', None), (float('nan'), None), ('  x ', 'x'), (0, '0'),
+    (None, None), ('', None), ('   ', None), (float('nan'), None), (pd.NA, None), ('  x ', 'x'), (0, '0'),
     ('null', 'null'), ('None', 'None'), ('NaN', 'NaN'), ('NULL', 'NULL'),
 ])
 def test_solo_es_ausencia_lo_vacio_o_un_nulo_real(value, expected):

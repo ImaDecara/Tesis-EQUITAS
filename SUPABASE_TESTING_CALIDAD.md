@@ -271,11 +271,11 @@ notify pgrst, 'reload schema';
 
 ## Semántica de la carga ETL (ALIGN-026, solo base local)
 
-`supabase/migrations/20261102100000_etl_semantic_nullables.sql` se aplica **solo en la base local**. Quita `not null` de `debtor_profile.socioeconomic_risk_level`, `debtor_profile.oldest_debt_days`, `debtor_profile.average_debt_age_days`, `debtor_profile_detail.risk_value` y `debtor.status`, para que una ausencia no se guarde como cero o como activo. Conserva los valores por defecto, porque e06 no escribe algunas de esas columnas. No toca políticas, RLS ni grants, y agrega `columnas_nulables_etl` al verificador.
+`supabase/migrations/20261102100000_etl_semantic_nullables.sql` se aplica **solo en la base local**. Quita `not null` de `debtor_profile.socioeconomic_risk_level`, `oldest_debt_days`, `average_debt_age_days`, `overdue_debt_amount`, `overdue_debt_count`, `available_contact_count`, `previous_contact_count` y `previous_response_count`, de `debtor_profile_detail.risk_value` y de `debtor.status`, para que una ausencia no se guarde como cero o como activo. Agrega `debtor_profile.debt_state_not_observed_count`, nula si el perfil no la calculó. Conserva los valores por defecto, porque e06 no escribe algunas de esas columnas. No toca políticas, RLS ni grants, y agrega `columnas_nulables_etl` al verificador.
 
 `etl-import-actor.sql` crea, después de los catálogos, un usuario `importador_sistema` del tenant 1, sin `auth_user`, que es el actor de los eventos de `import_batch`. Sus eventos se registran con el JWT de `equitas_import_server`. La clave de servicio general no tiene permiso y la carga se detiene con `IMPORT_BATCH_REJECTED` antes de escribir cartera.
 
-`database/testing/etl_semantic_local.py` corre la CLI real y compara lo persistido contra `back/tests/fixtures/sintetico-v1/expected.json`. Requiere `db reset`, los catálogos y el actor; publica solo casos, códigos y conteos, y deja filas: al terminar corresponde `db reset`.
+`database/testing/etl_semantic_local.py` corre la CLI real y compara lo persistido contra `back/tests/fixtures/sintetico-v1/expected.json`. También pasa las filas leídas de la base por el mapeador real del frontend (`etl-persisted-mapper.test.ts`, con su propia configuración de vitest, fuera de la suite aislada). Requiere `db reset`, los catálogos, el actor y `front/node_modules`; publica solo casos, códigos y conteos, y deja filas: al terminar corresponde `db reset`.
 
 ```sh
 back/.venv/bin/python database/testing/etl_semantic_local.py sintetico    # bloqueado, validado, recarga, cuarentenas
@@ -288,11 +288,18 @@ Reversión exacta: `npx --yes supabase@2.108.0 db reset --version 20261030100000
 ```sql
 begin;
 update public.debtor_profile set socioeconomic_risk_level = coalesce(socioeconomic_risk_level, 0),
-  oldest_debt_days = coalesce(oldest_debt_days, 0), average_debt_age_days = coalesce(average_debt_age_days, 0);
+  oldest_debt_days = coalesce(oldest_debt_days, 0), average_debt_age_days = coalesce(average_debt_age_days, 0),
+  overdue_debt_amount = coalesce(overdue_debt_amount, 0), overdue_debt_count = coalesce(overdue_debt_count, 0),
+  available_contact_count = coalesce(available_contact_count, 0), previous_contact_count = coalesce(previous_contact_count, 0),
+  previous_response_count = coalesce(previous_response_count, 0);
 update public.debtor_profile_detail set risk_value = coalesce(risk_value, 0);
 update public.debtor set status = coalesce(status, true);
-alter table public.debtor_profile alter column socioeconomic_risk_level set not null,
-  alter column oldest_debt_days set not null, alter column average_debt_age_days set not null;
+alter table public.debtor_profile drop column debt_state_not_observed_count,
+  alter column socioeconomic_risk_level set not null,
+  alter column oldest_debt_days set not null, alter column average_debt_age_days set not null,
+  alter column overdue_debt_amount set not null, alter column overdue_debt_count set not null,
+  alter column available_contact_count set not null, alter column previous_contact_count set not null,
+  alter column previous_response_count set not null;
 alter table public.debtor_profile_detail alter column risk_value set not null;
 alter table public.debtor alter column status set not null;
 delete from supabase_migrations.schema_migrations where version = '20261102100000';

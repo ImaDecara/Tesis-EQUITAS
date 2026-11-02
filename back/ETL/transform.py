@@ -111,7 +111,7 @@ def source_contract() -> dict:
 # "null", "None" o "NaN" son texto del origen y un catálogo del lote puede declararlos.
 def clean_text(value: Any) -> str | None:
 
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    if value is None or pd.isna(value):
         return None
 
     return str(value).strip() or None

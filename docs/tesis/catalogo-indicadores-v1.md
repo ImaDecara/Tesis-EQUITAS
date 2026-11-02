@@ -970,5 +970,7 @@ Solo para lo cargado por `python -m ETL.run_etl --execute` en la base local (ver
 Donde este catálogo dice que el ETL infirió el estado de una obligación al cargar, en esta carga
 es el estado de origen con su catálogo, y "vencida" significa pendiente con vencimiento anterior al
 corte declarado. El índice heredado (PR08) y el índice individual (PR09) quedan nulos: no se
-calculan. Los datos del original conservan la semántica descrita arriba.
+calculan. Sin vencidas observadas y con estados faltantes, la mora del perfil también queda nula y
+se muestra como no disponible; con vencidas observadas, es un subtotal con su desglose de faltantes.
+Los datos del original conservan la semántica descrita arriba.
 

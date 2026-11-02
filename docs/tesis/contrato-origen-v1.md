@@ -495,6 +495,13 @@ queda `FALLIDO` en `import_batch`. Si es verdadero, solo se publican las filas c
 `ACEPTADA`, agrupadas por la referencia de objeto del reporte: el detalle se enlaza por
 `ClaveAgrupacion`, sin depender de sus columnas opcionales `Bien_Tipo_Id` y `Cuenta`.
 
+**Una sola interpretación de cada campo.** El publicador no vuelve a resolver lo que el motor ya
+decidió: `decisiones_filas[].estado` trae el estado semántico de cada obligación evaluada (null si no
+hay ninguno observado) y `is_canonical_id` es la misma regla de identificador en ambos lados. Solo es
+ausencia lo vacío o un nulo real: `null`, `None` o `NaN` son texto del origen, y un catálogo del lote
+puede declararlos como códigos. El puente canónico entrega una fecha centinela como no informada en
+cualquier formato de lote.
+
 Mapas declarados, ninguno con IDs de base en el código:
 
 | De | A | Dónde se declara |
@@ -525,12 +532,23 @@ columna de período fiscal, por lo que `debt.period` queda nulo hasta que ALIGN-
 `DEUD_id` no es un período y `Periodos_Deuda` es un conteo.
 
 **Contactos:** un marcador o un formato ilegible no se carga. Una baja explícita se carga con
-`active=false` y no cuenta como disponible.
+`active=false` y no cuenta como disponible. Si el archivo no trae ninguna de las tres columnas de
+contacto, el conteo del perfil queda nulo: no son cero contactos.
+
+**Perfil sin insumos:** sin vencidas observadas y con estados faltantes, importe y conteo vencidos
+quedan nulos; con vencidas observadas se publica el subtotal, y `debt_state_not_observed_count` declara
+las obligaciones sin estado. Detalle por columna en el
+[contrato de dominio §14](contrato-dominio-v1.md#14-semántica-de-la-carga-v1-align-026).
+
+**Documento:** `CUIT` y el tipo de persona se deciden sobre el valor tal como llegó, sin borrar
+caracteres: `NN-NNNNNNNN-N` u 11 dígitos, con prefijo conocido y dígito verificador correcto. Todo lo
+demás es `UNKNOWN`, y el texto se conserva.
 
 **Registro:** `import_batch` recibe `source=ETL_CLI`, el SHA-256 de cabecera, detalle, mapeo y
 contrato (nunca rutas o nombres), corte, actualización de origen, versión de reglas y conteos. Los conteos son
-enteros: filas leídas, aceptadas y rechazadas por archivo y por código, objetos, estados al corte,
-hallazgos por código, bloqueos e importes en centavos. Un conteo no calculado se omite; no es 0.
+enteros: filas leídas, aceptadas y rechazadas por archivo y por código, objetos, estados al corte de
+los objetos publicables y, aparte, de los que quedan en cuarentena, hallazgos por código, bloqueos e
+importes en centavos. Un conteo no calculado se omite; no es 0.
 
 Queda fuera de este ticket y de esta versión: bajas y delta (ALIGN-031), paginación de la lectura de
 deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote (ALIGN-032),

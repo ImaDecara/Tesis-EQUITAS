@@ -318,7 +318,8 @@ def check_absent_states(local, checks, work, catalogs):
     checks.expect('sin columnas de estado: ceros de vencido con obligaciones', 0,
                   sum(row['debt_count'] > 0 and row['overdue_debt_amount'] is not None for row in profiles))
     empty = profile_of(local, debtor_of(local, catalogs, 'cabecera-sin-detalle'))
-    checks.expect('sin obligaciones: cero derivado', (0, 0, 0), (empty['overdue_debt_amount'], empty['overdue_debt_count'], empty['debt_state_not_observed_count']))
+    checks.expect('sin obligaciones: importe vencido es cero derivado', 0.0, float(empty['overdue_debt_amount']))
+    checks.expect('sin obligaciones: conteo y sin faltantes', (0, 0), (empty['overdue_debt_count'], empty['debt_state_not_observed_count']))
 
 
 def check_catalogued_words(local, checks, work, catalogs):
