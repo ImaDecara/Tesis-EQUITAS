@@ -181,7 +181,7 @@ function parseExpected(raw: unknown): ExpectedSuggestion | null {
 }
 
 function parseChecklist(raw: unknown): CaseReviewChecklist | null {
-  if (raw === undefined) return {}
+  if (raw === undefined || raw === null) return {}
   const value = plainRecord(raw, ['situacion_hogar', ...CHECKBOXES])
   if (!value) return null
   if ('situacion_hogar' in value && !oneOf(value.situacion_hogar, HOUSEHOLD_STATES)) return null

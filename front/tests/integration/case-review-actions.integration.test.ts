@@ -64,8 +64,7 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error'] } 
       ? { data: { review_id: id, created: isNew, pending_supervisor: Number(args.p_decided_intensity ?? 0) >= 3 }, error: null }
       : { data: { approval_id: id, created: isNew }, error: null }
     if (existing) {
-      const { id: _id, ...stored } = existing
-      return JSON.stringify(stored) === JSON.stringify(row)
+      return JSON.stringify({ ...existing, id: undefined }) === JSON.stringify({ ...row, id: undefined })
         ? reply(existing.id, false)
         : { data: null, error: { message: 'IDEMPOTENCY_KEY_CONFLICT', code: 'P0001' } }
     }
@@ -633,6 +632,12 @@ describe('ALIGN-020: instantanea para la pantalla', () => {
   it('sin sesion responde con el codigo, no lanza', async () => {
     session({ signedIn: false })
     await expect(getCaseReviewSnapshot(String(DEBTOR))).resolves.toMatchObject({ ok: false, code: 'AUTH_REQUIRED' })
+  })
+
+  it('una excepcion inesperada se informa como no disponible, sin detalle', async () => {
+    session()
+    serverClient.mockRejectedValue(new Error('detalle interno'))
+    await expect(getCaseReviewSnapshot(String(DEBTOR))).resolves.toEqual({ ok: false, code: 'SUGGESTION_UNAVAILABLE', message: CASE_REVIEW_MESSAGES.SUGGESTION_UNAVAILABLE })
   })
 
   it('un id invalido no consulta', async () => {

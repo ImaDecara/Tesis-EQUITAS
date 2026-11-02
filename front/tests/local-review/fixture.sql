@@ -13,7 +13,9 @@ end $$;
 insert into public.role(id, name, description) values (920010, 'tp_operator', 'Compatibilidad E06: solo lectura');
 update public.tenant_user set role = 920010 where id = 920004;
 -- Dos membresias: operador en el municipio B, consulta en el A. Sin seleccion no entra, y la cookie no suma permisos.
-insert into public.tenant_user(id, tenant, "user", role, status) values (920010, 920001, 920007, 920001, true);
+insert into public.tenant_user(id, tenant, "user", role, status) values
+  (920010, 920001, 920007, 920001, true),
+  (920011, 920002, 920009, 920005, true);
 
 insert into public.debt_status(id, key, value) values (920001, 'OVERDUE', 'Vencida');
 insert into public.contact_type(id, key, value) values (920001, 'EMAIL', 'Email sintetico');

@@ -91,8 +91,8 @@ describe('ALIGN-020: entrada de recordCaseDecision', () => {
     const proposal = { ...accept, decision: 'MODIFICA', decidedIntervention: 'INTIMACION_ADMINISTRATIVA', decidedIntensity, reasonCode: 'MOTIVO' }
     expect(failureOf(parseRecordCaseDecisionInput(proposal))).toBe('CHECKLIST_REQUIRED')
     expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, checklist: { ...readyChecklist, canal_valido: false } }))).toBe('CHECKLIST_REQUIRED')
-    const { situacion_hogar: _omitted, ...withoutHousehold } = readyChecklist
-    expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, checklist: withoutHousehold }))).toBe('CHECKLIST_REQUIRED')
+    expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, checklist: { ...readyChecklist, situacion_hogar: undefined } }))).toBe('CHECKLIST_INVALID')
+    expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, checklist: { estado_juridico_verificado: true, canal_valido: true, alternativa_asistida_ofrecida: true } }))).toBe('CHECKLIST_REQUIRED')
     expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, checklist: readyChecklist }))).toBe('OK')
     expect(failureOf(parseRecordCaseDecisionInput({ ...proposal, decision: 'DERIVA', checklist: readyChecklist, reasonCode: null }))).toBe('REASON_REQUIRED')
   })
@@ -105,6 +105,10 @@ describe('ALIGN-020: entrada de recordCaseDecision', () => {
     ['lista', []],
   ])('la lista de control no admite %s', (_name, checklist) => {
     expect(failureOf(parseRecordCaseDecisionInput({ ...accept, checklist }))).toBe('CHECKLIST_INVALID')
+  })
+
+  it('una lista de control nula equivale a sin completar', () => {
+    expect(parseRecordCaseDecisionInput({ ...accept, checklist: null })).toMatchObject({ ok: true, value: { checklist: {} } })
   })
 
   describe('reason_text: se valida lo que se guarda, sin normalizar', () => {

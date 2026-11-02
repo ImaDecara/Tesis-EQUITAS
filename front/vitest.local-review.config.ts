@@ -12,7 +12,8 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: 'node',
-    include: ['tests/local-review/**/*.local.ts'],
+    // `http` necesita un `next start` con la sonda: ver el README.
+    include: [process.env.EQUITAS_REVIEW_SUITE === 'http' ? 'tests/local-review/**/*.http.ts' : 'tests/local-review/**/*.local.ts'],
     fileParallelism: false,
     sequence: { concurrent: false },
     testTimeout: 60_000,

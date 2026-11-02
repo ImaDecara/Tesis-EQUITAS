@@ -28,11 +28,11 @@ import { DataAccessError, requireTenantAccess, type DalContext } from '@/lib/ser
 // funciones de ALIGN-018 con la credencial server-only. Devuelve códigos, nunca excepciones:
 // Next oculta los mensajes de error en producción y la pantalla necesita saber qué pasó.
 
-async function failClosed<T>(run: () => Promise<T | CaseReviewFailure>): Promise<T | CaseReviewFailure> {
+async function failClosed<T>(run: () => Promise<T | CaseReviewFailure>, unexpected: CaseReviewErrorCode = 'WRITE_UNAVAILABLE'): Promise<T | CaseReviewFailure> {
   try {
     return await run()
   } catch (error) {
-    return caseReviewFailure(error instanceof DataAccessError ? error.code : 'WRITE_UNAVAILABLE')
+    return caseReviewFailure(error instanceof DataAccessError ? error.code : unexpected)
   }
 }
 
@@ -120,7 +120,7 @@ export async function getCaseReviewSnapshot(rawDebtorId: string): Promise<CaseRe
     const chain = await readChain(supabase, 'case_review', [['tenant', context.tenantId], ['debtor', debtorId]])
     if (!chain) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
     return { ok: true, snapshot: { ...computed.value, currentReviewId: currentOf(chain) } } as const
-  })
+  }, 'SUGGESTION_UNAVAILABLE')
 }
 
 async function insertDecision(context: DalContext, input: RecordCaseDecisionInput, snapshot: ComputedSnapshot, idempotencyKey: string): Promise<RecordCaseDecisionResult> {

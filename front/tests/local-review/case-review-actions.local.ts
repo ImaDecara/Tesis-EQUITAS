@@ -1,6 +1,5 @@
 import { createHash, createHmac } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { createServerClient } from '@supabase/ssr'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -356,7 +355,6 @@ describe('propuesta intensa y aprobacion', () => {
   })
 
   it('cambian los insumos desde la propuesta: APRUEBA se frena, OBJETA sigue; una propuesta reemplazada no se aprueba', async () => {
-    actAs('otro-operador', TENANT_A)
     actAs('supervisor')
     const proposal = sql('select id from public.case_review where debtor = 920015 limit 1')
     sql('update public.debt set current_amount = current_amount + 500 where id = 920015')
@@ -372,8 +370,9 @@ describe('propuesta intensa y aprobacion', () => {
     expect(successor).toMatchObject({ ok: true, created: true, status: 'PENDIENTE_SUPERVISOR' })
     actAs('supervisor')
     await expect(approveCaseDecision({ caseReviewId: proposal, decision: 'APRUEBA', checklist: READY_CHECKLIST, supersedes: objection.approvalId })).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED' })
+    // Mismos insumos que la propuesta: lo que la frena ahora es que ya no rige.
     sql('update public.debt set current_amount = current_amount - 500 where id = 920015')
-    await expect(approveCaseDecision({ caseReviewId: proposal, decision: 'APRUEBA', checklist: READY_CHECKLIST, supersedes: objection.approvalId })).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED' })
+    await expect(approveCaseDecision({ caseReviewId: proposal, decision: 'APRUEBA', checklist: READY_CHECKLIST, supersedes: objection.approvalId })).resolves.toMatchObject({ ok: false, code: 'REVIEW_SUPERSEDED' })
   })
 
   it('una aprobacion distinta debe declarar la vigente', async () => {
