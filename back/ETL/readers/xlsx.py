@@ -42,6 +42,7 @@ from openpyxl import DEFUSEDXML
 from openpyxl.cell.text import Text
 from openpyxl.packaging.relationship import get_rels_path
 from openpyxl.reader.excel import ExcelReader
+from openpyxl.styles.numbers import BUILTIN_FORMATS_MAX_SIZE
 from openpyxl.styles.stylesheet import apply_stylesheet
 from openpyxl.utils.datetime import MAC_EPOCH, WINDOWS_EPOCH, from_excel
 from openpyxl.worksheet._read_only import ReadOnlyWorksheet
@@ -93,6 +94,8 @@ _MACRO_MARKS = ('macroenabled', 'vbaproject', 'macrosheet')
 _EXCEL_CONTROL = re.compile(r'_x00(?:[01][0-9A-Fa-f]|7[Ff]|[89][0-9A-Fa-f])_')
 # int() y float() aceptan formas ajenas al formato: «-1», «1_0», « 0», dígitos arábigos.
 _INDEX = re.compile(r'[0-9]{1,10}')
+_ROW_NUMBER = re.compile(r'[0-9]{1,10}(?:\.0+)?')
+_COORDINATE = re.compile(r'[A-Z]{1,3}[0-9]{1,7}')
 _NUMBER = re.compile(r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?')
 _CELL_TYPES = frozenset({'b', 'd', 'e', 'inlineStr', 'n', 's', 'str'})
 # Lo que un formato numérico muestra tal cual: un % ahí adentro no escala el valor.
@@ -350,14 +353,21 @@ def _check_relations(root, kind):
 
 def _check_styles(root, kind):
     formats = 0
+    declared, used = set(), set()
     for node in root.iter():
         name = _local(node.tag)
         if name == 'numFmt' and len(node.get('formatCode', '')) > MAX_FORMAT_CODE:
             source_error('LIMITE_XML_EXCEDIDO', kind)
+        if name == 'numFmts':
+            declared.update(child.get('numFmtId') for child in node)
         if name == 'xf':
             formats += 1
+            used.add(node.get('numFmtId', '0'))
     if formats > MAX_CELL_FORMATS:
         source_error('LIMITE_XML_EXCEDIDO', kind)
+    # openpyxl renumera los formatos propios: uno no declarado caería sobre otro, como un 0%.
+    if any(not _INDEX.fullmatch(value) or (int(value) >= BUILTIN_FORMATS_MAX_SIZE and value not in declared) for value in used):
+        source_error('ESTRUCTURA_INVALIDA', kind)
 
 
 def _string_text(unit):
@@ -393,6 +403,9 @@ class _SheetParser(WorkSheetParser):
 
     def parse_row(self, row):
         previous = self.row_counter
+        number = row.get('r')
+        if number is not None and not _ROW_NUMBER.fullmatch(number):
+            source_error('ESTRUCTURA_INVALIDA', self.kind, previous)
         line, cells = super().parse_row(row)
         self.row_dimensions.clear()
         # openpyxl descarta en silencio una fila repetida o fuera de orden.
@@ -404,8 +417,14 @@ class _SheetParser(WorkSheetParser):
         """Índices y tipos, antes de que openpyxl los use: un índice -1 sería un índice de Python."""
         cell_type = element.get('t', 'n')
         style = element.get('s')
-        valid = cell_type in _CELL_TYPES and (
-            style is None or (_INDEX.fullmatch(style) is not None and int(style) < self.style_count))
+        coordinate = element.get('r')
+        # Según su tipo, openpyxl lee <v> o <is> y descarta el otro en silencio.
+        inline = element.find(INLINE_STRING) is not None
+        valid = (cell_type in _CELL_TYPES
+                 and (coordinate is None or _COORDINATE.fullmatch(coordinate) is not None)
+                 and (style is None or (_INDEX.fullmatch(style) is not None and int(style) < self.style_count))
+                 and (not inline or cell_type == 'inlineStr')
+                 and (cell_type != 'inlineStr' or stored is None))
         if valid and stored is not None and stored.text:
             if cell_type == 's':
                 valid = _INDEX.fullmatch(stored.text) is not None and int(stored.text) < len(self.shared_strings)
@@ -641,7 +660,6 @@ def read_workbook(stream, selection, fmt, field_types, limits, deadline):
                                            field_types[logical], fmt, limits, deadline)
                       for logical, name in selection.items()}
         ignored = [sanitize_filename(name, 31) for name in parts if name not in selection.values()]
-        deadline.check(kind)
         return WorkbookTables(tables, ignored)
     except ValidationError:
         raise

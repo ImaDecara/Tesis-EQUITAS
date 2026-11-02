@@ -642,7 +642,7 @@ def _hostile_cases():
          xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
         ('celda-otra-fila.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A9"><v>1</v></c></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
         ('celda-fuera-de-excel.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="XFE2"/></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
-        ('coordenada-rota.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="!!"><v>1</v></c></row>'), xlsx_profile(), 'ARCHIVO_NO_LEIBLE', None),
+        ('coordenada-rota.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="!!"><v>1</v></c></row>'), xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
         ('celda-escape-control.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2" t="inlineStr"><is><t>a_x0007_b</t></is></c></row>'),
          xlsx_profile(), 'CARACTER_CONTROL', None),
         ('numero-enorme.xlsx', with_sheet(HEADER_ROW + '<row r="2"><c r="A2"><v>' + '9' * 5000 + '</v></c></row>'), xlsx_profile(),
@@ -1817,6 +1817,19 @@ def test_the_deadline_is_checked_right_after_the_stylesheet_is_built(tmp_path, m
     reject(path, xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO')
 
 
+def test_the_stylesheet_is_not_started_after_the_deadline(tmp_path, monkeypatch):
+    path = write(tmp_path, 'libro', minimal_workbook())
+    clock = Scripted(monkeypatch)
+    real = xlsx_reader._PackageReader.read_workbook
+
+    def slow(*args):
+        real(*args)
+        clock.expire()
+    monkeypatch.setattr(xlsx_reader._PackageReader, 'read_workbook', slow)
+    monkeypatch.setattr(xlsx_reader, 'apply_stylesheet', lambda *_: pytest.fail('no debe arrancar una fase que no se puede cortar'))
+    reject(path, xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO')
+
+
 def test_an_expired_batch_never_reaches_validation_in_any_format(tmp_path, monkeypatch):
     book = validated_book(tmp_path)
     sheets = validated_sheets()
@@ -2041,3 +2054,57 @@ def test_the_child_side_answers_rows_errors_and_final_mark():
     output = io.StringIO()
     supervised.serve(io.StringIO(json.dumps(request)), output)
     assert json.loads(output.getvalue()) == {'error': 'ARCHIVOS_REQUERIDOS'}
+
+
+# ------------------------------------------------------------- ciclo 1: otros casos del mismo tipo
+
+
+@pytest.mark.parametrize(('number', 'cell'), [('1_0', 'A10'), (' 2', 'A2'), ('٣', 'A3'), ('1e1', 'A10'), ('+2', 'A2')])
+def test_a_row_number_must_be_a_plain_number(tmp_path, number, cell):
+    path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="{number}"><c r="{cell}"><v>1</v></c></row>'))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+def test_a_row_number_written_as_a_whole_float_keeps_being_read(tmp_path):
+    rows = f'{HEADER_ROW}<row r="2.0"><c r="A2"><v>1</v></c></row>'
+    mapping = xlsx_profile()
+    with open(write(tmp_path, 'libro', with_sheet(rows)), 'rb') as stream:
+        table = extract.read_workbook(stream, {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                                      FileLimits(), Deadline(60)).tables['cabecera']
+    assert [row.line for row in table.rows] == [2]
+
+
+@pytest.mark.parametrize('coordinate', ['A1_0', 'a10', 'A 10', '$A$10', 'A١٠', 'A+10'])
+def test_a_cell_coordinate_must_be_plain(tmp_path, coordinate):
+    path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="10"><c r="{coordinate}"><v>1</v></c></row>'))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+@pytest.mark.parametrize('cell', ['<c r="A2" t="inlineStr"><v>123</v></c>', '<c r="A2" t="inlineStr"><is><t>x</t></is><v>123</v></c>',
+                                  '<c r="A2"><is><t>x</t></is></c>', '<c r="A2" t="s"><is><t>x</t></is><v>0</v></c>'])
+def test_a_value_the_cell_type_would_discard_is_not_lost_in_silence(tmp_path, cell):
+    path = write(tmp_path, 'libro', with_shared_strings(f'{HEADER_ROW}<row r="2">{cell}</row>', STRINGS))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+def _styles_with(xf_format):
+    return (f'<styleSheet xmlns="{MAIN_NS}"><numFmts count="1"><numFmt numFmtId="200" formatCode="0%"/></numFmts>'
+            f'<cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="{xf_format}"/></cellXfs></styleSheet>').encode()
+
+
+@pytest.mark.parametrize('xf_format', ['164', '-1', '1_0', '٠', '999'])
+def test_a_style_cannot_borrow_a_number_format_it_does_not_declare(tmp_path, xf_format):
+    """openpyxl renumera los formatos: el 164 inexistente caería sobre el 0% declarado con otro número."""
+    path = write(tmp_path, 'libro', with_styles(_styles_with(xf_format)))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+@pytest.mark.parametrize('xf_format', ['200', '9', '0'])
+def test_a_style_with_a_declared_or_builtin_format_is_read(tmp_path, xf_format):
+    reject(write(tmp_path, 'libro', with_styles(_styles_with(xf_format))), xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE')
+
+
+def test_a_format_declared_only_for_conditional_styles_is_not_a_cell_format(tmp_path):
+    styles = (f'<styleSheet xmlns="{MAIN_NS}"><cellXfs count="1"><xf numFmtId="170"/></cellXfs>'
+              '<dxfs count="1"><dxf><numFmt numFmtId="170" formatCode="0%"/></dxf></dxfs></styleSheet>').encode()
+    reject(write(tmp_path, 'libro', with_styles(styles)), xlsx_profile(), 'ESTRUCTURA_INVALIDA')

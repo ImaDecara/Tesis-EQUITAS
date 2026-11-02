@@ -183,7 +183,6 @@ def _read_delimited(path, kind, mapping, contract, limits, deadline):
                 if len(values) != len(columns):
                     source_error('ESTRUCTURA_INVALIDA', kind, line)
                 rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
-            deadline.check(kind, lines.line)
         except ValidationError:
             raise
         except csv.Error as error:
