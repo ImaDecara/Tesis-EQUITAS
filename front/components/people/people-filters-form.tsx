@@ -62,10 +62,11 @@ export function PeopleFiltersForm({ initialValues }: PeopleFiltersFormProps) {
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">
-          Riesgo individual
+        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">
+          Máxima severidad heredada
         </label>
         <select
+          id="risk"
           name="risk"
           defaultValue={initialValues.risk}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"

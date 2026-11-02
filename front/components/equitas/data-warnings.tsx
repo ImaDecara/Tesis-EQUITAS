@@ -19,7 +19,7 @@ export function DataWarnings({ warnings }: { warnings: DataWarning[] }) {
           <li key={`${warning.table}-${warning.message}`}>
             <span className="font-medium">{warning.table}:</span> {warning.message}
             {warning.needsSelectPolicy && (
-              <span> (agregar policy `SELECT` para el rol `anon`/`authenticated`)</span>
+              <span> (Acceso no disponible. Solicite al administrador que revise los permisos de su cuenta.)</span>
             )}
           </li>
         ))}

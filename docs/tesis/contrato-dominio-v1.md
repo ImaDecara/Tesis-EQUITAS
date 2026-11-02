@@ -345,9 +345,43 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 | `debt.status` | **FK al catálogo `debt_status`**; hoy inferida por vencimiento, no el estado de origen | Etiqueta del catálogo; `UNKNOWN` si falta el estado de origen | `back/ETL/transform.py:266-279`, `supabase/migrations/20261021220156_equitas_testing_schema.sql:332` |
 | `debtor` (tabla) | Objeto tributario | "Objeto" | §2 |
 | `DebtorProfileSummary.socioeconomicLevel` / "Nivel socioeconomico / riesgo" | Vulnerabilidad no informada, separada del índice de severidad | "Vulnerabilidad: no informada" en bloque propio | `front/lib/services/debtor-data-service.ts:41`, `front/app/debtors/[debtorId]/page.tsx:366` |
-| `debtor_profile_detail.risk_value` / "Riesgo individual" | Índice heredado del objeto con ajustes por persona; para una persona con varios objetos, el máximo entre ellos | "Máxima severidad entre sus objetos" | `back/ETL/transform.py:694`, `front/lib/mappers/person-risk-mapper.ts:146-149` |
+| `debtor_profile_detail.risk_value` / "Riesgo individual" | Índice heredado del objeto con ajustes por persona; para una persona con varios objetos, el máximo entre ellos | "Máxima severidad heredada" (máximo entre sus objetos vinculados) | `back/ETL/transform.py:694`, `front/lib/mappers/person-risk-mapper.ts:146-149` |
 | `PersonListItem.totalDebtAssociated` / "Deuda total asociada" | Exposición asociada no aditiva | "Exposición asociada (no aditiva)" | §3 |
 | `DebtorListItem.priorityScore` / "Score / prioridad" | Puntaje operativo heredado 0–172 del frontend, distinto de `priority_score` de Python (0–100) | Reemplazado por la prioridad operativa 0–100 de ALIGN-008 | `front/lib/mappers/debtor-object-mapper.ts:120-147`, `back/services/scoring_service.py:139-167` |
+
+### 8.1 Aplicación de etiquetas — ALIGN-012
+
+Después de ALIGN-010, `DebtorListItem.riskScore` y `DebtorProfileSummary.riskScore`
+son la **severidad v1** (§7.12), no el índice v0 persistido. El detalle los
+rotula «Severidad del objeto (v1)», en puntos de 0 a 100. El índice heredado
+ya no llega en el DTO del detalle: su bloque «Índice heredado de severidad
+(no social)» muestra **No disponible**, sin sustituirlo por v1 ni por cero.
+«Vulnerabilidad: no informada» se muestra por separado. La prioridad se
+rotula «Prioridad dentro de su cola (puntos de 0 a 100)». Ningún puntaje se
+presenta como porcentaje ni probabilidad de pago.
+
+| Pantalla / dato | Rótulo aplicado y límite |
+|---|---|
+| Detalle / `debtor_person.priority` | «Porcentaje declarado en origen». Se informa si la suma difiere de 100 con la tolerancia 0,01 del contrato de reglas; un valor ausente o inválido impide verificarla. No se normaliza ni se deduce una cuota legal de deuda |
+| Detalle / `debt.period` | «ID externo de la obligación»; no se presenta como período fiscal |
+| Personas y análisis / `risk_value` | «Máxima severidad heredada»: máximo del índice heredado por persona entre sus objetos vinculados; separado de la severidad v1 del objeto |
+| Personas / `totalDebtAssociated` | «Exposición asociada (no aditiva)» por persona, en cada fila y en la introducción. El encabezado de columna «Deuda total asociada» se conserva porque SMOKE-01 ubica la tabla con él y ese recorrido no se modifica. El resumen «Deuda asociada» mantiene la deduplicación por objeto de ALIGN-011 |
+| Ingreso | «Ejemplo ilustrativo, no son datos» para cifras y distribución; «Deuda de ejemplo» no afirma una gestión realizada |
+| Avisos de lectura | Solicitar revisión de permisos de la cuenta; sin recomendar acceso anónimo ni cambios de policy. Personas sin filas en `debtor_profile_detail` informa «No devolvió filas para esta sesión.» |
+
+En el detalle, contacto null y listas cuya lectura falló muestran **No
+disponible**; una lista leída correctamente y vacía conserva su mensaje de
+ausencia. Con `person` fallido, la lista de personas se conserva porque sus
+relaciones se leyeron: la celda de documento muestra **No disponible** y la suma
+de porcentajes se sigue verificando. Esa suma depende solo de `debtor` y
+`debtor_person`. Si `decisionIssues` registra una lectura fallida y no hay decisión,
+se informa que no se pudieron leer los datos necesarios para evaluar el objeto.
+
+La tarjeta del análisis declara **más de 90 puntos** (excluye 90); la tabla,
+**banda alta desde 70 puntos**, muestra hasta diez objetos: los primeros en orden
+operativo, no por severidad. Su definición de fondo queda en ALIGN-014. ALIGN-012 cambia
+estos rótulos, sin cambiar `riskAboveNinetyCases`, los selectores ni los
+agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
 
 ## 9. Reglas para mapeadores (las aplica ALIGN-011)
 

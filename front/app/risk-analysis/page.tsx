@@ -37,11 +37,12 @@ export default async function RiskAnalysisPage() {
     <AppShell>
       <section className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
-          Analisis de riesgo
+          Análisis de severidad
         </h1>
         <p className="text-sm text-slate-600">
-          El riesgo del objeto representa la criticidad del caso. El riesgo individual representa
-          la criticidad de cada persona asociada.
+          La severidad v1 describe el objeto. Para personas se muestra la máxima severidad
+          entre sus objetos vinculados según el índice heredado por persona. Son puntos de 0 a 100;
+          no son porcentajes ni probabilidades de pago.
         </p>
       </section>
 
@@ -52,19 +53,19 @@ export default async function RiskAnalysisPage() {
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Riesgo del objeto</CardTitle>
-              <CardDescription>Basado en la criticidad consolidada del caso.</CardDescription>
+              <CardTitle>Severidad del objeto (v1)</CardTitle>
+              <CardDescription>Puntaje heurístico del objeto según las reglas v1.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start justify-between gap-3 rounded-lg border border-[#efd2d2] bg-[#fbefef] p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase text-[#8f3434]">
-                    Objetos con riesgo &gt; 90
+                    Objetos con severidad mayor a 90 puntos
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
                     {formatNumber(objectDashboard.riskAboveNinetyCases)}
                   </p>
-                  <p className="text-xs text-slate-600">Criticidad extrema del caso</p>
+                  <p className="text-xs text-slate-600">Conteo de objetos con más de 90 puntos; excluye 90.</p>
                 </div>
                 <ShieldAlert className="size-5 text-[#9d3d3d]" />
               </div>
@@ -73,19 +74,19 @@ export default async function RiskAnalysisPage() {
 
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Riesgo individual</CardTitle>
-              <CardDescription>Basado en el puntaje individual de cada persona.</CardDescription>
+              <CardTitle>Máxima severidad heredada</CardTitle>
+              <CardDescription>Máximo del índice heredado por persona entre sus objetos vinculados.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7d2ae] bg-[#f9f3e4] p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase text-[#6f561e]">
-                    Personas con puntaje alto
+                    Personas con severidad heredada alta
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
                     {formatNumber(peopleDashboard.highRiskCount)}
                   </p>
-                  <p className="text-xs text-slate-600">Puntaje individual desde 70</p>
+                  <p className="text-xs text-slate-600">Índice heredado desde 70 puntos</p>
                 </div>
                 <UsersRound className="size-5 text-[#8a6f2a]" />
               </div>
@@ -94,9 +95,9 @@ export default async function RiskAnalysisPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <RiskDonutChart title="Distribucion de objetos por riesgo" data={objectRiskDistribution} />
+          <RiskDonutChart title="Distribución de objetos por severidad v1" data={objectRiskDistribution} />
           <RiskDonutChart
-            title="Distribucion de personas por riesgo individual"
+            title="Distribución de personas por máxima severidad heredada"
             data={peopleDashboard.individualRiskDistribution}
           />
         </section>
@@ -104,15 +105,15 @@ export default async function RiskAnalysisPage() {
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Objetos con riesgo mayor a 90</CardTitle>
-              <CardDescription>Casos con score de riesgo extremo.</CardDescription>
+              <CardTitle>Objetos en banda alta, desde 70 puntos</CardTitle>
+              <CardDescription>Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90. Primeros 10 en orden operativo, no por severidad.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Objeto</TableHead>
-                    <TableHead>Riesgo</TableHead>
+                    <TableHead>Severidad (puntos de 0 a 100)</TableHead>
                     <TableHead className="text-right">Deuda</TableHead>
                     <TableHead className="text-right">Accion</TableHead>
                   </TableRow>
@@ -146,17 +147,17 @@ export default async function RiskAnalysisPage() {
 
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Personas con puntaje alto</CardTitle>
-              <CardDescription>Personas con puntaje individual desde 70.</CardDescription>
+              <CardTitle>Personas con severidad heredada alta</CardTitle>
+              <CardDescription>Hasta 10 personas con índice heredado máximo desde 70 puntos entre sus objetos.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Persona</TableHead>
-                    <TableHead>Riesgo individual</TableHead>
-                    <TableHead className="text-right">Puntaje</TableHead>
-                    <TableHead className="text-right">Objetos</TableHead>
+                    <TableHead>Máxima severidad heredada</TableHead>
+                    <TableHead className="text-right">Puntaje (puntos de 0 a 100)</TableHead>
+                    <TableHead className="text-right">Objetos vinculados</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

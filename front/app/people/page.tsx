@@ -114,7 +114,9 @@ export default async function PeoplePage({
             Personas / Deudores
           </h1>
           <p className="text-sm text-slate-600">
-            Seguimiento individual con puntaje de riesgo de 0 a 100.
+            Personas con objetos vinculados y máxima severidad entre ellos, según el índice heredado
+            por persona. Los puntajes de 0 a 100 no son probabilidades de pago. Exposición no aditiva:
+            la deuda de un objeto compartido se muestra completa para cada persona y no se suma entre personas.
           </p>
         </div>
 
@@ -141,7 +143,7 @@ export default async function PeoplePage({
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <Card className="border-[#cfe1d8] bg-[#edf6f1] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">Riesgo bajo</CardTitle>
+              <CardTitle className="text-sm">Severidad heredada baja</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-emerald-700">
               {formatNumber(peopleDashboard.lowRiskCount)}
@@ -149,7 +151,7 @@ export default async function PeoplePage({
           </Card>
           <Card className="border-[#ead8b0] bg-[#f9f3e4] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">Riesgo medio</CardTitle>
+              <CardTitle className="text-sm">Severidad heredada media</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-amber-700">
               {formatNumber(peopleDashboard.mediumRiskCount)}
@@ -157,7 +159,7 @@ export default async function PeoplePage({
           </Card>
           <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">Riesgo alto</CardTitle>
+              <CardTitle className="text-sm">Severidad heredada alta</CardTitle>
             </CardHeader>
             <CardContent className="pb-4 text-2xl font-semibold text-rose-700">
               {formatNumber(peopleDashboard.highRiskCount)}
@@ -185,7 +187,7 @@ export default async function PeoplePage({
                 {formatCurrency(totalDebtAssociated)}
               </p>
               <p className="text-xs text-slate-600">
-                Riesgo promedio {averageRiskValue === null && summary.averageRiskValue.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(averageRiskValue, 1)} / 100
+                Promedio del índice heredado (puntos de 0 a 100): {averageRiskValue === null && summary.averageRiskValue.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(averageRiskValue, 1)}
               </p>
             </CardContent>
           </Card>
@@ -193,22 +195,22 @@ export default async function PeoplePage({
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <RiskDonutChart
-            title="Distribucion de riesgo individual"
+            title="Distribución de personas por máxima severidad heredada"
             data={peopleDashboard.individualRiskDistribution}
           />
 
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Top 5 personas con mayor riesgo</CardTitle>
+              <CardTitle>Top 5 personas por máxima severidad heredada</CardTitle>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[680px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Persona</TableHead>
-                    <TableHead>Riesgo</TableHead>
-                    <TableHead className="text-right">Puntaje</TableHead>
-                    <TableHead className="text-right">Objetos</TableHead>
+                    <TableHead>Máxima severidad heredada</TableHead>
+                    <TableHead className="text-right">Puntaje (puntos de 0 a 100)</TableHead>
+                    <TableHead className="text-right">Objetos vinculados</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,9 +273,9 @@ export default async function PeoplePage({
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Documento</TableHead>
-                  <TableHead>Riesgo individual</TableHead>
-                  <TableHead className="text-right">Puntaje</TableHead>
-                  <TableHead className="text-right">Objetos asociados</TableHead>
+                  <TableHead>Máxima severidad heredada</TableHead>
+                  <TableHead className="text-right">Puntaje (puntos de 0 a 100)</TableHead>
+                  <TableHead className="text-right">Objetos vinculados</TableHead>
                   <TableHead>Contacto disponible</TableHead>
                   <TableHead className="text-right">Deuda total asociada</TableHead>
                   <TableHead className="text-right">Accion</TableHead>

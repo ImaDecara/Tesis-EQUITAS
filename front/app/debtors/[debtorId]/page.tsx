@@ -1,4 +1,5 @@
-import { formatNumber, missingSummary } from '@/lib/data-presence'
+import { formatNumber, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
+import decisionRules from '../../../../contracts/decision-rules.v1.json'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -40,6 +41,17 @@ export default async function DebtorDetailPage({
   }
 
   const { debtor, debts, people, contacts, profile } = detail
+  const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
+  const personCatalogReadFailed = readingFailed(warnings, 'person')
+  const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
+  const debtsReadFailed = readingFailed(warnings, 'debtor', 'debt')
+  const decisionReadFailed = !debtor.decision && debtor.decisionIssues?.some(issue => issue.reason === 'LECTURA_FALLIDA')
+  const percentages = people.map(person => numericData(person.priority).value)
+  const percentageTotal = relationsReadFailed || percentages.some(value => value === null)
+    ? null : percentages.reduce<number>((sum, value) => sum + value!, 0)
+  // Misma tolerancia que las reglas v1, con margen de representación de Number.
+  const percentagesMismatch = percentageTotal !== null &&
+    Math.abs(percentageTotal - 100) > decisionRules.banderas.tolerancia_porcentajes + Number.EPSILON * 100
 
   return (
     <AppShell>
@@ -70,13 +82,23 @@ export default async function DebtorDetailPage({
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
+        {decisionReadFailed && (
+          <p role="status" className="text-sm text-amber-800">
+            Decisión no disponible: no se pudieron leer los datos necesarios para evaluar este objeto.
+            Revise los avisos de lectura.
+          </p>
+        )}
+        <p className="text-xs text-slate-600">
+          Severidad y prioridad: puntos de 0 a 100; no son porcentajes ni probabilidades de pago.
+        </p>
+        <p className="text-sm text-slate-700">Vulnerabilidad: no informada</p>
         <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>
         <p className="text-xs text-slate-600">{missingSummary(debtor.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           <Card className="border-[#efd2d2] bg-[#fbefef] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Riesgo</CardTitle>
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Severidad del objeto (v1)</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
@@ -131,7 +153,7 @@ export default async function DebtorDetailPage({
             <TabsTrigger value="people">Personas asociadas</TabsTrigger>
             <TabsTrigger value="contacts">Contactos</TabsTrigger>
             <TabsTrigger value="debts">Deudas</TabsTrigger>
-            <TabsTrigger value="risk">Perfil/Riesgo</TabsTrigger>
+            <TabsTrigger value="risk">Perfil / Severidad</TabsTrigger>
             <TabsTrigger value="recommendation">Recomendacion</TabsTrigger>
           </TabsList>
 
@@ -170,8 +192,8 @@ export default async function DebtorDetailPage({
                     <span className="font-medium text-slate-900">Estado:</span> {debtor.status}
                   </p>
                   <p>
-                    <span className="font-medium text-slate-900">Prioridad:</span>{' '}
-                    {debtor.priorityLevel ?? 'No disponible'} (score {formatNumber(debtor.priorityScore)})
+                    <span className="font-medium text-slate-900">Prioridad dentro de su cola (puntos de 0 a 100):</span>{' '}
+                    {debtor.priorityLevel ?? 'No disponible'} ({formatNumber(debtor.priorityScore)})
                   </p>
                 </CardContent>
               </Card>
@@ -191,7 +213,7 @@ export default async function DebtorDetailPage({
                     {debtor.hasContact ? (
                       <span className="font-medium text-emerald-700">Si</span>
                     ) : (
-                      <span className="font-medium text-amber-700">No</span>
+                      <span className="font-medium text-amber-700">{debtor.hasContact === null ? 'No disponible' : 'No'}</span>
                     )}
                   </p>
                 </CardContent>
@@ -205,12 +227,20 @@ export default async function DebtorDetailPage({
                 <CardTitle>Personas asociadas</CardTitle>
               </CardHeader>
               <CardContent>
+                {!relationsReadFailed && people.length > 0 && (percentageTotal === null || percentagesMismatch) && (
+                  <p role="status" className="mb-3 text-sm text-amber-800">
+                    {percentageTotal === null
+                      ? 'No se puede verificar la suma: hay porcentajes no informados o inválidos.'
+                      : `Los porcentajes declarados suman ${formatNumber(percentageTotal)}%, no 100%.`}{' '}
+                    No se normalizan ni determinan una cuota legal de deuda.
+                  </p>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Documento</TableHead>
-                      <TableHead>Prioridad de contacto</TableHead>
+                      <TableHead>Porcentaje declarado en origen</TableHead>
                       <TableHead>Relacion</TableHead>
                       <TableHead>Contacto</TableHead>
                     </TableRow>
@@ -219,17 +249,17 @@ export default async function DebtorDetailPage({
                     {people.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-slate-500">
-                          Sin personas asociadas visibles.
+                          {relationsReadFailed ? 'No disponible: no se pudo leer la lista de personas asociadas.' : 'Sin personas asociadas visibles.'}
                         </TableCell>
                       </TableRow>
                     )}
                     {people.map((person) => (
                       <TableRow key={person.id}>
                         <TableCell className="font-medium text-slate-900">{person.name}</TableCell>
-                        <TableCell>{person.document}</TableCell>
+                        <TableCell>{personCatalogReadFailed ? 'No disponible' : person.document}</TableCell>
                         <TableCell>{person.priority}</TableCell>
                         <TableCell>{person.relation}</TableCell>
-                        <TableCell>{person.contact}</TableCell>
+                        <TableCell>{contactsReadFailed ? 'No disponible' : person.contact}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -257,7 +287,7 @@ export default async function DebtorDetailPage({
                     {contacts.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-slate-500">
-                          Sin contactos registrados para este objeto.
+                          {contactsReadFailed ? 'No disponible: no se pudo leer la lista de contactos.' : 'Sin contactos registrados para este objeto.'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -292,7 +322,7 @@ export default async function DebtorDetailPage({
                     <TableRow>
                       <TableHead>Monto original</TableHead>
                       <TableHead>Monto actualizado</TableHead>
-                      <TableHead>Periodo</TableHead>
+                      <TableHead>ID externo de la obligación</TableHead>
                       <TableHead>Vencimiento</TableHead>
                       <TableHead>Estado</TableHead>
                     </TableRow>
@@ -301,7 +331,7 @@ export default async function DebtorDetailPage({
                     {debts.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-slate-500">
-                          Sin deudas visibles.
+                          {debtsReadFailed ? 'No disponible: no se pudo leer la lista de obligaciones.' : 'Sin deudas visibles.'}
                         </TableCell>
                       </TableRow>
                     )}
@@ -366,11 +396,11 @@ export default async function DebtorDetailPage({
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Nivel socioeconomico / riesgo</CardTitle>
+                  <CardTitle className="text-sm">Índice heredado de severidad (no social)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-slate-900">
-                  <RiskBadge risk={profile.risk} score={profile.riskScore} />
-                  <p className="text-sm text-slate-600">{profile.socioeconomicLevel}</p>
+                  <p>No disponible</p>
+                  <p className="text-sm text-slate-600">El índice heredado no se expone en esta vista ni se usa para decidir.</p>
                 </CardContent>
               </Card>
             </div>

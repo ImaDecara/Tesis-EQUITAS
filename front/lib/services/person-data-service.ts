@@ -45,7 +45,7 @@ async function loadRawPeopleData(): Promise<RawPersonDataBundle> {
     warnings.push(
       buildLikelyRlsWarning(
         EQUITAS_TABLE_NAMES.debtorProfileDetail,
-        'No devolvio filas desde frontend. Si en Supabase hay datos, falta policy SELECT para este rol o lectura con sesion autenticada.'
+        'No devolvió filas para esta sesión.'
       )
     )
   }
