@@ -1725,7 +1725,9 @@ def test_real_bytes_beyond_the_declared_size_are_cut_at_once(tmp_path, monkeypat
             return getattr(self.inner, name)
     monkeypatch.setattr('ETL.readers.xlsx.zlib.decompressobj', Counting)
     reject(path, xlsx_profile(), 'ZIP_CORRUPTO')
-    assert sum(produced) < 1 << 20
+    # Ningún byte de más: a lo sumo uno sobre lo declarado por las partes que se recorrieron.
+    declared = sum(info.file_size for info in zipfile.ZipFile(io.BytesIO(validated_data())).infolist())
+    assert sum(produced) <= declared + 1
 
 
 def test_an_entry_declared_empty_without_a_stream_is_read_as_empty(tmp_path):

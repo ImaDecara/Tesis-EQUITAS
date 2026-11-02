@@ -32,9 +32,10 @@ Son configurables: `FileLimits` en `back/ETL/readers/limits.py`. Los cuatro prim
 | Filas de datos | 300 000 | Al leer | `LIMITE_ARCHIVO_EXCEDIDO` |
 | Columnas | 60 | Al leer la cabecera; en XLSX, también cualquier celda con valor más allá de la 60 | `LIMITE_ARCHIVO_EXCEDIDO` |
 | Caracteres por celda | 32 767 | Al leer | `CELDA_EXCEDE_LIMITE` |
-| Descomprimido total (XLSX) | 200 000 000 bytes | **Antes de abrir**, con los tamaños del directorio ZIP | `TAMANO_DESCOMPRIMIDO_EXCEDIDO` |
-| Razón de compresión (XLSX) | 100, en el total y en cada parte de 1 MiB o más | **Antes de abrir** | `RAZON_COMPRESION_EXCEDIDA` |
-| Tiempo de lectura por lote | 120 s | Por fila, cadena o bloque de 64 KiB | `TIEMPO_LECTURA_EXCEDIDO` |
+| Descomprimido total (XLSX) | 200 000 000 bytes | **Antes de abrir**, con los tamaños del directorio ZIP; después se acreditan con los bytes reales (§3) | `TAMANO_DESCOMPRIMIDO_EXCEDIDO` |
+| Razón de compresión (XLSX) | 100, en el total y en cada parte de 1 MiB o más | **Antes de abrir**, y se acredita igual | `RAZON_COMPRESION_EXCEDIDA` |
+| Tiempo de lectura por lote | 120 s | Dentro del lector, entre operaciones y antes de entregar el lote; corte real con `read_source_batch_supervised` (§7) | `TIEMPO_LECTURA_EXCEDIDO` |
+| Memoria de la lectura | 2 GiB residentes | Solo con `read_source_batch_supervised` (§7) | `MEMORIA_LECTURA_EXCEDIDA` |
 | Archivos por lote | 2 archivos, o 1 XLSX con 2 hojas | Al llamar: `cabecera` y `detalle` | `ARCHIVOS_REQUERIDOS` |
 
 Un lote son siempre dos archivos lógicos: dos CSV/TSV, dos XLSX o un XLSX con dos hojas. Dos libros pueden usar el mismo nombre de hoja, como `Hoja1`. Un solo libro no, y da `PERFIL_INVALIDO`.
@@ -57,30 +58,38 @@ En CSV/TSV, un registro no puede pasar de 60 × (2 × 32 767 + 3) caracteres, co
 **Por qué no `load_workbook`.** El lector usa `ExcelReader`, lo mismo que `load_workbook` usa por dentro, con el mismo modo. `load_workbook` no se puede acotar ni interrumpir: arma un árbol por cada hoja, también las ignoradas, solo para buscar su dimensión; arma enteras las cadenas compartidas; y aplica expresiones regulares cuadráticas a nombres definidos y formatos numéricos. Con un archivo de 3 MB medimos más de 3 GiB, y con 1 MB un cuelgue de más de un minuto. Por eso:
 
 - **Solo se interpreta lo que se usa:** tipos de contenido, libro, relaciones, estilos, cadenas y hojas elegidas. Propiedades, tema, nombres definidos, gráficos y hojas ignoradas no se interpretan.
-- **Antes de interpretar nada,** se recorren todas las partes en flujo: CRC, tamaño real y ningún DTD en el XML. Un tamaño declarado falso da `ZIP_CORRUPTO`, y cualquier `DOCTYPE` o entidad, `XML_ENTIDAD_EXTERNA`.
+- **Antes de interpretar nada,** se recorren todas las partes byte a byte, y los límites dejan de apoyarse en lo declarado: la cabecera local dice lo mismo que el directorio, las partes ocupan el archivo sin huecos ni solapes, el flujo comprimido se consume entero y termina donde termina lo declarado, y los bytes reales y el CRC coinciden. Se descomprime descartando la salida y se corta en el primer byte de más: 200 MB reales detrás de un tamaño chico no llegan a producirse. Cualquier diferencia da `ZIP_CORRUPTO`, y cualquier `DOCTYPE` o entidad, `XML_ENTIDAD_EXTERNA`.
 - **Hojas y cadenas van en flujo:** ningún elemento sobrevive a su fila o cadena, así que la memoria no crece con el tamaño de la parte.
 - **No se evalúan fórmulas, no se siguen vínculos externos y no se extrae nada a disco.**
 
-Un ZIP inusual se rechaza con `ZIP_CORRUPTO`: cifrado, compresión que no sea `deflate` o ninguna, Zip64, rutas con `..` o `\`, nombres repetidos o entradas superpuestas.
+Un ZIP inusual se rechaza con `ZIP_CORRUPTO`: cifrado, datos parcheados o cabeceras enmascaradas, compresión que no sea `deflate` o ninguna, Zip64 en cualquier cabecera o registro, rutas con `..` o `\`, un NUL en el nombre, nombres repetidos, entradas superpuestas, datos antes de la primera parte o después del fin, y un contador de partes distinto del real. El descriptor de datos que dejan los programas que escriben en flujo se acepta, con o sin firma, si coincide con el directorio; el de 64 bits no.
 
 **Hojas.** El perfil elige una por archivo lógico (`formato.hojas`). Las demás se listan en `SourceBatch.ignored_sheets`, con el nombre saneado, y se ignoran; solo se comprueba que su ZIP y su DTD estén limpios. Si falta la elegida: `HOJA_NO_ENCONTRADA`.
 
-**Celdas.** Se convierten al mismo texto que tendrían en TSV, para que el motor dé el mismo resultado:
+**Celdas.** Se convierten al mismo texto que tendrían en TSV, para que el motor dé el mismo resultado. **Un estilo no cambia lo que un número significa:** openpyxl no convierte nada por estilo, y una sola regla decide con estilo, sin estilo y para el resultado guardado de una fórmula, en los dos sistemas de fechas.
 
 | Celda | Resultado |
 |---|---|
 | Texto | Tal cual |
 | Número | Texto exacto sin notación científica, con 15 dígitos significativos; en importes y porcentajes, con el decimal del perfil |
-| Porcentaje con formato `%` | Multiplicado por 100, porque el contrato usa la escala 0-100 |
-| Fecha serial o con estilo de fecha, con `fecha_serial` en el perfil | `fecha` del perfil, según el sistema declarado (`1900` o `1904`). Si el libro usa otro: `SISTEMA_FECHAS_NO_COINCIDE` |
+| Porcentaje con formato `%` | Multiplicado por 100, porque el contrato usa la escala 0-100. Un `%` literal (entre comillas, escapado, de relleno o entre corchetes) no escala, igual que en Excel |
+| Porcentaje con un formato que escala solo algunos valores (`0%;0.0`) | `CELDA_TIPO_NO_SOPORTADO`: no se adivina |
+| Número en una columna de fecha, con `fecha_serial` en el perfil, con o sin estilo | `fecha` del perfil, según el sistema declarado (`1900` o `1904`). Si el libro usa otro: `SISTEMA_FECHAS_NO_COINCIDE` |
+| Ese número con menos de 1 (cero, negativos, una hora sola) en cualquier sistema; entre 59 y 61 sin incluirlos en el sistema 1900, porque el 29/02/1900 no existió; o fuera de rango | Queda crudo y el motor lo marca inválido, con o sin estilo |
+| Fecha con hora | Queda visible y el motor la marca inválida |
 | Número en una columna de fecha, sin `fecha_serial` | Queda crudo y el motor lo marca inválido |
-| Celda con estilo de fecha, sin `fecha_serial` | `FECHA_SERIAL_NO_DECLARADA` |
-| Fecha con hora, serial 60 del sistema 1900 (no existió) o fuera de rango | Queda visible y el motor la marca inválida |
+| Cualquier número con estilo de fecha, sin `fecha_serial` | `FECHA_SERIAL_NO_DECLARADA` |
+| Número con estilo de fecha fuera de una columna de fecha | Serial válido: el texto de la fecha, que en un importe el motor marca inválido. Serial imposible: `CELDA_TIPO_NO_SOPORTADO`, porque crudo pasaría por un número válido |
+| Número con estilo de duración (`[h]:mm`) | `CELDA_TIPO_NO_SOPORTADO` |
 | Fórmula con valor guardado | El valor guardado. Nunca se evalúa |
 | Fórmula sin valor guardado | `FORMULA_SIN_VALOR`, con hoja y fila |
 | Error de Excel (`#REF!`) | `CELDA_CON_ERROR` |
-| Booleano, hora sola o infinito | `CELDA_TIPO_NO_SOPORTADO` |
+| Booleano, infinito, o `t="d"` con una hora sola o una duración | `CELDA_TIPO_NO_SOPORTADO` |
 | Fila o celda repetida o fuera de orden | `ESTRUCTURA_INVALIDA`; openpyxl las descartaba en silencio |
+| Índice de cadena o de estilo negativo, fuera de la tabla o con formas que Python acepta y el formato no (`-1`, `1_0`, ` 0`, dígitos arábigos) | `ESTRUCTURA_INVALIDA`; un -1 tomaba el último elemento |
+| Lo mismo en el número guardado, el número de fila o la coordenada; tipo de celda desconocido | `ESTRUCTURA_INVALIDA` |
+| Celda con `<is>` y otro tipo, o con `<is>` y `<v>` a la vez | `ESTRUCTURA_INVALIDA`; openpyxl leía uno y descartaba el otro en silencio |
+| Estilo con un formato numérico propio que no declara | `ESTRUCTURA_INVALIDA`; openpyxl renumera y caía sobre otro formato, como un `0%` |
 
 ## 4. CSV y TSV
 
@@ -117,21 +126,40 @@ Cada archivo se midió en un proceso propio; el crecimiento de memoria es `ru_ma
 
 Se midió aparte, sin incluirlo en la suite porque tarda: un XLSX de 180 MB descomprimidos con 200 000 filas × 60 columnas numéricas se lee en 78 s con 864 MiB. La cartera `escala` (2990 cabeceras y 56 289 detalles) da el mismo reporte y los mismos payloads en TSV, CSV y XLSX.
 
-**Qué no cubren estos límites.** Dentro del proceso no se puede interrumpir el armado de los estilos, unos 5 s. Con dos archivos al máximo, estimamos cerca de 1,8 GiB, el doble de lo medido con uno. Por eso, el servidor debería correr el lector en un proceso aparte, con tope de memoria y de tiempo (ALIGN-052/059).
+**Qué no cubren estos límites.** Dentro del proceso no se puede interrumpir el armado de los estilos, unos 5 s: por eso, un archivo subido se lee con `read_source_batch_supervised` (§8).
 
-## 8. Uso
+## 8. Quién corta de verdad
+
+Hay dos maneras de leer, y **un archivo subido se lee con la segunda**:
+
+| | `read_source_batch` | `read_source_batch_supervised` |
+|---|---|---|
+| Dónde corre | En el proceso de quien llama | En un proceso hijo, `ETL.readers.supervised` |
+| Plazo | Se comprueba entre operaciones, al terminar cada parte y antes de entregar: un lote vencido nunca se entrega. No interrumpe un parser en plena operación: un rechazo puede llegar tarde | Un vigilante en el padre mata al hijo al vencer. El rechazo llega a tiempo, sea cual sea la fase |
+| Memoria | Sin tope | El mismo vigilante mata al hijo si pasa de `read_memory_bytes` |
+| Uso | Pruebas y línea de comandos, con archivos propios | API y cualquier archivo de un usuario |
+
+El hijo es no confiable: no hereda el entorno, así que no ve ninguna credencial; no tiene stderr, para que un traceback no cite un valor; y contesta en JSON por líneas, no en pickle, para que un hijo comprometido no pueda ejecutar nada en el padre. Sin la marca final no hay lote: un hijo que muere o contesta otra cosa da `LECTURA_INTERRUMPIDA`, nunca un prefijo. El plazo incluye el arranque del hijo, cerca de 1 s.
+
+**Qué resuelve este ticket y qué queda para quien lo invoca:**
+
+- **ALIGN-054/055** llaman a `read_source_batch_supervised` con las rutas que entrega `UploadStore.files`, y traducen sus códigos a la respuesta HTTP. Ese almacén sigue siendo el dueño del archivo: la lectura no copia ni borra nada. No hace falta `PrivateUploadStore`, y no conviene copiar a un segundo almacén, porque reiniciaría el TTL.
+- **`validate_batch` no está cubierto** por `read_seconds`: corre después, en quien invoca, sobre filas ya acotadas. Si esa ruta necesita un máximo total, lo pone quien la arma.
+- **La llamada bloquea:** el hijo tarda hasta `read_seconds`. Quien la haga desde una ruta asíncrona la manda a un hilo y limita cuántas corren a la vez, porque cada una usa hasta `read_memory_bytes`. Eso, y cuántos lotes simultáneos admite el servidor, es de ALIGN-055 y del despliegue.
+- **ALIGN-059** cuenta con que el tope de memoria es una medición del padre cada 0,1 s, no un límite del núcleo: una reserva muy brusca puede pasarlo por un instante antes del corte. Un `cgroup` o `--memory` en el despliegue lo vuelve estricto. El hijo tampoco está encerrado: sin red ni disco, si se quiere, es tarea del despliegue.
+
+## 9. Uso
 
 ```python
-from ETL.extract import load_source_profile, read_source_batch, validate_source_files
-from ETL.readers.limits import PrivateUploadStore, XLS_MESSAGE
+from ETL.extract import load_source_profile
+from ETL.readers.limits import XLS_MESSAGE
+from ETL.readers.supervised import read_source_batch_supervised
 
-with PrivateUploadStore(raiz_privada) as store:
-    upload = store.save(flujo_subido, nombre_del_usuario)   # upload.display_name es solo para mostrar
-    path = store.resolve(upload.token)
-    mapping = load_source_profile(ruta_perfil, contract)
-    batch = read_source_batch({'cabecera': path, 'detalle': path}, mapping, contract=contract)
-    # batch.tables: SourceTable para validate_batch; batch.ignored_sheets: para el preview autorizado.
-    store.release(upload.token)                             # al publicar o descartar
+mapping = load_source_profile(ruta_perfil, contract)
+batch = read_source_batch_supervised({'cabecera': ruta, 'detalle': ruta}, mapping, contract=contract)
+# batch.tables: SourceTable para validate_batch; batch.ignored_sheets: para el preview autorizado.
 ```
+
+Con archivos sueltos, fuera de la API, `PrivateUploadStore` los guarda con TTL: `save` devuelve un token, `resolve` da la ruta y `release` borra al publicar o descartar.
 
 Los errores son `ValidationError`, cuyo texto es `CODIGO: archivo=…, linea=…, campo=…` o solo el código. El de `.xls` es `FORMATO_XLS_NO_SOPORTADO: ` seguido de `XLS_MESSAGE`.

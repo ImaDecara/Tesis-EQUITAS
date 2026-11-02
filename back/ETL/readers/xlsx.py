@@ -289,7 +289,6 @@ def _checked_tree(archive, name, kind, limits, deadline):
                 source_error('LIMITE_XML_EXCEDIDO', kind)
             if not elements % _DEADLINE_EVERY:
                 deadline.check(kind)
-        deadline.check(kind)
         return parser.root
 
 
