@@ -29,7 +29,7 @@ Con `PATH` en npm 11.21.1 y el stack de `docs/tesis/entorno-aislado.md` levantad
    P -q -At < front/tests/local-reports/expected.sql > /tmp/align028/expected.json
    ```
 
-5. Desde `front/`, levantar `next start` en un puerto propio, con las mismas variables, y ejecutar:
+5. Desde `front/`, levantar `next start` en un puerto propio, con las mismas variables más `EQUITAS_REVIEW_SERVER_JWT` (ALIGN-069: sin registro de auditoría no se entrega ningún reporte; se emite con `database/testing/case_review_local.py mint-jwt`), y ejecutar:
 
    ```sh
    node tests/local-reports/run-http.mjs /tmp/align028/credentials.psv http://127.0.0.1:31028 /tmp/align028/http
