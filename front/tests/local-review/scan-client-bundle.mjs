@@ -26,7 +26,9 @@ const needles = {
   rol_servidor: 'equitas_review_server',
   funcion_revision: 'record_case_review',
   funcion_aprobacion: 'record_case_review_approval',
+  funcion_lectura_motivo: 'read_case_review_reason_text',
   modulo_escritor: 'createCaseReviewWriter',
+  modulo_lectura_pantalla: 'loadCaseReviewScreen',
 }
 let hits = 0
 for (const [name, needle] of Object.entries(needles)) {
