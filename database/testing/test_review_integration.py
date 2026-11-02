@@ -6,8 +6,10 @@ import base64
 import json
 import re
 import tempfile
+import threading
 import unittest
 import xml.etree.ElementTree as ET
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
@@ -263,6 +265,17 @@ class CaseSourceTests(unittest.TestCase):
             with self.subTest(pattern=pattern):
                 self.assertIsNone(re.search(pattern, self.source))
 
+    def test_no_request_of_the_campaign_follows_a_redirect(self):
+        folder = runner.ROOT / 'front/tests/external-review'
+        sources = {path.name: path.read_text(encoding='utf-8') for path in folder.glob('*.ts')}
+        self.assertIn('support.ts', sources)
+        for name, source in sources.items():
+            with self.subTest(archivo=name):
+                self.assertEqual(len(re.findall(r'\bfetch\(', source)), len(re.findall(r"redirect: 'manual'", source)), 'fetch sin redirect manual')
+                self.assertEqual(len(re.findall(r'\bcreateServerClient\(', source)), len(re.findall(r'global: \{ fetch: withoutRedirects \}', source)), 'SDK sin el fetch de la campana')
+                # cookieFor y registerBatch, de local-review, siguen redirecciones con credenciales.
+                self.assertIsNone(re.search(r'\b(cookieFor|registerBatch)\b', source))
+
     def test_every_it_is_a_case_of_the_inventory(self):
         self.assertEqual(len(re.findall(r'\bit(?:\.\w+)?\(', self.source)), len(CAMPAIGN.required_cases))
         self.assertIsNone(re.search(r'\bit\.each\b|\btest\(', self.source))
@@ -291,6 +304,84 @@ class SuiteSeparationTests(unittest.TestCase):
         self.assertIn('readLocalReviewConfig()', review)
 
 
+class RedirectingServer:
+    """Loopback efimero. Registra cada solicitud: el segundo destino no debe recibir ninguna."""
+
+    def __init__(self, status):
+        self.requests = []
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                outer.requests.append(self.path)
+                if status == 200 or self.path != '/api/build-info':
+                    body = json.dumps({'sourceSha': SHA, 'supabaseProjectRef': None}).encode()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                self.send_response(status)
+                # 127.1 tambien es loopback, pero require_loopback lo rechaza: es otro destino.
+                self.send_header('Location', f'http://127.1:{outer.port}/segundo-destino')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.port = self.server.server_address[1]
+        self.base = f'http://127.0.0.1:{self.port}'
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+
+class RedirectTests(unittest.TestCase):
+    def test_a_direct_answer_is_read(self):
+        with RedirectingServer(200) as server:
+            self.assertEqual(runner.read_build_info(server.base)['sourceSha'], SHA)
+        self.assertEqual(server.requests, ['/api/build-info'])
+
+    def test_no_redirect_is_followed(self):
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status), RedirectingServer(status) as server:
+                with self.assertRaises(ValueError) as result:
+                    runner.read_build_info(server.base)
+                self.assertIn('redirigio', str(result.exception))
+                self.assertEqual(server.requests, ['/api/build-info'], 'el segundo destino no recibe ninguna solicitud')
+
+    def test_the_redirect_target_is_itself_a_rejected_destination(self):
+        with self.assertRaises(ValueError):
+            runner.require_loopback('http://127.1:32222', 'http_base')
+
+    def test_run_stops_at_the_redirect_before_vitest(self):
+        with tempfile.TemporaryDirectory() as folder, RedirectingServer(302) as server:
+            config_file = Path(folder) / 'config.json'
+            config_file.write_text(json.dumps(local_config()), encoding='utf-8')
+            with mock.patch.object(runner, 'current_sha', return_value=SHA), mock.patch.object(runner, 'worktree_is_clean', return_value=True), \
+                    mock.patch.object(runner, 'tool_versions', return_value={}), mock.patch.dict(runner.os.environ, {}, clear=False), \
+                    mock.patch.object(runner.subprocess, 'run') as launched:
+                for name in list(runner.os.environ):
+                    if runner.names_prohibited(runner.os.environ[name]):
+                        del runner.os.environ[name]
+                self.assertEqual(runner.run(Path(folder) / 'salida', config_file, server.base, CAMPAIGN), 1)
+            launched.assert_not_called()
+            self.assertEqual(server.requests, ['/api/build-info'])
+            report = json.loads((Path(folder) / 'salida/review.json').read_text(encoding='utf-8'))
+            self.assertIn('redirigio', report['report_errors'][0])
+            self.assertIsNone(report['environment']['target'])
+
+
 class RunnerTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -312,7 +403,7 @@ class RunnerTests(unittest.TestCase):
             if any(mark in runner.os.environ[name] for mark in ('supabase.co', ORIGINAL, TESTING)):
                 del runner.os.environ[name]
 
-    def vitest(self, cases=None, returncode=0, extra_failure=''):
+    def vitest(self, cases=None, returncode=0, extra_failure='', reported_passed=None):
         cases = cases if cases is not None else [(f'{case}: variante', 'passed') for case in sorted(CAMPAIGN.required_cases)]
 
         def run(command, **kwargs):
@@ -320,7 +411,7 @@ class RunnerTests(unittest.TestCase):
             passed = sum(status == 'passed' for _, status in cases)
             failed = sum(status == 'failed' for _, status in cases)
             Path(flag.split('=', 1)[1]).write_text(json.dumps({
-                'numTotalTests': len(cases), 'numPassedTests': passed, 'numFailedTests': failed,
+                'numTotalTests': len(cases), 'numPassedTests': passed if reported_passed is None else reported_passed, 'numFailedTests': failed,
                 'numPendingTests': sum(status in ('skipped', 'pending') for _, status in cases),
                 'numTodoTests': sum(status == 'todo' for _, status in cases),
                 'testResults': [{'assertionResults': [
@@ -366,8 +457,40 @@ class RunnerTests(unittest.TestCase):
         with self.vitest(cases[1:]):
             self.assertEqual(self.execute(), 1)
         suite = ET.parse(self.output / 'review.xml').getroot().find('testsuite')
-        self.assertEqual(int(suite.get('failures')), 1)
+        self.assertEqual(int(suite.get('failures')), 2, 'el caso faltante y el rechazo del validador')
         self.assertIn('Faltan', self.saved()['report_errors'][0])
+
+    def junit_rejection(self):
+        suite = ET.parse(self.output / 'review.xml').getroot().find('testsuite')
+        cases = suite.findall('testcase')
+        rejected = [case for case in cases if case.get('name') == runner.JUNIT_REJECTION_CASE]
+        self.assertEqual(int(suite.get('tests')), len(cases), 'el total coincide con los casos del XML')
+        return suite, rejected
+
+    def test_rejection_with_every_case_passed_is_a_junit_failure(self):
+        cases = [(f'{case}: variante', 'passed') for case in sorted(CAMPAIGN.required_cases)]
+        for label, variant, reported, dirty, needle in (
+                ('duplicado', [*cases, cases[0]], None, False, 'Caso duplicado'),
+                ('conteos inconsistentes', cases, len(cases) + 5, False, 'conteos de vitest'),
+                ('procedencia', cases, None, True, 'limpio'),
+                ('ajeno', [*cases, ('REV-XXX-99: fuera de inventario', 'passed')], None, False, 'REV-XXX-99')):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as folder:
+                self.output = Path(folder) / 'salida'
+                self.mocks['is_clean'].return_value = not dirty
+                with self.vitest(variant, 0, reported_passed=reported):
+                    self.assertEqual(self.execute(), 1)
+                self.assertTrue(all(case['status'] == 'passed' for case in self.saved()['cases']), 'cada resultado individual dice passed')
+                suite, rejected = self.junit_rejection()
+                self.assertGreaterEqual(int(suite.get('failures')), 1)
+                self.assertEqual(len(rejected), 1)
+                self.assertIn(needle, rejected[0].find('failure').get('message'))
+
+    def test_approved_run_has_no_rejection_in_junit(self):
+        with self.vitest():
+            self.assertEqual(self.execute(), 0)
+        suite, rejected = self.junit_rejection()
+        self.assertEqual(rejected, [])
+        self.assertEqual(int(suite.get('failures')), 0)
 
     def test_missing_skipped_and_failed_cases_fail_the_run(self):
         cases = [(f'{case}: variante', 'passed') for case in sorted(CAMPAIGN.required_cases)]
@@ -408,7 +531,7 @@ class RunnerTests(unittest.TestCase):
         with mock.patch.object(runner.subprocess, 'run'):
             self.assertEqual(self.execute(), 1)
         suite = ET.parse(self.output / 'review.xml').getroot().find('testsuite')
-        self.assertEqual(int(suite.get('failures')), len(CAMPAIGN.required_cases))
+        self.assertEqual(int(suite.get('failures')), len(CAMPAIGN.required_cases) + 1, 'todo el inventario sin resultado y el rechazo')
         self.assertEqual({item.get('name'): item.get('value') for item in suite.find('properties')}['passed'], 'False')
 
     def test_exit_code_survives_when_vitest_writes_no_report(self):
