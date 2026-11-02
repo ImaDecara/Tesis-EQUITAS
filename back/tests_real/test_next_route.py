@@ -106,6 +106,24 @@ def test_direct_post_without_the_role_is_403(browser, next_server, session_cooki
     assert response.json() == {"detail": "ROLE_FORBIDDEN"}
 
 
+@pytest.mark.parametrize("size", [12_000_000, 30_000_000])
+def test_big_file_without_the_role_is_a_clean_403_and_not_a_broken_connection(
+    browser, next_server, session_cookie, size
+):
+    """FastAPI responde sin leer el cuerpo: el reenvío en flujo no debe convertirlo en 503."""
+    body, content_type = batch(cabecera=b"x" * size)
+    response = post(browser, next_server, session_cookie("consulta"), body, content_type)
+    assert response.status_code == 403, response.text
+    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+
+
+def test_big_file_with_another_rejection_keeps_its_code(browser, next_server, session_cookie):
+    body, content_type = batch(cabecera=b"x" * 30_000_000, as_of=b"no-es-fecha")
+    response = post(browser, next_server, session_cookie("importador"), body, content_type)
+    assert response.status_code == 413
+    assert response.json() == {"detail": "LIMITE_ARCHIVO_EXCEDIDO"}
+
+
 def test_batch_of_another_tenant_is_404(browser, next_server, session_cookie):
     body, content_type = batch()
     created = post(browser, next_server, session_cookie("importador"), body, content_type)

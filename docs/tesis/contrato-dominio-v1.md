@@ -416,7 +416,7 @@ Los nombres de columnas **no se cambian** (exclusión de ALIGN-007). Este mapa f
 
 ## 13. Decisión humana, aprobación y lote (ALIGN-018)
 
-Tablas append-only `case_review`, `case_review_approval` e `import_batch`, **solo en la base local**. Clase **S**: hoy solo reciben datos sintéticos. Hasta que ALIGN-020 y ALIGN-026 las alimenten, ninguna pantalla ni carga las lee. Roles, funciones y credencial: [`SUPABASE_TESTING_CALIDAD.md`](../../SUPABASE_TESTING_CALIDAD.md). La unidad es el objeto tributario (§2). Una corrección o un cambio de estado es una fila nueva con `supersedes`: la fila vigente es la que ninguna otra reemplaza. El antecedente existe en el mismo tenant (y objeto o revisión) y es siempre anterior: una cadena no puede cerrarse sobre sí misma.
+Tablas append-only `case_review`, `case_review_approval` e `import_batch`, **solo en la base local**. Clase **S**: hoy solo reciben datos sintéticos. Hasta que ALIGN-020 y ALIGN-026 las alimenten, ninguna pantalla ni carga las lee; la API interna de ALIGN-052 registra y consulta `import_batch`. Roles, funciones y credencial: [`SUPABASE_TESTING_CALIDAD.md`](../../SUPABASE_TESTING_CALIDAD.md). La unidad es el objeto tributario (§2). Una corrección o un cambio de estado es una fila nueva con `supersedes`: la fila vigente es la que ninguna otra reemplaza. El antecedente existe en el mismo tenant (y objeto o revisión) y es siempre anterior: una cadena no puede cerrarse sobre sí misma.
 
 | Variable | Significado | Quién la fija | Faltantes y límites |
 |---|---|---|---|

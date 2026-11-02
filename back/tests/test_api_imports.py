@@ -259,7 +259,6 @@ def test_parser_decodes_quoted_parameters_and_keeps_unicode_filenames():
 # ---- Almacén temporal
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Permisos POSIX")
 def test_store_uses_private_modes(store):
     token = store.begin()
     with store.open_part(token, "cabecera") as handle:
@@ -272,7 +271,6 @@ def test_store_uses_private_modes(store):
     assert list(store.files(1, 9)) == ["cabecera"]
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Permisos POSIX")
 def test_store_rejects_shared_directory_or_symlink(tmp_path):
     shared = tmp_path / "compartido"
     shared.mkdir()
@@ -291,7 +289,6 @@ def test_store_rejects_shared_directory_or_symlink(tmp_path):
         UploadStore(occupied)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Permisos POSIX")
 def test_store_does_not_follow_a_planted_symlink(store, tmp_path):
     token = store.begin()
     outside = tmp_path / "fuera"
@@ -755,7 +752,6 @@ def test_write_requires_the_dedicated_credential(client, supabase, store, monkey
     assert stored_files(store.root) == []
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Permisos POSIX")
 def test_insecure_store_is_503_without_paths(client, supabase, tmp_path, monkeypatch):
     shared = tmp_path / "compartido"
     shared.mkdir()

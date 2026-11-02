@@ -107,7 +107,7 @@ en su propia banda y conserva prioridad null, nunca cero.
 
 ## Lectura y adaptación del esquema
 
-- Se leen todos los objetos `debtor`, incluso sin perfil persistido. Los perfiles
+- Se leen todos los objetos `debtor` del municipio, incluso sin perfil persistido. Los perfiles
   activos solo aportan su id de referencia; si hay varios, se referencia el id
   mayor. Sus totales, riesgo, antigüedad y contactos v0 no intervienen en v1.
 - Todas las lecturas usan orden ascendente por `id`, `id > cursor` y límite
