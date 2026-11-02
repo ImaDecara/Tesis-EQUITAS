@@ -361,7 +361,6 @@ def test_reintentos_no_exponen_mensaje_ni_nombre_de_operacion(monkeypatch, capsy
     ("load_debtor_contact", {}, "CONTACT_PERSON_MISSING"),
     ("load_debtor_contact", {"person": 1}, "CONTACT_TYPE_MISSING"),
     ("load_debtor_contact", {"person": 1, "type": 1}, "CONTACT_VALUE_MISSING"),
-    ("load_debtor_profile", {}, "PROFILE_DEBTOR_MISSING"),
     ("load_debtor_profile_detail", {}, "DETAIL_PROFILE_MISSING"),
     ("load_debtor_profile_detail", {"debtor_profile": 1}, "DETAIL_PERSON_MISSING"),
 ])

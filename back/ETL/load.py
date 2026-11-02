@@ -81,7 +81,6 @@ WRITE_OUTCOMES = (WRITE_INSERTED, WRITE_UPDATED, WRITE_UNCHANGED)
 _WRITE_TALLY: ContextVar[dict[str, Counter[str]] | None] = ContextVar("etl_write_tally", default=None)
 
 # Cuándo se calculó el perfil no es parte de lo calculado: si nada más cambió, sigue valiendo el cálculo anterior.
-PROFILE_COMPUTED_AT_COLUMN = "profile_generated_at"
 
 DEBT_COMPARE_COLUMNS = (
     "external_id",
@@ -105,7 +104,6 @@ DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
 # lo acota a 100 con dos decimales, y un float lo representa sin pérdida al volver a texto.
 EXACT_NUMERIC_COLUMNS = {
     DEBT_TABLE: frozenset(DEBT_NUMERIC_COLUMNS),
-    DEBTOR_PROFILE_TABLE: frozenset({"total_debt_amount", "overdue_debt_amount"}),
 }
 
 IMPORT_BATCH_RPC_PATH = "/rest/v1/rpc/record_import_batch"
@@ -765,28 +763,6 @@ def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
             "value": value,
         },
     )
-# Inserta o actualiza el perfil calculado de un objeto de deuda.
-def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Regla de deduplicación:
-    debtor_profile.debtor
-    """
-
-    debtor = payload.get("debtor")
-
-    if debtor is None:
-        raise ValueError(etl_message("PROFILE_DEBTOR_MISSING"))
-
-    return insert_or_update_by_filters(
-        table_name=DEBTOR_PROFILE_TABLE,
-        payload=payload,
-        lookup_filters={
-            "debtor": debtor,
-        },
-        ignored_columns=(PROFILE_COMPUTED_AT_COLUMN,),
-    )
-
-
 # Inserta o actualiza el detalle de una persona dentro de un perfil.
 def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
     """

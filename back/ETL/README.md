@@ -50,14 +50,15 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
 1. Calcula el SHA-256 de los archivos, del mapeo y del contrato, lee y valida con `ETL.validate_source`.
 2. **Lote bloqueado o ilegible:** registra `FALLIDO` en `import_batch`, no escribe ninguna fila de cartera y sale con 1
    (`BATCH_BLOCKED` o el código de la estructura). Un lote de `sintetico-v1` completo termina siempre así, a propósito.
-3. **Lote parcial:** lee lo ya publicado del municipio. Si el archivo no trae un objeto, una obligación de un objeto
-   aceptado o una relación persona–objeto, registra `FALLIDO`, no escribe y sale con `PARTIAL_LOAD_REJECTED`. V1 solo
-   admite el lote completo: delta y bajas son de ALIGN-031. `counts.faltantes` dice cuántos. Un objeto en cuarentena sí
-   viene en el archivo y no se compara.
+3. **Lo que el archivo ya no trae:** lee lo ya publicado del municipio y compara. Qué hacer lo decide quien carga, con
+   `--ausentes` (ver "Política de ausentes"). Por defecto, `rechazar`: si falta un objeto, una obligación de un objeto
+   aceptado o una relación persona–objeto, registra `FALLIDO`, no escribe y sale con `PARTIAL_LOAD_REJECTED`;
+   `counts.faltantes` dice cuántos.
 4. **Lote validado:** resuelve todas las claves de catálogo (`CATALOG_KEY_MISSING` detiene antes de escribir), registra
    `VALIDADO`, carga solo las filas aceptadas y cierra con `PUBLICADO`, que reemplaza al evento anterior. Solo escribe lo
    que cambió: recargar el mismo lote deja todas las filas intactas, y `PUBLICADO` guarda `filas_insertadas`,
-   `filas_actualizadas`, `filas_sin_cambios` y `escrituras` por tabla. `profile_generated_at` solo cambia si cambia el perfil.
+   `filas_actualizadas`, `filas_sin_cambios` y `escrituras` por tabla. Los perfiles de los objetos aceptados se recalculan
+   al final con `recompute_debtor_profiles`, desde lo persistido. `profile_generated_at` solo cambia si cambia el perfil.
    Una persona que viene en varios objetos se escribe una vez, con los datos de su última fila.
 5. **Falla durante la carga, interrupción o rechazo de `PUBLICADO`:** registra `FALLIDO` con antecedente y conserva el
    código original. Las escrituras por la Data API no son una transacción: lo ya escrito no se revierte. La publicación
@@ -67,8 +68,35 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
    `PUBLISH_OUTCOME_UNKNOWN`, sale con 1 y no registra `FALLIDO`, que podría ser falso. `VALIDADO` queda sin desenlace hasta
    ALIGN-032. Es rechazo confirmado solo si la base respondió 4xx.
 
-Los importes de `debt` y del perfil se comparan contra lo persistido leyéndolos como texto (`::text`). Por la Data API
-llegarían como `float`, que pierde el centavo desde unos 100 billones.
+Los importes de `debt` se comparan contra lo persistido leyéndolos como texto (`::text`). Por la Data API llegarían como
+`float`, que pierde el centavo desde unos 100 billones. Los del perfil los compara la función SQL como `numeric`. Toda lectura
+de lo existente recorre todas las páginas: la Data API corta en su máximo de filas sin avisar, y una deuda no leída se
+insertaría de nuevo.
+
+### Política de ausentes
+
+Antes de registrar `VALIDADO`, sin escribir cartera, se compara lo publicado con el archivo. Lo que dejó de venir se informa
+siempre: en la salida (`Ausentes del archivo`) y en `counts.ausentes` de `VALIDADO` y `PUBLICADO`, solo con conteos. Una
+relación o un contacto ya inactivos no cuentan como ausentes.
+
+| `--ausentes` | Objeto ausente | Obligación ausente | Relación ausente | Contacto ausente |
+|---|---|---|---|---|
+| `rechazar` (por defecto) | `FALLIDO`, sin escribir | `FALLIDO`, sin escribir | `FALLIDO`, sin escribir | Se informa, sigue activo y contando |
+| `conservar` (delta) | No se toca | Se conserva y cuenta | Sigue activa y contando | Sigue activo y contando |
+| `dar-de-baja` (delta con bajas) | No se toca | Se conserva y cuenta | `active=false`, también su detalle de perfil | `active=false` |
+
+- **Nada se desactiva sin pedirlo** y nada se borra. Lo dado de baja queda en `counts.bajas_relaciones` y
+  `counts.bajas_contactos`. Si vuelve a venir, se reactiva. Las bajas solo alcanzan a objetos aceptados de este archivo.
+- **Una obligación ausente nunca se da de baja:** el archivo no dice que se pagó y `debt` no tiene baja. Sigue sumando en el
+  perfil. Un municipio que entrega solo deudas vivas puede recargar con `conservar`, pero el total de ese objeto incluye lo que
+  dejó de venir, y `counts.ausentes.obligaciones` dice cuánto. Es un límite declarado: darlas de baja exige un cambio de esquema
+  y de lecturas.
+- **Un contacto se compara por persona**, porque es de la persona y no del objeto: si lo trae en cualquiera de sus filas
+  aceptadas, sigue viniendo. No se compara sin la columna de ese tipo en el archivo, ni para una persona con alguna cabecera no
+  aceptada: en esos casos no hubo observación.
+- **Un objeto en cuarentena** viene en el archivo: conserva su estado previo y no se compara.
+- **Un perfil ajeno no se recalcula.** Si una persona está en un objeto del archivo y en otro ausente, y cambian sus contactos,
+  `available_contact_count` del objeto ausente se actualiza cuando ese objeto vuelve a venir.
 
 En el perfil, una ausencia queda nula y no en cero: sin vencidas observadas y con estados faltantes no hay importe
 vencido, y `debt_state_not_observed_count` declara cuántas obligaciones no tienen estado. Ver el
@@ -119,7 +147,7 @@ de anonimización de archivos de origen.
 
 Códigos principales: `TARGET_ORIGINAL_FORBIDDEN`, `TARGET_ENV_INVALID`,
 `TARGET_URL_INVALID`, `TARGET_HOST_FORBIDDEN`, `SUPABASE_KEY_MISSING`,
-`CUT_OFF_REQUIRED`, `PARTIAL_LOAD_REJECTED`, `IMPORT_CREDENTIAL_MISSING`, `IMPORT_ACTOR_INVALID`,
+`CUT_OFF_REQUIRED`, `PARTIAL_LOAD_REJECTED`, `ABSENT_POLICY_INVALID`, `PROFILE_RECOMPUTE_RESPONSE_INVALID`, `IMPORT_CREDENTIAL_MISSING`, `IMPORT_ACTOR_INVALID`,
 `BATCH_BLOCKED`, `SOURCE_CHANGED_DURING_READ`, `CATALOG_KEY_MISSING`, `IMPORT_BATCH_REJECTED`, `PUBLISH_OUTCOME_UNKNOWN`,
 `SUPABASE_RETRY`, `SUPABASE_RETRY_EXHAUSTED`, `SUPABASE_OPERATION_FAILED` y `ETL_FAILED`, además de los códigos
 del contrato de origen (`CORTE_INVALIDO`, `MAPEO_REQUERIDO`, `COLUMNA_OBLIGATORIA_AUSENTE`…) y los estables de

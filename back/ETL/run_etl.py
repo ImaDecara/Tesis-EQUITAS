@@ -40,8 +40,8 @@ from ETL.load import (
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
 from ETL.transform import (
     CATALOG_KEY_COLUMNS,
-    PreparedBatch,
     AbsentRows,
+    PreparedBatch,
     PreparedObject,
     SourceRowContext,
     StructuralRejection,
