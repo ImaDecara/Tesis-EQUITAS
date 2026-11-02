@@ -90,13 +90,13 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
 
   // Matriz completa: ALIGN-003 y las funciones de ALIGN-018@76863d7. Lo que no figura se deniega.
   const CAPABILITIES: Record<string, readonly DalPermission[]> = {
-    consulta: ['portfolio:read'],
-    operador: ['portfolio:read', 'decision:record'],
-    supervisor: ['portfolio:read', 'decision:approve', 'supervision:read'],
+    consulta: ['portfolio:read', 'decision:read'],
+    operador: ['portfolio:read', 'decision:read', 'decision:record'],
+    supervisor: ['portfolio:read', 'decision:read', 'decision:approve', 'supervision:read'],
     importador: ['import:write'],
     tp_operator: ['portfolio:read'],
   }
-  const PERMISSIONS: readonly DalPermission[] = ['portfolio:read', 'decision:record', 'decision:approve', 'supervision:read', 'import:write']
+  const PERMISSIONS: readonly DalPermission[] = ['portfolio:read', 'decision:read', 'decision:record', 'decision:approve', 'supervision:read', 'import:write']
   it.each(Object.entries(CAPABILITIES).flatMap(([name, allowed]) =>
     PERMISSIONS.map(permission => [name, permission, allowed.includes(permission)] as const)))('%s / %s: permitido=%s', async (name, permission, allowed) => {
     const { requests } = clientFor({ role: [{ id: 3, name }] })

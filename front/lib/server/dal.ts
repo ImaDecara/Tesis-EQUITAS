@@ -12,6 +12,9 @@ import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-s
 // tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
 const PERMISSIONS = {
   'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
+  // ALIGN-028: leer decisiones sin texto libre ni identidades. La compatibilidad E06 no entra:
+  // solo lee cartera. La politica de `case_review` admite a todo miembro activo.
+  'decision:read': ['consulta', 'operador', 'supervisor'],
   'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
