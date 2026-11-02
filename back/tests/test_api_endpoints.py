@@ -3,12 +3,25 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from api import main
+from api import auth, main
+
+CONTEXT = auth.TenantContext("usuario-auth", 10, 7, "operador")
+DATA_CLIENT = object()
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(main.app)
+def client():
+    """Las rutas con el contexto ya resuelto. La autenticación se prueba en test_api_auth."""
+    session = auth.Session("usuario-auth", "token", auth.ApiConfig("http://x", "k"))
+    main.app.dependency_overrides.update(
+        {
+            auth.require_session: lambda: session,
+            auth.tenant_context: lambda: CONTEXT,
+            auth.user_data_client: lambda: DATA_CLIENT,
+        }
+    )
+    yield TestClient(main.app, base_url="http://127.0.0.1")
+    main.app.dependency_overrides.clear()
 
 
 def test_health_and_group_definitions_are_available(client: TestClient) -> None:
@@ -27,13 +40,13 @@ def test_case_group_endpoints_forward_filters_to_service(
 ) -> None:
     received: dict[str, Any] = {}
 
-    def fake_groups(**kwargs: Any) -> dict[str, Any]:
-        received.update(kwargs)
+    def fake_groups(data_client: Any, **kwargs: Any) -> dict[str, Any]:
+        received.update(kwargs, client=data_client)
         return {"total": 1, "items": [{"debtor_id": 1}]}
 
     monkeypatch.setattr(main, "get_case_groups", fake_groups)
     monkeypatch.setattr(
-        main, "get_case_groups_summary", lambda **_kwargs: {"total_cases": 1}
+        main, "get_case_groups_summary", lambda *_args, **_kwargs: {"total_cases": 1}
     )
 
     groups_response = client.get(
@@ -55,6 +68,8 @@ def test_case_group_endpoints_forward_filters_to_service(
     assert groups_response.status_code == 200
     assert groups_response.json()["items"] == [{"debtor_id": 1}]
     assert received == {
+        "client": DATA_CLIENT,
+        "tenant": 7,
         "as_of": "2026-09-30",
         "group_key": "MEJORAR_DATOS",
         "severity_band": "ALTA",
@@ -96,7 +111,7 @@ def test_incomplete_read_returns_503_without_partial_results_or_remote_payload(
 ):
     from services.paginated_reader import DataReadError
 
-    def failed(**_kwargs):
+    def failed(*_args, **_kwargs):
         raise DataReadError("debt")
 
     monkeypatch.setattr(main, "get_case_groups", failed)
