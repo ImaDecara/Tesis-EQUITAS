@@ -42,7 +42,6 @@ export default async function DebtorDetailPage({
   }
 
   const { debtor, debts, people, contacts, profile } = detail
-  await auditCaseOpen(debtor.id)
   const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
   const personCatalogReadFailed = readingFailed(warnings, 'person')
   const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
@@ -54,6 +53,9 @@ export default async function DebtorDetailPage({
   // Misma tolerancia que las reglas v1, con margen de representación de Number.
   const percentagesMismatch = percentageTotal !== null &&
     Math.abs(percentageTotal - 100) > decisionRules.banderas.tolerancia_porcentajes + Number.EPSILON * 100
+
+  // ALIGN-069: cada entrega de la ficha deja un registro. Si no se puede registrar, no se entrega.
+  await auditCaseOpen(debtor.id)
 
   return (
     <AppShell>
