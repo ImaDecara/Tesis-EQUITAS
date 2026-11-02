@@ -326,7 +326,12 @@ async function run() {
   await page.keyboard.press('Enter')
   await expect(narrow.getByLabel('Motivo', { exact: true })).toBeFocused()
   await expect.poll(() => focusObscured(page)).toBeNull()
-  await tabTo(page, narrow.getByRole('radio', { name: 'Rechazar la sugerencia' }), 'Shift+Tab')
+  // Formulario largo y hacia arriba: cada control aparece por el borde superior, justo debajo de la barra.
+  await page.goto(reviewUrl(base, CASE.focus))
+  await chooseRadio(page, narrow.getByRole('radio', { name: 'Aceptar la sugerencia' }), narrow.getByRole('radio', { name: 'Modificar la acción' }), 1)
+  await chooseOption(page, narrow.getByLabel('Acción propuesta', { exact: true }), INTENSE_ACTION)
+  await tabTo(page, narrow.getByRole('button', { name: 'Registrar propuesta' }))
+  await tabTo(page, narrow.getByRole('radio', { name: 'Modificar la acción' }), 'Shift+Tab')
   if (operador.posts.length !== 0) throw Error('Salió una acción sin motivo.')
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(reviewUrl(base, CASE.intense))
