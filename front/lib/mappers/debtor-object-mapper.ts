@@ -85,24 +85,17 @@ function isDebtOverdue(key: string, label: string) {
 
 }
 
-function inferContactChannel(contact: RawRow, value: string) {
-  const explicitChannel = selectTextFromRow(contact, [
-    'channel',
-    'contact_channel',
-    'kind',
-    'type',
-    'contact_type',
-  ])
+// Identidad del canal en origen: una etiqueta faltante no puede unir contactos distintos.
+function contactChannelKey(contact: RawRow) {
+  return selectTextFromRow(contact, ['channel', 'contact_channel', 'kind']) ||
+    selectTextFromRow(contact, ['type', 'contact_type'])
+}
 
-  if (explicitChannel) {
-    return explicitChannel
-  }
-
-  if (value.includes('@')) {
-    return 'Email'
-  }
-
-  return 'Telefono'
+// Un ID nunca llega a pantalla: se resuelve por catálogo o queda "No disponible".
+// La inferencia por `@` (derivada, no observada) solo aplica si el contacto no trae tipo.
+function contactChannelLabel(key: string, value: string, labels: Map<string, string>) {
+  if (!key) return value.includes('@') ? 'Email' : 'Telefono'
+  return /^[0-9]+$/.test(key) ? labels.get(key) ?? 'No disponible' : key
 }
 
 function ruleNumber(data: NumericData): RuleDatum<number> {
@@ -321,7 +314,13 @@ export function mapDebtorObjectsFromRawData(
     personRelationsByDebtor.set(debtorId, current)
   }
 
+  const contactTypeLabels = mapLabelById(
+    raw.contactTypes ?? [],
+    ['id', 'contact_type_id', 'type_id'],
+    ['value', 'name', 'description', 'label']
+  )
   const contactsByPerson = new Map<string, DebtorContactItem[]>()
+  const seenContacts = new Set<string>()
   for (const contact of raw.debtorContacts) {
     const personId = stringifyUnknownValue(
       selectValueFromRow(contact, ['person', 'person_id', 'id_person'])
@@ -365,28 +364,24 @@ export function mapDebtorObjectsFromRawData(
         )
       : true
 
+    const channelKey = contactChannelKey(contact)
     const contactItem: DebtorContactItem = {
       id:
         stringifyUnknownValue(selectValueFromRow(contact, ['id', 'contact_id'])) ||
         `${personId}-${contactsByPerson.get(personId)?.length ?? 0}`,
       personId,
       personName: '',
-      channel: inferContactChannel(contact, value),
+      channel: contactChannelLabel(channelKey, value, contactTypeLabels),
       value,
       isActive,
     }
 
-    const current = contactsByPerson.get(personId) ?? []
-    const duplicate = current.some(
-      (item) =>
-        item.value.toLowerCase() === contactItem.value.toLowerCase() &&
-        item.channel.toLowerCase() === contactItem.channel.toLowerCase() &&
-        item.isActive === contactItem.isActive
-    )
+    // Compara el canal de origen, no su etiqueta: leer o no el catálogo no cambia el conteo de contactos.
+    const identity = JSON.stringify([personId, value.toLowerCase(), (channelKey || contactItem.channel).toLowerCase(), isActive])
 
-    if (!duplicate) {
-      current.push(contactItem)
-      contactsByPerson.set(personId, current)
+    if (!seenContacts.has(identity)) {
+      seenContacts.add(identity)
+      contactsByPerson.set(personId, [...(contactsByPerson.get(personId) ?? []), contactItem])
     }
   }
 

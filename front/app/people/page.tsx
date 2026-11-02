@@ -1,4 +1,4 @@
-import { formatNumber, missingSummary, readingFailed } from '@/lib/data-presence'
+import { formatCountOfTotal, formatNumber, formatWithUnit, missingSummary, readingFailed } from '@/lib/data-presence'
 import { summarizePeople } from '@/lib/mappers/person-risk-mapper'
 import Link from 'next/link'
 import { Filter, UsersRound } from 'lucide-react'
@@ -122,8 +122,7 @@ export default async function PeoplePage({
 
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {filterReadFailed ? 'No disponible' : filteredPeople.length.toLocaleString('es-AR')} /{' '}
-          {formatNumber(peopleDashboard.totalPeople)} personas
+          {formatCountOfTotal(filterReadFailed ? null : filteredPeople.length, peopleDashboard.totalPeople, 'personas')}
         </Badge>
       </section>
 
@@ -243,7 +242,7 @@ export default async function PeoplePage({
               <p className="mt-2 text-sm text-slate-600">
                 Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {filterReadFailed ? 'No disponible' : filteredPeople.length.toLocaleString('es-AR')} personas.
+                {formatWithUnit(filterReadFailed ? null : filteredPeople.length, 'personas')}.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">

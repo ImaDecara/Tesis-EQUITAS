@@ -1,4 +1,4 @@
-import { formatNumber, missingSummary } from '@/lib/data-presence'
+import { formatNumber, formatWithUnit, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { ClipboardCheck, Eye } from 'lucide-react'
 
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import { getDebtorsData } from '@/lib/equitas-data'
 import {
+  buildQueueReconciliation,
   buildRecommendationSummary,
   RECOMMENDATION_BADGE_VARIANT,
   RECOMMENDATION_KINDS,
@@ -26,9 +27,24 @@ import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
+function countLabel(count: number, singular: string, plural: string) {
+  return `${formatNumber(count)} ${count === 1 ? singular : plural}`
+}
+
 export default async function RecommendedActionsPage() {
   const { debtors, warnings } = await getDebtorsData()
   const summary = buildRecommendationSummary(debtors, warnings)
+  const reconciliation = buildQueueReconciliation(debtors, warnings)
+  const totalMissing = missingSummary({ totalDebt: reconciliation.dashboardTotal })
+  const outsideDetail = reconciliation.outsideObjects === null ? null
+    : `${countLabel(reconciliation.outsideObjects, 'objeto', 'objetos')} · ${countLabel(reconciliation.outsideObligations!, 'obligación', 'obligaciones')}`
+  const reconciliationRows: { label: string; value: string; detail?: string | null }[] = [
+    { label: 'Suma de las colas', value: formatCurrency(reconciliation.queueTotal.value) },
+    { label: 'Deuda total del tablero', value: formatCurrency(reconciliation.dashboardTotal.value), detail: totalMissing && `Faltantes: ${totalMissing}` },
+    { label: 'Diferencia con el tablero', value: formatCurrency(reconciliation.difference.value) },
+    { label: 'Importe sin vencimiento evaluable', value: formatCurrency(reconciliation.outsideAmount.value), detail: outsideDetail },
+    { label: 'Resto de la diferencia', value: formatCurrency(reconciliation.otherDifference.value) },
+  ]
 
   return (
     <AppShell>
@@ -72,6 +88,49 @@ export default async function RecommendedActionsPage() {
 
         <Card className="border-[#d2dceb]">
           <CardHeader>
+            <CardTitle>Qué suma el monto de cada cola</CardTitle>
+            <CardDescription>
+              Cada cola suma el importe actual de las obligaciones evaluables de sus objetos: importe
+              observado y no negativo, con vencimiento válido, vencidas o no. Cada objeto cuenta una vez y
+              no se usan los importes del perfil.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-slate-700">
+            <dl className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {reconciliationRows.map(row => (
+                <div key={row.label}>
+                  <dt className="text-xs font-medium text-slate-600">{row.label}</dt>
+                  <dd className="text-lg font-semibold text-[#163a63]">{row.value}</dd>
+                  {row.detail && <dd className="text-xs text-slate-600">{row.detail}</dd>}
+                </div>
+              ))}
+            </dl>
+            {reconciliation.outsideWithoutAmount !== null && reconciliation.outsideWithoutAmount > 0 && (
+              <p role="status" className="text-amber-800">
+                {reconciliation.outsideWithoutAmount === 1
+                  ? '1 de esas obligaciones no tiene importe observado: '
+                  : `${formatNumber(reconciliation.outsideWithoutAmount)} de esas obligaciones no tienen importe observado: `}
+                no se suma como 0 y el importe sin vencimiento evaluable es parcial.
+              </p>
+            )}
+            {reconciliation.outsideObjects === null && (
+              <p role="status" className="text-amber-800">
+                No se puede establecer qué queda fuera de las colas: no se pudieron leer los datos
+                necesarios. Revise los avisos de lectura.
+              </p>
+            )}
+            <p>
+              Por qué no coincide con el tablero: el tablero suma el total de cada objeto (el del perfil
+              persistido o, si no hay, todas sus obligaciones con importe, tengan o no vencimiento). Las
+              colas dejan fuera el importe de las obligaciones sin vencimiento evaluable. El resto de la
+              diferencia viene de totales del perfil distintos de la suma de obligaciones, importes
+              negativos y objetos sin decisión.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#d2dceb]">
+          <CardHeader>
             <CardTitle>Resumen por recomendacion</CardTitle>
             <CardDescription>
               Mantiene las recomendaciones operativas actuales y sus casos destacados.
@@ -107,7 +166,7 @@ export default async function RecommendedActionsPage() {
                         {formatCurrency(group.debtAssociated)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {group.metrics.riskScore.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(group.averageRisk, 1)} / 100
+                        {group.metrics.riskScore.presence === 'NO_APLICA' ? 'No aplica' : formatWithUnit(group.averageRisk, '/ 100', 1)}
                       </TableCell>
                       <TableCell>
                         <div className="flex max-w-[420px] flex-wrap gap-2">

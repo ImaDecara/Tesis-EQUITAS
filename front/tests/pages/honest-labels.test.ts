@@ -18,6 +18,8 @@ const { loadRawDebtorData, getDebtorDetailData, getDebtorsData, getPeopleData, g
   getPeopleData: vi.fn(), getDashboardData: vi.fn(), loadAllTableRows: vi.fn(),
 }))
 vi.mock('@/lib/data/raw-debtor-loader', () => ({ loadRawDebtorData }))
+// El catálogo de canales tiene sus propias pruebas; aquí basta con la forma de la fila real.
+vi.mock('@/lib/server/contact-type-catalog', () => ({ loadContactTypeCatalog: async () => ({ rows: [{ id: 1, key: 'EMAIL', value: 'Email' }], warning: null }) }))
 vi.mock('@/lib/equitas-data', () => ({ getDebtorDetailData, getDebtorsData, getPeopleData, getDashboardData }))
 // El servicio de personas corre completo: solo se reemplaza la lectura de tablas.
 vi.mock('@/lib/data/paginated-table-reader', () => ({ loadAllTableRows }))

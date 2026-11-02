@@ -134,7 +134,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     const failed = mapDashboardMetricsFromDebtorObjects(mapDebtorObjectsFromRawData(raw))
     expect(failed.byRecommendation).toEqual([])
     getDashboardData.mockResolvedValue({ dashboard: failed, warnings: raw.warnings })
-    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+casos/)
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+Revisión jurídica/)
   })
 
   it.each(['debt', 'debtor_contact', 'debtor_person', 'debtor', 'as_of'])('las colas son no disponibles ante fallo de %s, conservando los objetos conocidos aparte', async failure => {
@@ -157,14 +157,14 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
       expect(group.metrics.totalDebt.presence).toBe('NO_INTEGRADO')
       expect(group.metrics.riskScore.presence).toBe('NO_INTEGRADO')
       expect(cards[group.recommendation]).toBe('No disponible')
-      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s*/\\s*100`))
+      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s+Sin casos`))
     }
     const unavailable = summary.find(group => group.interventionCode === null)!
     expect(unavailable.count).toBe(failure === 'debtor' ? null : mapped.debtors.length)
     expect(unavailable.cases).toEqual(mapped.debtors)
     expect(cards['No disponible']).toBe(failure === 'debtor' ? 'No disponible' : '1')
     expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toEqual([])
-    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+casos/)
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+Revisión jurídica/)
   })
 
   it('un objeto parcial evaluado conserva su cola y los bloqueados se cuentan aparte', async () => {
@@ -267,7 +267,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     raw.debts[0].current_amount = null
     configure(buildPresencePeopleData(), raw)
     const unavailable = textFromReactTree(await HomePage())
-    expect(unavailable).toMatch(/No disponible\s*de los objetos/)
+    expect(unavailable).toMatch(/Objetos en riesgo alto:\s*No disponible/)
     expect(unavailable).not.toMatch(/(?:^|\s)0%\s*de los objetos/)
   })
 

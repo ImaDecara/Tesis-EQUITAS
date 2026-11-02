@@ -1,10 +1,12 @@
-import { comparePriority, type InterventionCode } from '@/lib/domain/decision-rules-v1'
+import decisionRules from '../../contracts/decision-rules.v1.json'
+import { comparePriority, type InterventionCode, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import { INTERVENTION_CODES, INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
-import { aggregateData, compareNullable, metric, readingFailed, unavailable } from '@/lib/data-presence'
+import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
 import type {
   ChartBucket,
   DataWarning,
   DebtorListItem,
+  NumericData,
   PersonListItem,
   RecommendationKind,
 } from '@/types/equitas-domain'
@@ -160,6 +162,42 @@ export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: 
       highlightedCases: cases.slice(0, 3),
     }
   })
+}
+
+// Misma definición de obligación evaluable que evaluateSeverity, solo para el vencimiento.
+function dueDateNotEvaluable(due: RuleDatum<string>) {
+  return due.estado !== 'OBSERVADO' || due.valor < decisionRules.evaluabilidad.fecha_minima_plausible
+}
+
+function differenceData(left: NumericData, right: NumericData) {
+  return left.value === null || right.value === null
+    ? unavailable() : observed(Math.round((left.value - right.value) * 100) / 100)
+}
+
+// KPI-V1-07 a 09. No recalcula colas ni tablero: explica por qué sus sumas no coinciden.
+export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
+  const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
+  const queueTotal = aggregateData(buildRecommendationSummary(debtors, warnings)
+    .filter(group => group.interventionCode !== null).map(group => group.metrics.totalDebt), 'sum', queuesUnknown)
+  const dashboardTotal = buildDebtAgingSummary(debtors, warnings).metrics.totalDebt
+  const outsideByObject = queuesUnknown ? [] : debtors
+    .map(debtor => (debtor.decisionInput?.obligaciones ?? []).filter(item => dueDateNotEvaluable(item.due_date)))
+    .filter(items => items.length > 0)
+  const outside = outsideByObject.flat()
+  // Un importe negativo no es evaluable por sí mismo: queda en el resto de la diferencia.
+  const outsideAmount = aggregateData(outside.flatMap(({ current_amount: amount }) => amount.estado !== 'OBSERVADO'
+    ? [unavailable(amount.estado)] : amount.valor < 0 ? [] : [observed(amount.valor)]), 'sum', queuesUnknown)
+  const difference = differenceData(dashboardTotal, queueTotal)
+  return {
+    queueTotal,
+    dashboardTotal,
+    difference,
+    outsideAmount,
+    outsideObjects: queuesUnknown ? null : outsideByObject.length,
+    outsideObligations: queuesUnknown ? null : outside.length,
+    outsideWithoutAmount: queuesUnknown ? null : outside.filter(item => item.current_amount.estado !== 'OBSERVADO').length,
+    otherDifference: differenceData(difference, outsideAmount),
+  }
 }
 
 export function matchesDebtorSearch(debtor: DebtorListItem, query: string) {

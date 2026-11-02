@@ -1,4 +1,4 @@
-import { formatNumber, readingFailed } from '@/lib/data-presence'
+import { formatWithUnit, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, Search, SlidersHorizontal } from 'lucide-react'
 
@@ -106,7 +106,7 @@ export default async function PriorityCasesPage({
         </div>
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredCases.length.toLocaleString('es-AR')} casos
+          {formatWithUnit(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredCases.length, 'casos')}
         </Badge>
       </section>
 
@@ -256,10 +256,10 @@ export default async function PriorityCasesPage({
                     </TableCell>
                     <TableCell>
                       <Badge variant={debtor.priorityLevel === 'ALTA' ? 'danger' : 'warning'}>
-                        {formatNumber(debtor.priorityScore)} / {debtor.priorityLevel}
+                        {formatWithUnit(debtor.priorityScore, `/ ${debtor.priorityLevel}`)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
+                    <TableCell className="text-right">{formatWithUnit(debtor.maxDaysOverdue, 'dias')}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell>
                       <ContactAvailabilityBadge hasContact={debtor.hasContact} />

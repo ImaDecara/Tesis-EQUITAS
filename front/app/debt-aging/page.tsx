@@ -1,4 +1,4 @@
-import { compareNullable, formatNumber, missingSummary, readingFailed } from '@/lib/data-presence'
+import { compareNullable, formatWithUnit, missingSummary, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { CalendarClock, CircleDollarSign, Eye, FileWarning } from 'lucide-react'
 
@@ -106,7 +106,7 @@ export default async function DebtAgingPage({
           />
           <MetricCard
             label="Promedio de atraso"
-            value={`${summary.metrics.averageOverdueDays.presence === 'NO_APLICA' ? 'No aplica' : formatNumber(summary.averageOverdueDays)} dias`}
+            value={summary.metrics.averageOverdueDays.presence === 'NO_APLICA' ? 'No aplica' : formatWithUnit(summary.averageOverdueDays, 'dias')}
             hint="Sobre objetos con mora"
             icon={CalendarClock}
             tone="warning"
@@ -146,7 +146,7 @@ export default async function DebtAgingPage({
                     <TableCell>{debtor.type}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.overdueDebt)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
+                    <TableCell className="text-right">{formatWithUnit(debtor.maxDaysOverdue, 'dias')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -187,7 +187,7 @@ export default async function DebtAgingPage({
                     <TableCell>{debtor.type}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.overdueDebt)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
+                    <TableCell className="text-right">{formatWithUnit(debtor.maxDaysOverdue, 'dias')}</TableCell>
                     <TableCell>
                       <Badge variant={debtor.overdueDebt !== null && debtor.overdueDebt > 0 ? 'danger' : 'neutral'}>
                         {debtor.status}
