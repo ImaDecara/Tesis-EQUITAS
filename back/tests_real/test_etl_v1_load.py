@@ -28,7 +28,7 @@ from urllib.parse import urlsplit
 
 import httpx
 import pytest
-from conftest import BACK, LOOPBACK_HOSTS, ROOT, TESTING, load_local_env, psql
+from conftest import BACK, DB_CONTAINER, LOOPBACK_HOSTS, ROOT, TESTING, load_local_env, psql
 
 sys.path.append(str(BACK / "tests"))
 
@@ -301,8 +301,11 @@ def campaign(env, import_jwt, tmp_path_factory):
     assert actor.isdigit(), "etl-import-actor.sql no devolvió un id"
     yield Campaign(env, import_jwt, actor, tmp_path_factory.mktemp("lotes"))
     # Sus semillas son excluyentes con las de otras suites de la sesión (ALIGN-052): deja las tablas como tras db reset.
+    # Como administrador y sin disparadores: import_batch es de solo agregado y rechaza el truncate de cualquier otro.
     tables = ", ".join(f'public."{name}"' for name in public_tables())
-    psql(f"truncate {tables} restart identity cascade")
+    subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-X", "-q", "-U", "supabase_admin", "-d", "postgres", "-v", "ON_ERROR_STOP=1"],
+                   input=f"set session_replication_role = replica; truncate {tables} restart identity cascade;".encode(),
+                   check=True, capture_output=True)
     assert not nonempty_tables()
 
 
