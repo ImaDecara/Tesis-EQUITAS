@@ -1658,6 +1658,19 @@ def test_r1_get_removes_the_copy_left_by_an_interrupted_discard(client, supabase
     assert stored_files(store.root) == []
 
 
+def test_r1_repeated_discard_removes_the_copy_left_by_an_interrupted_one(client, supabase, store):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    root = supabase.tables["import_batch"][0]
+    supabase.add_batch(
+        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        file_hashes=root["file_hashes"], counts=root["counts"],
+    )
+    response = client.post("/imports/1/discard", headers=auth_headers(supabase))
+    assert response.status_code == 200
+    assert response.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
 def test_r1_response_of_a_retry_is_a_consistent_snapshot(client, supabase, store, monkeypatch):
     """Estado y copia se leen dentro de la exclusión: no se contradicen en la misma respuesta."""
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
@@ -1673,6 +1686,22 @@ def test_r1_response_of_a_retry_is_a_consistent_snapshot(client, supabase, store
     monkeypatch.setattr(imports, "_batch_view", view)
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 200
     assert held
+
+
+def test_r1_a_key_that_points_to_a_later_event_fails_closed(client, supabase, store):
+    """La clave de un envío siempre es del evento de origen: otra cosa no se da por buena."""
+    first = supabase.add_batch(TENANT_A, 4, "importador")
+    second = supabase.add_batch(
+        TENANT_A, 4, "importador", supersedes=first, idempotency_key=KEY,
+        file_hashes={
+            "cabecera": hashlib.sha256(CABECERA).hexdigest(),
+            "detalle": hashlib.sha256(DETALLE).hexdigest(),
+        },
+    )
+    response = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert second != first
+    assert response.status_code == 503
+    assert stored_files(store.root) == []
 
 
 # ---- Ciclo 2, exclusión por lote
@@ -1871,10 +1900,13 @@ def test_r2_busy_batch_is_left_for_the_next_purge_and_stays_unreadable(store):
     stored(store, TENANT_A, 1)
     age_copy(batch_dir(store))
     with hold_lock(store):
+        started = time.monotonic()
         assert store.purge_expired() == 0
         assert batch_dir(store).exists()
         assert store.files(TENANT_A, 1) == {}
         assert batch_dir(store).exists()
+        # Ni la purga ni la lectura esperan a un lote ocupado.
+        assert time.monotonic() - started < store_module.LOCK_WAIT_SECONDS / 2
     assert store.purge_expired() == 1
     assert not batch_dir(store).exists()
 
@@ -1917,6 +1949,30 @@ def test_r2_a_generation_left_half_way_is_swept_by_the_next_purge(store):
     leftover.mkdir(mode=0o700)
     (leftover / "cabecera").write_bytes(b"resto de un proceso caido")
     assert store.purge_expired() == 1
+    assert list((store.root / "retirados").iterdir()) == []
+
+
+@pytest.mark.parametrize("planted", ["enlace", "archivo"])
+def test_r2_something_planted_in_the_name_of_a_batch_is_replaced_and_leaves_no_residue(
+    client, supabase, store, tmp_path, caplog, planted
+):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    store.release(TENANT_A, 1)
+    outside = tmp_path / "fuera"
+    outside.mkdir()
+    (outside / "cabecera").write_bytes(b"ajeno")
+    if planted == "enlace":
+        batch_dir(store).symlink_to(outside)
+    else:
+        batch_dir(store).write_bytes(b"plantado")
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["copy_available"] is True
+    assert_whole_copy(store)
+    assert (outside / "cabecera").read_bytes() == b"ajeno"
+    with caplog.at_level(logging.WARNING, logger="equitas.api"):
+        store.purge_expired()
+    assert "PURGA_INCOMPLETA" not in caplog.text
     assert list((store.root / "retirados").iterdir()) == []
 
 

@@ -175,9 +175,17 @@ class UploadStore:
         return retired
 
     def _erase(self, path: Path | None) -> bool:
+        """Un directorio se borra con su contenido. Un enlace o un archivo plantado en el lugar de
+        un lote se quita él mismo: nunca se sigue el enlace."""
         if path is None:
             return True
-        shutil.rmtree(path, ignore_errors=True)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
         return not os.path.lexists(path)
 
     def begin(self) -> str:
