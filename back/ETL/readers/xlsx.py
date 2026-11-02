@@ -82,6 +82,12 @@ _CHUNK = 1 << 16
 _MACRO_MARKS = ('macroenabled', 'vbaproject', 'macrosheet')
 # Excel guarda los caracteres de control de una celda como texto: _x0007_.
 _EXCEL_CONTROL = re.compile(r'_x00(?:[01][0-9A-Fa-f]|7[Ff]|[89][0-9A-Fa-f])_')
+# int() y float() aceptan formas ajenas al formato: «-1», «1_0», « 0», dígitos arábigos.
+_INDEX = re.compile(r'[0-9]{1,10}')
+_NUMBER = re.compile(r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?')
+_CELL_TYPES = frozenset({'b', 'd', 'e', 'inlineStr', 'n', 's', 'str'})
+# Lo que un formato numérico muestra tal cual: un % ahí adentro no escala el valor.
+_FORMAT_LITERAL = re.compile(r'"[^"]*"|\\.|_.|\*.|\[[^\]]*\]', re.DOTALL)
 
 
 @dataclass
@@ -254,9 +260,10 @@ class _SheetParser(WorkSheetParser):
     """El intérprete de filas y celdas de openpyxl, en flujo y sin perder datos en silencio."""
 
     def __init__(self, source, sheet, kind, limits, deadline):
-        workbook = sheet.parent
-        super().__init__(source, sheet._shared_strings, data_only=True, epoch=workbook.epoch,
-                         date_formats=workbook._date_formats, timedelta_formats=workbook._timedelta_formats)
+        # Sin formatos de fecha, openpyxl no convierte: el serial original llega a _number_cell_text
+        # y una sola política decide, con estilo o sin él.
+        super().__init__(source, sheet._shared_strings, data_only=True, epoch=sheet.parent.epoch)
+        self.style_count = len(sheet.parent._cell_styles)
         self.kind = kind
         self.limits = limits
         self.deadline = deadline
@@ -275,6 +282,20 @@ class _SheetParser(WorkSheetParser):
             source_error('ESTRUCTURA_INVALIDA', self.kind, previous)
         return line, cells
 
+    def _check_references(self, element, stored, line):
+        """Índices y tipos, antes de que openpyxl los use: un índice -1 sería un índice de Python."""
+        cell_type = element.get('t', 'n')
+        style = element.get('s')
+        valid = cell_type in _CELL_TYPES and (
+            style is None or (_INDEX.fullmatch(style) is not None and int(style) < self.style_count))
+        if valid and stored is not None and stored.text:
+            if cell_type == 's':
+                valid = _INDEX.fullmatch(stored.text) is not None and int(stored.text) < len(self.shared_strings)
+            elif cell_type == 'n':
+                valid = _NUMBER.fullmatch(stored.text) is not None
+        if not valid:
+            source_error('ESTRUCTURA_INVALIDA', self.kind, line)
+
     def parse_cell(self, element):
         line, previous = self.row_counter, self.col_counter
         if element.tag != CELL_TAG:
@@ -287,6 +308,7 @@ class _SheetParser(WorkSheetParser):
                 # t="str" con <v> vacío es un resultado guardado de texto vacío.
                 or (stored is not None and (stored.text or element.get('t') == 'str'))):
             source_error('FORMULA_SIN_VALOR', self.kind, line)
+        self._check_references(element, stored, line)
         cell = super().parse_cell(element)
         # openpyxl se queda con la última de dos celdas en la misma posición.
         if cell['row'] != line or not previous < cell['column'] <= MAX_SHEET_COLUMN:
@@ -368,6 +390,55 @@ def _date_text(value, date_format):
     return text
 
 
+def _serial_date(value, system):
+    """La única vía por la que un número se vuelve fecha; ``None`` si no denota ningún día.
+
+    Menos de 1 no es un día, en ninguno de los dos sistemas. El 29/02/1900 no existió: todo lo
+    que caería en él, o que el redondeo de la hora arrastraría sobre él, tampoco.
+    """
+    if value < 1 or (system == '1900' and 59 < value < 61):
+        return None
+    try:
+        return from_excel(value, EPOCHS[system])
+    except (OverflowError, ValueError):
+        return None
+
+
+def _scales_as_percent(code, kind, line):
+    """Si el formato multiplica por 100 al mostrar. Un formato que lo hace solo para algunos valores no se adivina."""
+    sections = _FORMAT_LITERAL.sub('', code).split(';')[:3]
+    scales = {'%' in section for section in sections if section}
+    if len(scales) > 1:
+        source_error('CELDA_TIPO_NO_SOPORTADO', kind, line)
+    return True in scales
+
+
+def _number_cell_text(cell, field_type, fmt, kind, line):
+    """El estilo no cambia lo que un número significa: solo avisa que el municipio lo ve como fecha."""
+    value = cell.value
+    workbook = cell.parent.parent
+    if not math.isfinite(value) or cell._style_id in workbook._timedelta_formats:
+        source_error('CELDA_TIPO_NO_SOPORTADO', kind, line)
+    styled = cell._style_id in workbook._date_formats
+    if styled and 'fecha_serial' not in fmt:
+        source_error('FECHA_SERIAL_NO_DECLARADA', kind, line)
+    if 'fecha_serial' in fmt and (styled or field_type == 'fecha'):
+        parsed = _serial_date(value, fmt['fecha_serial'])
+        if parsed is not None:
+            return _date_text(parsed, fmt['fecha'])
+        # En una columna de fecha queda crudo y el motor lo marca. En otra, pasaría por un número válido.
+        if field_type != 'fecha':
+            source_error('CELDA_TIPO_NO_SOPORTADO', kind, line)
+    if field_type == 'porcentaje':
+        if _scales_as_percent(cell.number_format, kind, line):
+            value = Decimal(format(value, '.15g')) * 100
+            return format(value.normalize(), 'f').replace('.', fmt['decimal'])
+        return _number_text(value, fmt['decimal'])
+    if field_type == 'importe':
+        return _number_text(value, fmt['decimal'])
+    return _number_text(value)
+
+
 def _cell_text(cell, field_type, fmt, kind, line):
     """Una celda como texto del contrato. Nunca inventa un valor ni evalúa una fórmula."""
     value = cell.value
@@ -381,28 +452,12 @@ def _cell_text(cell, field_type, fmt, kind, line):
         return value
     if isinstance(value, (bool, time, timedelta)):
         source_error('CELDA_TIPO_NO_SOPORTADO', kind, line)
+    # Solo t="d", que trae una fecha ISO y no un serial: un número nunca llega acá convertido.
     if isinstance(value, (date, datetime)):
         if 'fecha_serial' not in fmt:
             source_error('FECHA_SERIAL_NO_DECLARADA', kind, line)
         return _date_text(value, fmt['fecha'])
-    if not math.isfinite(value):
-        source_error('CELDA_TIPO_NO_SOPORTADO', kind, line)
-    # El 29/02/1900 no existió: 60 en el sistema 1900 queda crudo y el motor lo marca.
-    if field_type == 'fecha' and 'fecha_serial' in fmt and value >= 1 and not (value == 60 and fmt['fecha_serial'] == '1900'):
-        try:
-            parsed = from_excel(value, EPOCHS[fmt['fecha_serial']])
-        except (OverflowError, ValueError):
-            parsed = None
-        if isinstance(parsed, datetime):
-            return _date_text(parsed, fmt['fecha'])
-    if field_type == 'porcentaje':
-        if '%' in cell.number_format:
-            value = Decimal(format(value, '.15g')) * 100
-            return format(value.normalize(), 'f').replace('.', fmt['decimal'])
-        return _number_text(value, fmt['decimal'])
-    if field_type == 'importe':
-        return _number_text(value, fmt['decimal'])
-    return _number_text(value)
+    return _number_cell_text(cell, field_type, fmt, kind, line)
 
 
 def _read_sheet(sheet, kind, field_types, fmt, limits, deadline):

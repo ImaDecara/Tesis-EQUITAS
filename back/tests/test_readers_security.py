@@ -599,7 +599,7 @@ def _hostile_cases():
         ('entidades-parte-suelta.xlsx', rewrite_zip(book, add={'customXml/item1.xml': LAUGHS + b'<a>&c;</a>'}),
          xlsx_profile(), 'XML_ENTIDAD_EXTERNA', None),
         ('indice-cadena.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>99</v></c></row>', b'<sst><si><t>A</t></si></sst>'),
-         xlsx_profile(), 'ARCHIVO_NO_LEIBLE', None),
+         xlsx_profile(), 'ESTRUCTURA_INVALIDA', None),
         ('estilos-al-limite.xlsx', with_styles(worst_styles), xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
         ('cadenas-al-limite.xlsx', with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', _sst(strings_at_limit)),
          xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE', None),
@@ -1354,3 +1354,172 @@ def test_errors_reveal_no_values_names_or_paths(tmp_path, corpus):
     secret = f'{SENTINEL}-archivo.csv'
     path = write(tmp_path, secret, f'A\n{SENTINEL}\x07\n'.encode())
     assert secret not in reject(path, csv_profile(), 'CARACTER_CONTROL')
+
+
+# ------------------------------------------------------------- ciclo 1: fechas y referencias
+
+
+def validated_sheets():
+    """Una cabecera y tres detalles que el motor da por VALIDADO: sintetico-v1 siempre queda BLOQUEADO."""
+    def first(kind):
+        with (FIXTURE / f'{kind}.tsv').open(encoding='utf-8', newline='') as stream:
+            return next(csv.DictReader(stream, delimiter='\t'))
+    header, debt = first('cabecera'), first('detalle')
+    header.update(Deuda_Actualizada='30,00', Deuda_Capital='30,00')
+    debt.update(NOTD_totalActualizado='10,00', NOTD_capital='10,00', NOTD_vencimiento='29/09/2026')
+    details = [{**debt, 'DEUD_id': str(700001 + number)} for number in range(3)]
+    return {'cabecera': [list(header), list(header.values())],
+            'detalle': [list(debt), *[list(row.values()) for row in details]]}
+
+
+def validated_data(value=None, number_format=None, *, epoch=None, formula=False, column='NOTD_vencimiento'):
+    sheets = validated_sheets()
+    position = sheets['detalle'][0].index(column)
+    if value is not None:
+        sheets['detalle'][1][position] = value
+
+    def configure(workbook):
+        if epoch:
+            workbook.epoch = epoch
+        if number_format:
+            workbook['detalle'].cell(2, position + 1).number_format = number_format
+    data = workbook_bytes(sheets, configure=configure)
+    if formula:
+        sheet = re.sub(rb'(<c r="[A-Z]+2"[^>]*>)<v>' + str(value).encode(), rb'\1<f>1+1</f><v>' + str(value).encode(),
+                       _part(data, 'xl/worksheets/sheet2.xml'), count=1)
+        assert b'<f>' in sheet
+        data = rewrite_zip(data, replace_parts={'xl/worksheets/sheet2.xml': sheet})
+    return data
+
+
+def validated_book(folder, *args, **kwargs):
+    return write(folder, 'validado', validated_data(*args, **kwargs))
+
+
+def lot_result(path, mapping):
+    report = extract.validate_source_files(dict.fromkeys(KINDS, path), mapping, cut_off=mapping['fecha_corte'])
+    return report['resultado_lote']
+
+
+def test_the_control_workbook_is_validated_before_any_change(tmp_path):
+    assert lot_result(validated_book(tmp_path), xlsx_profile()) == 'VALIDADO'
+    assert lot_result(validated_book(tmp_path), xlsx_profile(fecha_serial='1900')) == 'VALIDADO'
+
+
+SERIALS = {
+    '1900': [(59, '28/02/1900'), (60, '60'), (61, '01/03/1900'), (59.5, '59.5'), (60.5, '60.5'),
+             (59.99999999999, '59.99999999999'), (60.00000000001, '60.00000000001'), (0, '0'), (-1, '-1'),
+             (0.5, '0.5'), (-0.5, '-0.5'), (1, '01/01/1900'), (45306, '15/01/2024'),
+             (45306.5, '15/01/2024 12:00:00'), (99999999999, '99999999999')],
+    '1904': [(0, '0'), (-1, '-1'), (0.5, '0.5'), (-0.5, '-0.5'), (1, '02/01/1904'), (59, '29/02/1904'), (60, '01/03/1904'),
+             (61, '02/03/1904'), (60.5, '01/03/1904 12:00:00'), (43844, '15/01/2024'), (99999999999, '99999999999')],
+}
+
+
+@pytest.mark.parametrize(('system', 'serial', 'expected'), [(system, *case) for system, cases in SERIALS.items() for case in cases])
+@pytest.mark.parametrize('style', [None, 'dd/mm/yyyy', 'yyyy-mm-dd hh:mm', 'hh:mm'])
+@pytest.mark.parametrize('formula', [False, True])
+def test_a_serial_means_the_same_with_any_style_or_as_a_stored_formula_result(tmp_path, system, serial, expected, style, formula):
+    path = validated_book(tmp_path, serial, style, epoch=MAC_EPOCH if system == '1904' else None, formula=formula)
+    mapping = xlsx_profile(fecha_serial=system)
+    assert read_detail(path, mapping)['NOTD_vencimiento'] == expected
+    # El contrato trata 01/01/1900 como fecha centinela: el lector la entrega y el motor la marca, igual que en TSV.
+    is_plain_date = re.fullmatch(r'[0-9]{2}/[0-9]{2}/[0-9]{4}', expected) is not None and expected != '01/01/1900'
+    assert lot_result(path, mapping) == ('VALIDADO' if is_plain_date else 'BLOQUEADO')
+
+
+def test_serial_60_is_blocked_with_a_date_style_exactly_as_without_it(tmp_path):
+    """El caso B1 de la revisión: el mismo serial no puede bloquear sin estilo y validar con estilo."""
+    mapping = xlsx_profile(fecha_serial='1900')
+    assert lot_result(validated_book(tmp_path, 60), mapping) == 'BLOQUEADO'
+    assert lot_result(validated_book(tmp_path, 60, 'dd/mm/yyyy'), mapping) == 'BLOQUEADO'
+    assert lot_result(validated_book(tmp_path, 59, 'dd/mm/yyyy'), mapping) == 'VALIDADO'
+    assert lot_result(validated_book(tmp_path, 61, 'dd/mm/yyyy'), mapping) == 'VALIDADO'
+
+
+def test_date_style_outside_a_date_column_never_passes_for_a_valid_number(tmp_path):
+    mapping = xlsx_profile(fecha_serial='1900')
+    path = validated_book(tmp_path, 45306, 'dd/mm/yyyy', column='NOTD_capital')
+    assert read_detail(path, mapping)['NOTD_capital'] == '15/01/2024'
+    assert lot_result(path, mapping) == 'BLOQUEADO'
+    for serial in (60, 0, -1, 0.5):
+        reject(validated_book(tmp_path, serial, 'dd/mm/yyyy', column='NOTD_capital'), mapping, 'CELDA_TIPO_NO_SOPORTADO')
+    reject(validated_book(tmp_path, 60, 'dd/mm/yyyy', column='NOTD_capital'), xlsx_profile(), 'FECHA_SERIAL_NO_DECLARADA')
+    reject(validated_book(tmp_path, 60, 'dd/mm/yyyy'), xlsx_profile(), 'FECHA_SERIAL_NO_DECLARADA')
+
+
+@pytest.mark.parametrize('column', ['NOTD_vencimiento', 'NOTD_capital'])
+def test_a_duration_style_is_never_a_date_or_a_number(tmp_path, column):
+    reject(validated_book(tmp_path, 45306, '[h]:mm', column=column), xlsx_profile(fecha_serial='1900'), 'CELDA_TIPO_NO_SOPORTADO')
+
+
+def percentage_text(folder, code, value=0.5):
+    def percent(workbook):
+        workbook['cabecera']['B2'].number_format = code
+    data = workbook_bytes({'cabecera': [['ClaveAgrupacion', 'Destinatario_Porcentaje'], ['K', value]],
+                           'detalle': [['A'], ['1']]}, configure=percent)
+    mapping = xlsx_profile()
+    with open(write(folder, 'libro', data), 'rb') as stream:
+        tables = extract.read_workbook(stream, {'cabecera': 'cabecera'}, mapping['formato'],
+                                       {'cabecera': extract._physical_types('cabecera', mapping, load_contract())},
+                                       FileLimits(), Deadline(60))
+    return tables.tables['cabecera'].rows[0].values['Destinatario_Porcentaje']
+
+
+@pytest.mark.parametrize(('code', 'expected'), [
+    ('0%', '50'), ('0.00%', '50'), ('[Red]0%', '50'), ('0%;0%', '50'), ('0%;;', '50'),
+    # Un % literal no escala en Excel: la celda muestra 0,5 %, no 50 %.
+    ('0.0"%"', '0,5'), ('0.0\\%', '0,5'), ('"%"0.0', '0,5'), ('0.0_%', '0,5'), ('0.0*%', '0,5'), ('[$%-409]0.0', '0,5'), ('0.0;0.0;0.0;@%', '0,5')])
+def test_only_a_real_percent_format_scales_the_value(tmp_path, code, expected):
+    assert percentage_text(tmp_path, code) == expected
+
+
+def test_a_format_that_scales_only_some_values_is_not_guessed(tmp_path):
+    with pytest.raises(ValidationError, match='CELDA_TIPO_NO_SOPORTADO: archivo=cabecera, linea=2'):
+        percentage_text(tmp_path, '0%;0.0')
+
+
+STRINGS = f'<sst xmlns="{MAIN_NS}"><si><t>A</t></si><si><t>B</t></si></sst>'.encode()
+
+
+@pytest.mark.parametrize('index', ['-1', '-2', '2', '99', '1_0', ' 0', '0 ', '+0', '0.0', '1e0', '٠', '9' * 11])
+def test_a_shared_string_index_must_be_a_plain_number_inside_the_table(tmp_path, index):
+    path = write(tmp_path, 'libro', with_shared_strings(f'<row r="1"><c r="A1" t="s"><v>{index}</v></c></row>', STRINGS))
+    assert reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA').endswith('archivo=cabecera, linea=1, campo=*')
+
+
+@pytest.mark.parametrize('style', ['-1', '1_0', ' 0', '+0', '1.0', '٠', '999', '9' * 11])
+def test_a_style_index_must_be_a_plain_number_inside_the_table(tmp_path, style):
+    path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="2"><c r="A2" s="{style}"><v>1</v></c></row>'))
+    assert reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA').endswith('archivo=cabecera, linea=2, campo=*')
+
+
+def test_a_negative_style_cannot_borrow_the_percent_format_of_the_last_style(tmp_path):
+    data = workbook_bytes({'cabecera': [['ClaveAgrupacion', 'Destinatario_Porcentaje'], ['K', 0.5]], 'detalle': [['A'], ['1']]},
+                          configure=lambda workbook: setattr(workbook['cabecera']['B2'], 'number_format', '0%'))
+    sheet = re.sub(rb'(<c r="B2") s="[0-9]+"', rb'\1 s="-1"', _part(data, 'xl/worksheets/sheet1.xml'))
+    assert b's="-1"' in sheet
+    path = write(tmp_path, 'libro', rewrite_zip(data, replace_parts={'xl/worksheets/sheet1.xml': sheet}))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+@pytest.mark.parametrize('text', ['1_000', ' 5', '5 ', '٣', '0x10', 'nan', 'inf', 'Infinity', '1e', '--1', '1,5'])
+def test_a_stored_number_must_be_a_number_of_the_format(tmp_path, text):
+    path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="2"><c r="A2"><v>{text}</v></c></row>'))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+@pytest.mark.parametrize(('text', 'expected'), [('5', '5'), ('-5', '-5'), ('+5', '5'), ('.5', '0.5'), ('5.', '5'), ('1E+2', '100'), ('2.5e-1', '0.25')])
+def test_every_number_form_of_the_format_is_read(tmp_path, text, expected):
+    rows = f'{HEADER_ROW}<row r="2"><c r="A2"><v>{text}</v></c></row>'
+    path = write(tmp_path, 'libro', with_sheet(rows))
+    mapping = xlsx_profile()
+    with open(path, 'rb') as stream:
+        table = extract.read_workbook(stream, {'cabecera': 'cabecera'}, mapping['formato'], {'cabecera': {}},
+                                      FileLimits(), Deadline(60)).tables['cabecera']
+    assert table.rows[0].values == {'A': expected}
+
+
+def test_a_cell_type_outside_the_format_is_rejected(tmp_path):
+    path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="2"><c r="A2" t="zz"><v>1</v></c></row>'))
+    reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
