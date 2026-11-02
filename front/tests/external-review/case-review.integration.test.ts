@@ -39,7 +39,9 @@ const forgedBatch = (overrides: Record<string, unknown> = {}) => ({
   idempotency_key: randomUUID(), ...overrides,
 })
 
-const insertRow = (table: string, token: string | undefined, body: unknown) => api('POST', `/rest/v1/${table}`, { token, body, prefer: 'return=representation' })
+// Sin `return=representation`: RETURNING pide reason_text, que nadie lee, y daria 42501 aunque el INSERT o el UPDATE tuvieran privilegio.
+const insertRow = (table: string, token: string | undefined, body: unknown) => api('POST', `/rest/v1/${table}`, { token, body })
+const validRow = { case_review: () => forgedRow(), case_review_approval: () => forgedApproval(), import_batch: () => forgedBatch() }
 
 async function insertDenied(token: string, row: Record<string, unknown>, marker: string) {
   await withoutWrites(async () => {
@@ -149,6 +151,27 @@ describe('registro por la funcion, con la credencial de servidor', () => {
     createdId(await recordReview(reviewBody(USER.otroOperador, TENANT.B, OBJECT.B, cutoff.B)), 'review_id')
   })
 
+  it('REV-FN-11: la clave de idempotencia no deja reescribir ni responder por otro', async () => {
+    const body = reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)
+    const first = createdId(await recordReview(body), 'review_id')
+    await withoutWrites(async () => {
+      const repeated = await recordReview(body)
+      expect([repeated.status, repeated.body]).toEqual([200, { review_id: first, created: false, pending_supervisor: false }])
+      expectRejected(await recordReview({ ...body, p_inputs_hash: 'f'.repeat(64) }), 'IDEMPOTENCY_KEY_CONFLICT', 'otro hash')
+      expectRejected(await recordReview({ ...body, p_rules_version: '9.9.9' }), 'IDEMPOTENCY_KEY_CONFLICT', 'otra version')
+      expectRejected(await recordReview({ ...body, p_reviewer_user: USER.proponente }), 'IDEMPOTENCY_KEY_CONFLICT', 'otro operador')
+    })
+  })
+
+  it('REV-FN-12: la base no acepta una sugerencia de intensidad 3 o una decision intensa sin lista de control', async () => {
+    await withoutWrites(async () => {
+      for (const intensity of [3, 4]) {
+        expectRejected(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_suggested_intensity: intensity, p_decided_intensity: intensity })), 'INVALID_CASE_REVIEW:case_review_suggested_intensity_range', `sugerencia ${intensity}`)
+      }
+      expectRejected(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_checklist: {} })), 'INVALID_CASE_REVIEW:case_review_intense_requires_checklist', 'sin lista')
+    })
+  })
+
   it('REV-FN-10: rol, fecha y municipio de la fila no son parametros que se puedan enviar', async () => {
     await withoutWrites(async () => {
       for (const extra of [{ p_reviewer_role: 'supervisor' }, { p_created_at: '2020-01-01' }, { tenant: TENANT.B }]) {
@@ -161,7 +184,7 @@ describe('registro por la funcion, con la credencial de servidor', () => {
 describe('cliente directo por la Data API', () => {
   it('REV-API-01: anon no inserta ni ejecuta', async () => {
     await withoutWrites(async () => {
-      for (const table of DECISION_TABLES) expectCode(await api('POST', `/rest/v1/${table}`, { body: {} }), '42501', `insertar ${table}`)
+      for (const table of DECISION_TABLES) expectCode(await insertRow(table, undefined, validRow[table]()), '42501', `insertar ${table}`)
       expectCode(await api('POST', '/rest/v1/rpc/record_case_review', { body: reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A) }), '42501', 'decision')
       expectCode(await api('POST', '/rest/v1/rpc/record_case_review_approval', { body: approvalBody(USER.supervisor, TENANT.A, base.proposal, cutoff.A) }), '42501', 'aprobacion')
       expectCode(await api('POST', '/rest/v1/rpc/record_import_batch', { body: batchBody(USER.sistema, TENANT.A) }), '42501', 'lote')
@@ -173,7 +196,7 @@ describe('cliente directo por la Data API', () => {
     const before = sql(`select md5(string_agg(r::text, ',' order by id)) from public.case_review r`)
     for (const [table, id, body] of targets) {
       for (const [name, token] of [...CLIENTS, ['servidor de revision', () => config.reviewJwt] as const]) {
-        expectCode(await api('PATCH', `/rest/v1/${table}?id=eq.${id}`, { token: token(), body, prefer: 'return=representation' }), '42501', `${name} ${table}`)
+        expectCode(await api('PATCH', `/rest/v1/${table}?id=eq.${id}`, { token: token(), body }), '42501', `${name} ${table}`)
       }
     }
     expect(sql(`select md5(string_agg(r::text, ',' order by id)) from public.case_review r`), 'filas intactas').toBe(before)
@@ -186,7 +209,7 @@ describe('cliente directo por la Data API', () => {
       const targets = [['case_review', base.review], ['case_review_approval', base.approval], ['import_batch', base.batchA]] as const
       for (const [table, id] of targets) {
         for (const [name, token] of [...CLIENTS, ['servidor de revision', () => config.reviewJwt] as const]) {
-          expectCode(await api('DELETE', `/rest/v1/${table}?id=eq.${id}`, { token: token(), prefer: 'return=representation' }), '42501', `${name} ${table}`)
+          expectCode(await api('DELETE', `/rest/v1/${table}?id=eq.${id}`, { token: token() }), '42501', `${name} ${table}`)
         }
       }
     })
@@ -270,7 +293,8 @@ describe('cliente directo por la Data API', () => {
 describe('aprobacion de intensidad 3 o mayor', () => {
   it('REV-APR-01: operador aprobando, denegado por la funcion', async () => {
     await withoutWrites(async () => {
-      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, cutoff.A)), 'ROLE_NOT_ALLOWED')
+      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, cutoff.A)), 'ROLE_NOT_ALLOWED', 'aprueba')
+      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, null, { p_decision: 'OBJETA', p_reason_code: 'MOTIVO_SINTETICO', p_checklist: {} })), 'ROLE_NOT_ALLOWED', 'objeta')
     })
     expect(approvals(base.proposal)).toBe(0)
   })
@@ -319,6 +343,19 @@ describe('aprobacion de intensidad 3 o mayor', () => {
     } finally {
       sql('update public.tenant_user set role = 920002 where id = 920015')
     }
+  })
+})
+
+describe('aprobacion, reenvios', () => {
+  it('REV-APR-08: la clave de idempotencia de una aprobacion no deja cambiar la decision', async () => {
+    const proposal = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
+    const body = approvalBody(USER.supervisor, TENANT.A, proposal, cutoff.A)
+    const first = createdId(await recordApproval(body), 'approval_id')
+    await withoutWrites(async () => {
+      const repeated = await recordApproval(body)
+      expect([repeated.status, repeated.body]).toEqual([200, { approval_id: first, created: false }])
+      expectRejected(await recordApproval({ ...body, p_decision: 'OBJETA', p_reason_code: 'MOTIVO_SINTETICO', p_checklist: {} }), 'IDEMPOTENCY_KEY_CONFLICT')
+    })
   })
 })
 
@@ -400,18 +437,14 @@ describe('corte', () => {
   })
 
   it('REV-CUT-06: con una carga en curso no se decide ni se aprueba; se puede objetar', async () => {
-    const validated = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'VALIDADO' })), 'batch_id')
-    const objectable = base.proposal
+    const proposal = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
+    const loading = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'VALIDADO' })), 'batch_id')
     await withoutWrites(async () => {
       expectRejected(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'CUTOFF_CHANGED', 'decision')
-      expectRejected(await recordApproval(approvalBody(USER.supervisor, TENANT.A, objectable, cutoff.A)), 'CUTOFF_CHANGED', 'aprobacion')
+      expectRejected(await recordApproval(approvalBody(USER.supervisor, TENANT.A, proposal, cutoff.A)), 'CUTOFF_CHANGED', 'aprobacion')
     })
-    const proposalForObjection = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'PUBLICADO', p_supersedes: validated })), 'batch_id')
-    cutoff.A = proposalForObjection
-    const proposal = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
-    const inProgress = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'VALIDADO' })), 'batch_id')
     createdId(await recordApproval(approvalBody(USER.supervisor, TENANT.A, proposal, null, { p_decision: 'OBJETA', p_reason_code: 'MOTIVO_SINTETICO', p_checklist: {} })), 'approval_id')
-    cutoff.A = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'PUBLICADO', p_supersedes: inProgress })), 'batch_id')
+    cutoff.A = createdId(await recordBatch(batchBody(USER.sistema, TENANT.A, { p_status: 'PUBLICADO', p_supersedes: loading })), 'batch_id')
   })
 })
 
@@ -453,7 +486,7 @@ describe('credenciales', () => {
     await withoutWrites(async () => {
       for (const table of DECISION_TABLES) {
         expectCode(await api('GET', `/rest/v1/${table}?select=id`, { token: config.reviewJwt }), '42501', `leer ${table}`)
-        expectCode(await api('POST', `/rest/v1/${table}`, { token: config.reviewJwt, body: {} }), '42501', `insertar ${table}`)
+        expectCode(await insertRow(table, config.reviewJwt, validRow[table]()), '42501', `insertar ${table}`)
       }
       expectCode(await recordBatch(batchBody(USER.importador, TENANT.A), config.reviewJwt), '42501', 'lote')
     })
@@ -526,6 +559,17 @@ describe('importacion, segun ALIGN-003', () => {
     await withoutWrites(async () => {
       expect((await post(ids.record, blind(OBJECT.A), { cookie: session })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
       expect((await post(ids.approve, { caseReviewId: String(base.proposal), decision: 'APRUEBA', checklist: READY_CHECKLIST }, { cookie: session })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+    })
+  })
+
+  it('REV-IMP-09: la clave de idempotencia de un lote no deja cambiar su estado ni su autor', async () => {
+    const body = batchBody(USER.importador, TENANT.A)
+    const first = createdId(await recordBatch(body), 'batch_id')
+    await withoutWrites(async () => {
+      const repeated = await recordBatch(body)
+      expect([repeated.status, repeated.body]).toEqual([200, { batch_id: first, created: false }])
+      expectRejected(await recordBatch({ ...body, p_status: 'PUBLICADO' }), 'IDEMPOTENCY_KEY_CONFLICT', 'otro estado')
+      expectRejected(await recordBatch({ ...body, p_actor_user: USER.sistema }), 'IDEMPOTENCY_KEY_CONFLICT', 'otro autor')
     })
   })
 
@@ -610,12 +654,28 @@ describe('lectura entre municipios', () => {
     const id = createdId(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_decision: 'RECHAZA', p_decided_intervention: null, p_decided_intensity: null, p_reason_code: 'MOTIVO_SINTETICO', p_reason_text: 'Texto sintetico' })), 'review_id')
     expectCode(await api('GET', `/rest/v1/case_review?select=*&id=eq.${id}`, { token: tokens.supervisor }), '42501', 'select=*')
     expectCode(await api('GET', `/rest/v1/case_review?select=reason_text&id=eq.${id}`, { token: tokens.supervisor }), '42501', 'select=reason_text')
+    expectCode(await api('GET', `/rest/v1/case_review?select=id&reason_text=like.*sintetico*`, { token: tokens.supervisor }), '42501', 'filtrar por el motivo')
+    expectCode(await api('GET', `/rest/v1/case_review?select=id&order=reason_text`, { token: tokens.supervisor }), '42501', 'ordenar por el motivo')
+    expectCode(await api('GET', `/rest/v1/debtor?select=id,case_review(reason_text)&id=eq.${OBJECT.A}`, { token: tokens.supervisor }), '42501', 'embeber el motivo')
     expectCode(await readReason(USER.supervisor, TENANT.A, id, tokens.supervisor), '42501', 'funcion con la sesion')
+    expectCode(await api('GET', `/rest/v1/rpc/read_case_review_reason_text?p_actor_user=${USER.supervisor}&p_tenant=${TENANT.A}&p_case_review=${id}`, { token: tokens.supervisor }), '42501', 'funcion por GET')
     expectRejected(await readReason(USER.consulta, TENANT.A, id), 'ROLE_NOT_ALLOWED', 'consulta')
     expectRejected(await readReason(USER.otroSupervisor, TENANT.A, id), 'ACTOR_NOT_ACTIVE_MEMBER', 'otro municipio')
     expectRejected(await readReason(USER.otroSupervisor, TENANT.B, id), 'REVIEW_NOT_IN_TENANT', 'nombrando el suyo')
     const allowed = await readReason(USER.supervisor, TENANT.A, id)
     expect([allowed.status, allowed.body]).toEqual([200, 'Texto sintetico'])
+  })
+
+  it('REV-READ-06: embeber tablas relacionadas tampoco cruza municipios', async () => {
+    for (const path of ['debtor?select=id,tenant,case_review(id,tenant)', 'case_review_approval?select=id,tenant,case_review(id,tenant)', 'case_review?select=id,tenant,debtor(id,tenant)', 'tenant?select=id,import_batch(id,tenant)']) {
+      const reply = await api('GET', `/rest/v1/${path}`, { token: tokens.operador })
+      expect(reply.status, path).toBe(200)
+      const text = JSON.stringify(reply.body)
+      expect(text, `${path}: hay filas de A`).toContain(`"tenant":${TENANT.A}`)
+      expect(text, `${path}: nada de B`).not.toContain(`"tenant":${TENANT.B}`)
+    }
+    const reply = await api('GET', `/rest/v1/debtor?select=id,case_review(id)&id=eq.${OBJECT.B}`, { token: tokens.operador })
+    expect([reply.status, reply.body], 'objeto ajeno con sus decisiones').toEqual([200, []])
   })
 })
 
@@ -698,5 +758,7 @@ describe('acciones de servidor, compiladas y por HTTP', () => {
       expect(result?.ok).not.toBe(true)
     })
     expect(reviews(String(debtor))).toBe(0)
+    // Control: lo mismo desde el origen propio entra. Lo que frena el caso anterior es el origen, no la entrada.
+    expect((await post(ids.record, { debtorId: String(debtor), decision: 'ACEPTA', expected }, { cookie: session })).result).toMatchObject({ ok: true, created: true })
   })
 })
