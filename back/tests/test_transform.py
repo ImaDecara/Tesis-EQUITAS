@@ -143,8 +143,9 @@ def test_numeracion_no_numerica_no_es_cero(value, expected):
 
 
 @pytest.mark.parametrize(('document', 'expected'), [
-    ('20-12345678-6', 'CUIT'), ('30-71234567-1', 'CUIT'), ('20123456786', 'CUIT'),
-    ('30-71234567-2', 'UNKNOWN'), ('20-12345678-9', 'UNKNOWN'), ('99-00000001-1', 'UNKNOWN'), ('12345678', 'UNKNOWN'), ('ABC', 'UNKNOWN'),
+    # Documento 00000000: dígito verificador válido sin corresponder a una persona real.
+    ('20-00000000-1', 'CUIT'), ('30-00000000-7', 'CUIT'), ('20000000001', 'CUIT'),
+    ('30-00000000-2', 'UNKNOWN'), ('20-00000000-9', 'UNKNOWN'), ('99-00000001-1', 'UNKNOWN'), ('12345678', 'UNKNOWN'), ('ABC', 'UNKNOWN'),
     ('', 'UNKNOWN'), (None, 'UNKNOWN'),
 ])
 def test_tipo_de_documento_no_se_fuerza_a_cuit(document, expected):
