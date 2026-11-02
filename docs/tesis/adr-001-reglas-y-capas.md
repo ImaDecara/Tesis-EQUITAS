@@ -219,7 +219,10 @@ sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`
 `supervisor`; importación: `importador`. Coincide con ALIGN-003 y con las funciones
 de ALIGN-018: quien sea supervisor e importe necesita además una membresía
 `importador`. `importador_sistema` no tiene acceso web. Estos permisos no
-implementan escrituras.
+implementan escrituras. ALIGN-021 agrega `review:read`, lectura de decisiones para
+`consulta`, `operador` y `supervisor`: la compatibilidad E06 no lo tiene. La pestaña
+"Revisión" deriva de esta misma tabla qué formulario ofrece (`roleHasPermission`), y
+la acción lo vuelve a comprobar.
 
 Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
 `validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en

@@ -115,7 +115,7 @@ Objeto | Tipo | Riesgo | Score / prioridad | Atraso | Deuda | Contacto | Recomen
 - Los filtros, la página y la cola viajan juntos en la URL. El contador de cada cola respeta los filtros. Elegir otra cola vuelve a la primera página.
 - Sin `queue`, se abre la primera cola con casos. Un valor desconocido se trata igual.
 - Si la pertenencia es desconocida porque falló una lectura, los contadores dicen "No disponible", nunca 0, y los objetos siguen visibles en el grupo "No disponible".
-- La cola sale de la decisión calculada para las listas, con la fecha de cálculo si no hay corte integrado (ALIGN-010). La sugerencia a revisar es la del corte publicado y puede diferir: la pestaña lo avisa.
+- La cola sale de la decisión calculada para las listas, con la fecha de cálculo si no hay corte integrado (ALIGN-010). La sugerencia a revisar es la del corte publicado y puede diferir: la ficha y la pestaña lo avisan. La cabecera de la ficha sigue diciendo "corte no integrado" porque describe su propio cálculo; integrar el corte en toda la ficha queda fuera de este ticket.
 
 ## 8. Lo que no resuelve
 
