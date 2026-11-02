@@ -9,6 +9,7 @@ import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { auditCaseOpen } from '@/lib/server/audit'
 import {
   Table,
   TableBody,
@@ -19,7 +20,6 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getDebtorDetailData } from '@/lib/equitas-data'
-import { auditCaseOpen } from '@/lib/server/audit'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
