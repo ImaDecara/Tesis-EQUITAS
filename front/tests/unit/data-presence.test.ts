@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateData, compareNullable, currentAmount, daysSinceData, formatNumber, formatPercentage,
-  missingSummary, numericData, observed, percentageData, unavailable } from '@/lib/data-presence'
+import { aggregateData, compareNullable, currentAmount, daysSinceData, formatCountOfTotal, formatNumber, formatPercentage,
+  formatWithUnit, missingSummary, numericData, observed, percentageData, unavailable } from '@/lib/data-presence'
 import { formatCurrency } from '@/lib/utils'
 
 describe('reglas de presencia y agregación del contrato §4.1', () => {
@@ -41,6 +41,17 @@ describe('reglas de presencia y agregación del contrato §4.1', () => {
     expect(formatPercentage(percentageData(0, 10))).toBe('0%')
     expect(missingSummary({ totalDebt: unavailable('INVALIDO') })).toContain('Deuda total: 1 INVALIDO')
     expect(missingSummary()).toBe('')
+  })
+  it('la unidad acompaña solo a un valor', () => {
+    expect(formatWithUnit(0, 'dias')).toBe('0 dias')
+    expect(formatWithUnit(1500, 'dias')).toBe('1.500 dias')
+    expect(formatWithUnit(17.5, '/ 100', 1)).toBe('17.5 / 100')
+    expect(formatWithUnit(null, 'dias')).toBe('No disponible')
+    expect(formatWithUnit(NaN, 'dias')).toBe('No disponible')
+    expect(formatCountOfTotal(1, 2, 'registros')).toBe('1 / 2 registros')
+    expect(formatCountOfTotal(null, 2, 'registros')).toBe('No disponible / 2 registros')
+    expect(formatCountOfTotal(1, null, 'registros')).toBe('1 / No disponible')
+    expect(formatCountOfTotal(null, null, 'registros')).toBe('No disponible')
   })
   it('valida vencimientos antes de calcular días', () => {
     expect(daysSinceData(null).presence).toBe('NO_INFORMADO_EN_ORIGEN')

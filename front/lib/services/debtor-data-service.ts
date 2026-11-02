@@ -1,5 +1,6 @@
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
+import { loadContactTypeCatalog } from '@/lib/server/contact-type-catalog'
 import { daysSinceData, readingFailed } from '@/lib/data-presence'
 import type { DebtorDetailData } from '@/types/equitas-domain'
 
@@ -58,7 +59,12 @@ export async function getDebtorsDataFromService() {
 // Caso de uso del detalle de un objeto de deuda.
 export async function getDebtorDetailDataFromService(debtorId: string) {
   const rawData = await loadRawDebtorData()
-  const mapped = mapDebtorObjectsFromRawData(rawData)
+  const contactTypes = await loadContactTypeCatalog()
+  const mapped = mapDebtorObjectsFromRawData({
+    ...rawData,
+    contactTypes: contactTypes.rows,
+    warnings: contactTypes.warning ? [...rawData.warnings, contactTypes.warning] : rawData.warnings,
+  })
   const detail = mapDebtorDetailFromMappedObjects(debtorId, mapped)
 
   return {

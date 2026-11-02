@@ -104,6 +104,10 @@ Inventario completo de `front/app/**/page.tsx` y `front/components/**`. La colum
 | Acciones (`front/app/recommended-actions/page.tsx`) | Tarjeta por recomendación: cantidad y monto | `item?.count`, `item?.debtAssociated` | [KPI-45](#kpi-45), [KPI-46](#kpi-46) |
 | Acciones (`front/app/recommended-actions/page.tsx`) | Resumen: Cantidad de casos; Deuda asociada; "Riesgo promedio n / 100" | `group.count`, `group.debtAssociated`, `group.averageRisk` | [KPI-45](#kpi-45), [KPI-46](#kpi-46), [KPI-47](#kpi-47) |
 | Acciones (`front/app/recommended-actions/page.tsx`) | Recomendacion; Casos destacados | `group.recommendation`, `group.highlightedCases` | [KPI-13](#kpi-13), [KPI-31](#kpi-31) |
+| Acciones (`front/app/recommended-actions/page.tsx`) | "Qué suma el monto de cada cola": Suma de las colas | `reconciliation.queueTotal` | [KPI-V1-07](#kpi-v1-suma-colas) |
+| Acciones (`front/app/recommended-actions/page.tsx`) | "Qué suma el monto de cada cola": Importe sin vencimiento evaluable; "n objetos · m obligaciones"; "n de esas obligaciones no tiene(n) importe observado" | `reconciliation.outsideAmount`, `reconciliation.outsideObjects`, `reconciliation.outsideObligations`, `reconciliation.outsideWithoutAmount` | [KPI-V1-08](#kpi-v1-fuera-colas) |
+| Acciones (`front/app/recommended-actions/page.tsx`) | "Qué suma el monto de cada cola": Deuda total del tablero y sus faltantes | `reconciliation.dashboardTotal` | [KPI-20](#kpi-20), [KPI-60](#kpi-60) |
+| Acciones (`front/app/recommended-actions/page.tsx`) | "Qué suma el monto de cada cola": Diferencia con el tablero; Resto de la diferencia | `reconciliation.difference`, `reconciliation.otherDifference` | [KPI-V1-09](#kpi-v1-diferencia-colas) |
 | Sin contacto (`front/app/no-contact/page.tsx`) | Total sin contacto | `noContactCases.length` | [KPI-22](#kpi-22) |
 | Sin contacto (`front/app/no-contact/page.tsx`) | Deuda asociada | `associatedDebt` | [KPI-48](#kpi-48) |
 | Sin contacto (`front/app/no-contact/page.tsx`) | Riesgo alto sin contacto | `highRiskNoContact` | [KPI-49](#kpi-49) |
@@ -154,7 +158,7 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 - **Unidad:** días.
 - **Población:** obligaciones vencidas del objeto.
 - **Corte:** mixto (conjunto de vencidas persistido por el ETL; días con el reloj de la consulta); `as_of` no integrado.
-- **Cobertura:** sin vencidas, `NO_APLICA`, que las tablas muestran como "No disponible dias" (solo la distribución de Deuda y mora lo separa como "No aplica", [KPI-42](#kpi-42)); un vencimiento ilegible es `INVALIDO`; si alguna obligación del objeto no tiene estado observado, el máximo queda "No disponible".
+- **Cobertura:** sin vencidas, `NO_APLICA`, que las tablas muestran como "No disponible", sin unidad (solo la distribución de Deuda y mora lo separa como "No aplica", [KPI-42](#kpi-42)); un vencimiento ilegible es `INVALIDO`; si alguna obligación del objeto no tiene estado observado, el máximo queda "No disponible".
 - **Decisión que apoya:** ordenar por antigüedad de la mora; insumo de antigüedad de la severidad v1 ([reglas §4][r4]).
 - **No significa:** días desde la última gestión ni desde la emisión; tampoco prescripción (eso solo lo indica la bandera `VERIFICAR_PRESCRIPCION`, que pide verificación jurídica).
 - **Contrato:** [FO05][c76].
@@ -198,7 +202,7 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 ### <a id="kpi-07"></a>KPI-07 · Contactos disponibles
 
 - **Pantallas:** "Contactos disponibles" en el perfil de la Ficha.
-- **Fórmula:** contactos activos con valor de las personas con relación activa, deduplicados por persona, canal y valor; ya no usa el conteo del perfil (`front/lib/mappers/debtor-object-mapper.ts:328-338`, `387`, `421-423`).
+- **Fórmula:** contactos activos con valor de las personas con relación activa, deduplicados por persona, canal de origen (el tipo, no su etiqueta: una falla del catálogo no cambia el conteo) y valor; ya no usa el conteo del perfil (`front/lib/mappers/debtor-object-mapper.ts:328-338`, `387`, `421-423`).
 - **Unidad:** contactos.
 - **Población:** contactos de las personas del objeto.
 - **Corte:** no depende de una fecha.
@@ -357,7 +361,7 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 
 ### <a id="kpi-20"></a>KPI-20 · Deuda total de la cartera
 
-- **Pantallas:** "Deuda total" en el tablero (`dashboard.totalDebt`) y en Deuda y mora (`summary.totalDebt`).
+- **Pantallas:** "Deuda total" en el tablero (`dashboard.totalDebt`) y en Deuda y mora (`summary.totalDebt`); "Deuda total del tablero" en Acciones, para comparar con las colas ([§9](#diferencia-colas-tablero)).
 - **Fórmula:** Σ [KPI-01](#kpi-01) sobre los objetos con total disponible (`front/lib/mappers/dashboard-metrics-mapper.ts:117`; `front/lib/equitas-view-selectors.ts:74-79`).
 - **Unidad:** ARS.
 - **Población:** todos los objetos leídos (suma por objeto, sin duplicar personas).
@@ -632,7 +636,7 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 - **Unidad:** días.
 - **Población:** objetos con [KPI-02](#kpi-02) > 0.
 - **Corte:** mixto; reloj de la consulta.
-- **Cobertura:** sin objetos vencidos, "No aplica dias"; los objetos con deuda vencida o atraso no disponible se cuentan como faltantes ([KPI-60](#kpi-60)).
+- **Cobertura:** sin objetos vencidos, "No aplica", sin unidad; los objetos con deuda vencida o atraso no disponible se cuentan como faltantes ([KPI-60](#kpi-60)).
 - **Decisión que apoya:** antigüedad típica de la mora.
 - **No significa:** atraso promedio de las obligaciones (es el máximo por objeto, promediado).
 - **Contrato:** [AG16][c78].
@@ -686,6 +690,31 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 - **Contrato:** [AG16][c78], [FO02][c76].
 
 ## 9. Acciones recomendadas (`/recommended-actions`)
+
+### <a id="diferencia-colas-tablero"></a>Por qué la suma de las colas difiere de la deuda total del tablero
+
+Son dos cifras con definición distinta, y ninguna corrige a la otra. Desde ALIGN-010 el monto de cada cola es [KPI-V1-05](#kpi-v1-monto-cola), no [KPI-46](#kpi-46): suma solo las **obligaciones evaluables** de sus objetos (importe observado y ≥ 0, con vencimiento observado y no anterior a `fecha_minima_plausible`), vencidas o no. La deuda total del tablero ([KPI-20](#kpi-20)) suma [KPI-01](#kpi-01) por objeto: el total del perfil persistido o, si el perfil no lo trae, todas las obligaciones con importe, tengan o no vencimiento.
+
+La diferencia se muestra en pantalla y tiene dos partes:
+
+1. **Importe sin vencimiento evaluable** ([KPI-V1-08](#kpi-v1-fuera-colas)): importe observado de las obligaciones cuyo vencimiento falta, es inválido o es anterior al mínimo plausible. Un objeto puede estar en una cola y aportar solo una parte de su deuda (severidad `PARCIAL`), o estar en la cola con monto "No disponible" (`NO_DISPONIBLE`).
+2. **Resto de la diferencia** ([KPI-V1-09](#kpi-v1-diferencia-colas)): totales del perfil distintos de la suma de obligaciones, importes negativos (no evaluables, pero suman en KPI-01) y objetos sin decisión. Puede ser negativo.
+
+Caso armado a mano (`front/tests/pages/correcciones-noche-4.test.ts`, corte 2026-09-30, sin perfil):
+
+| Objeto | Obligaciones | En la cola | Sin vencimiento evaluable | En el tablero |
+|---|---|---|---|---|
+| A | 1000 con vencimiento; 300 sin vencimiento | 1000 | 300 | 1300 |
+| B | 500 con vencimiento futuro | 500 | 0 | 500 |
+| C | 200 sin vencimiento | No disponible | 200 | 200 |
+| D | importe y vencimiento faltantes | No disponible | sin importe observado | No disponible |
+| E | 700 con vencimiento de 1960 | No disponible | 700 | 700 |
+| F | −50 con vencimiento válido | No disponible | 0 | −50 |
+| **Total** | | **1500** | **1200** (4 objetos, 4 obligaciones, 1 sin importe) | **2650** |
+
+Diferencia: 2650 − 1500 = 1150. Resto: 1150 − 1200 = −50, el importe negativo de F.
+
+Si falla una lectura de la que depende una cifra, esa cifra y las que se derivan de ella quedan "No disponible": nunca $0 ni "0 objetos" fuera de las colas ([contrato §4.1][c41], reglas 4 y 6).
 
 ### <a id="kpi-45"></a>KPI-45 · Casos por recomendación
 
@@ -886,7 +915,8 @@ Valores de una fila que se muestran tal como llegan, con un rótulo heredado o c
 | Prioridad de contacto † | `person.priority` | **Porcentaje declarado** en origen, no una prioridad; "No informado" si falta | [RE01][c74] |
 | Relacion | `person.relation` | Rol declarado en origen | [RE02][c74] |
 | Contacto (persona) | `person.contact` | Primer contacto cargado, no verificado | [CO01][c74] |
-| Canal; Valor; Estado (contacto) | `contact.channel`, `contact.value`, `contact.isActive` | Tipo y valor cargados; "Activo" ≠ verificado | [CO01–CO03][c74] |
+| Canal | `contact.channel` | Etiqueta del catálogo `contact_type`, nunca el ID. "No disponible" si el tipo no figura en el catálogo o el catálogo no se leyó (con aviso). Solo sin tipo se infiere por `@` (Email o Telefono; dato derivado) | [CO02][c74] |
+| Valor; Estado (contacto) | `contact.value`, `contact.isActive` | Valor cargado; "Activo" ≠ verificado | [CO01][c74], [CO03][c74] |
 | Monto original | `debt.originalAmount` | `NOTD_capital` | [DE04][c73] |
 | Monto actualizado | `debt.updatedAmount` | Importe actual (`current_amount` o `updated_amount`); un 0 se conserva y no se reemplaza por el capital | [DE06][c73] |
 | Periodo † | `debt.period` | **ID externo** de la obligación (`DEUD_id`), no período fiscal; "No informado" si falta | [DE02][c73] |
@@ -908,6 +938,7 @@ El contrato de ALIGN-007 no se modifica en este ticket. Al inventariar se encont
 |---|---|---|
 | v1 | 29/10/2026 | Versión inicial (ALIGN-013): inventario de cifras visibles en `c17a1bf` y una entrada enlazable por indicador. Provisional como el contrato y las reglas que cita. Cada indicador nuevo o redefinido (ALIGN-010, 014, 021) se agrega en una versión nueva |
 | v1 (corrección 1) | 29/10/2026 | Revisión independiente: el orden del tablero se separa del de los listados ([KPI-58](#kpi-58)); población real del top 5 de personas; orden del Listado economico ([KPI-59](#kpi-59)). Se describe el código integrado con ALIGN-011 (`ab4c5b3`): estados "No disponible"/"No aplica", línea de faltantes ([KPI-60](#kpi-60)) y procedencia temporal ([KPI-61](#kpi-61)) |
+| v1.2 | 02/11/2026 | Correcciones tras la prueba manual: entradas [KPI-V1-07](#kpi-v1-suma-colas), [KPI-V1-08](#kpi-v1-fuera-colas) y [KPI-V1-09](#kpi-v1-diferencia-colas) ([§17](#adenda-reconciliacion-colas)); [KPI-V1-05](#kpi-v1-monto-cola) y [§9](#diferencia-colas-tablero) documentan la diferencia con [KPI-20](#kpi-20); ninguna unidad acompaña a un valor faltante ([KPI-03](#kpi-03), [KPI-41](#kpi-41)); el canal se resuelve por catálogo ([§13](#campos-de-registro)). No cambia ninguna fórmula existente |
 
 [contrato]: contrato-dominio-v1.md
 [reglas]: reglas-decision-v1.md
@@ -948,7 +979,7 @@ a ALIGN-014. La implementación se describe en
 | <a id="kpi-v1-prioridad"></a>KPI-V1-02 Prioridad | `decision.prioridad.valor` = severidad; alias `priorityScore`; banda en `priorityLevel` | Puntos 0–100, **no %**, objetos de una misma intervención | Mismo corte/estado que severidad; null al final | Prioridad ↓, monto evaluable ↓, vencimiento más antiguo ↑, id ASCII ↑. Las prioridades de colas distintas no se comparan |
 | <a id="kpi-v1-intervencion"></a>KPI-V1-03 Intervención | `decision.intervencion` y etiquetas de `contracts/decision-rules.v1.json`; `recommendationType`/`recommendationReason` | Código, etiqueta e intensidad 0–4 (automático ≤2), **no %**, por objeto | Incluye versión, fecha usada y aviso si no hay corte municipal | Falta de contacto → mejorar datos, intensidad 0; no aumenta severidad; revisión se evalúa con supervisor |
 | <a id="kpi-v1-colas"></a>KPI-V1-04 Casos de cola | `buildRecommendationSummary`: con pertenencia conocida, `count = cases.length`, destacados = primeros 3 de `cases` | Cantidad de objetos distintos de esa intervención | Cola vacía conocida = 0; falla de `debtor`/`debt`/`debtor_contact`/`debtor_person` o ningún objeto con decisión en un universo no vacío: colas null, listas vacías. El grupo No disponible conserva los objetos conocidos; con evaluación parcial se cuentan aparte los bloqueados | Elegir casos de la intervención; el orden visual de colas no implica una prioridad global |
-| <a id="kpi-v1-monto-cola"></a>KPI-V1-05 Monto de cola | Σ `decision.severidad.monto_actualizado_ars` de los objetos de `cases` | ARS de obligaciones evaluables, vencidas o no; cada objeto una vez | No usa importes persistidos del perfil; conserva faltantes; sin observados → null, cola vacía leída → 0 | Dimensionar exposición evaluable; un parcial no es el total certificado |
+| <a id="kpi-v1-monto-cola"></a>KPI-V1-05 Monto de cola | Σ `decision.severidad.monto_actualizado_ars` de los objetos de `cases` | ARS de obligaciones evaluables, vencidas o no; cada objeto una vez | No usa importes persistidos del perfil; conserva faltantes; sin observados → null, cola vacía leída → 0. **No suma el importe de las obligaciones sin vencimiento evaluable**: la suma de colas difiere de [KPI-20](#kpi-20) ([§9](#diferencia-colas-tablero)) | Dimensionar exposición evaluable; un parcial no es el total certificado ni se compara con el total del tablero sin [KPI-V1-08](#kpi-v1-fuera-colas) |
 | <a id="kpi-v1-promedio-cola"></a>KPI-V1-06 Severidad media de cola | Media de `decision.severidad.valor` entre casos con valor | Puntos 0–100, **no %**, casos evaluados de la cola | Con faltantes se informa el desglose; cola vacía conocida → NO_APLICA; pertenencia desconocida → null/NO_INTEGRADO, igual que el monto de KPI-V1-05 | Describe esa cola; no predice pago ni compara prioridades entre intervenciones |
 
 Los nombres del DTO anterior se mantienen para compatibilidad de pantallas,
@@ -964,3 +995,13 @@ Una decisión R2 permite contar la cola aunque su puntaje sea null. Fallas de
 ALIGN-014 debe sustituir el orden
 global y las dependencias heredadas de perfiles/estados. Las demás cifras y el orden del tablero
 no se confunden con el contrato de `buildRecommendationSummary` de esta adenda.
+
+## 17. <a id="adenda-reconciliacion-colas"></a>Adenda v1.2: lectura del monto de cola
+
+**Versión del catálogo: v1.2.** Estas cifras explican la diferencia entre colas y tablero; no cambian [KPI-V1-05](#kpi-v1-monto-cola) ni [KPI-20](#kpi-20). Las calcula `buildQueueReconciliation` (`front/lib/equitas-view-selectors.ts`) y se muestran en "Qué suma el monto de cada cola" (`front/app/recommended-actions/page.tsx`).
+
+| Entrada | Campo / fórmula | Unidad y población | Corte / cobertura | Decisión y límite |
+|---|---|---|---|---|
+| <a id="kpi-v1-suma-colas"></a>KPI-V1-07 Suma de las colas | `queueTotal`: Σ [KPI-V1-05](#kpi-v1-monto-cola) de las cinco intervenciones; el grupo "No disponible" no suma | ARS de obligaciones evaluables, vencidas o no; cada objeto una vez | El de KPI-V1-05. Una cola vacía no cuenta como observación: si ninguna cola con objetos tiene monto observado, "No disponible", nunca 0; 0 solo con la cartera vacía o con importes 0 observados. Los faltantes se informan al lado de la cifra. Pertenencia desconocida (falla de `debtor`, `debt`, `debtor_contact` o `debtor_person`, o ningún objeto con decisión): "No disponible" | Comparar colas con el tablero; no es la deuda de la cartera ni deuda exigible |
+| <a id="kpi-v1-fuera-colas"></a>KPI-V1-08 Fuera de las colas por vencimiento | `outsideAmount`: Σ de los importes observados y ≥ 0 de las obligaciones con vencimiento no observado o anterior a `fecha_minima_plausible`. `outsideObjects`: objetos con al menos una de esas obligaciones. `outsideObligations`: esas obligaciones, con y sin importe. `outsideWithoutAmount`: las que no tienen importe observado | ARS, objetos y obligaciones, **no %**; todos los objetos leídos, en cualquier cola | Fecha usada `decisionAsOf`. Sin obligaciones así → 0 derivado. Si ninguna tiene importe observado → "No disponible", con el conteo al lado; si algunas no lo tienen, el importe es parcial y se avisa. Pertenencia desconocida: los cuatro valores "No disponible", nunca 0 | Dimensionar cuánta deuda requiere corregir el vencimiento antes de evaluarla. Un objeto contado aquí puede seguir en una cola por sus otras obligaciones; no significa que el objeto esté fuera de gestión ni que no deba nada |
+| <a id="kpi-v1-diferencia-colas"></a>KPI-V1-09 Diferencia con el tablero y resto | `difference` = [KPI-20](#kpi-20) − KPI-V1-07. `otherDifference` = `difference` − `outsideAmount`, en centavos | ARS; puede ser negativo. Población: la de sus términos | Si algún término es null → "No disponible", nunca 0. Faltantes del tablero: [KPI-60](#kpi-60), al lado de la cifra. Un resto de 0 solo es válido con todos los términos observados | Saber cuánto de la diferencia se explica por vencimientos. El resto agrupa totales del perfil distintos de la suma de obligaciones, importes negativos y objetos sin decisión; no se desglosa ni indica un error de la cartera por sí mismo |

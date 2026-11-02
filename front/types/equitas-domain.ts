@@ -251,6 +251,8 @@ export type RawDebtorDataBundle = {
   people: RawRow[]
   debtorContacts: RawRow[]
   debtorProfiles: RawRow[]
+  // Solo lo aporta el detalle, único lugar donde se muestra el canal de un contacto.
+  contactTypes?: RawRow[]
   warnings: DataWarning[]
 }
 

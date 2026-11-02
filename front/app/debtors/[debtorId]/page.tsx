@@ -1,4 +1,4 @@
-import { formatNumber, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
+import { formatNumber, formatWithUnit, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
 import decisionRules from '../../../../contracts/decision-rules.v1.json'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -141,7 +141,7 @@ export default async function DebtorDetailPage({
                 {debtor.recommendationType}
               </Badge>
               <p className="text-xs text-slate-600">
-                {formatNumber(debtor.peopleCount)} persona(s) asociada(s)
+                {formatWithUnit(debtor.peopleCount, 'persona(s) asociada(s)')}
               </p>
             </CardContent>
           </Card>
@@ -186,14 +186,14 @@ export default async function DebtorDetailPage({
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Dias de atraso:</span>{' '}
-                    {formatNumber(debtor.maxDaysOverdue)} dias
+                    {formatWithUnit(debtor.maxDaysOverdue, 'dias')}
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Estado:</span> {debtor.status}
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Prioridad dentro de su cola (puntos de 0 a 100):</span>{' '}
-                    {debtor.priorityLevel ?? 'No disponible'} ({formatNumber(debtor.priorityScore)})
+                    {debtor.priorityScore === null ? 'No disponible' : `${debtor.priorityLevel} (${formatNumber(debtor.priorityScore)})`}
                   </p>
                 </CardContent>
               </Card>
@@ -274,6 +274,13 @@ export default async function DebtorDetailPage({
                 <CardTitle>Contactos de personas asociadas</CardTitle>
               </CardHeader>
               <CardContent>
+                {contacts.some(contact => contact.channel === 'No disponible') && (
+                  <p role="status" className="mb-3 text-sm text-amber-800">
+                    {readingFailed(warnings, 'contact_type')
+                      ? 'Canal no disponible: no se pudo leer el catálogo de tipos de contacto.'
+                      : 'Canal no disponible en contactos cuyo tipo no figura en el catálogo.'}
+                  </p>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -383,7 +390,7 @@ export default async function DebtorDetailPage({
                   <CardTitle className="text-sm">Antiguedad</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {formatNumber(profile.antiquityDays)} dias
+                  {formatWithUnit(profile.antiquityDays, 'dias')}
                 </CardContent>
               </Card>
               <Card>
@@ -418,9 +425,9 @@ export default async function DebtorDetailPage({
                 <p className="text-base font-semibold text-slate-900">{debtor.recommendation}</p>
                 <p>{debtor.recommendationReason}</p>
                 <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                  Ejemplo de lectura operativa: {debtor.recommendation} porque el caso combina{' '}
-                  {formatCurrency(debtor.totalDebt)} de deuda total, {formatNumber(debtor.maxDaysOverdue)} dias
-                  de atraso y contacto {debtor.hasContact === null ? 'no disponible' : debtor.hasContact ? 'disponible' : 'faltante'}.
+                  Ejemplo de lectura operativa: {debtor.recommendation === 'No disponible' ? 'recomendación no disponible; el caso combina' : `${debtor.recommendation} porque el caso combina`}{' '}
+                  deuda total: {formatCurrency(debtor.totalDebt)}, atraso: {formatWithUnit(debtor.maxDaysOverdue, 'dias')} y
+                  contacto: {debtor.hasContact === null ? 'no disponible' : debtor.hasContact ? 'disponible' : 'faltante'}.
                 </p>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { aggregateData, formatNumber, formatPercentage, numericData, missingSummary, percentageData } from '@/lib/data-presence'
+import { aggregateData, formatNumber, formatPercentage, formatWithUnit, numericData, missingSummary, percentageData } from '@/lib/data-presence'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -116,22 +116,34 @@ export default async function HomePage() {
             <CardDescription>Lectura rapida para orientar la mesa de gestion.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-3">
-            <p>
-              <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span> de los objetos
-              estan en riesgo alto.
-            </p>
-            <p>
-              Los 5 objetos con mayor deuda concentran{' '}
-              <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span> del
-              saldo total.
-            </p>
-            <p>
-              Hay{' '}
-              <span className="font-semibold text-slate-900">
-                {formatNumber(dashboard.withoutContactCases)}
-              </span>{' '}
-              casos bloqueados por falta de contacto.
-            </p>
+            {highRiskShare.value === null ? (
+              <p>Objetos en riesgo alto: <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span></p>
+            ) : (
+              <p>
+                <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span> de los objetos
+                estan en riesgo alto.
+              </p>
+            )}
+            {topDebtConcentration.value === null ? (
+              <p>Concentración de los 5 objetos con mayor deuda: <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span></p>
+            ) : (
+              <p>
+                Los 5 objetos con mayor deuda concentran{' '}
+                <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span> del
+                saldo total.
+              </p>
+            )}
+            {dashboard.withoutContactCases === null ? (
+              <p>Casos bloqueados por falta de contacto: <span className="font-semibold text-slate-900">{formatNumber(null)}</span></p>
+            ) : (
+              <p>
+                Hay{' '}
+                <span className="font-semibold text-slate-900">
+                  {formatNumber(dashboard.withoutContactCases)}
+                </span>{' '}
+                casos bloqueados por falta de contacto.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -211,7 +223,7 @@ export default async function HomePage() {
                       <TableCell>
                         <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                       </TableCell>
-                      <TableCell className="text-right">{formatNumber(debtor.overdueDays)} dias</TableCell>
+                      <TableCell className="text-right">{formatWithUnit(debtor.overdueDays, 'dias')}</TableCell>
                       <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                     </TableRow>
                   ))}
@@ -248,7 +260,7 @@ export default async function HomePage() {
                         {recommendation}
                       </Badge>
                       <span className="text-xs font-semibold text-slate-700">
-                        {formatNumber(count)} casos ({formatPercentage(percentage)})
+                        {count === null ? formatNumber(null) : `${formatNumber(count)} casos (${formatPercentage(percentage)})`}
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-200">

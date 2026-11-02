@@ -16,17 +16,28 @@ export function formatCurrency(value: number | null, currency = 'ARS') {
   }).format(value)
 }
 
-// Formato de fecha seguro para valores nulos o invalidos.
+const ISO_CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/
+
+// El dia se toma tal como viene escrito: sin `Date` local ni `toLocaleDateString`,
+// muestra lo mismo en cualquier zona, en el servidor y en el navegador (sin desajuste
+// de hidratacion). Lo imposible o ilegible se muestra tal como llego, nunca corrido.
 export function formatDate(value: string | null | undefined) {
   if (!value) {
     return 'Sin fecha'
   }
 
-  const parsed = new Date(value)
+  const match = ISO_CALENDAR_DATE.exec(value.trim())
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (!match) {
     return value
   }
 
-  return parsed.toLocaleDateString('es-AR')
+  const [year, month, day] = match.slice(1).map(Number)
+  const calendar = new Date(Date.UTC(year, month - 1, day))
+
+  if (calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day) {
+    return value
+  }
+
+  return `${day}/${month}/${match[1]}`
 }

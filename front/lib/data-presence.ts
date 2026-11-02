@@ -78,6 +78,18 @@ export function formatNumber(value: number | null, digits?: number) {
   return digits === undefined ? value.toLocaleString('es-AR') : value.toFixed(digits)
 }
 
+// La unidad acompaña solo a un valor: sin dato no queda "No disponible dias".
+export function formatWithUnit(value: number | null, unit: string, digits?: number) {
+  const text = formatNumber(value, digits)
+  return value === null || !Number.isFinite(value) ? text : `${text} ${unit}`
+}
+
+// "n / N unidad": con ambos faltantes no se repite "No disponible" ni queda la unidad suelta.
+export function formatCountOfTotal(part: number | null, total: number | null, unit: string) {
+  if (part === null && total === null) return formatNumber(null)
+  return `${formatNumber(part)} / ${formatWithUnit(total, unit)}`
+}
+
 export function percentageData(numerator: number | null, denominator: number | null) {
   if (numerator === null || denominator === null) return unavailable()
   return denominator > 0 ? observed(Math.round(100 * numerator / denominator)) : { value: null, presence: 'NO_APLICA' as const, missing: {} }

@@ -1,4 +1,4 @@
-import { formatNumber, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
+import { formatNumber, formatWithUnit, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { AlertCircle, CircleDollarSign, Eye, Percent, ShieldAlert } from 'lucide-react'
 
@@ -164,7 +164,7 @@ export default async function NoContactPage({
                       <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(debtor.maxDaysOverdue)} dias</TableCell>
+                    <TableCell className="text-right">{formatWithUnit(debtor.maxDaysOverdue, 'dias')}</TableCell>
                     <TableCell>Sin telefono/email activo</TableCell>
                     <TableCell className="text-right">
                       <Link

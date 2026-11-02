@@ -1,4 +1,4 @@
-import { formatNumber, readingFailed } from '@/lib/data-presence'
+import { formatCountOfTotal, formatNumber, formatWithUnit, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, SlidersHorizontal } from 'lucide-react'
 
@@ -192,8 +192,7 @@ export default async function DebtorsPage({
 
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredDebtors.length.toLocaleString('es-AR')} /{' '}
-          {readingFailed(warnings, 'debtor') ? 'No disponible' : debtors.length.toLocaleString('es-AR')} registros
+          {formatCountOfTotal(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredDebtors.length, readingFailed(warnings, 'debtor') ? null : debtors.length, 'registros')}
         </Badge>
       </section>
 
@@ -242,7 +241,7 @@ export default async function DebtorsPage({
               <p className="mt-2 text-sm text-slate-600">
                 Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? 'No disponible' : filteredDebtors.length.toLocaleString('es-AR')} registros.
+                {formatWithUnit(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredDebtors.length, 'registros')}.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
