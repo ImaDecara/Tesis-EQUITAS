@@ -318,3 +318,11 @@ contextos quedó no concluyente por la carga de la máquina: sin hallazgos, pero
 sesión no llegó a medir. Con la cuenta E06 se comprobó que solo lee: la DAL deniega
 los demás permisos, la Data API con RLS rechaza sus escrituras y las funciones de
 ALIGN-018 responden `ROLE_NOT_ALLOWED`. Falta la re-revisión independiente.
+
+Validación del 02/11, con la máquina libre y sobre `f547bba`. `test:supabase` da 12/12
+y SMOKE-01 5/5. El barrido de contextos reemplaza al no concluyente del 31/10: aprobado,
+con 1.140 solicitudes en 29 contextos, sin hallazgos y sin contextos sin medir; antes,
+un mutante de la DAL comprobó que la sonda puede fallar. En los gates, el único control
+en falla es `audit`, por el aviso GHSA-g3hv-75wg-m249 (solo desarrollo, 0 hallazgos en
+producción), desvío declarado que autorizó el usuario. Falta la re-revisión
+independiente.
