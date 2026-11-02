@@ -348,6 +348,15 @@ def test_la_fixture_completa_se_rechaza_con_cero_filas_y_lote_fallido(campaign):
                     estado=event["status"], filas_de_cartera=0, dataset=dataset_hash(hashes), hashes=hashes)
 
 
+def test_el_lote_derivado_son_lineas_de_la_fixture_sin_alterar(validated):
+    for name in ("cabecera", "detalle"):
+        source = (FIXTURE / f"{name}.tsv").read_text(encoding="utf-8").splitlines()
+        lines = iter(source)
+        derived = (validated.lot / f"{name}.tsv").read_text(encoding="utf-8").splitlines()
+        assert len(derived) < len(source), "El lote validado es un derivado: sin cuarentena de más ni detalle huérfano"
+        assert all(line in lines for line in derived), "Una línea del lote no está en la fixture o cambió de orden"
+
+
 def test_el_validador_aprueba_el_lote_sin_credenciales_ni_base(validated):
     assert validated.report["resultado_lote"] == "VALIDADO"
     assert validated.report["publicacion_permitida"] is True

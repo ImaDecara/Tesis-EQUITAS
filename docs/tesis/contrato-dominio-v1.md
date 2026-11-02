@@ -449,6 +449,7 @@ agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
 | v1 (adenda ALIGN-018, corrección 1) | 31/10/2026 | Revisión independiente de ALIGN-018: antecedente siempre anterior en las cadenas; límite de `reason_text` sobre lo almacenado; `supervisor` no registra lotes; límites y claves de `counts` |
 | v1 (adenda ALIGN-026) | 02/11/2026 | §14: semántica de la carga V1 en la base local. Prevalece sobre las columnas de faltantes y las brechas de §5, §7.1–§7.5, §8 y §10 para los campos que lista |
 | v1 (adenda ALIGN-026, corrección 1) | 02/11/2026 | Revisión independiente de ALIGN-026: sin estados observados no hay cero de deuda vencida; `debt_state_not_observed_count`; `debt.status` sale del estado que resolvió el validador; documento y persona se clasifican sobre el valor tal como llegó; gestiones y contactos sin insumos quedan nulos |
+| v1 (adenda ALIGN-027) | 02/11/2026 | §14: `computed_at` de un perfil es el momento del cálculo que produjo sus valores; una recarga sin cambios lo conserva (L04). `import_batch.counts` agrega `filas_*`, `escrituras` y `faltantes` |
 
 ## 13. Decisión humana, aprobación y lote (ALIGN-018)
 
@@ -501,6 +502,7 @@ Vale para lo que carga `python -m ETL.run_etl --execute`, **solo en la base loca
 | PR06 | `debtor_profile.available_contact_count` | Contactos activos con formato utilizable de las personas del objeto en este lote | Celdas vacías con columna presente: 0 derivado, como el oráculo. Ninguna de las tres columnas en el archivo: nulo = `NO_INFORMADO_EN_ORIGEN` | D |
 | PR07 | `debtor_profile.previous_contact_count`, `debtor_profile.previous_response_count` | Nulos: no hay fuente | `NO_INTEGRADO`, ya no un 0 por defecto | A |
 | PR11 | `debtor_profile.debt_state_not_observed_count` | Obligaciones del objeto cuyo estado de origen no está observado. Columna nueva, solo base local | 0 = PR02–PR04 completos. Nula en un perfil que no la calculó | D |
+| L04 | `debtor_profile.profile_generated_at` | Momento del cálculo que produjo los valores del perfil. Si una recarga obtiene los mismos valores, se conserva: la fila no se reescribe (ALIGN-027) | Nula solo si el perfil no se generó | D |
 | PR08 | `debtor_profile.socioeconomic_risk_level` | **No se calcula.** Nulo: dependía del promedio del lote. La severidad la calculan las reglas v1 al leer (ALIGN-008) | Legado del original; nulo aquí = `NO_INTEGRADO` | A |
 | PR09, PR10 | `debtor_profile_detail.risk_value`, `debtor_profile_detail.reason` | **No se calcula.** Una fila por relación, con `risk_value` nulo y `reason` que lo declara: derivaba de PR08 | Nulo, nunca 0 ni BAJO. El mapeador actual lo presenta como no informado (§9 regla 6) | A |
 

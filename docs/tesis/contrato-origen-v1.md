@@ -548,9 +548,15 @@ demás es `UNKNOWN`, y el texto se conserva.
 contrato (nunca rutas o nombres), corte, actualización de origen, versión de reglas y conteos. Los conteos son
 enteros: filas leídas, aceptadas y rechazadas por archivo y por código, objetos, estados al corte de
 los objetos publicables y, aparte, de los que quedan en cuarentena, hallazgos por código, bloqueos e
-importes en centavos. Un conteo no calculado se omite; no es 0.
+importes en centavos. Un conteo no calculado se omite; no es 0. `PUBLICADO` agrega `filas_insertadas`,
+`filas_actualizadas`, `filas_sin_cambios` y su detalle por tabla en `escrituras` (ALIGN-027).
 
-Queda fuera de este ticket y de esta versión: bajas y delta (ALIGN-031), paginación de la lectura de
-deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote (ALIGN-032),
-la campaña real con `back/tests_real` (ALIGN-027), y el municipio obtenido del contexto autorizado
-(ALIGN-052/054): la CLI usa el tenant 1 fijo.
+**Lote completo (ALIGN-027):** V1 no admite delta ni bajas. Si un archivo no trae un objeto ya publicado, una obligación
+publicada de un objeto aceptado o una relación persona–objeto, el lote termina en `FALLIDO`, sin escribir, con
+`PARTIAL_LOAD_REJECTED` y `faltantes` en los conteos. Un objeto en cuarentena viene en el archivo: conserva su estado previo.
+Recargar el mismo lote no inserta ni actualiza ninguna fila. Procedimiento en
+[`entorno-aislado.md` §8](entorno-aislado.md#8-carga-v1-verificada-align-027).
+
+Queda fuera de esta versión: la política de bajas y delta, incluidos contactos y direcciones que dejan de venir, y la
+paginación de la lectura de deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote
+(ALIGN-032), y el municipio obtenido del contexto autorizado (ALIGN-052/054): la CLI usa el tenant 1 fijo.
