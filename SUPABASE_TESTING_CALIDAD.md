@@ -304,6 +304,26 @@ commit;
 notify pgrst, 'reload schema';
 ```
 
+## Campaña de autorización del registro de decisiones (ALIGN-022, solo base local)
+
+Demuestra que el registro de decisiones no se puede falsear ni leer entre municipios, con Auth, RLS, PostgREST, las funciones y las acciones compiladas reales. **Es una campaña separada de la de 12 casos de E06, que no cambia:** su glob, sus fixtures y su runner siguen iguales y siguen reservados al proyecto testing. Esta solo acepta `localhost`.
+
+| Qué | Dónde |
+| --- | --- |
+| Pruebas, semilla y procedimiento | [`front/tests/external-review/`](front/tests/external-review/README.md) |
+| Configuración de Vitest | `front/vitest.review.config.ts`. `tests/external-review/**` está en el `exclude` de `front/vitest.config.ts`, para que las suites aisladas sigan sin red ni secretos |
+| Runner y validador | `database/testing/review_integration.py`, con pruebas en `database/testing/test_review_integration.py` (`back/.venv/bin/python -m unittest database/testing/test_review_integration.py`, desde la raíz) |
+
+**Ubicación.** El ticket pone el runner en `quality/` y pide describirlo en `quality/README.md`. Por decisión del usuario del 02/11/2026 no se modifica `quality/`: el runner vive en `database/testing/` y la descripción, acá. El alcance y la aceptación no cambian. Consecuencia: `python -m unittest discover -s quality/tests` y el workflow de CI no corren estas pruebas del validador; hay que ejecutarlas con el comando de arriba.
+
+**Qué rechaza el runner antes de la primera solicitud.** El original y el testing por URL y por `project_ref`, en la configuración o en cualquier variable de entorno; cualquier otro host que no sea `localhost`, `127.0.0.1` o `::1`; una clave administrativa; un servidor de otro commit, según `/api/build-info`. Los IDs prohibidos salen de `quality/supabase-testing.json`, que solo se lee.
+
+**Qué exige para aprobar.** Inventario exacto de 75 casos, sin faltantes, omitidos ni ajenos; 75 aprobadas, 0 fallidas y 0 omitidas; SHA completo con árbol limpio; destino local. Deja `review.json` y `review.xml` (JUnit), los dos con el SHA y el entorno. Vitest sale con 0 aunque falte un caso: el código de salida no alcanza, y por eso el validador compara el inventario.
+
+**Qué demuestra.** Un operador legítimo no puede insertar directo por la Data API con sugerencia, hash o versión falsificados: el rechazo es `42501`, falta de privilegio, no una regla de datos. Las pruebas no piden `return=representation`: `RETURNING` exige leer `reason_text`, y daría `42501` aunque el `INSERT` estuviera permitido. El mismo error enmascararía un privilegio mal otorgado en `UPDATE`.
+
+**Límites.** No reproduce las intercalaciones de importación, que siguen en `front/tests/local-review/`. No demuestra nada sobre el original ni sobre el proyecto testing. Quien tenga el secreto JWT del proyecto puede firmar cualquier rol que `authenticator` pueda asumir: la campaña prueba qué puede hacer cada credencial, no protege el secreto.
+
 ## Semántica de la carga ETL (ALIGN-026, solo base local)
 
 `supabase/migrations/20261102100000_etl_semantic_nullables.sql` se aplica **solo en la base local**. Quita `not null` de `debtor_profile.socioeconomic_risk_level`, `oldest_debt_days`, `average_debt_age_days`, `overdue_debt_amount`, `overdue_debt_count`, `available_contact_count`, `previous_contact_count` y `previous_response_count`, de `debtor_profile_detail.risk_value` y de `debtor.status`, para que una ausencia no se guarde como cero o como activo. Agrega `debtor_profile.debt_state_not_observed_count`, nula si el perfil no la calculó. Conserva los valores por defecto, porque e06 no escribe algunas de esas columnas. No toca políticas, RLS ni grants, y agrega `columnas_nulables_etl` al verificador.
