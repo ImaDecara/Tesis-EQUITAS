@@ -2,6 +2,7 @@
 
 import copy
 import csv
+import inspect
 import io
 import json
 import os
@@ -20,7 +21,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 from openpyxl.utils.datetime import MAC_EPOCH, to_excel
-from test_source_mapping import payloads
+from test_source_mapping import payloads as _payloads
 
 from ETL import extract
 from ETL.readers import supervised
@@ -231,6 +232,13 @@ def profile_for(name):
 # ------------------------------------------------------------- equivalencia
 
 
+def payloads_of(files, mapping):
+    """Los payloads de un lote. ALIGN-026 hace que se armen desde las rutas y el perfil: esta prueba vale en las dos versiones."""
+    if len(inspect.signature(_payloads).parameters) == 2:
+        return _payloads(files, mapping)
+    return _payloads(extract.extract_source_files(files['cabecera'], files['detalle'], mapping=mapping))
+
+
 def tsv_reference():
     mapping = load_mapping(FIXTURE)
     files = {kind: FIXTURE / f'{kind}.tsv' for kind in KINDS}
@@ -240,7 +248,7 @@ def tsv_reference():
 @pytest.mark.parametrize('layout', ['un_libro', 'dos_libros'])
 def test_same_portfolio_gives_same_payloads_and_report_in_tsv_csv_and_xlsx(tmp_path, layout):
     original, mapping, expected = tsv_reference()
-    baseline = payloads(extract.extract_source_files(*original.values(), mapping=mapping))
+    baseline = payloads_of(original, mapping)
     sheets = fixture_sheets()
     if layout == 'un_libro':
         files = dict.fromkeys(KINDS, write(tmp_path, 'libro', workbook_bytes(sheets)))
@@ -248,7 +256,7 @@ def test_same_portfolio_gives_same_payloads_and_report_in_tsv_csv_and_xlsx(tmp_p
         files = {kind: write(tmp_path, f'{kind}-libro', workbook_bytes({kind: sheets[kind]})) for kind in KINDS}
     profile = xlsx_profile()
     assert extract.validate_source_files(files, profile, cut_off=profile['fecha_corte']) == expected
-    assert payloads(extract.extract_source_files(files['cabecera'], files['detalle'], mapping=profile)) == baseline
+    assert payloads_of(files, profile) == baseline
     tables = extract.read_source_tables(files, profile)
     assert [row.line for row in tables['cabecera'].rows] == list(range(2, 44))
     delimited = {}
@@ -259,7 +267,7 @@ def test_same_portfolio_gives_same_payloads_and_report_in_tsv_csv_and_xlsx(tmp_p
         delimited[kind] = path
     profile = csv_profile()
     assert extract.validate_source_files(delimited, profile, cut_off=profile['fecha_corte']) == expected
-    assert payloads(extract.extract_source_files(*delimited.values(), mapping=profile)) == baseline
+    assert payloads_of(delimited, profile) == baseline
 
 
 def test_generator_xlsx_variant_matches_the_oracle(tmp_path):
@@ -300,11 +308,11 @@ def typed_sheets():
 
 def test_numeric_cells_and_serial_dates_give_the_same_report_and_payloads(tmp_path):
     original, mapping, expected = tsv_reference()
-    baseline = payloads(extract.extract_source_files(*original.values(), mapping=mapping))
+    baseline = payloads_of(original, mapping)
     path = write(tmp_path, 'libro', workbook_bytes(typed_sheets()))
     profile = xlsx_profile(fecha_serial='1900')
     assert extract.validate_source_files(dict.fromkeys(KINDS, path), profile, cut_off=profile['fecha_corte']) == expected
-    assert payloads(extract.extract_source_files(path, path, mapping=profile)) == baseline
+    assert payloads_of(dict.fromkeys(KINDS, path), profile) == baseline
 
 
 def typed_cells(tmp_path, values, *, configure=None, **fmt):
