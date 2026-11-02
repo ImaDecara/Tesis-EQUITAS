@@ -23,6 +23,8 @@ from openpyxl.utils.datetime import MAC_EPOCH, to_excel
 from test_source_mapping import payloads
 
 from ETL import extract
+from ETL.readers import supervised
+from ETL.readers import xlsx as xlsx_reader
 from ETL.readers.limits import (
     XLS_MESSAGE,
     Deadline,
@@ -1737,3 +1739,305 @@ def test_a_zip_comment_of_the_declared_length_is_accepted(tmp_path):
     position = data.rindex(b'PK\x05\x06')
     commented = data[:position + 20] + struct.pack('<H', 7) + b'esquema'
     assert lot_result(write(tmp_path, 'libro', commented), xlsx_profile()) == 'VALIDADO'
+
+
+# ------------------------------------------------------------- ciclo 1: el plazo
+
+
+class Scripted:
+    """Reloj de prueba: el tiempo pasa solo cuando la prueba lo dice."""
+
+    def __init__(self, monkeypatch):
+        self.now = 0.0
+        monkeypatch.setattr(extract, 'Deadline', lambda seconds: Deadline(seconds, clock=lambda: self.now))
+
+    def expire(self):
+        self.now = 1e9
+
+
+class _EndsTime:
+    """Envuelve un recorrido XML y avisa cuando se termina la parte."""
+
+    def __init__(self, parser, ended):
+        self.parser, self.ended = parser, ended
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            return next(self.parser)
+        except StopIteration:
+            self.ended()
+            raise
+
+    def __getattr__(self, name):
+        return getattr(self.parser, name)
+
+
+def _excel_like_book():
+    return with_shared_strings('<row r="1"><c r="A1" t="s"><v>0</v></c></row>', f'<sst xmlns="{MAIN_NS}"><si><t>A</t></si></sst>'.encode())
+
+
+def test_the_deadline_is_checked_when_every_xml_part_ends(tmp_path, monkeypatch):
+    """Un comentario enorme al final de una parte no da ningún lugar donde cortar mientras se lee."""
+    path = write(tmp_path, 'libro', _excel_like_book())
+    clock = Scripted(monkeypatch)
+    real = xlsx_reader.iterparse
+    ended = [0]
+    expire_at = [None]
+
+    def timed(*args, **kwargs):
+        def on_end():
+            ended[0] += 1
+            if ended[0] == expire_at[0]:
+                clock.expire()
+        return _EndsTime(real(*args, **kwargs), on_end)
+    monkeypatch.setattr(xlsx_reader, 'iterparse', timed)
+    # Sin vencimiento rechaza por lo que le falta al libro: el recorrido llegó al final.
+    reject(path, xlsx_profile(), 'COLUMNA_OBLIGATORIA_AUSENTE')
+    parts = ended[0]
+    assert parts >= 6
+    for position in range(1, parts + 1):
+        ended[0], clock.now = 0, 0.0
+        expire_at[0] = position
+        reject(path, xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO')
+
+
+def test_the_deadline_is_checked_right_after_the_stylesheet_is_built(tmp_path, monkeypatch):
+    path = write(tmp_path, 'libro', minimal_workbook())
+    clock = Scripted(monkeypatch)
+    real = xlsx_reader.apply_stylesheet
+
+    def slow(*args):
+        real(*args)
+        clock.expire()
+    monkeypatch.setattr(xlsx_reader, 'apply_stylesheet', slow)
+    monkeypatch.setattr(xlsx_reader, '_read_sheet', lambda *_: pytest.fail('no debe leer hojas después del plazo'))
+    reject(path, xlsx_profile(), 'TIEMPO_LECTURA_EXCEDIDO')
+
+
+def test_an_expired_batch_never_reaches_validation_in_any_format(tmp_path, monkeypatch):
+    book = validated_book(tmp_path)
+    sheets = validated_sheets()
+    delimited = {}
+    for kind in KINDS:
+        path = tmp_path / f'{kind}.csv'
+        with path.open('w', encoding='utf-8', newline='') as stream:
+            csv.writer(stream).writerows(sheets[kind])
+        delimited[kind] = path
+    assert lot_result(book, xlsx_profile()) == 'VALIDADO'
+    profile = csv_profile()
+    assert extract.validate_source_files(delimited, profile, cut_off=profile['fecha_corte'])['resultado_lote'] == 'VALIDADO'
+    clock = Scripted(monkeypatch)
+    real = extract._finish_table
+
+    def finish(table, kind, *args):
+        result = real(table, kind, *args)
+        if kind == 'detalle':
+            clock.expire()  # Lo último que hace la lectura: después no queda ninguna fila donde cortar.
+        return result
+    monkeypatch.setattr(extract, '_finish_table', finish)
+    with pytest.raises(ValidationError, match='TIEMPO_LECTURA_EXCEDIDO'):
+        extract.validate_source_files(dict.fromkeys(KINDS, book), xlsx_profile(), cut_off='2026-09-30')
+    clock.now = 0.0
+    with pytest.raises(ValidationError, match='TIEMPO_LECTURA_EXCEDIDO'):
+        extract.validate_source_files(delimited, profile, cut_off='2026-09-30')
+
+
+class _Counting(Deadline):
+    def __init__(self):
+        super().__init__(60)
+        self.calls = 0
+
+    def check(self, kind, line=0):
+        self.calls += 1
+
+
+def test_measuring_a_part_checks_the_deadline_while_it_walks(tmp_path):
+    styles = f'<styleSheet xmlns="{MAIN_NS}">'.encode() + b'<a/>' * 100_000 + b'</styleSheet>'
+    deadline = _Counting()
+    with zipfile.ZipFile(io.BytesIO(with_styles(styles))) as archive:
+        xlsx_reader._checked_tree(archive, 'xl/styles.xml', 'cabecera', FileLimits(), deadline)
+    assert deadline.calls >= 100_000 // 4096
+
+
+def test_walking_inside_a_row_or_a_string_checks_the_deadline(tmp_path):
+    source = io.BytesIO(f'<sst xmlns="{MAIN_NS}"><si>'.encode() + b'<r/>' * 60_000 + b'</si></sst>')
+    deadline = _Counting()
+    assert len(list(xlsx_reader._units(source, xlsx_reader.STRING_TAG, 'cabecera', FileLimits(), deadline))) == 1
+    assert deadline.calls >= 60_000 // 4096
+
+
+# ------------------------------------------------------------- ciclo 1: proceso aparte
+
+
+def supervised_outcome(files, mapping, **kwargs):
+    start = time.perf_counter()
+    try:
+        batch = supervised.read_source_batch_supervised(files, mapping, **kwargs)
+    except ValidationError as error:
+        return str(error), time.perf_counter() - start
+    return batch, time.perf_counter() - start
+
+
+def rows_of(table):
+    return table.columns, [(row.line, row.values) for row in table.rows]
+
+
+def _delimited_validated(folder, separator=','):
+    files = {}
+    for kind, rows in validated_sheets().items():
+        path = folder / f'{kind}.csv'
+        with path.open('w', encoding='utf-8', newline='') as stream:
+            csv.writer(stream, delimiter=separator).writerows(rows)
+        files[kind] = path
+    return files
+
+
+@pytest.mark.parametrize('layout', ['xlsx', 'csv'])
+def test_supervised_reading_gives_exactly_what_the_reader_gives(tmp_path, layout):
+    if layout == 'xlsx':
+        data = rewrite_zip(validated_data(), add={})
+        files, mapping = dict.fromkeys(KINDS, write(tmp_path, 'libro', data)), xlsx_profile()
+    else:
+        files, mapping = _delimited_validated(tmp_path), csv_profile()
+    expected = extract.read_source_batch(files, mapping)
+    batch, _ = supervised_outcome(files, mapping)
+    assert {kind: rows_of(table) for kind, table in batch.tables.items()} == {kind: rows_of(table) for kind, table in expected.tables.items()}
+    assert batch.ignored_sheets == expected.ignored_sheets
+    contract = load_contract()
+    report = validate_batch(batch.tables, mapping, contract, mapping['fecha_corte'])
+    assert report == validate_batch(expected.tables, mapping, contract, mapping['fecha_corte'])
+    assert report['resultado_lote'] == 'VALIDADO'
+
+
+def test_supervised_reading_keeps_the_codes_of_the_reader_and_leaves_nothing_behind(tmp_path):
+    book = write(tmp_path, 'libro', minimal_workbook())
+    assert supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile())[0].startswith('COLUMNA_OBLIGATORIA_AUSENTE')
+    forged = write(tmp_path, 'forjado', handmade_zip(minimal_workbook(), _prefix_of_a_longer_stream))
+    message = supervised_outcome(dict.fromkeys(KINDS, forged), xlsx_profile())[0]
+    assert message.split(':')[0] == 'ZIP_CORRUPTO' and str(tmp_path) not in message
+    assert sorted(path.name for path in tmp_path.iterdir()) == ['forjado', 'libro']
+    with pytest.raises(ValidationError, match='ARCHIVOS_REQUERIDOS'):
+        supervised.read_source_batch_supervised({'cabecera': book}, xlsx_profile())
+
+
+def captured_processes(monkeypatch):
+    processes = []
+    real = supervised.subprocess.Popen
+
+    def popen(*args, **kwargs):
+        processes.append(real(*args, **kwargs))
+        processes[-1].options = kwargs
+        return processes[-1]
+    monkeypatch.setattr(supervised.subprocess, 'Popen', popen)
+    return processes
+
+
+def test_expiry_during_a_phase_that_cannot_be_interrupted_is_a_real_cut(tmp_path, hostile_cases, monkeypatch):
+    """Los estilos no devuelven el control durante segundos: quien espera no espera más que el plazo."""
+    data = next(case[1] for case in hostile_cases if case[0] == 'estilos-al-limite.xlsx')
+    path = write(tmp_path, 'libro', data)
+    processes = captured_processes(monkeypatch)
+    seconds = 1.5
+    limits = replace(FileLimits(), read_seconds=seconds)
+    message, elapsed = supervised_outcome(dict.fromkeys(KINDS, path), xlsx_profile(), limits=limits)
+    assert message.split(':')[0] == 'TIEMPO_LECTURA_EXCEDIDO'
+    assert seconds <= elapsed < seconds + 1
+    assert processes[0].returncode == -9
+    # Sin el proceso aparte, esa misma lectura no puede cortar a tiempo: la fase dura más que todo el margen.
+    alone = measure(path, xlsx_profile(), limits)
+    assert alone['codigo'] == 'TIEMPO_LECTURA_EXCEDIDO'
+    assert alone['segundos'] > elapsed
+
+
+def test_too_much_memory_is_a_real_cut(tmp_path, hostile_cases, monkeypatch):
+    data = next(case[1] for case in hostile_cases if case[0] == 'texto-190mb.xlsx')
+    path = write(tmp_path, 'libro', data)
+    processes = captured_processes(monkeypatch)
+    limits = replace(FileLimits(), read_memory_bytes=250 * 2**20)
+    message, _ = supervised_outcome(dict.fromkeys(KINDS, path), xlsx_profile(), limits=limits)
+    assert message.split(':')[0] == 'MEMORIA_LECTURA_EXCEDIDA'
+    assert processes[0].returncode == -9
+
+
+def test_the_child_inherits_no_credentials_and_has_no_stderr(tmp_path, monkeypatch):
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', SENTINEL)
+    processes = captured_processes(monkeypatch)
+    book = write(tmp_path, 'libro', minimal_workbook())
+    supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile())
+    options = processes[0].options
+    assert SENTINEL not in json.dumps(options['env']) and set(options['env']) == {'LC_ALL', 'PYTHONUTF8'}
+    assert options['stderr'] == subprocess.DEVNULL
+
+
+@pytest.mark.parametrize('script', [
+    'raise SystemExit(3)',
+    'import sys; sys.stdin.read(); print("no es json")',
+    'import sys; sys.stdin.read(); print("[1, [\\"parcial\\"]]")',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'[2, ["a", "b"]]\')',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'[2, ["a"]]\')',
+    'import sys; sys.stdin.read(); print("{}")',
+], ids=['muere', 'basura', 'fila-sin-tabla', 'ancho-distinto', 'sin-marca-final', 'objeto-desconocido'])
+def test_a_child_that_dies_or_answers_nonsense_never_gives_a_batch(tmp_path, monkeypatch, script):
+    monkeypatch.setattr(supervised, '_worker_command', lambda: [sys.executable, '-B', '-c', script])
+    book = write(tmp_path, 'libro', minimal_workbook())
+    message, _ = supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile())
+    assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA'
+
+
+def test_a_child_that_answers_more_rows_than_allowed_never_gives_a_batch(tmp_path, monkeypatch):
+    script = ('import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); '
+              'print(\'[2, ["a"]]\'); print(\'[3, ["a"]]\'); print(\'{"hojas_ignoradas": []}\')')
+    monkeypatch.setattr(supervised, '_worker_command', lambda: [sys.executable, '-B', '-c', script])
+    book = write(tmp_path, 'libro', minimal_workbook())
+    message, _ = supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile(), limits=replace(FileLimits(), rows=1))
+    assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA'
+
+
+def test_a_batch_that_arrives_after_the_deadline_is_not_delivered(tmp_path, monkeypatch):
+    book = write(tmp_path, 'libro', validated_data())
+    real = supervised._receive
+    limits = replace(FileLimits(), read_seconds=60)
+    moments = iter([0.0, 61.0])
+    monkeypatch.setattr(supervised, '_receive', real)
+    monkeypatch.setattr(supervised.threading, 'Thread', lambda **_: _NoWatcher())
+    monkeypatch.setattr(supervised.time, 'monotonic', lambda: next(moments))
+    with pytest.raises(ValidationError, match='TIEMPO_LECTURA_EXCEDIDO'):
+        supervised.read_source_batch_supervised(dict.fromkeys(KINDS, book), xlsx_profile(), limits=limits)
+
+
+class _NoWatcher:
+    def start(self):
+        pass
+
+    def join(self):
+        pass
+
+
+def test_resident_memory_is_read_from_proc_when_the_system_has_it(tmp_path, monkeypatch):
+    (tmp_path / '7').write_text('10 20 30', encoding='ascii')
+    monkeypatch.setattr(supervised, '_STATM', str(tmp_path / '{pid}'))
+    assert supervised._resident_bytes(7) == 20 * supervised._PAGE_BYTES
+    monkeypatch.setattr(supervised, '_STATM', str(tmp_path / 'nada-{pid}'))
+    assert supervised._resident_bytes(os.getpid()) > 0
+    assert supervised._resident_bytes(2**22 + 3) == 0
+    # Sin forma de medir, la memoria da 0 y el vigilante sigue vivo para cortar por tiempo.
+    monkeypatch.setattr(supervised.subprocess, 'run', lambda *_, **__: (_ for _ in ()).throw(OSError()))
+    assert supervised._resident_bytes(os.getpid()) == 0
+
+
+def test_the_child_side_answers_rows_errors_and_final_mark():
+    book = FIXTURE / 'cabecera.tsv'
+    request = {'files': {kind: str(FIXTURE / f'{kind}.tsv') for kind in KINDS}, 'mapping': load_mapping(FIXTURE),
+               'contract': load_contract(), 'limits': supervised.asdict(FileLimits())}
+    output = io.StringIO()
+    supervised.serve(io.StringIO(json.dumps(request)), output)
+    lines = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert lines[0]['tabla'] == 'cabecera' and lines[-1] == {'hojas_ignoradas': []}
+    assert isinstance(lines[1], list) and book.exists()
+    request['files'] = {'cabecera': str(book)}
+    output = io.StringIO()
+    supervised.serve(io.StringIO(json.dumps(request)), output)
+    assert json.loads(output.getvalue()) == {'error': 'ARCHIVOS_REQUERIDOS'}

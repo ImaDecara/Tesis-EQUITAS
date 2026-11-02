@@ -58,6 +58,8 @@ class FileLimits:
     shared_strings: int = 4_000_000
     workbook_sheets: int = 256
     read_seconds: float = 120.0
+    # Solo la aplica read_source_batch_supervised: dentro del proceso no hay cómo cortar la memoria.
+    read_memory_bytes: int = 2_147_483_648
     temp_ttl_seconds: int = 86_400
 
     @classmethod
@@ -68,7 +70,11 @@ class FileLimits:
 
 
 class Deadline:
-    """Tiempo máximo de lectura de un lote completo."""
+    """Tiempo máximo de lectura de un lote completo, comprobado entre operaciones.
+
+    Corta lo que el lector recorre, y nunca se entrega un lote vencido, pero no interrumpe un
+    parser en plena operación: el corte real al vencer es ``read_source_batch_supervised``.
+    """
 
     def __init__(self, seconds, clock=time.monotonic):
         self._clock = clock

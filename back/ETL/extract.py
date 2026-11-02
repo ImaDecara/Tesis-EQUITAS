@@ -183,6 +183,7 @@ def _read_delimited(path, kind, mapping, contract, limits, deadline):
                 if len(values) != len(columns):
                     source_error('ESTRUCTURA_INVALIDA', kind, line)
                 rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
+            deadline.check(kind, lines.line)
         except ValidationError:
             raise
         except csv.Error as error:
@@ -231,6 +232,9 @@ def read_source_batch(files, mapping, *, contract=None, limits=None):
     El tipo sale del contenido del archivo, no del nombre ni del MIME del cliente. Ante
     una lectura corrupta no entrega prefijos parciales. Los errores son códigos seguros
     con ubicación; no contienen valores ni nombres externos.
+
+    El plazo se comprueba entre operaciones y al terminar: un lote vencido nunca se entrega.
+    Para un archivo subido, el corte real es ``ETL.readers.supervised.read_source_batch_supervised``.
     """
     contract = load_contract() if contract is None else contract
     validate_source_profile(mapping, contract)
@@ -239,8 +243,11 @@ def read_source_batch(files, mapping, *, contract=None, limits=None):
     limits = FileLimits.from_contract(contract) if limits is None else limits
     deadline = Deadline(limits.read_seconds)
     if _source_format(mapping)[0] == 'xlsx':
-        return SourceBatch(*_read_xlsx(files, mapping, contract, limits, deadline))
-    return SourceBatch({kind: _read_delimited(files[kind], kind, mapping, contract, limits, deadline) for kind in KINDS})
+        batch = SourceBatch(*_read_xlsx(files, mapping, contract, limits, deadline))
+    else:
+        batch = SourceBatch({kind: _read_delimited(files[kind], kind, mapping, contract, limits, deadline) for kind in KINDS})
+    deadline.check(KINDS[-1])
+    return batch
 
 
 def read_source_tables(files, mapping, *, contract=None, limits=None):

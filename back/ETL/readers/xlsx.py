@@ -87,6 +87,7 @@ _ZIP64_EXTRA = 1
 _FLAG_ENCRYPTED, _FLAG_DESCRIPTOR, _FLAG_PATCHED, _FLAG_STRONG, _FLAG_UTF8, _FLAG_MASKED = 0x1, 0x8, 0x20, 0x40, 0x800, 0x2000
 _FLAGS_UNSUPPORTED = _FLAG_ENCRYPTED | _FLAG_PATCHED | _FLAG_STRONG | _FLAG_MASKED
 _CHUNK = 1 << 16
+_DEADLINE_EVERY = 4096
 _MACRO_MARKS = ('macroenabled', 'vbaproject', 'macrosheet')
 # Excel guarda los caracteres de control de una celda como texto: _x0007_.
 _EXCEL_CONTROL = re.compile(r'_x00(?:[01][0-9A-Fa-f]|7[Ff]|[89][0-9A-Fa-f])_')
@@ -268,7 +269,7 @@ def _check_parts(archive, infos, kind, deadline):
             deadline.check(kind)
 
 
-def _checked_tree(archive, name, kind, limits):
+def _checked_tree(archive, name, kind, limits, deadline):
     """Árbol de una parte que openpyxl arma entera; primero la mide, sin DTD ni entidades."""
     if archive.getinfo(name).file_size > limits.part_bytes:
         source_error('LIMITE_PARTE_ZIP_EXCEDIDO', kind)
@@ -283,6 +284,9 @@ def _checked_tree(archive, name, kind, limits):
             elements += 1
             if depth > limits.xml_depth or elements > limits.part_elements:
                 source_error('LIMITE_XML_EXCEDIDO', kind)
+            if not elements % _DEADLINE_EVERY:
+                deadline.check(kind)
+        deadline.check(kind)
         return parser.root
 
 
@@ -293,9 +297,12 @@ def _units(source, unit_tag, kind, limits, deadline):
     """
     open_elements = []
     unit = None
-    inside = outside = 0
+    inside = outside = seen = 0
     for event, element in iterparse(source, events=('start', 'end'), forbid_dtd=True):
         if event == 'start':
+            seen += 1
+            if not seen % _DEADLINE_EVERY:
+                deadline.check(kind)
             open_elements.append(element)
             if len(open_elements) > limits.xml_depth:
                 source_error('LIMITE_XML_EXCEDIDO', kind)
@@ -309,8 +316,6 @@ def _units(source, unit_tag, kind, limits, deadline):
                 outside += 1
                 if outside > limits.other_elements:
                     source_error('LIMITE_XML_EXCEDIDO', kind)
-                if not outside % 4096:
-                    deadline.check(kind)
             continue
         open_elements.pop()
         if element is unit:
@@ -318,6 +323,8 @@ def _units(source, unit_tag, kind, limits, deadline):
             yield element
         if unit is None and open_elements:
             open_elements[-1].remove(element)
+    # Un comentario enorme al final no da ningún lugar donde cortar mientras se lee.
+    deadline.check(kind)
 
 
 def _check_manifest(package, names, kind):
@@ -441,7 +448,7 @@ class _PackageReader(ExcelReader):
         self.entries = entries
 
     def _tree(self, name):
-        return _checked_tree(self.archive, name, self.kind, self.limits)
+        return _checked_tree(self.archive, name, self.kind, self.limits, self.deadline)
 
     def read_strings(self):
         part = self.package.find(SHARED_STRINGS)
@@ -473,7 +480,10 @@ class _PackageReader(ExcelReader):
             _check_styles(self._tree(ARC_STYLE), self.kind)
         self.read_strings()
         self.read_workbook()
+        self.deadline.check(self.kind)
+        # No se puede interrumpir: cerca de 5 s en el peor caso medido. El corte real lo da el proceso aparte.
         apply_stylesheet(self.archive, self.wb)
+        self.deadline.check(self.kind)
 
     def sheet_parts(self):
         """Nombre de hoja -> parte, según openpyxl: no hay una segunda lectura que la contradiga."""
@@ -631,6 +641,7 @@ def read_workbook(stream, selection, fmt, field_types, limits, deadline):
                                            field_types[logical], fmt, limits, deadline)
                       for logical, name in selection.items()}
         ignored = [sanitize_filename(name, 31) for name in parts if name not in selection.values()]
+        deadline.check(kind)
         return WorkbookTables(tables, ignored)
     except ValidationError:
         raise
