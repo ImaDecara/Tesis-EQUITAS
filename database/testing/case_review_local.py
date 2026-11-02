@@ -35,6 +35,8 @@ USER_SISTEMA = 920009
 MISSING_ID = 999999999
 READY_CHECKLIST = {'situacion_hogar': 'NO_DISPONIBLE', 'estado_juridico_verificado': True,
                    'canal_valido': True, 'alternativa_asistida_ofrecida': True}
+# ALIGN-020: evento PUBLICADO vigente del municipio A. Hasta publicar el primero, un id que no existe.
+CUTOFF = {'batch': MISSING_ID}
 
 
 def load_local_env():
@@ -138,7 +140,7 @@ class Report:
 
 
 def review_body(user, tenant, debtor, decision='ACEPTA', **extra):
-    body = {'p_reviewer_user': user, 'p_tenant': tenant, 'p_debtor': debtor, 'p_rules_version': '1.0.0',
+    body = {'p_reviewer_user': user, 'p_tenant': tenant, 'p_debtor': debtor, 'p_cutoff_batch': CUTOFF['batch'], 'p_rules_version': '1.0.0',
             'p_as_of': '2026-10-30', 'p_inputs_hash': 'a' * 64, 'p_suggested_intervention': 'RECORDATORIO_INFORMATIVO',
             'p_suggested_intensity': 1, 'p_explanation': {'factores': []}, 'p_decision': decision,
             'p_idempotency_key': str(uuid.uuid4())}
@@ -150,7 +152,7 @@ def review_body(user, tenant, debtor, decision='ACEPTA', **extra):
 
 def approval_body(user, tenant, review, decision='APRUEBA', **extra):
     body = {'p_approver_user': user, 'p_tenant': tenant, 'p_case_review': review, 'p_decision': decision,
-            'p_idempotency_key': str(uuid.uuid4()), 'p_checklist': READY_CHECKLIST}
+            'p_idempotency_key': str(uuid.uuid4()), 'p_cutoff_batch': CUTOFF['batch'], 'p_checklist': READY_CHECKLIST}
     body.update(extra)
     return body
 
@@ -205,6 +207,52 @@ def check_server_credential(api, report, env, review_jwt, import_jwt):
         'POST', '/rest/v1/rpc/record_case_review', review_jwt, review_body(USER_CONSULTA, TENANT_A, OBJECT_A), env['PUBLISHABLE_KEY']))
     report.error('servidor de revision no registra lotes', '42501', api.rpc('record_import_batch', review_jwt, batch_body(USER_IMPORTADOR, TENANT_A)))
     report.error('servidor de importacion no registra decisiones', '42501', api.rpc('record_case_review', import_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A)))
+
+
+def publish_cutoff(api, report, import_jwt, case):
+    """VALIDADO y PUBLICADO por la funcion real, como el ETL. Deja vigente el evento nuevo."""
+    status, validated = api.rpc('record_import_batch', import_jwt, batch_body(USER_SISTEMA, TENANT_A, p_status='VALIDADO'))
+    report.expect(f'{case}: VALIDADO', '200-True', f"{status}-{validated.get('created')}")
+    status, published = api.rpc('record_import_batch', import_jwt, batch_body(
+        USER_SISTEMA, TENANT_A, p_status='PUBLICADO', p_supersedes=validated.get('batch_id')))
+    report.expect(f'{case}: PUBLICADO', '200-True', f"{status}-{published.get('created')}")
+    CUTOFF['batch'] = published.get('batch_id')
+
+
+def check_cutoff(api, report, review_jwt, import_jwt):
+    """ALIGN-020, ciclo 1: el corte con que se calculo se verifica en la transaccion de la insercion. Deja 2 revisiones, 1 aprobacion y 2 lotes."""
+    changed = 'CUTOFF_CHANGED'
+
+    def review(**extra):
+        return api.rpc('record_case_review', review_jwt, review_body(USER_OPERADOR, TENANT_A, OBJECT_A, **extra))
+
+    without = review_body(USER_OPERADOR, TENANT_A, OBJECT_A)
+    del without['p_cutoff_batch']
+    report.error('revision sin el parametro de corte', 'PGRST202', api.rpc('record_case_review', review_jwt, without))
+    without = approval_body(USER_SUPERVISOR, TENANT_A, 1)
+    del without['p_cutoff_batch']
+    report.error('aprobacion sin el parametro de corte', 'PGRST202', api.rpc('record_case_review_approval', review_jwt, without))
+    report.rejected('revision con corte nulo', changed, review(p_cutoff_batch=None))
+    report.rejected('revision con corte inexistente', changed, review(p_cutoff_batch=MISSING_ID))
+    status, proposal = api.rpc('record_case_review', review_jwt, review_body(
+        USER_OPERADOR, TENANT_A, OBJECT_A, 'MODIFICA', p_decided_intervention='INTIMACION_ADMINISTRATIVA', p_decided_intensity=3,
+        p_reason_code='MOTIVO_SINTETICO', p_checklist=READY_CHECKLIST))
+    report.expect('propuesta con el corte vigente', '200-True', f"{status}-{proposal.get('created')}")
+    target = proposal.get('review_id')
+    status, validated = api.rpc('record_import_batch', import_jwt, batch_body(USER_SISTEMA, TENANT_A, p_status='VALIDADO'))
+    report.expect('empieza una carga', '200-True', f"{status}-{validated.get('created')}")
+    report.rejected('revision con una carga en curso', changed, review())
+    report.rejected('APRUEBA con una carga en curso', changed, api.rpc('record_case_review_approval', review_jwt, approval_body(USER_SUPERVISOR, TENANT_A, target)))
+    status, objection = api.rpc('record_case_review_approval', review_jwt, approval_body(
+        USER_SUPERVISOR, TENANT_A, target, 'OBJETA', p_reason_code='MOTIVO_SINTETICO', p_cutoff_batch=None))
+    report.expect('OBJETA con una carga en curso y corte nulo', '200-True', f"{status}-{objection.get('created')}")
+    status, published = api.rpc('record_import_batch', import_jwt, batch_body(
+        USER_SISTEMA, TENANT_A, p_status='PUBLICADO', p_supersedes=validated.get('batch_id')))
+    report.expect('termina la carga', '200-True', f"{status}-{published.get('created')}")
+    report.rejected('revision con el corte anterior', changed, review())
+    CUTOFF['batch'] = published.get('batch_id')
+    status, fresh = review()
+    report.expect('revision con el corte nuevo', '200-True', f"{status}-{fresh.get('created')}")
 
 
 def check_write_flow(api, report, review_jwt, import_jwt):
@@ -299,8 +347,8 @@ def check_reads(api, report, sessions):
         status, rows = api.rows(table, 'id', token)
         return len(rows) if status == 200 and isinstance(rows, list) else f'http-{status}'
 
-    # Filas de check_write_flow, check_chains, check_reason_length y check_import_permission.
-    expected = {'case_review': 6, 'case_review_approval': 2, 'import_batch': 3}
+    # Filas de publish_cutoff, check_write_flow, check_chains, check_reason_length, check_import_permission y check_cutoff.
+    expected = {'case_review': 8, 'case_review_approval': 3, 'import_batch': 7}
     for table, rows in expected.items():
         for label in ('consulta', 'operador', 'supervisor', 'importador'):
             report.expect(f'lectura {label} {table}', rows, count(table, sessions[label]))
@@ -321,10 +369,12 @@ def http_check():
     check_clients_denied(api, report, [('anon', None, None), ('authenticated', sessions['operador'], None),
                                        ('service_role', env['SERVICE_ROLE_KEY'], env['SERVICE_ROLE_KEY'])])
     check_server_credential(api, report, env, review_jwt, import_jwt)
+    publish_cutoff(api, report, import_jwt, 'corte inicial')
     check_write_flow(api, report, review_jwt, import_jwt)
     check_chains(api, report, review_jwt, import_jwt)
     check_reason_length(api, report, review_jwt)
     check_import_permission(api, report, review_jwt, import_jwt)
+    check_cutoff(api, report, review_jwt, import_jwt)
     check_reads(api, report, sessions)
     return report.finish()
 

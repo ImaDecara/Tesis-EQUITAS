@@ -32,7 +32,8 @@ export function createPaginatedSupabase(
       limit: Number(url.searchParams.get('limit') ?? serverMaxRows),
       offset: Number(url.searchParams.get('offset') ?? 0),
       order: url.searchParams.get('order'),
-      after: url.searchParams.get('id')?.startsWith('gt.') ? url.searchParams.get('id')!.slice(3) : null,
+      // Con un filtro por id, el cursor llega en un segundo parametro `id`.
+      after: url.searchParams.getAll('id').find(value => value.startsWith('gt.'))?.slice(3) ?? null,
       select: url.searchParams.get('select'),
       filters: Object.fromEntries([...url.searchParams].filter(([, value]) => value.startsWith('eq.'))),
     }

@@ -449,6 +449,7 @@ agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
 | v1 (adenda ALIGN-018, corrección 1) | 31/10/2026 | Revisión independiente de ALIGN-018: antecedente siempre anterior en las cadenas; límite de `reason_text` sobre lo almacenado; `supervisor` no registra lotes; límites y claves de `counts` |
 | v1 (adenda ALIGN-026) | 02/11/2026 | §14: semántica de la carga V1 en la base local. Prevalece sobre las columnas de faltantes y las brechas de §5, §7.1–§7.5, §8 y §10 para los campos que lista |
 | v1 (adenda ALIGN-026, corrección 1) | 02/11/2026 | Revisión independiente de ALIGN-026: sin estados observados no hay cero de deuda vencida; `debt_state_not_observed_count`; `debt.status` sale del estado que resolvió el validador; documento y persona se clasifican sobre el valor tal como llegó; gestiones y contactos sin insumos quedan nulos |
+| v1 (adenda ALIGN-020) | 02/11/2026 | §13: de dónde sale el corte de una decisión, cómo se calcula `inputs_hash` y cómo se verifica el corte al insertar |
 
 ## 13. Decisión humana, aprobación y lote (ALIGN-018)
 
@@ -472,6 +473,8 @@ Tablas append-only `case_review`, `case_review_approval` e `import_batch`, **sol
 | `import_batch.created_by`, `import_batch.created_by_role`, `import_batch.created_at` | Quién registró el lote, con qué rol en ese momento y cuándo | Base de datos, a partir de la membresía activa | Solo `importador` o `importador_sistema`: `supervisor` no adquiere el permiso por serlo |
 
 **Regla de lectura:** las lecturas de `case_review` listan columnas y no incluyen `reason_text`; solo se obtiene con `read_case_review_reason_text`, para quien decide o supervisa en ese tenant.
+
+**Corte de una decisión (ALIGN-020):** `case_review.as_of` es el `as_of` del último evento `PUBLICADO` de `import_batch` que ningún otro reemplaza, nunca el reloj del servidor. Con una carga en curso (`VALIDADO` o `CONFIRMADO` más nuevo) o interrumpida (`FALLIDO` que reemplaza a uno de ellos) no hay corte vigente, y por lo tanto no hay decisión registrable. `inputs_hash` es el SHA-256 de la forma canónica de `DecisionInput`: claves ordenadas, obligaciones por id y personas por contenido. No incluye la versión, que se guarda aparte en `rules_version`. La función de escritura verifica el evento de corte dentro de la misma transacción de la inserción, bajo el bloqueo que comparte con `record_import_batch`: toda importación por esa función invalida una revisión en curso. Una escritura de cartera que no pase por ella no se detecta. Reglas de escritura: [`SUPABASE_TESTING_CALIDAD.md`](../../SUPABASE_TESTING_CALIDAD.md).
 
 ## 14. Semántica de la carga V1 (ALIGN-026)
 

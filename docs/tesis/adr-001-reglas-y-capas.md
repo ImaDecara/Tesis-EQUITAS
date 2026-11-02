@@ -295,9 +295,9 @@ el bloqueo es total: toda cuenta recibe `ROLE_FORBIDDEN`, sin datos.
 Puntos cubiertos: tablero `/`, objetos `/debtors`, detalle `/debtors/[debtorId]`,
 personas `/people`, colas `/priority-cases`, sin contacto `/no-contact`, mora
 `/debt-aging`, riesgo `/risk-analysis`, acciones recomendadas `/recommended-actions`.
-Las futuras Server Actions (ALIGN-020), lecturas de revisión (021) y rutas CSV (028)
-deben autorizar **dentro de cada entrada** y extender el lector con filtros de tenant
-para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
+Las Server Actions de ALIGN-020 ya autorizan dentro de cada entrada. Las futuras lecturas
+de revisión (021) y rutas CSV (028) deben autorizar **dentro de cada entrada** y extender
+el lector con filtros de tenant para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
 insertarse después de autorizar y antes de entregar el DTO, sin datos personales.
 
 Validación del 30/10: pruebas negativas y positivas con Auth/REST simulados y ocho

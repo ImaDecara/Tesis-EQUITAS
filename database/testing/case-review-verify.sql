@@ -26,7 +26,7 @@ with nueva(nombre) as (
 ), funcion as (
   select f.oid, f.proname, f.prosecdef as definer, f.proconfig, f.proowner, f.proacl
   from pg_proc f where f.pronamespace = 'public'::regnamespace
-    and f.proname in ('record_case_review', 'record_case_review_approval', 'read_case_review_reason_text', 'record_import_batch', 'equitas_member_role', 'equitas_append_only')
+    and f.proname in ('record_case_review', 'record_case_review_approval', 'read_case_review_reason_text', 'record_import_batch', 'equitas_member_role', 'equitas_append_only', 'equitas_current_cutoff', 'equitas_verify_cutoff')
 ), funcion_servidor as (
   select * from funcion where definer
 ), rol_nuevo(rol) as (
@@ -68,6 +68,10 @@ union all select 'funciones_ejecutables_anon_authenticated_service', count(*) fi
   from funcion f cross join (values ('anon'), ('authenticated'), ('service_role')) r(rol)
 union all select 'funciones_servidor_revision', count(*) filter (where exists(select 1 from pg_roles where rolname = 'equitas_review_server') and has_function_privilege('equitas_review_server', f.oid, 'EXECUTE'))::text from funcion f
 union all select 'funciones_servidor_importacion', count(*) filter (where exists(select 1 from pg_roles where rolname = 'equitas_import_server') and has_function_privilege('equitas_import_server', f.oid, 'EXECUTE'))::text from funcion f
+union all select 'firmas_de_escritura_de_revision', count(*)::text from pg_proc f where f.pronamespace = 'public'::regnamespace and f.proname in ('record_case_review', 'record_case_review_approval')
+union all select 'corte_parametro_obligatorio', count(*) filter (where array_position(f.proargnames, 'p_cutoff_batch') <= f.pronargs - f.pronargdefaults)::text
+  from pg_proc f where f.pronamespace = 'public'::regnamespace and f.proname in ('record_case_review', 'record_case_review_approval')
+union all select 'funciones_cubiertas_por_la_verificacion', count(*)::text from funcion
 union all select 'roles_servidor_con_login_o_bypass', count(*)::text from pg_roles
   where rolname in ('equitas_review_server', 'equitas_import_server') and (rolcanlogin or rolbypassrls or rolsuper or rolcreaterole or rolcreatedb)
 union all select 'rol_definidor_con_login_o_super', count(*)::text from pg_roles
