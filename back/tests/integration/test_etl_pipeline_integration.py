@@ -25,6 +25,7 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         'relations': [],
         'contacts': [],
         'profiles': [],
+        'profile_details': [],
         'debt_batches': [],
         'stored_debts': {},
         'debt_summaries': [],
@@ -59,6 +60,9 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     def load_debtor_profile(payload: dict[str, Any]) -> dict[str, int]:
         state['profiles'].append(payload)
         return {'id': 1_000 + int(payload['debtor'])}
+
+    def load_debtor_profile_detail(payload: dict[str, Any]) -> None:
+        state['profile_details'].append(payload)
 
     def load_debts_bulk(payloads: list[dict[str, Any]]) -> dict[str, int]:
         state['debt_batches'].append(payloads)
@@ -102,6 +106,7 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(run_etl, 'load_address', load_address)
     monkeypatch.setattr(run_etl, 'load_debtor_contact', load_debtor_contact)
     monkeypatch.setattr(run_etl, 'load_debtor_profile', load_debtor_profile)
+    monkeypatch.setattr(run_etl, 'load_debtor_profile_detail', load_debtor_profile_detail)
     monkeypatch.setattr(run_etl, 'load_debts_bulk', load_debts_bulk)
     monkeypatch.setattr(run_etl, 'resolve_catalogs', resolve_catalogs)
     monkeypatch.setattr(run_etl, 'record_import_batch', record_import_batch)

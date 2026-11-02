@@ -8,7 +8,12 @@ from typing import Any
 import pandas as pd
 
 from ETL.config import ETLError, get_import_credentials, get_settings, settings
-from ETL.extract import extract_from_input_folder_limited, load_source_profile, source_folder
+from ETL.extract import (
+    extract_from_input_folder_limited,
+    load_source_profile,
+    source_files,
+    source_folder,
+)
 from ETL.load import (
     etl_message,
     load_address,
@@ -17,6 +22,7 @@ from ETL.load import (
     load_debtor_contact,
     load_debtor_person,
     load_debtor_profile,
+    load_debtor_profile_detail,
     load_debts_bulk,
     load_person,
     load_province,
@@ -40,6 +46,7 @@ from ETL.transform import (
     build_debtor_contact_payloads,
     build_debtor_payload,
     build_debtor_person_payload,
+    build_debtor_profile_detail_payload,
     build_debtor_profile_payload,
     build_person_payload,
     build_province_payload,
@@ -81,10 +88,8 @@ def run_etl(
 ) -> None:
     token = set_log_context(0, None)
     try:
-        if execute:
-            # Rechazar antes de leer archivos, resumir filas o crear el cliente.
-            get_settings(execute=True)
-            _require_execution_inputs(cut_off, limit_objects, priority_tipo_ingreso_ids)
+        # Rechazar antes de leer archivos, resumir filas o crear el cliente.
+        _require_inputs(execute, cut_off, limit_objects, priority_tipo_ingreso_ids)
         if cut_off is None:
             _summarize_source(folder_name, limit_objects, priority_tipo_ingreso_ids)
         else:
@@ -97,17 +102,21 @@ def run_etl(
         reset_log_context(token)
 
 
-def _require_execution_inputs(
+def _require_inputs(
+    execute: bool,
     cut_off: str | None,
     limit_objects: int | None,
     priority_tipo_ingreso_ids: list[int] | None,
 ) -> None:
-    if not cut_off:
-        raise ETLError("CUT_OFF_REQUIRED")
+    if execute:
+        get_settings(execute=True)
+        if not cut_off:
+            raise ETLError("CUT_OFF_REQUIRED")
     # Un subconjunto no es el lote validado: sus hashes y conteos no lo describirían.
-    if limit_objects is not None or priority_tipo_ingreso_ids:
+    if cut_off is not None and (limit_objects is not None or priority_tipo_ingreso_ids):
         raise ETLError("PARTIAL_LOAD_REJECTED")
-    get_import_credentials()
+    if execute:
+        get_import_credentials()
 
 
 # Vista previa sin corte: solo conteos de los archivos. No valida ni autoriza cargar.
@@ -160,10 +169,8 @@ def _load_mapping(folder: Path, mapping_path: str | None) -> dict[str, Any]:
 
 
 def _prepare(folder: Path, mapping: dict[str, Any], cut_off: str) -> PreparedBatch:
-    extension = "csv" if mapping["formato"].get("tipo") == "csv" else "tsv"
-    files = {name: folder / f"{name}.{extension}" for name in ("cabecera", "detalle")}
     try:
-        return prepare_batch(files, mapping, source_contract(), cut_off)
+        return prepare_batch(source_files(folder, mapping), mapping, source_contract(), cut_off)
     except OSError:
         raise ETLError("ARCHIVO_NO_LEIBLE") from None
     except ValidationError as error:
@@ -250,7 +257,7 @@ def _publish_validated_batch(batch: PreparedBatch) -> None:
 
     try:
         loaded = _load_objects(batch, catalogs)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _register_failure(batch, counts, validated_id)
         raise
 
@@ -359,7 +366,7 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
     for index, item in enumerate(batch.objects, start=1):
         debtor_id, person_ids, usable_contacts, debts = _load_object(item, batch, catalogs, loaded)
         all_debts.extend(debts)
-        profile_inputs.append((debtor_id, debts, len(person_ids), usable_contacts))
+        profile_inputs.append((debtor_id, debts, person_ids, usable_contacts))
 
         if index % 10 == 0:
             print(f"Objetos procesados: {index}/{len(batch.objects)}")
@@ -374,18 +381,21 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
     loaded["deudas_sin_cambios"] = debt_summary["unchanged"]
 
     # El perfil se calcula al final porque resume las obligaciones del objeto al corte.
-    for debtor_id, debts, person_count, usable_contacts in profile_inputs:
+    for debtor_id, debts, person_ids, usable_contacts in profile_inputs:
         set_log_context(0, ("perfil", debtor_id))
-        load_debtor_profile(
+        profile = load_debtor_profile(
             build_debtor_profile_payload(
                 debtor_id=debtor_id,
                 debt_rows=debts,
-                active_person_count=person_count,
+                active_person_count=len(person_ids),
                 available_contact_count=usable_contacts,
                 cut_off=batch.cut_off,
             )
         )
         loaded["perfiles_publicados"] += 1
+
+        for person_id in sorted(person_ids):
+            load_debtor_profile_detail(build_debtor_profile_detail_payload(int(profile["id"]), person_id))
 
     return dict(loaded)
 

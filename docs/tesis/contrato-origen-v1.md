@@ -39,8 +39,8 @@ XLSX y los controles adicionales de archivos hostiles corresponden a ALIGN-053.
 `python -m ETL.inspect_tsv --cabecera … --detalle … --cut-off … [--mapping …]`
 llama al mismo motor. Ya no tiene parsers monetarios propios, conciliación
 independiente ni impresión de muestras. Sus constantes de columnas salen del
-contrato JSON. El ejecutor `run_etl.py` conserva su comportamiento de ALIGN-025;
-la conexión con esta validación corresponde a ALIGN-026.
+contrato JSON. Desde ALIGN-026, `run_etl.py --cut-off` y `--execute` validan con este
+motor y solo publican lo que él permite (§9).
 
 ## 2. Declaración de lote y mapeo
 
@@ -169,8 +169,8 @@ Salidas: **0** validado, **1** analizado y bloqueado, **2** perfil/archivo no
 procesable. No tiene modo de publicación ni crea reportes en disco, clientes de
 base o conexiones. El módulo de extracción conserva sus imports del ETL
 heredado; la garantía de biblioteca estándar sin importarlos corresponde a
-`ETL.validate_source`. `run_etl.py` conserva sus argumentos y su flujo de TSV de
-ALIGN-025; no adquiere un `--mapping` ni publica a través de este adaptador.
+`ETL.validate_source`. `run_etl.py` publica a través de este adaptador desde ALIGN-026
+(§9): `--mapping` es el mismo perfil y sin él solo se admite una fixture sintética.
 
 ## 3. Columnas, claves y tipos
 
@@ -432,8 +432,9 @@ fechas válidas a `dd/mm/aaaa`, formatos consumidos por el transformador heredad
 No completa importes ausentes ni convierte inválidos a cero. Los DataFrames no
 son un reporte de validación ni una autorización de publicación: ALIGN-026 debe
 validar las `SourceTable` originales, preservar objetos completos en cuarentena
-y consumir sus decisiones antes de construir payloads. La llamada sin `mapping`
-mantiene la lectura TSV heredada. La semántica del publicador sigue en ALIGN-026.
+y consumir sus decisiones antes de construir payloads, como hace `prepare_batch` (§9).
+La llamada sin `mapping` mantiene la lectura TSV heredada, usada solo por la vista de
+conteos y por `export_preview`, que no cargan.
 
 No se mutan entradas. El resultado es serializable y determinista, sin timestamps
 del equipo, personas, documentos, teléfonos, correos, domicilios, cuentas, claves
@@ -447,7 +448,7 @@ de programación/configuración inválidas. La CLI no imprime el texto original 
 excepciones. El contrato es configuración confiable del servidor; no se debe
 aceptar un contrato arbitrario del navegador. No se devuelve un payload para
 base: la publicación transaccional, la autenticación y la revisión congelada
-siguen perteneciendo a ALIGN-032/052/054.
+siguen perteneciendo a ALIGN-032/052/054. Los payloads los construye el publicador (§9).
 
 ## 8. Códigos y verificación
 
@@ -480,8 +481,58 @@ aparte. También prueba cabecera inválida con detalles válidos, una sola oblig
 inválida, umbral 5 %, claves compuestas, centinelas, estados, límites, privacidad,
 mapeo, entorno vacío e importaciones prohibidas. No cambia el oráculo.
 
-Para integrar: ALIGN-026 debe usar decisiones por fila/objeto y evitar cargar o
-recalcular los objetos en cuarentena; ALIGN-030 adapta formatos sin cambiar las
-reglas; ALIGN-052 llama esta función y respeta bloqueos/privacidad, con autorización
-del tenant obtenida en servidor. Los gates y la revisión independiente se registran
-en la evidencia de la ejecución; la homologación real permanece pendiente.
+Para integrar: ALIGN-026 usa las decisiones por fila/objeto y no carga ni recalcula los
+objetos en cuarentena (§9); ALIGN-030 adapta formatos sin cambiar las reglas; ALIGN-052
+llama esta función y respeta bloqueos/privacidad, con autorización del tenant obtenida en
+servidor. Los gates y la revisión independiente se registran en la evidencia de la
+ejecución; la homologación real permanece pendiente.
+
+## 9. Del archivo validado a la base — ALIGN-026
+
+`ETL.transform.prepare_batch` lee y valida; lo que devuelve es todo lo que la carga puede
+usar. Si `publicacion_permitida` es falso, no se escribe ninguna fila de cartera y el lote
+queda `FALLIDO` en `import_batch`. Si es verdadero, solo se publican las filas con decisión
+`ACEPTADA`, agrupadas por la referencia de objeto del reporte: el detalle se enlaza por
+`ClaveAgrupacion`, sin depender de sus columnas opcionales `Bien_Tipo_Id` y `Cuenta`.
+
+Mapas declarados, ninguno con IDs de base en el código:
+
+| De | A | Dónde se declara |
+|---|---|---|
+| `Bien_Tipo_Id` del lote | `debtor_type.key` | Los valores de `catalogos.Bien_Tipo_Id` del perfil (`catalogos.destino_Bien_Tipo_Id` del contrato). El código de origen nunca es un id |
+| Estado semántico y corte | `debt_status.key` | `catalogos.debt_status_por_estado` del contrato |
+| `moneda` del perfil | `currency.code` | Perfil del lote |
+
+| Estado de origen | Vencimiento frente al corte | `debt_status.key` |
+|---|---|---|
+| `PENDIENTE` | Anterior | `OVERDUE` (derivado: "vencida a la fecha de corte") |
+| `PENDIENTE` | Igual o posterior | `ACTIVE` |
+| `PAGADA`, `ANULADA`, `SUSPENDIDA` | Indiferente | `PAID`, `CANCELLED`, `SUSPENDED` |
+| No informado o `UNKNOWN` | Indiferente | `UNKNOWN`: no se infiere del vencimiento, ni siquiera si es antiguo |
+
+**Identificadores:** se leen como texto y solo se acepta el decimal canónico de un bigint no
+negativo. `000123` y `123` no colapsan: el primero queda en cuarentena con `CUENTA_NO_CANONICA`
+y el segundo se publica con sus propios importes. **Importes:** viajan como texto exacto hacia
+`numeric`, sin pasar por `float`. Vacío o inválido nunca es 0; cero válido se conserva. Más de
+dos decimales es `IMPORTE_NO_NUMERICO`: una fracción de centavo no llega al motor de reglas.
+Un `NOTD_totalActualizado` vacío o inválido bloquea el lote (§6, decisión conservadora) y un
+`NOTD_capital` inválido pone en cuarentena solo su objeto.
+
+**Fechas:** `Fecha_Actualizacion` se registra como `import_batch.source_updated_at`, tomando
+la mayor de las filas aceptadas; una centinela no es una fecha. `issue_date` y
+`last_collection_date` quedan nulas: no hay fuente real. **Período:** este contrato no declara una
+columna de período fiscal, por lo que `debt.period` queda nulo hasta que ALIGN-046 la homologue.
+`DEUD_id` no es un período y `Periodos_Deuda` es un conteo.
+
+**Contactos:** un marcador o un formato ilegible no se carga. Una baja explícita se carga con
+`active=false` y no cuenta como disponible.
+
+**Registro:** `import_batch` recibe `source=ETL_CLI`, el SHA-256 de cabecera, detalle, mapeo y
+contrato (nunca rutas o nombres), corte, actualización de origen, versión de reglas y conteos. Los conteos son
+enteros: filas leídas, aceptadas y rechazadas por archivo y por código, objetos, estados al corte,
+hallazgos por código, bloqueos e importes en centavos. Un conteo no calculado se omite; no es 0.
+
+Queda fuera de este ticket y de esta versión: bajas y delta (ALIGN-031), paginación de la lectura de
+deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote (ALIGN-032),
+la campaña real con `back/tests_real` (ALIGN-027), y el municipio obtenido del contexto autorizado
+(ALIGN-052/054): la CLI usa el tenant 1 fijo.

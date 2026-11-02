@@ -1,6 +1,7 @@
 -- ALIGN-017. SOLO base local aislada con 20261030090000_etl_compat. Datos sinteticos.
--- Catalogos con los IDs fijos del ETL actual (back/ETL/transform.py:16-53) y claves estables
--- para resolverlos por key (ALIGN-026). Mismos conteos que el original (informe de input §2).
+-- Catalogos con claves estables: el ETL los resuelve por key, sin IDs fijos (ALIGN-026).
+-- Mismos conteos que el original (informe de input §2), mas debt_status SUSPENDED: el contrato de origen
+-- distingue SUSPENDIDA y el original tiene 8 estados cuyas claves no se observaron (homologar en ALIGN-046).
 -- Excluyente con e06: comparte claves unicas ARS, OVERDUE, EMAIL y ACTIVE (fixtures.sql:15-21).
 -- Ante un choque de id o clave falla sin modificar nada. Repetirlo no cambia la base.
 -- psql -v ON_ERROR_STOP=1 -f database/testing/etl-compat-catalogs.sql (ver SUPABASE_TESTING_CALIDAD.md).
@@ -42,12 +43,13 @@ select pg_temp.etl_seed('debt_status', 'key', 'value', '[
   {"id":1,"key":"ACTIVE","value":"Vigente"},{"id":2,"key":"OVERDUE","value":"Vencida"},
   {"id":3,"key":"PAYMENT_PLAN","value":"Plan de pago"},{"id":4,"key":"JUDICIAL","value":"Judicial"},
   {"id":5,"key":"CERTIFICATE_ACTIVE","value":"Certificado activo"},{"id":6,"key":"PAID","value":"Pagada"},
-  {"id":7,"key":"CANCELLED","value":"Cancelada"},{"id":8,"key":"UNKNOWN","value":"Desconocido"}]');
+  {"id":7,"key":"CANCELLED","value":"Cancelada"},{"id":8,"key":"UNKNOWN","value":"Desconocido"},
+  {"id":9,"key":"SUSPENDED","value":"Suspendida"}]');
 select pg_temp.etl_seed('contact_type', 'key', 'value', '[
   {"id":1,"key":"PHONE","value":"Telefono"},{"id":2,"key":"MOBILE","value":"Celular"},
   {"id":3,"key":"EMAIL","value":"Email"},{"id":4,"key":"LETTER","value":"Carta"},
   {"id":5,"key":"WHATSAPP","value":"WhatsApp"}]');
--- El ETL copia Bien_Tipo_Id en debtor.type. IDs del lote sintetico (manifest.json), no del municipio.
+-- El perfil del lote mapea Bien_Tipo_Id a estas claves (contrato de origen). IDs propios de esta base.
 select pg_temp.etl_seed('debtor_type', 'key', 'value', '[
   {"id":1,"key":"INMUEBLE","value":"Inmueble"},{"id":3,"key":"RODADO","value":"Rodado"},
   {"id":6,"key":"AGUA","value":"Agua"}]');

@@ -83,7 +83,7 @@ def simular_carga(monkeypatch):
     })
     monkeypatch.setattr(run_etl, "record_import_batch", Mock(return_value=1))
     for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact", "load_debtor_profile",
-                   "load_province", "load_city", "load_address"):
+                   "load_debtor_profile_detail", "load_province", "load_city", "load_address"):
         monkeypatch.setattr(run_etl, nombre, Mock(return_value={"id": 1}))
     monkeypatch.setattr(run_etl, "load_debts_bulk",
                         Mock(return_value={"unique": 1, "inserted": 1, "updated": 0, "unchanged": 0}))
@@ -357,6 +357,8 @@ def test_reintentos_no_exponen_mensaje_ni_nombre_de_operacion(monkeypatch, capsy
     ("load_debtor_contact", {"person": 1}, "CONTACT_TYPE_MISSING"),
     ("load_debtor_contact", {"person": 1, "type": 1}, "CONTACT_VALUE_MISSING"),
     ("load_debtor_profile", {}, "PROFILE_DEBTOR_MISSING"),
+    ("load_debtor_profile_detail", {}, "DETAIL_PROFILE_MISSING"),
+    ("load_debtor_profile_detail", {"debtor_profile": 1}, "DETAIL_PERSON_MISSING"),
 ])
 def test_validaciones_de_payload_solo_exponen_codigos(nombre, payload, codigo):
     with pytest.raises(ValueError, match="codigo=" + codigo) as error:

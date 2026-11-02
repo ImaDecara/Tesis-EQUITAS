@@ -45,6 +45,9 @@ union all select 'debt_updated_amount', (select concat_ws(':', data_type, is_gen
   from information_schema.columns where table_schema = 'public' and table_name = 'debt' and column_name = 'updated_amount')
 union all select 'external_id_tipos', (select string_agg(table_name || '=' || data_type, ',' order by table_name)
   from information_schema.columns where table_schema = 'public' and column_name = 'external_id')
+union all select 'columnas_nulables_etl', (select string_agg(table_name || '.' || column_name || '=' || is_nullable, ',' order by table_name, column_name)
+  from information_schema.columns where table_schema = 'public' and (table_name, column_name) in
+    (('debtor', 'status'), ('debtor_profile', 'socioeconomic_risk_level'), ('debtor_profile', 'oldest_debt_days'), ('debtor_profile', 'average_debt_age_days'), ('debtor_profile_detail', 'risk_value')))
 union all select 'filas_por_tabla', coalesce(string_agg(nombre || '=' || filas, ',' order by nombre), '') from tabla
 union all select 'filas_total', coalesce(sum(filas), 0)::text from tabla
 union all select 'debt_updated_distinto_current', (select count(*)::text from public.debt where updated_amount is distinct from current_amount)

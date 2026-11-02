@@ -117,6 +117,9 @@ def validate_contract(contract):
     catalogs = c['catalogos']
     require(set(catalogs['por_lote']) == {'Bien_Tipo_Id', 'Tipo_Ingreso_Id', 'NOTD_ESTA_id', 'NOTD_SITU_id'})
     require(set(catalogs['estados_obligacion']) == {'PENDIENTE', 'PAGADA', 'ANULADA', 'SUSPENDIDA', 'UNKNOWN'})
+    require(set(catalogs['debt_status_por_estado']) == {'PENDIENTE_VENCIDA', 'PENDIENTE_VIGENTE', 'PAGADA', 'ANULADA',
+                                                        'SUSPENDIDA', 'UNKNOWN'})
+    require(all(isinstance(v, str) and v for v in catalogs['debt_status_por_estado'].values()))
     require(catalogs['normalizacion_estado_objeto'] == 'casefold')
     require(catalogs['Estado'] and all(isinstance(k, str) and k and v in ('ACTIVO', 'INACTIVO')
                                     for k, v in catalogs['Estado'].items()))

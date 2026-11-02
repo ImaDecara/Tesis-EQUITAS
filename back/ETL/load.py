@@ -54,6 +54,7 @@ CITY_TABLE = "city"
 ADDRESS_TABLE = "address"
 DEBTOR_CONTACT_TABLE = "debtor_contact"
 DEBTOR_PROFILE_TABLE = "debtor_profile"
+DEBTOR_PROFILE_DETAIL_TABLE = "debtor_profile_detail"
 
 TRANSIENT_SUPABASE_ERRORS = (
     httpx.RemoteProtocolError,
@@ -703,6 +704,32 @@ def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
         payload=payload,
         lookup_filters={
             "debtor": debtor,
+        },
+    )
+
+
+# Inserta o actualiza el detalle de una persona dentro de un perfil.
+def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Regla de deduplicación:
+    debtor_profile_detail.debtor_profile + debtor_profile_detail.person
+    """
+
+    debtor_profile = payload.get("debtor_profile")
+    person = payload.get("person")
+
+    if debtor_profile is None:
+        raise ValueError(etl_message("DETAIL_PROFILE_MISSING"))
+
+    if person is None:
+        raise ValueError(etl_message("DETAIL_PERSON_MISSING"))
+
+    return insert_or_update_by_filters(
+        table_name=DEBTOR_PROFILE_DETAIL_TABLE,
+        payload=payload,
+        lookup_filters={
+            "debtor_profile": debtor_profile,
+            "person": person,
         },
     )
 

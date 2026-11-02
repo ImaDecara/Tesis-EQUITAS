@@ -962,3 +962,13 @@ Una decisión R2 permite contar la cola aunque su puntaje sea null. Fallas de
 ALIGN-014 debe sustituir el orden
 global y las dependencias heredadas de perfiles/estados. Las demás cifras y el orden del tablero
 no se confunden con el contrato de `buildRecommendationSummary` de esta adenda.
+
+## 17. Adenda ALIGN-026: carga semántica V1
+
+Solo para lo cargado por `python -m ETL.run_etl --execute` en la base local (ver
+[contrato de dominio §14](contrato-dominio-v1.md#14-semántica-de-la-carga-v1-align-026)).
+Donde este catálogo dice que el ETL infirió el estado de una obligación al cargar, en esta carga
+es el estado de origen con su catálogo, y "vencida" significa pendiente con vencimiento anterior al
+corte declarado. El índice heredado (PR08) y el índice individual (PR09) quedan nulos: no se
+calculan. Los datos del original conservan la semántica descrita arriba.
+

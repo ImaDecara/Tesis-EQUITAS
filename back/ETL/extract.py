@@ -322,6 +322,12 @@ def source_folder(folder_name: str) -> Path:
     return settings.input_dir / folder_name
 
 
+# Archivos de un lote según el formato que declara su perfil.
+def source_files(folder: Path, mapping: dict) -> dict[str, Path]:
+    kind, _ = _source_format(mapping)
+    return {name: folder / f'{name}.{kind}' for name in ('cabecera', 'detalle')}
+
+
 # Extrae los archivos de cabecera y detalle a partir de una carpeta de input.
 def extract_from_input_folder(folder_name: str) -> ExtractedSourceData:
 

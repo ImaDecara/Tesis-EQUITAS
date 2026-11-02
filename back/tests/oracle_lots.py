@@ -122,7 +122,9 @@ def persisted_mismatches(tables: dict[str, list[dict]], expected: list[dict], ca
 
     check('lote', 'objetos', len(expected), len(tables['debtor']))
     check('lote', 'perfiles', len(expected), len(tables['debtor_profile']))
-    check('lote', 'indice_heredado_detalle', 0, len(tables['debtor_profile_detail']))
+    check('lote', 'indice_heredado_detalle', [], [row['risk_value'] for row in tables['debtor_profile_detail']
+                                                  if row['risk_value'] is not None])
+    check('lote', 'filas_detalle_por_relacion', sum(len(item['personas']) for item in expected), len(tables['debtor_profile_detail']))
     for item in expected:
         case = item['caso']
         type_id = catalogs['debtor_type'][BIEN_TIPO_A_CLAVE[item['bien_tipo_id']]]

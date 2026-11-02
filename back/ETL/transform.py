@@ -14,9 +14,9 @@ import pandas as pd
 
 from ETL.config import ETLError, settings
 from ETL.extract import canonical_records, extract_from_input_folder, read_source_tables
+from ETL.validate_source import load_contract, validate_batch
 from ETL.validate_source import parse_amount as parse_source_amount
 from ETL.validate_source import parse_date as parse_source_date
-from ETL.validate_source import load_contract, validate_batch
 
 # ============================================================
 # CATÁLOGOS: SIEMPRE POR CLAVE
@@ -66,6 +66,7 @@ CUIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
 SOURCE_PERIOD_COLUMN = "Periodo_Fiscal"
 UNUSABLE_CONTACT_CODES = {"CONTACTO_PLACEHOLDER", "CONTACTO_FORMATO_INVALIDO"}
 INACTIVE_CONTACT_CODE = "CONTACTO_INACTIVO"
+LEGACY_INDEX_NOT_CALCULATED = "Índice heredado no calculado: la severidad la calculan las reglas v1."
 CONTACT_COLUMNS = (
     ("Destinatario_Telefono", CONTACT_TYPE_PHONE),
     ("Destinatario_Celular", CONTACT_TYPE_MOBILE),
@@ -588,6 +589,17 @@ def build_debtor_profile_payload(
         "available_contact_count": available_contact_count,
         "socioeconomic_risk_level": None,
         "profile_generated_at": datetime.now(UTC).isoformat(),
+        "active": True,
+    }
+
+
+# El índice individual derivaba del índice heredado del objeto: la fila se conserva con valor nulo (PR09, PR10).
+def build_debtor_profile_detail_payload(debtor_profile_id: int, person_id: int) -> dict[str, Any]:
+    return {
+        "debtor_profile": debtor_profile_id,
+        "person": person_id,
+        "risk_value": None,
+        "reason": LEGACY_INDEX_NOT_CALCULATED,
         "active": True,
     }
 

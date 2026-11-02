@@ -6,6 +6,7 @@ valores históricos del ETL, para que una resolución por constante falle. La mi
 contra la base local con database/testing/etl_semantic_local.py.
 """
 
+import csv
 import hashlib
 import json
 import os
@@ -46,7 +47,7 @@ CATALOGS = {
 UNIQUE = {
     'person': ('external_id',), 'debtor': ('tenant', 'type', 'external_id'), 'debt': ('debtor', 'external_id'),
     'debtor_person': ('debtor', 'person'), 'debtor_contact': ('person', 'type', 'value'),
-    'debtor_profile': ('debtor',), 'address': ('person',), 'province': ('name',),
+    'debtor_profile': ('debtor',), 'debtor_profile_detail': ('debtor_profile', 'person'), 'address': ('person',), 'province': ('name',),
     'city': ('province', 'name', 'postal_code'),
 }
 FOREIGN_KEYS = {
@@ -447,6 +448,22 @@ def test_alias_de_columnas_del_perfil_llegan_a_la_carga(database, tmp_path):
     assert persisted_mismatches(database.tables, expected, CATALOGS, lot) == []
 
 
+def test_lote_csv_con_perfil_explicito_se_publica_igual(database, tmp_path):
+    lot = derive_lot(tmp_path / 'csv')
+    for name in ('cabecera', 'detalle'):
+        rows = list(csv.reader((lot / f'{name}.tsv').read_text(encoding='utf-8').splitlines(), delimiter='\t'))
+        with (lot / f'{name}.csv').open('w', encoding='utf-8', newline='') as stream:
+            csv.writer(stream, delimiter=';').writerows(rows)
+    mapping = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
+    mapping['formato'] = {**mapping['formato'], 'tipo': 'csv', 'separador': ';'}
+    mapping['vigencia_contactos'] = json.loads((FIXTURE / 'contactos-vigencia.json').read_text(encoding='utf-8'))['contactos']
+    path = tmp_path / 'perfil-csv.json'
+    path.write_text(json.dumps(mapping, ensure_ascii=False), encoding='utf-8')
+    execute(lot, mapping=path)
+    assert persisted_mismatches(database.tables, accepted_objects(), CATALOGS, lot) == []
+    assert database.batches[0]['p_file_hashes']['detalle'] == hashlib.sha256((lot / 'detalle.csv').read_bytes()).hexdigest()
+
+
 def test_contacto_marcador_o_ilegible_no_se_carga_y_el_inactivo_queda_inactivo(database, tmp_path):
     execute(derive_lot(tmp_path / 'contactos'))
     people = {row['external_id']: row['id'] for row in database.tables['person']}
@@ -653,10 +670,12 @@ def test_execute_exige_corte_antes_de_leer_archivos(database, tmp_path):
     assert database.batches == []
 
 
-def test_execute_rechaza_carga_parcial_por_limite(database, tmp_path):
+@pytest.mark.parametrize('execute_flag', [True, False])
+@pytest.mark.parametrize('partial', [{'limit_objects': 2}, {'priority_tipo_ingreso_ids': [801]}])
+def test_lote_con_corte_rechaza_subconjuntos(database, tmp_path, execute_flag, partial):
     lot = derive_lot(tmp_path / 'parcial')
     with pytest.raises(ETLError) as error:
-        run_etl.run_etl(str(lot), execute=True, cut_off=AS_OF, limit_objects=2)
+        run_etl.run_etl(str(lot), execute=execute_flag, cut_off=AS_OF, **partial)
     assert error.value.code == 'PARTIAL_LOAD_REJECTED'
     assert database.cartera_rows() == 0 and database.batches == []
 

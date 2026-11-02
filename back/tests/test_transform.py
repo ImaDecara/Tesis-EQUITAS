@@ -19,6 +19,7 @@ from ETL.transform import (
     build_debt_payload,
     build_debtor_payload,
     build_debtor_person_payload,
+    build_debtor_profile_detail_payload,
     build_debtor_profile_payload,
     build_person_payload,
     build_transform_summary,
@@ -36,6 +37,7 @@ from ETL.transform import (
     resolve_origin_state,
     with_catalog_ids,
 )
+from ETL.validate_source import ValidationError, load_contract, validate_contract
 
 CUT_OFF = date(2026, 9, 30)
 STATES = {'NOTD_ESTA_id': {'10': 'PENDIENTE', '20': 'PAGADA', '30': 'ANULADA', '40': 'SUSPENDIDA', '99': 'UNKNOWN'},
@@ -240,6 +242,18 @@ def test_tipo_de_tributo_no_acepta_id_no_canonico():
     assert infer_debt_type_key('0801') == 'unknown'
 
 
+@pytest.mark.parametrize('mutation', [
+    lambda catalogos: catalogos.pop('debt_status_por_estado'),
+    lambda catalogos: catalogos['debt_status_por_estado'].pop('SUSPENDIDA'),
+    lambda catalogos: catalogos['debt_status_por_estado'].update(PAGADA=''),
+])
+def test_contrato_sin_el_mapa_de_estados_completo_se_rechaza(mutation):
+    contract = load_contract()
+    mutation(contract['catalogos'])
+    with pytest.raises(ValidationError, match='CONFIGURACION_INVALIDA'):
+        validate_contract(contract)
+
+
 def test_claves_de_catalogo_se_cambian_por_id_y_faltante_falla():
     payload = {'type': 'RODADO', 'external_id': 3}
     assert with_catalog_ids('debtor', payload, {'debtor_type': {'RODADO': 73}}) == {'type': 73, 'external_id': 3}
@@ -265,6 +279,12 @@ def test_perfil_agrega_al_corte_sin_indice_heredado():
     assert (profile['active_person_count'], profile['available_contact_count']) == (2, 3)
     assert profile['socioeconomic_risk_level'] is None
     assert 'previous_contact_count' not in profile
+
+
+def test_detalle_por_persona_conserva_la_fila_sin_indice_heredado():
+    detail = build_debtor_profile_detail_payload(11, 22)
+    assert (detail['debtor_profile'], detail['person'], detail['risk_value']) == (11, 22, None)
+    assert 'no calculado' in detail['reason']
 
 
 def test_perfil_sin_vencidas_no_inventa_antiguedad():
