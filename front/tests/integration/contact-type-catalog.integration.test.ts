@@ -63,6 +63,16 @@ describe('lectura del catálogo contact_type para el detalle', () => {
     expect((await loadContactTypeCatalog()).warning?.table).toBe('contact_type')
   })
 
+  // Con ALIGN-019 la autorización ocurre dentro de loadRawDebtorData: el catálogo va siempre después.
+  it('una lectura denegada de la cartera corta antes de tocar el catálogo', async () => {
+    const { client, requests } = createPaginatedSupabase({ contact_type: [{ id: 910001, value: 'Email' }] })
+    clientMock.mockResolvedValue(client)
+    loadRawDebtorData.mockRejectedValue(new Error('Rol sin permiso'))
+    await expect(getDebtorDetailDataFromService('910001')).rejects.toThrow('Rol sin permiso')
+    expect(clientMock).not.toHaveBeenCalled()
+    expect(requests).toEqual([])
+  })
+
   it('los listados no leen el catálogo: el canal solo se muestra en el detalle', async () => {
     const { client, requests } = createPaginatedSupabase({ contact_type: [{ id: 910001, value: 'Email' }] })
     clientMock.mockResolvedValue(client)
