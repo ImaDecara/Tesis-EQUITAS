@@ -84,7 +84,8 @@ Un ZIP inusual se rechaza con `ZIP_CORRUPTO`: cifrado, datos parcheados o cabece
 | Fórmula con valor guardado | El valor guardado. Nunca se evalúa |
 | Fórmula sin valor guardado | `FORMULA_SIN_VALOR`, con hoja y fila |
 | Error de Excel (`#REF!`) | `CELDA_CON_ERROR` |
-| Booleano, infinito, o `t="d"` con una hora sola o una duración | `CELDA_TIPO_NO_SOPORTADO` |
+| Booleano, infinito, o `t="d"` con una hora sola | `CELDA_TIPO_NO_SOPORTADO` |
+| `t="d"`, que trae una fecha ISO y no un serial, con una fecha imposible | `ARCHIVO_NO_LEIBLE` |
 | Fila o celda repetida o fuera de orden | `ESTRUCTURA_INVALIDA`; openpyxl las descartaba en silencio |
 | Índice de cadena o de estilo negativo, fuera de la tabla o con formas que Python acepta y el formato no (`-1`, `1_0`, ` 0`, dígitos arábigos) | `ESTRUCTURA_INVALIDA`; un -1 tomaba el último elemento |
 | Lo mismo en el número guardado, el número de fila o la coordenada; tipo de celda desconocido | `ESTRUCTURA_INVALIDA` |

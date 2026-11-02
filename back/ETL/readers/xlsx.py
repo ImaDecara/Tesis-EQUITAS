@@ -180,10 +180,7 @@ def _check_directory(archive, kind, limits, entries):
 def _check_local_header(stream, info, kind):
     """La cabecera local tiene que decir lo mismo que el directorio; devuelve dónde empiezan los datos."""
     stream.seek(info.header_offset)
-    raw = stream.read(_LOCAL_HEADER.size)
-    if len(raw) != _LOCAL_HEADER.size:
-        source_error('ZIP_CORRUPTO', kind)
-    signature, _, flags, method, _, _, *sizes, name_bytes, extra_bytes = _LOCAL_HEADER.unpack(raw)
+    signature, _, flags, method, _, _, *sizes, name_bytes, extra_bytes = _LOCAL_HEADER.unpack(stream.read(_LOCAL_HEADER.size))
     name = stream.read(name_bytes).decode('utf-8' if flags & _FLAG_UTF8 else 'cp437', 'replace')
     extra = stream.read(extra_bytes)
     declared = (info.CRC, info.compress_size, info.file_size)

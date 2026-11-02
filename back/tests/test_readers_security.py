@@ -1465,6 +1465,29 @@ def test_a_duration_style_is_never_a_date_or_a_number(tmp_path, column):
     reject(validated_book(tmp_path, 45306, '[h]:mm', column=column), xlsx_profile(fecha_serial='1900'), 'CELDA_TIPO_NO_SOPORTADO')
 
 
+def _iso_cell_book(folder, stored):
+    data = validated_data(45306)
+    sheet = re.sub(rb'<c r="([A-Z]+)2"([^>]*?)><v>45306</v>', rb'<c r="\g<1>2" t="d"><v>' + stored.encode() + b'</v>', _part(data, 'xl/worksheets/sheet2.xml'), count=1)
+    assert b't="d"' in sheet
+    return write(folder, 'libro', rewrite_zip(data, replace_parts={'xl/worksheets/sheet2.xml': sheet}))
+
+
+@pytest.mark.parametrize(('stored', 'expected'), [('2024-01-15', '15/01/2024'), ('2024-01-15T08:30:00', '15/01/2024 08:30:00')])
+def test_a_cell_with_an_iso_date_is_not_a_serial_and_follows_the_profile(tmp_path, stored, expected):
+    path = _iso_cell_book(tmp_path, stored)
+    assert read_detail(path, xlsx_profile(fecha_serial='1900'))['NOTD_vencimiento'] == expected
+    reject(path, xlsx_profile(), 'FECHA_SERIAL_NO_DECLARADA')
+
+
+def test_a_cell_with_an_iso_time_is_not_a_date(tmp_path):
+    reject(_iso_cell_book(tmp_path, '12:30:00'), xlsx_profile(fecha_serial='1900'), 'CELDA_TIPO_NO_SOPORTADO')
+
+
+@pytest.mark.parametrize('stored', ['1900-02-29', 'P1D', '60'])
+def test_a_cell_with_an_impossible_iso_date_is_rejected(tmp_path, stored):
+    reject(_iso_cell_book(tmp_path, stored), xlsx_profile(fecha_serial='1900'), 'ARCHIVO_NO_LEIBLE')
+
+
 def percentage_text(folder, code, value=0.5):
     def percent(workbook):
         workbook['cabecera']['B2'].number_format = code
@@ -1631,6 +1654,22 @@ def _local_sizes_marked_zip64(entries):
     entries[STYLES_PART].update(local_compressed=0xFFFFFFFF, local_size=0xFFFFFFFF)
 
 
+def _descriptor_with_a_byte_more(entries):
+    _with_descriptor()(entries)
+    entries[STYLES_PART]['after'] += b'x'
+
+
+def _descriptor_of_16_without_signature(entries):
+    _with_descriptor()(entries)
+    entries[STYLES_PART]['after'] = b'XXXX' + entries[STYLES_PART]['after'][4:]
+
+
+def _stored_declares_more_than_the_file(entries):
+    entry = entries[STYLES_PART]
+    plain = zlib.decompress(entry['stream'], -15)
+    entry.update(stream=plain, method=0, size=len(plain) + 1_000_000, compressed=len(plain) + 1_000_000, crc=zlib.crc32(plain))
+
+
 FORGED_PACKAGES = [
     ('prefijo-en-ambas-cabeceras', _prefix_of_a_longer_stream, {}),
     ('tamano-falso-solo-en-la-local', _set(local_size=999), {}),
@@ -1655,6 +1694,9 @@ FORGED_PACKAGES = [
     ('zip64-solo-en-la-local', _local_zip64, {}),
     ('zip64-solo-en-el-directorio', _central_zip64, {}),
     ('tamanos-marcados-zip64-en-la-local', _local_sizes_marked_zip64, {}),
+    ('descriptor-con-un-byte-de-mas', _descriptor_with_a_byte_more, {}),
+    ('descriptor-de-16-bytes-sin-firma', _descriptor_of_16_without_signature, {}),
+    ('sin-comprimir-declara-mas-que-el-archivo', _stored_declares_more_than_the_file, {}),
     ('datos-parcheados', _set(flags=0x20), {}),
     ('cifrado-fuerte', _set(flags=0x40), {}),
     ('cabeceras-enmascaradas', _set(flags=0x2000), {}),
@@ -1736,6 +1778,18 @@ def test_real_bytes_beyond_the_declared_size_are_cut_at_once(tmp_path, monkeypat
     # Ningún byte de más: a lo sumo uno sobre lo declarado por las partes que se recorrieron.
     declared = sum(info.file_size for info in zipfile.ZipFile(io.BytesIO(validated_data())).infolist())
     assert sum(produced) <= declared + 1
+
+
+def test_other_extra_fields_in_the_headers_do_not_hide_zip64_or_get_in_the_way(tmp_path):
+    other = struct.pack('<HH', 0x9999, 2) + b'ab'
+
+    def harmless(entries):
+        entries[STYLES_PART].update(extra=other, local_extra=other)
+    assert lot_result(write(tmp_path, 'libro', handmade_zip(validated_data(), harmless)), xlsx_profile()) == 'VALIDADO'
+
+    def hidden(entries):
+        entries[STYLES_PART].update(local_extra=other + struct.pack('<HHQQ', 1, 16, 1, 1))
+    reject(write(tmp_path, 'libro2', handmade_zip(validated_data(), hidden)), xlsx_profile(), 'ZIP_CORRUPTO')
 
 
 def test_an_entry_declared_empty_without_a_stream_is_read_as_empty(tmp_path):
