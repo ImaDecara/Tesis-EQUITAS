@@ -41,7 +41,8 @@ export EQUITAS_IMPORT_SERVER_JWT=...   EQUITAS_IMPORT_ACTOR_USER=...
 .venv/bin/python -m ETL.run_etl --folder <lote> --execute --cut-off 2026-09-30 [--mapping perfil.json]
 ```
 
-Sin `--mapping` solo se admite una carpeta con `manifest.json` de fixture sintética (`MAPEO_REQUERIDO` si no).
+Sin `--mapping` solo se admite una carpeta con `manifest.json` de fixture sintética: sin manifiesto, `JSON_NO_LEIBLE`;
+con otro manifiesto, `MAPEO_REQUERIDO`.
 Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que declaran.
 
 `--execute` valida el destino, el corte y las credenciales **antes de leer el lote**. Después:
