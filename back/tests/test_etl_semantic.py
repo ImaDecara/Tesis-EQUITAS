@@ -17,6 +17,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -79,9 +80,17 @@ class FakeError(Exception):
 
 class FakeQuery:
     def __init__(self, database, table):
-        self.database, self.table, self.filters, self.action = database, table, [], ('select', None)
+        self.database, self.table, self.filters, self.action, self.page = database, table, [], ('select', None), None
 
     def select(self, _columns):
+        return self
+
+    def order(self, column):
+        self.sort_column = column
+        return self
+
+    def range(self, start, end):
+        self.page = (start, end)
         return self
 
     def eq(self, column, value):
@@ -112,10 +121,14 @@ class FakeQuery:
             created = [self.database.insert(self.table, item) for item in payloads]
             return SimpleNamespace(data=created)
         if name == 'update':
+            self.database.updates += 1
             self.database.check(self.table, payload)
             for row in matches:
                 row.update(json.loads(json.dumps(payload)))
             return SimpleNamespace(data=[dict(row) for row in matches])
+        if self.page:
+            # Como la Data API: corta en su máximo de filas aunque la página pedida sea mayor.
+            matches = sorted(matches, key=lambda row: row[self.sort_column])[self.page[0]:self.page[1] + 1][:self.database.max_rows]
         return SimpleNamespace(data=[dict(row) for row in matches])
 
 
@@ -129,7 +142,9 @@ class FakeDatabase:
         self.batches = []
         self.rpc_headers = []
         self.fail_on = None
+        self.max_rows = 1000
         self.writes = 0
+        self.updates = 0
         self.next_id = 1000
 
     def table(self, name):
@@ -808,6 +823,160 @@ def test_recarga_identica_no_inserta_ni_actualiza_deudas(database, tmp_path, cap
     assert before == json.dumps(sorted(database.tables['debt'], key=lambda row: row['id']))
     assert re.search(r'Deudas insertadas:\s+0', salida) and re.search(r'Deudas actualizadas:\s+0', salida)
     assert database.batches[-1]['p_counts']['deudas_sin_cambios'] == len(database.tables['debt'])
+
+
+def _portfolio(database):
+    return json.dumps({name: database.tables[name] for name in CARTERA}, sort_keys=True)
+
+
+def test_recarga_identica_no_reescribe_ninguna_fila_ni_el_momento_del_perfil(database, tmp_path, capsys):
+    lot = derive_lot(tmp_path / 'recarga')
+    execute(lot)
+    first = database.batches[-1]['p_counts']
+    assert first['filas_actualizadas'] == 0
+    assert first['filas_insertadas'] == database.cartera_rows()
+    assert {name: value['insertadas'] for name, value in first['escrituras'].items()} \
+        == {name: len(database.tables[name]) for name in CARTERA}
+    before = _portfolio(database)
+    writes = database.writes
+    capsys.readouterr()
+    execute(lot)
+    salida = capsys.readouterr().out
+    assert _portfolio(database) == before
+    assert (database.writes, database.updates) == (writes, 0)
+    counts = database.batches[-1]['p_counts']
+    assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (0, 0)
+    assert counts['filas_sin_cambios'] >= database.cartera_rows()
+    assert re.search(r'Filas insertadas:\s+0\n', salida) and re.search(r'Filas actualizadas:\s+0\n', salida)
+
+
+def test_corregir_una_obligacion_solo_toca_esa_fila_y_el_perfil_de_su_objeto(database, tmp_path):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+    execute(derive_lot(tmp_path / 'primero'))
+    profiles = {row['id']: dict(row) for row in database.tables['debtor_profile']}
+    debts = {row['id']: dict(row) for row in database.tables['debt']}
+    execute(derive_lot(tmp_path / 'corregido', cabecera_cells={(key, None, 'Deuda_Actualizada'): '46.279,61'},
+                       detalle_cells={(key, '700001', 'NOTD_totalActualizado'): '13.817,54'}))
+    assert database.updates == 2
+    assert [row['id'] for row in database.tables['debt'] if row != debts[row['id']]] == \
+        [next(row['id'] for row in database.tables['debt'] if row['external_id'] == 700001)]
+    debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    changed = [row for row in database.tables['debtor_profile'] if row != profiles[row['id']]]
+    assert [row['debtor'] for row in changed] == [debtor['id']]
+    assert changed[0]['total_debt_amount'] == '46279.61'
+    assert changed[0]['profile_generated_at'] != profiles[changed[0]['id']]['profile_generated_at']
+    assert database.batches[-1]['p_counts']['escrituras']['debtor_profile']['actualizadas'] == 1
+    assert database.batches[-1]['p_counts']['escrituras']['debt']['actualizadas'] == 1
+
+
+def _drop_lines(path, *cells):
+    lines = path.read_text(encoding='utf-8').splitlines()
+    kept = [line for line in lines if not set(cells) <= set(line.split('\t'))]
+    assert len(kept) < len(lines)
+    path.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+
+
+def _sin_objeto(tmp_path):
+    key = object_by_case('base-valido')['clave_agrupacion']
+    lot = derive_lot(tmp_path / 'sin-objeto')
+    _drop_lines(lot / 'cabecera.tsv', key)
+    _drop_lines(lot / 'detalle.tsv', key)
+    return lot, {'objetos': 1}
+
+
+def _sin_obligacion(tmp_path):
+    key = object_by_case('base-valido')['clave_agrupacion']
+    lot = derive_lot(tmp_path / 'sin-obligacion', cabecera_cells={(key, None, 'Deuda_Actualizada'): '32.462,07',
+                                                                  (key, None, 'Deuda_Capital'): '27.196,60'})
+    _drop_lines(lot / 'detalle.tsv', key, '700001')
+    return lot, {'obligaciones': 1}
+
+
+def _sin_relacion(tmp_path):
+    item = object_by_case('dos-personas-un-objeto')
+    lot = derive_lot(tmp_path / 'sin-relacion')
+    _drop_lines(lot / 'cabecera.tsv', item['clave_agrupacion'], str(item['personas'][-1]))
+    return lot, {'relaciones': 1}
+
+
+def _cuenta_con_ceros(tmp_path):
+    # 000123 no es la cuenta 123: el objeto publicado deja de venir, aunque el otro quede en cuarentena.
+    canonical = object_by_case('cuenta-canonica-123')
+    lot = derive_lot(tmp_path / 'ceros', cabecera_cells={(canonical['clave_agrupacion'], None, 'Cuenta'): '000123'},
+                     detalle_cells={(canonical['clave_agrupacion'], None, 'Cuenta'): '000123'})
+    return lot, {'objetos': 1}
+
+
+@pytest.mark.parametrize('partial', [_sin_objeto, _sin_obligacion, _sin_relacion, _cuenta_con_ceros])
+def test_archivo_parcial_o_con_bajas_se_rechaza_sin_escribir(database, tmp_path, partial):
+    execute(derive_lot(tmp_path / 'completo'))
+    before = _portfolio(database)
+    writes, updates = database.writes, database.updates
+    lot, missing = partial(tmp_path)
+    with pytest.raises(ETLError) as error:
+        execute(lot)
+    assert error.value.code == 'PARTIAL_LOAD_REJECTED'
+    assert _portfolio(database) == before
+    assert (database.writes, database.updates) == (writes, updates)
+    event = database.batches[-1]
+    assert (event['p_status'], event['p_supersedes']) == ('FALLIDO', None)
+    assert event['p_counts']['faltantes'] == missing
+    assert event['p_file_hashes']['detalle'] == hashlib.sha256((lot / 'detalle.tsv').read_bytes()).hexdigest()
+
+
+def test_un_objeto_publicado_en_cuarentena_no_es_una_baja(database, tmp_path):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'primero'))
+    before = json.dumps(debts_of(database, target['bien_tipo_id'], target['cuenta'])[1])
+    execute(derive_lot(tmp_path / 'segundo', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_capital'): 'sin-monto'}))
+    assert database.batches[-1]['p_status'] == 'PUBLICADO'
+    assert json.dumps(debts_of(database, target['bien_tipo_id'], target['cuenta'])[1]) == before
+
+
+def test_lo_publicado_se_lee_entero_aunque_la_data_api_corte_antes(database, tmp_path, monkeypatch):
+    execute(derive_lot(tmp_path / 'completo'))
+    published = load.fetch_published_objects(1)
+    total = len(database.tables['debt'])
+    assert sum(len(item['obligaciones']) for item in published.values()) == total
+    database.max_rows = 2
+    monkeypatch.setattr(load, 'READ_IDS_PER_REQUEST', 3)
+    assert len(load.fetch_all_rows('debt', 'id')) == total
+    assert load.fetch_published_objects(1) == published
+    database.max_rows = 1000
+    monkeypatch.setattr(load, 'READ_PAGE_SIZE', 2)
+    assert len(load.fetch_all_rows('debt', 'id')) == total
+
+
+def test_una_lectura_invalida_no_se_confunde_con_lo_publicado(monkeypatch):
+    client = Mock()
+    for name in ('table', 'select', 'eq', 'in_', 'order', 'range'):
+        getattr(client, name).return_value = client
+    client.execute.return_value = SimpleNamespace(data={'datos': 1})
+    monkeypatch.setattr(load, 'supabase', client)
+    with pytest.raises(ETLError) as error:
+        load.fetch_all_rows('debt', 'id', filters={'tenant': 1}, in_filter=('debtor', [1]))
+    assert error.value.code == 'READ_RESPONSE_INVALID'
+
+
+@pytest.mark.parametrize(('current', 'wanted', 'same'), [
+    (None, None, True), (None, 0, False), (0, None, False), (None, '', False),
+    (True, True, True), (True, False, False), (True, 1, False), (1, True, False),
+    ('a', 'a', True), ('a', 'b', False), ('1', '1.0', False), ('0000', '0', False),
+    (46279.6, '46279.60', True), (46279.6, '46279.61', False), (5, '5', True), (5, 5, True), (5, 6, False), (5, 'x', False),
+])
+def test_comparacion_de_valores_sin_float_ni_coerciones(current, wanted, same):
+    assert load._same_value(current, wanted) is same
+
+
+def test_escritura_fuera_de_una_carga_no_lleva_cuenta(database):
+    load._WRITE_TALLY.set(None)
+    row = load.insert_or_update_by_filters('province', {'name': 'X'}, {'name': 'X'})
+    assert row['name'] == 'X'
+    assert load._WRITE_TALLY.get() is None
+    updated = load.insert_or_update_by_filters('province', {'name': 'X', 'active': True}, {'name': 'X'})
+    assert updated['active'] is True
+    assert load.write_summary({}) == {'filas_insertadas': 0, 'filas_actualizadas': 0, 'filas_sin_cambios': 0, 'escrituras': {}}
 
 
 def test_cuarentena_conserva_el_estado_previo_del_objeto(database, tmp_path):

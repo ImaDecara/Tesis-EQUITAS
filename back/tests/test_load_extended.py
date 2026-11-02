@@ -92,6 +92,7 @@ def test_specific_loaders_keep_their_deduplication_contracts(
         table_name: str,
         payload: dict[str, Any],
         lookup_filters: dict[str, Any],
+        ignored_columns: tuple[str, ...] = (),
     ) -> dict[str, int]:
         captured.update({
             'table_name': table_name,

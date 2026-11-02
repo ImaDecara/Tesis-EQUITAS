@@ -14,6 +14,7 @@ from ETL.extract import (
 )
 from ETL.load import (
     etl_message,
+    fetch_published_objects,
     load_address,
     load_city,
     load_debtor,
@@ -28,6 +29,8 @@ from ETL.load import (
     reset_log_context,
     resolve_catalogs,
     set_log_context,
+    start_write_tally,
+    write_summary,
 )
 
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
@@ -49,6 +52,7 @@ from ETL.transform import (
     build_person_payload,
     build_province_payload,
     build_transform_summary,
+    coverage_gaps,
     prepare_batch,
     required_catalog_keys,
     source_contract,
@@ -235,6 +239,14 @@ def _publish_validated_batch(batch: PreparedBatch) -> None:
     cut_off = batch.report["fecha_corte"]
     catalogs = resolve_catalogs(required_catalog_keys(batch), CATALOG_KEY_COLUMNS)
     counts = batch_counts(batch.report)
+    # Lectura, sin escribir cartera. Un FALLIDO sin antecedente declara justamente eso: no tocó nada.
+    missing = coverage_gaps(batch, fetch_published_objects(settings.tenant_id))
+
+    if missing:
+        _register_batch(batch.file_hashes, cut_off, STATUS_FAILED, {**counts, "faltantes": missing},
+                        source_updated_at=batch.source_updated_at)
+        raise ETLError("PARTIAL_LOAD_REJECTED")
+
     validated_id = _register_batch(batch.file_hashes, cut_off, STATUS_VALIDATED, counts,
                                    source_updated_at=batch.source_updated_at)
 
@@ -344,7 +356,8 @@ def _load_object(
 
 # Solo llegan aquí filas que el motor aceptó en un lote cuya publicación está permitida.
 # Los objetos en cuarentena conservan su estado previo: no se escribe ninguna de sus filas.
-def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]]) -> dict[str, int]:
+def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]]) -> dict[str, Any]:
+    tally = start_write_tally()
     loaded: Counter[str] = Counter()
     profile_inputs = []
     all_debts: list[dict[str, Any]] = []
@@ -383,10 +396,10 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
         for person_id in sorted(person_ids):
             load_debtor_profile_detail(build_debtor_profile_detail_payload(int(profile["id"]), person_id))
 
-    return dict(loaded)
+    return {**loaded, **write_summary(tally)}
 
 
-def _print_load_summary(loaded: Mapping[str, int]) -> None:
+def _print_load_summary(loaded: Mapping[str, Any]) -> None:
     print()
     print("CARGA FINALIZADA")
     print("-" * 80)
@@ -399,6 +412,9 @@ def _print_load_summary(loaded: Mapping[str, int]) -> None:
     print(f"Direcciones publicadas:              {loaded.get('direcciones_publicadas', 0)}")
     print(f"Contactos publicados:                {loaded.get('contactos_publicados', 0)}")
     print(f"Perfiles debtor_profile publicados:  {loaded.get('perfiles_publicados', 0)}")
+    print(f"Filas insertadas:                    {loaded.get('filas_insertadas', 0)}")
+    print(f"Filas actualizadas:                  {loaded.get('filas_actualizadas', 0)}")
+    print(f"Filas sin cambios:                   {loaded.get('filas_sin_cambios', 0)}")
     print("-" * 80)
 
 

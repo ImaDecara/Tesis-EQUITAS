@@ -81,6 +81,7 @@ def simular_carga(monkeypatch):
     monkeypatch.setattr(run_etl, "resolve_catalogs", lambda required, _columns: {
         table: {key: index for index, key in enumerate(sorted(keys), start=1)} for table, keys in required.items()
     })
+    monkeypatch.setattr(run_etl, "fetch_published_objects", Mock(return_value={}))
     monkeypatch.setattr(run_etl, "record_import_batch", Mock(return_value=1))
     for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact", "load_debtor_profile",
                    "load_debtor_profile_detail", "load_province", "load_city", "load_address"):

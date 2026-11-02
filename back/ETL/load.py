@@ -1,9 +1,10 @@
 import re
 import time
 import uuid
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from contextvars import ContextVar, Token
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from hashlib import blake2b
 from secrets import token_bytes
 from typing import Any, TypeVar, cast
@@ -65,6 +66,18 @@ TRANSIENT_SUPABASE_ERRORS = (
 MAX_SUPABASE_ATTEMPTS = 5
 SUPABASE_RETRY_DELAYS_SECONDS = (1, 2, 4, 8)
 DEFAULT_BULK_BATCH_SIZE = 500
+READ_PAGE_SIZE = 1000
+READ_IDS_PER_REQUEST = 200
+
+# Qué le pasó a cada fila en una carga. Una recarga idéntica tiene que dar solo "sin_cambios".
+WRITE_INSERTED = "insertadas"
+WRITE_UPDATED = "actualizadas"
+WRITE_UNCHANGED = "sin_cambios"
+WRITE_OUTCOMES = (WRITE_INSERTED, WRITE_UPDATED, WRITE_UNCHANGED)
+_WRITE_TALLY: ContextVar[dict[str, Counter[str]] | None] = ContextVar("etl_write_tally", default=None)
+
+# Cuándo se calculó el perfil no es parte de lo calculado: si nada más cambió, sigue valiendo el cálculo anterior.
+PROFILE_COMPUTED_AT_COLUMN = "profile_generated_at"
 
 DEBT_COMPARE_COLUMNS = (
     "external_id",
@@ -92,6 +105,26 @@ IMPORT_BATCH_STABLE_ERROR = re.compile(
 )
 
 T = TypeVar("T")
+
+
+def start_write_tally() -> dict[str, Counter[str]]:
+    tally: dict[str, Counter[str]] = defaultdict(Counter)
+    _WRITE_TALLY.set(tally)
+    return tally
+
+
+def _count_writes(table_name: str, outcome: str, rows: int = 1) -> None:
+    tally = _WRITE_TALLY.get()
+    if tally is not None:
+        tally[table_name][outcome] += rows
+
+
+# Solo enteros y claves propias: se guarda tal cual en import_batch.counts.
+def write_summary(tally: Mapping[str, Counter[str]]) -> dict[str, Any]:
+    tables = {table: {outcome: counts[outcome] for outcome in WRITE_OUTCOMES} for table, counts in sorted(tally.items())}
+    totals = {f"filas_{outcome}": sum(counts[outcome] for counts in tables.values()) for outcome in WRITE_OUTCOMES}
+    return {**totals, "escrituras": tables}
+
 
 # ============================================================
 # FUNCIONES BASE DE SUPABASE
@@ -351,17 +384,48 @@ def fetch_existing_debts_by_key(
     return rows_by_key
 
 
+def _same_value(current: Any, wanted: Any) -> bool:
+    if current is None or wanted is None:
+        return current is None and wanted is None
+
+    if isinstance(current, bool) or isinstance(wanted, bool):
+        return isinstance(current, bool) and isinstance(wanted, bool) and current == wanted
+
+    if isinstance(current, str) and isinstance(wanted, str):
+        return current == wanted
+
+    # Un número contra otro, o contra el texto exacto con que viajan los importes. Sin float: un centavo es un cambio.
+    try:
+        return Decimal(str(current)) == Decimal(str(wanted))
+    except InvalidOperation:
+        return False
+
+
+def _row_already_has(
+    existing_row: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    ignored_columns: Iterable[str],
+) -> bool:
+    ignored = set(ignored_columns)
+    return all(
+        _same_value(existing_row.get(column), value)
+        for column, value in payload.items()
+        if column not in ignored
+    )
+
+
 #1.Busca si ya existe un registro con lookup_filters.
-#2. Si existe, actualiza.
+#2. Si existe y ya tiene esos valores, no lo toca. Si difiere, actualiza.
 #3. Si no existe, inserta.
 
 def insert_or_update_by_filters(
     table_name: str,
     payload: dict[str, Any],
     lookup_filters: dict[str, Any],
+    ignored_columns: Iterable[str] = (),
 ) -> dict[str, Any]:
 
-    def insert_or_update_operation() -> dict[str, Any]:
+    def insert_or_update_operation() -> tuple[dict[str, Any], str]:
         existing_row = fetch_one(
             table_name=table_name,
             filters=lookup_filters,
@@ -374,23 +438,30 @@ def insert_or_update_by_filters(
             if row_id is None:
                 raise ETLError("ROW_ID_MISSING", etl_message("ROW_ID_MISSING"))
 
-            return update_row(
+            if _row_already_has(existing_row, payload, ignored_columns):
+                return existing_row, WRITE_UNCHANGED
+
+            updated_row = update_row(
                 table_name=table_name,
                 row_id=row_id,
                 payload=payload,
                 retry_http=False,
             )
+            return updated_row, WRITE_UPDATED
 
-        return insert_row(
+        inserted_row = insert_row(
             table_name=table_name,
             payload=payload,
             retry_http=False,
         )
+        return inserted_row, WRITE_INSERTED
 
-    return execute_supabase_operation(
+    row, outcome = execute_supabase_operation(
         operation_name=f"insert/update {table_name}",
         operation=insert_or_update_operation,
     )
+    _count_writes(table_name, outcome)
+    return row
 
 
 # ============================================================
@@ -583,6 +654,9 @@ def load_debts_bulk(
             f"sin cambios: {summary['unchanged']}"
         )
 
+    _count_writes(DEBT_TABLE, WRITE_INSERTED, summary["inserted"])
+    _count_writes(DEBT_TABLE, WRITE_UPDATED, summary["updated"])
+    _count_writes(DEBT_TABLE, WRITE_UNCHANGED, summary["unchanged"])
     return summary
 
 #Inserta o actualiza una provincia.
@@ -705,6 +779,7 @@ def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
         lookup_filters={
             "debtor": debtor,
         },
+        ignored_columns=(PROFILE_COMPUTED_AT_COLUMN,),
     )
 
 
@@ -773,6 +848,70 @@ def resolve_catalogs(
         }
         for table_name, keys in required.items()
     }
+
+
+# ============================================================
+# LECTURA DE LO YA PUBLICADO
+# ============================================================
+
+# Hasta la página vacía: la Data API corta en su máximo de filas sin avisar, y ese máximo puede ser menor que la página.
+def fetch_all_rows(
+    table_name: str,
+    columns: str,
+    filters: Mapping[str, Any] | None = None,
+    in_filter: tuple[str, list[int]] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def select_page() -> Any:
+        query = supabase.table(table_name).select(columns)
+
+        for column, value in (filters or {}).items():
+            query = query.eq(column, value)
+
+        if in_filter is not None:
+            query = query.in_(*in_filter)
+
+        return query.order("id").range(len(rows), len(rows) + READ_PAGE_SIZE - 1).execute()
+
+    while True:
+        response = execute_supabase_operation(f"select {table_name}", select_page)
+
+        if not response.data:
+            return rows
+
+        if not isinstance(response.data, list):
+            raise ETLError("READ_RESPONSE_INVALID", etl_message("READ_RESPONSE_INVALID"))
+
+        rows.extend(response.data)
+
+
+def _rows_for_ids(table_name: str, columns: str, column: str, ids: Iterable[int]) -> list[dict[str, Any]]:
+    unique_ids = sorted(set(ids))
+    return [
+        row
+        for start in range(0, len(unique_ids), READ_IDS_PER_REQUEST)
+        for row in fetch_all_rows(table_name, columns, in_filter=(column, unique_ids[start:start + READ_IDS_PER_REQUEST]))
+    ]
+
+
+# Objetos publicados del municipio, por (tipo, cuenta), con las obligaciones y personas que tienen hoy. Solo lee.
+def fetch_published_objects(tenant: int) -> dict[tuple[str | None, str], dict[str, set[int]]]:
+    type_keys = {row["id"]: row["key"] for row in fetch_all_rows("debtor_type", "id,key")}
+    debtors = fetch_all_rows(DEBTOR_TABLE, "id,type,external_id", filters={"tenant": tenant})
+    debtor_ids = [row["id"] for row in debtors]
+    relations = _rows_for_ids(DEBTOR_PERSON_TABLE, "id,debtor,person", "debtor", debtor_ids)
+    people = _rows_for_ids(PERSON_TABLE, "id,external_id", "id", [row["person"] for row in relations])
+    person_keys = {row["id"]: row["external_id"] for row in people}
+    published: dict[int, dict[str, set[int]]] = {row["id"]: {"obligaciones": set(), "relaciones": set()} for row in debtors}
+
+    for row in _rows_for_ids(DEBT_TABLE, "id,debtor,external_id", "debtor", debtor_ids):
+        published[row["debtor"]]["obligaciones"].add(row["external_id"])
+
+    for row in relations:
+        published[row["debtor"]]["relaciones"].add(person_keys[row["person"]])
+
+    return {(type_keys.get(row["type"]), str(row["external_id"])): published[row["id"]] for row in debtors}
 
 
 # ============================================================

@@ -98,6 +98,7 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         state['batches'].append(event)
         return len(state['batches'])
 
+    monkeypatch.setattr(run_etl, 'fetch_published_objects', lambda _tenant: {})
     monkeypatch.setattr(run_etl, 'load_person', load_person)
     monkeypatch.setattr(run_etl, 'load_debtor', load_debtor)
     monkeypatch.setattr(run_etl, 'load_debtor_person', load_debtor_person)
