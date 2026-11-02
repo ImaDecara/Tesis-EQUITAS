@@ -37,3 +37,19 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
       return null
   }
 }
+
+// ALIGN-020: los mismos alcances, reducidos a un objeto. No abre tablas ni columnas nuevas.
+const DEBTOR_COLUMN = {
+  debtor: 'id',
+  debt: 'debtor',
+  debtor_person: 'debtor',
+  person: '__links.debtor',
+  debtor_contact: '__person.__links.debtor',
+} as const
+
+export type DebtorScopedTable = keyof typeof DEBTOR_COLUMN
+
+export function debtorReadScope(table: DebtorScopedTable, tenantId: string, debtorId: string): TableReadScope {
+  const scope = tenantReadScope(table, tenantId)!
+  return { select: scope.select, filters: [...scope.filters, [DEBTOR_COLUMN[table], debtorId]] }
+}
