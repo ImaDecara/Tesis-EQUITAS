@@ -123,9 +123,9 @@ describe('colas por intervención', () => {
   })
 
   it('el acceso al caso abre la pestaña Revisión y nombra el objeto', async () => {
-    const { markup, text } = await open({ queue: 'RECORDATORIO_INFORMATIVO' })
+    const { markup } = await open({ queue: 'RECORDATORIO_INFORMATIVO' })
     expect(markup).toContain('href="/debtors/5?tab=revision"')
-    expect(text).toContain('Abrir revisión MEDIA')
+    expect(markup).toContain('aria-label="Abrir revisión MEDIA"')
   })
 })
 

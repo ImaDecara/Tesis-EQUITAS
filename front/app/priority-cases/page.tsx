@@ -319,10 +319,10 @@ export default async function PriorityCasesPage({
                     <TableCell className="text-right">
                       <Link
                         href={`/debtors/${encodeURIComponent(debtor.id)}?tab=revision`}
+                        aria-label={`Abrir revisión ${debtor.identifier}`}
                         className={buttonVariants({ variant: 'default', size: 'sm' })}
                       >
                         Abrir revisión
-                        <span className="sr-only"> {debtor.identifier}</span>
                       </Link>
                     </TableCell>
                   </TableRow>
