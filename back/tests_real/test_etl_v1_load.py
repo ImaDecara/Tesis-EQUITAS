@@ -4,9 +4,9 @@ Fuera de `testpaths`. Desde `back/`, con el turno de la base y recién después 
 
     .venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q
 
-Solo datos sintéticos y destino loopback (`conftest.load_local_env`). Deja filas: al terminar corresponde otro
-`db reset`. Las pruebas corren en orden: cada una parte de lo que dejó la anterior. Con `EQUITAS_V1_EVIDENCE` escribe
-ahí la evidencia JSON (hashes, conteos y códigos, sin filas ni claves).
+Solo datos sintéticos y destino loopback (`conftest.load_local_env`). Las pruebas corren en orden: cada una parte de lo
+que dejó la anterior. Al terminar vacía las tablas, porque sus semillas chocan con las de otras suites de la sesión. Con
+`EQUITAS_V1_EVIDENCE` escribe ahí la evidencia JSON (hashes, conteos y códigos, sin filas ni claves).
 
 `sintetico-v1` completo siempre queda BLOQUEADO, a propósito. "El mismo archivo validado" se comprueba con su lote
 VALIDADO derivado: el SHA-256 calculado al validar es el que queda registrado en `import_batch` al cargar.
@@ -274,8 +274,16 @@ class Published:
     rows: dict
 
 
+def public_tables() -> list[str]:
+    return psql("select tablename from pg_tables where schemaname = 'public' order by 1").split()
+
+
+def nonempty_tables() -> list[str]:
+    return [name for name in public_tables() if psql(f'select exists(select 1 from public."{name}")').strip() == "t"]
+
+
 @pytest.fixture(scope="module")
-def campaign(env, import_jwt, tmp_path_factory) -> Campaign:
+def campaign(env, import_jwt, tmp_path_factory):
     # Tras db reset, PostgREST puede responder PGRST002 hasta cargar su caché de esquema.
     for _ in range(60):
         response = httpx.get(f"{env['API_URL']}/rest/v1/debtor", params={"select": "id", "limit": "1"},
@@ -286,13 +294,16 @@ def campaign(env, import_jwt, tmp_path_factory) -> Campaign:
         time.sleep(2)
     else:
         pytest.fail("La Data API local no respondió 200")
-    assert psql(f"select count(*) from public.debtor where tenant = {TENANT}").strip() == "0", "Se requiere db reset --local"
-    assert psql(f"select count(*) from public.import_batch where tenant = {TENANT}").strip() == "0", "Se requiere db reset --local"
+    assert not nonempty_tables(), "Se requiere db reset --local antes de esta campaña"
+    assert urlsplit(env["API_URL"]).hostname in LOOPBACK_HOSTS
     psql(script=TESTING / "etl-compat-catalogs.sql")
     actor = psql(script=TESTING / "etl-import-actor.sql").strip()
     assert actor.isdigit(), "etl-import-actor.sql no devolvió un id"
-    assert urlsplit(env["API_URL"]).hostname in LOOPBACK_HOSTS
-    return Campaign(env, import_jwt, actor, tmp_path_factory.mktemp("lotes"))
+    yield Campaign(env, import_jwt, actor, tmp_path_factory.mktemp("lotes"))
+    # Sus semillas son excluyentes con las de otras suites de la sesión (ALIGN-052): deja las tablas como tras db reset.
+    tables = ", ".join(f'public."{name}"' for name in public_tables())
+    psql(f"truncate {tables} restart identity cascade")
+    assert not nonempty_tables()
 
 
 @pytest.fixture(scope="module")

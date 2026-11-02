@@ -319,9 +319,10 @@ cd back && .venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q
 ```
 
 Con `EQUITAS_V1_EVIDENCE=<ruta>` escribe además la evidencia JSON: hash del dataset, corte, versión de contrato, SHA,
-entorno y un resumen por paso, sin filas ni claves. Deja filas: al terminar corresponde otro `db reset`, que es también la
-reversión. `tests_real/conftest.py` no fuerza variables ficticias y detiene la sesión si el destino no es loopback, si un
-valor de configuración nombra un proyecto remoto o si falta el turno.
+entorno y un resumen por paso, sin filas ni claves. Exige la base vacía y al terminar vacía las tablas, porque sus semillas
+chocan con las de `test_imports_api.py` (ALIGN-052), que corre después en la misma sesión. La reversión es `db reset`.
+`tests_real/conftest.py` no fuerza variables ficticias y detiene la sesión si el destino no es loopback, si un valor de
+configuración nombra un proyecto remoto o si falta el turno.
 
 ### 8.3 Qué comprueba
 
