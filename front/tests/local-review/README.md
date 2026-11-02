@@ -45,6 +45,10 @@ Con `PATH` en npm 11.21.1 y el stack de `docs/tesis/entorno-aislado.md` levantad
 
 5. Detener `next start`, borrar `app/align020-probe/`, compilar de nuevo, `db reset --local` si corresponde y `rmdir /tmp/equitas-local-db/lock`. Borrar `/tmp/align020`.
 
+## Ejecución verificada (02/11/2026)
+
+Sobre la base local, con `fixture.sql` y un lote registrado como `VALIDADO` y luego `PUBLICADO`: 44 de 44 casos con sesiones reales y 10 de 10 por HTTP contra `next start`. Un origen ajeno con sesión válida se rechaza en el CSRF de Next. Búsqueda en `.next/static` con las acciones compiladas: 0 hallazgos y 4 controles positivos. Con el JWT filtrado a propósito en un componente cliente, la búsqueda lo encuentra. Con una clave de idempotencia aleatoria, los casos de doble envío fallan. Evidencia depurada: `execution/evidence/ALIGN-020/` del paquete del plan, fuera de git.
+
 ## Para ALIGN-022
 
 La campaña separada reutiliza `fixture.sql` y este recorrido para el caso "recorrido autorizado por la acción de servidor". El nombre de cada acción y su ID están en `.next/server/server-reference-manifest.json` (`exportedName`). El cuerpo del POST es `JSON.stringify([entrada])`, con `Next-Action: <id>` y `Accept: text/x-component`, y el resultado es la fila `1:` de la respuesta Flight.

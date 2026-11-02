@@ -39,7 +39,7 @@ describe('ALIGN-020: credencial de escritura', () => {
     ['service_role, que abriria toda la base', jwt('service_role')],
     ['sesion de usuario', jwt('authenticated')],
     ['sin rol', `${part({})}.${part({})}.firma`],
-    ['no es un JWT', 'sb_secret_sintetica'],
+    ['no es un JWT', 'clave-sintetica-sin-formato-jwt'],
     ['payload ilegible', 'a.%%%.c'],
     ['payload nulo', `${part({})}.${part(null)}.firma`],
   ])('rechaza %s', (_name, token) => {
