@@ -301,6 +301,19 @@ describe('ALIGN-028: formato y metadatos', () => {
   })
 })
 
+describe('ALIGN-028: una falla inesperada', () => {
+  it('un numero irrepresentable responde 500 sin archivo y sin el detalle', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    client({ debtor_profile: [{ id: 1, debtor: 101, total_debt_amount: 1e21, __scope: { tenant: 7 } }] })
+    const response = await getQueue(request('queue'))
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: 'REPORTE_NO_DISPONIBLE' })
+    expect(response.headers.get('content-disposition')).toBeNull()
+    expect(log.mock.calls.flat().join(' ')).toBe('Reporte cola-de-trabajo no disponible: RangeError')
+    log.mockRestore()
+  })
+})
+
 describe('ALIGN-028: filtros invalidos no parecen un archivo vacio correcto', () => {
   it.each([
     ['queue', '?risk=XYZ'], ['queue', '?contact=otro'], ['queue', '?minAmount=abc'], ['queue', '?nada=1'],
@@ -393,6 +406,13 @@ describe('ALIGN-028: celdas peligrosas', () => {
     }
   })
 
+  it('un identificador o tipo ausente se declara, sin el rotulo de respaldo de la pantalla', async () => {
+    client({ debtor: [{ id: 120, tenant: 7 }], debt: [], debtor_person: [], person: [], debtor_contact: [] })
+    const { file } = await download('queue')
+    expect(details(file.rows)[0]).toMatchObject({ objeto_id: '120', identificador: 'NO_INFORMADO_EN_ORIGEN', tipo: 'NO_INFORMADO_EN_ORIGEN' })
+    expect(details((await download('queue', '?type=Sin%20tipo')).file.rows)).toHaveLength(1)
+  })
+
   it('un importe negativo sigue siendo numero y entra en el total', async () => {
     client()
     const { file } = await download('queue')
@@ -465,6 +485,22 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     expect(partial.deuda_total_ars).toBe('300')
     expect(partial.faltantes).toContain('deuda_total_ars:INVALIDO=1')
     expect(total.faltantes).toContain('deuda_total_ars:INVALIDO=1')
+  })
+
+  it('los faltantes de las filas suman los del total, por columna y estado', async () => {
+    client()
+    const { file } = await download('queue')
+    const accumulated = new Map<string, number>()
+    for (const row of details(file.rows)) {
+      if (row.faltantes === 'NINGUNO') continue
+      for (const part of row.faltantes.split('|')) {
+        const [key, count] = part.split('=')
+        accumulated.set(key, (accumulated.get(key) ?? 0) + Number(count))
+      }
+    }
+    const declared = totalRow(file.rows).faltantes.split('|').map(part => part.split('='))
+    expect(accumulated.size).toBeGreaterThan(0)
+    expect(Object.fromEntries(declared.map(([key, count]) => [key, Number(count)]))).toEqual(Object.fromEntries(accumulated))
   })
 
   it('un objeto sin obligaciones suma 0 derivado; intensidad y atraso no se inventan', async () => {

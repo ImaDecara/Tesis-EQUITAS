@@ -4,7 +4,6 @@ Uso: python3 -I tests/local-reports/verify_reports.py <salida de run-http> <expe
 Publica solo conteos y nombres de comprobacion. Sale con 1 si algo falla.
 """
 import csv
-import html
 import io
 import json
 import re
@@ -38,10 +37,22 @@ def read_csv(row):
     return list(csv.DictReader(io.StringIO(text, newline=""), delimiter=";"))
 
 
-def page_text(row):
+def page_flight(row):
+    """Contenido de la pantalla: el HTML solo trae "Validando sesion..."; el resto viaja en el payload Flight."""
     raw = (folder / row["file"]).read_text(encoding="utf-8")
-    without_scripts = re.sub(r"<script\b.*?</script>", " ", raw, flags=re.S)
-    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", without_scripts))).replace("\xa0", " ")
+    chunks = re.findall(r'self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)', raw)
+    return "".join(json.loads(chunk) for chunk in chunks).replace("\xa0", " ")
+
+
+def card_value(flight, label):
+    """Primer texto despues del rotulo de una tarjeta. Flight escribe un `$` inicial como `$$`."""
+    found = re.search(rf'"children":"{re.escape(label)}"(.*?)"children":"([^"]*)"', flight, flags=re.S)
+    return found.group(2) if found else None
+
+
+def counter(flight):
+    found = re.search(r'"([\d.]+)(?:",")? casos"', flight)
+    return int(found.group(1).replace(".", "")) if found else None
 
 
 def number(cell):
@@ -145,19 +156,16 @@ check("sin vencimiento declara severidad", by_id["928107"]["severidad_estado"] =
 check("sin obligaciones suma 0 derivado", by_id["920001"]["deuda_total_ars"] == "0")
 for query in ["", "?contact=without", "?contact=with", "?risk=ALTO", "?minAmount=100000", "?q=TP-A028-PERSONA-DOS", "?type=NO-EXISTE"]:
     report = read_csv(result("operador", f"{PATHS['queue']}{query}"))
-    screen = page_text(result("operador", f"/priority-cases{query}"))
-    shown = re.search(r"([\d.]+) casos", screen)
-    check(f"pantalla con contador {query}", shown is not None)
-    if shown:
-        count = int(shown.group(1).replace(".", ""))
-        check(f"cola = pantalla {query}", len(details(report)) == count, f"{len(details(report))} {count}")
+    count = counter(page_flight(result("operador", f"/priority-cases{query}")))
+    check(f"pantalla con contador {query}", count is not None)
+    check(f"cola = pantalla {query}", len(details(report)) == count, f"{len(details(report))} {count}")
     check(f"total con metadatos {query}", number(total(report)["objetos"]) == len(details(report)) and bool(total(report)["generado_en"]))
-aging = page_text(result("operador", "/debt-aging"))
-shown_total = re.search(r"Deuda total \$ ?([\d.]+)", aging)
-check("/debt-aging muestra la deuda", shown_total is not None)
+shown_total = card_value(page_flight(result("operador", "/debt-aging")), "Deuda total")
+check("/debt-aging muestra la deuda", shown_total is not None and re.fullmatch(r"\$\$? ?[\d.]+", shown_total) is not None, str(shown_total))
 if shown_total:
-    screen_total = Decimal(shown_total.group(1).replace(".", ""))
-    check("cola total = /debt-aging", detail_sum.quantize(Decimal(1), rounding="ROUND_HALF_EVEN") == screen_total or abs(detail_sum - screen_total) <= Decimal("0.5"), f"{detail_sum} {screen_total}")
+    # La pantalla redondea a pesos enteros.
+    screen_total = Decimal(re.sub(r"[^\d]", "", shown_total))
+    check("cola total = /debt-aging", abs(detail_sum - screen_total) <= Decimal("0.5"), f"{detail_sum} {screen_total}")
 
 # 5. Calidad = SQL y = pantalla.
 quality = read_csv(result("operador", PATHS["data-quality"]))
@@ -165,8 +173,8 @@ check("calidad objetos = SQL", number(aggregated(quality, "objetos_leidos")["val
 check("calidad obligaciones = SQL", number(aggregated(quality, "obligaciones_leidas")["valor"]) == expected["obligaciones"])
 without = aggregated(quality, "objetos_sin_contacto")
 check("calidad sin contacto = SQL", number(without["valor"]) == expected["sin_contacto"], without["valor"])
-no_contact = re.search(r"Total sin contacto ([\d.]+)", page_text(result("operador", "/no-contact")))
-check("calidad sin contacto = /no-contact", no_contact is not None and no_contact.group(1) == without["valor"])
+no_contact = card_value(page_flight(result("operador", "/no-contact")), "Total sin contacto")
+check("calidad sin contacto = /no-contact", no_contact == without["valor"], str(no_contact))
 for indicator in ["presencia_deuda_total", "presencia_deuda_vencida", "presencia_contactos", "presencia_atraso", "presencia_severidad", "severidad_estado"]:
     categories = [r for r in quality if r["indicador"] == indicator]
     check(f"{indicator} suma el universo", sum(number(r["valor"]) for r in categories) == expected["objetos"])

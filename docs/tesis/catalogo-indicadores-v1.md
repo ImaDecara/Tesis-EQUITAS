@@ -1002,7 +1002,7 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | Columna | Significado | Unidad | Definición | Fila `TOTAL` |
 |---|---|---|---|---|
 | `posicion` | Lugar en el orden de `getPriorityCases` | orden | [KPI-31](#kpi-31) | `NO_APLICA` |
-| `objeto_id`, `identificador`, `tipo` | Clave interna, identificador de origen (o `OBJ-<id>`) y tipo | texto | [OB01, OB04, OB03][c72] | `NO_APLICA` |
+| `objeto_id`, `identificador`, `tipo` | Clave interna, identificador de origen y tipo. Sin identificador o sin tipo, `NO_INFORMADO_EN_ORIGEN`, aunque la pantalla muestre `OBJ-<id>` o «Sin tipo» | texto | [OB01, OB04, OB03][c72] | `NO_APLICA` |
 | `intervencion_codigo`, `intervencion`, `intensidad` | Sugerencia de reglas v1 | código, etiqueta, 0–4 | [KPI-V1-03](#kpi-v1-intervencion) | `NO_APLICA` |
 | `revision_requerida` | La pantalla pide evaluar con supervisor: `SI`/`NO` | booleano | `isUrgentRecommendation` | `NO_APLICA` |
 | `severidad_puntos`, `severidad_banda`, `severidad_estado` | Severidad v1 | puntos 0–100, **no %** | [KPI-V1-01](#kpi-v1-severidad) | `NO_APLICA` |

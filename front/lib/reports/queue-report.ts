@@ -20,6 +20,7 @@ const RISKS = ['ALTO', 'MEDIO', 'BAJO'] as const
 const CONTACTS = ['with', 'without'] as const
 const MAX_FILTER_LENGTH = 200
 const NOT_APPLICABLE = 'NO_APLICA'
+const MISSING_IN_SOURCE = 'NO_INFORMADO_EN_ORIGEN'
 
 export type QueueFilters = { q?: string; risk?: string; contact?: string; type?: string; minAmount?: string }
 
@@ -68,13 +69,14 @@ function missingLabel(entries: Readonly<Record<string, NumericData>>) {
 function rowValues(debtor: DebtorListItem, position: number) {
   const decision = debtor.decision
   const state = absentState(metric(debtor, 'priorityScore').presence)
-  const debts = { deuda_total_ars: metric(debtor, 'totalDebt'), deuda_vencida_ars: metric(debtor, 'overdueDebt') }
+  const amounts = { deuda_total_ars: metric(debtor, 'totalDebt'), deuda_vencida_ars: metric(debtor, 'overdueDebt'), monto_evaluable_ars: evaluableAmount(debtor) }
   return {
     tipo_fila: 'DETALLE',
     posicion: position,
     objeto_id: debtor.id,
-    identificador: debtor.identifier,
-    tipo: debtor.type,
+    // Contrato OB03 y OB04: el mapeador conserva rotulos de respaldo; el archivo declara la ausencia.
+    identificador: debtor.identifier === `OBJ-${debtor.id}` ? MISSING_IN_SOURCE : debtor.identifier,
+    tipo: debtor.type === 'Sin tipo' ? MISSING_IN_SOURCE : debtor.type,
     intervencion_codigo: decision?.intervencion.codigo ?? state,
     intervencion: decision ? debtor.recommendationType : state,
     intensidad: decision?.intervencion.intensidad ?? state,
@@ -83,16 +85,16 @@ function rowValues(debtor: DebtorListItem, position: number) {
     severidad_banda: decision?.severidad.banda ?? state,
     severidad_estado: decision?.severidad.estado ?? state,
     prioridad_puntos: numericCell(metric(debtor, 'priorityScore')),
-    deuda_total_ars: numericCell(debts.deuda_total_ars),
-    deuda_vencida_ars: numericCell(debts.deuda_vencida_ars),
-    monto_evaluable_ars: numericCell(evaluableAmount(debtor)),
+    deuda_total_ars: numericCell(amounts.deuda_total_ars),
+    deuda_vencida_ars: numericCell(amounts.deuda_vencida_ars),
+    monto_evaluable_ars: numericCell(amounts.monto_evaluable_ars),
     dias_atraso_max: numericCell(metric(debtor, 'maxDaysOverdue')),
     obligaciones: debtor.debtCount ?? 'NO_INTEGRADO',
     contactos_disponibles: numericCell(metric(debtor, 'contactCount')),
     con_contacto: debtor.hasContact ?? 'NO_INTEGRADO',
     banderas: decision ? decision.banderas.join('|') || 'SIN_BANDERAS' : state,
     objetos: 1,
-    faltantes: missingLabel(debts),
+    faltantes: missingLabel(amounts),
   } satisfies Partial<Record<Column, CsvValue>>
 }
 
