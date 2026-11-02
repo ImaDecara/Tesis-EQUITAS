@@ -41,6 +41,8 @@ type PrioritySearchParams = {
   pageSize?: string
 }
 
+const EMPTY_FILTERS = { q: '', risk: '', contact: '', type: '', minAmount: '' }
+
 function buildPriorityHref(filters: Omit<Required<Omit<PrioritySearchParams, 'page' | 'pageSize'>>, 'queue'>, queue: string, page: number, pageSize: number) {
   const params = new URLSearchParams()
 
@@ -101,6 +103,9 @@ export default async function PriorityCasesPage({
   })
   const selectedQueue = selectQueueGroup(queues, resolvedSearchParams.queue)
   const selectedQueueParam = queueParam(selectedQueue)
+  // Solo una cola elegida a propósito acompaña a los filtros. La de la primera carga no:
+  // si no, buscar un caso de otra cola no lo encontraría.
+  const chosenQueue = selectedQueueParam === resolvedSearchParams.queue ? selectedQueueParam : ''
   const pagination = paginateItems(
     selectedQueue.cases,
     resolvedSearchParams.page,
@@ -137,7 +142,7 @@ export default async function PriorityCasesPage({
           </CardHeader>
           <CardContent>
             <form method="get" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <input type="hidden" name="queue" value={selectedQueueParam} />
+              {chosenQueue && <input type="hidden" name="queue" value={chosenQueue} />}
               <div className="xl:col-span-2">
                 <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
                   Buscar por objeto o persona
@@ -213,7 +218,7 @@ export default async function PriorityCasesPage({
                 <button type="submit" className={buttonVariants({ variant: 'default' })}>
                   Aplicar filtros
                 </button>
-                <Link href={`/priority-cases?queue=${selectedQueueParam}`} className={buttonVariants({ variant: 'outline' })}>
+                <Link href={buildPriorityHref(EMPTY_FILTERS, chosenQueue, 1, 10)} className={buttonVariants({ variant: 'outline' })}>
                   Limpiar
                 </Link>
               </div>

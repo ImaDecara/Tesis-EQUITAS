@@ -138,6 +138,19 @@ describe('los filtros se conservan', () => {
     expect(markup).toContain('value="alta"')
   })
 
+  it('sin cola elegida el formulario no la fija: buscar encuentra casos de cualquier cola', async () => {
+    const { markup } = await open()
+    expect(markup).not.toContain('name="queue"')
+    expect(markup).toMatch(/href="\/priority-cases"[^>]*>Limpiar/)
+    const found = await open({ q: 'media' })
+    expect(found.text).toContain('Cola: Recordatorio')
+    expect(found.markup).toContain('href="/debtors/5?tab=revision"')
+  })
+
+  it('una cola inventada tampoco se conserva', async () => {
+    expect((await open({ queue: 'INVENTADA' })).markup).not.toContain('name="queue"')
+  })
+
   it('cambiar de cola conserva los filtros y vuelve a la primera página', async () => {
     const { markup } = await open({ ...SEARCH, page: '2', pageSize: '20', queue: 'CONTACTO_PERSONAL_Y_PLAN' })
     const link = queueLinks(markup).find(item => item.queue === 'RECORDATORIO_INFORMATIVO')!
