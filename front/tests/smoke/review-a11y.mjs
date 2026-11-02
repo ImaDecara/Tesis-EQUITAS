@@ -69,11 +69,25 @@ async function registerBatch(config, status, asOf, supersedes = null) {
   return (await response.json()).batch_id
 }
 
+// El control con foco se tiene que ver: nada fijo por encima, ni fuera de la ventana.
+const focusObscured = page => page.evaluate(() => {
+  const element = document.activeElement
+  if (!element || element === document.body) return null
+  const box = element.getBoundingClientRect()
+  const x = box.left + box.width / 2
+  const y = box.top + box.height / 2
+  if (y < 0 || y > window.innerHeight || x < 0 || x > window.innerWidth) return `fuera: ${element.tagName}#${element.id}`
+  const top = document.elementFromPoint(x, y)
+  return top && (top === element || element.contains(top) || top.contains(element)) ? null : `tapado: ${element.tagName}#${element.id} por ${top?.tagName}`
+})
+
 async function tabTo(page, locator, key = 'Tab', max = 150) {
   await locator.waitFor({ state: 'visible' })
   for (let presses = 0; presses < max; presses += 1) {
     if (await locator.evaluate(element => element === document.activeElement)) return presses
     await page.keyboard.press(key)
+    const obscured = await focusObscured(page)
+    if (obscured) throw Error(`Foco no visible, ancho ${page.viewportSize().width}: ${obscured}`)
   }
   throw Error('El control no se alcanza con Tab.')
 }
@@ -169,6 +183,8 @@ async function assertLayout(page, output, root, name) {
       throw Error(`${name} a ${width}: ${JSON.stringify(layout).slice(0, 800)}`)
     }
     const file = `${name}-${width}.png`
+    // Arriba de todo: la barra superior es fija y, si no, la captura completa la deja en el medio.
+    await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: resolve(output, file), fullPage: true })
     report.screenshots.push(file)
     measured.push({ width, elements: layout.checked })
@@ -347,7 +363,7 @@ async function run() {
   await expect(panelOf(page).getByText(REASON_DETAIL)).toBeVisible()
   pass('propuesta_registrada_y_persiste', 'Queda como pendiente de supervisor, con su detalle, tras recargar.')
 
-  // Aceptar a 360 px, también con teclado.
+  // Aceptar a 360 px, también con teclado, con la barra superior fija. El foco no queda debajo.
   await page.setViewportSize({ width: 360, height: 800 })
   await page.goto(reviewUrl(base, CASE.accept))
   await chooseRadio(page, panelOf(page).getByRole('radio', { name: 'Aceptar la sugerencia' }), panelOf(page).getByRole('radio', { name: 'Aceptar la sugerencia' }), 0)
@@ -355,7 +371,7 @@ async function run() {
   await page.keyboard.press('Enter')
   await expect(panelOf(page).locator('#rv-notice')).toContainText('Decisión registrada.')
   await page.setViewportSize({ width: 1440, height: 1000 })
-  pass('aceptar_con_teclado_a_360', 'Sin motivo, sin lista.')
+  pass('aceptar_con_teclado_a_360', 'Sin motivo, sin lista. En cada Tab, el control con foco queda a la vista.')
 
   // Rechazar exige motivo; el detalle es opcional. El error se corrige sin perder nada.
   await page.goto(reviewUrl(base, CASE.reject))

@@ -292,7 +292,7 @@ export default async function PriorityCasesPage({
                     <TableCell>
                       <div className="font-medium text-slate-900">{debtor.identifier}</div>
                       {debtor.peopleNames.length > 0 && (
-                        <p className="max-w-[220px] truncate text-xs text-slate-500">
+                        <p className="max-w-[220px] truncate text-xs text-slate-600">
                           {debtor.peopleNames.join(', ')}
                         </p>
                       )}

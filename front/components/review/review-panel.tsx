@@ -217,12 +217,19 @@ function ReviewHistory({ screen }: { screen: ReadyScreen }) {
   )
 }
 
+// La ficha usa la fecha de cálculo y la revisión, el corte publicado: nunca se presentan como si
+// fueran lo mismo. La cabecera dice "corte no integrado" solo sobre el cálculo de la ficha.
 export function reviewDifferenceNotice(debtor: DebtorListItem, screen: CaseReviewScreen): string | null {
-  if (screen.kind !== 'ready' || !screen.snapshot.ok || !debtor.decision) return null
+  if (screen.kind !== 'ready' || !screen.snapshot.ok) return null
   const { snapshot } = screen.snapshot
-  const { codigo, intensidad } = debtor.decision.intervencion
-  if (codigo === snapshot.suggestedIntervention && intensidad === snapshot.suggestedIntensity) return null
-  return `La sugerencia a revisar usa el corte publicado del ${formatDate(snapshot.asOf)} y difiere de la recomendación de esta ficha (${interventionLabel(codigo)}), calculada con otra fecha. Para decidir vale la de la pestaña Revisión.`
+  const cutoff = formatDate(snapshot.asOf)
+  const intervention = debtor.decision?.intervencion
+  if (intervention && (intervention.codigo !== snapshot.suggestedIntervention || intervention.intensidad !== snapshot.suggestedIntensity)) {
+    return `La sugerencia a revisar usa el corte publicado del ${cutoff} y difiere de la recomendación de esta ficha (${interventionLabel(intervention.codigo)}), calculada con otra fecha. Para decidir vale la de la pestaña Revisión.`
+  }
+  return debtor.decisionAsOfSource === 'FECHA_CALCULO'
+    ? `Hay un corte publicado del ${cutoff}: la pestaña Revisión lo usa, y el resto de esta ficha usa la fecha de cálculo.`
+    : null
 }
 
 // El orden es la decisión de diseño: hechos, sugerencia, decisión e historial `[P0219]`.

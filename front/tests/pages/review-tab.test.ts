@@ -160,6 +160,27 @@ describe('hechos primero, sugerencia después', () => {
     expect(whole).not.toContain('difiere de la recomendación')
   })
 
+  it('la cabecera dice "corte no integrado", pero la página aclara que hay un corte publicado', async () => {
+    const detail = buildDebtorDetail()
+    detail.debtor.decision = { intervencion: { codigo: 'CONTACTO_PERSONAL_Y_PLAN', intensidad: 2 } } as never
+    detail.debtor.decisionAsOfSource = 'FECHA_CALCULO'
+    const { whole } = await open(screen(), detail)
+    expect(whole).toContain('Hay un corte publicado del 30/10/2026: la pestaña Revisión lo usa')
+    const sameBasis = buildDebtorDetail()
+    sameBasis.debtor.decision = detail.debtor.decision
+    sameBasis.debtor.decisionAsOfSource = 'MANIFIESTO_LOTE'
+    expect((await open(screen(), sameBasis)).whole).not.toContain('Hay un corte publicado')
+  })
+
+  it('sin instantánea no afirma que haya un corte publicado', async () => {
+    const detail = buildDebtorDetail()
+    detail.debtor.decisionAsOfSource = 'FECHA_CALCULO'
+    for (const review of [screen({ snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE') }), { kind: 'restricted', message: 'x' } as const]) {
+      const { whole } = await open(review, detail)
+      expect(whole).not.toContain('corte publicado del')
+    }
+  })
+
   describe('valores faltantes', () => {
     const missing = (factores: unknown[], severidad: unknown = EXPLANATION.severidad) =>
       screen({ snapshot: { ok: true, snapshot: { ...SNAPSHOT, explanation: { ...EXPLANATION, severidad, factores } } } })
