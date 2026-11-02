@@ -621,6 +621,8 @@ class PreparedBatch:
     file_hashes: dict[str, str]
     objects: tuple[PreparedObject, ...]
     source_updated_at: str | None
+    # (debtor_type.key, Cuenta) de toda cabecera con tipo catalogado, también las de objetos en cuarentena.
+    file_object_keys: frozenset[tuple[str, str]] = frozenset()
 
     @property
     def publishable(self) -> bool:
@@ -694,6 +696,19 @@ def _group_objects(tables, report, mapping, contract) -> tuple[PreparedObject, .
     )
 
 
+def _file_object_keys(tables: Mapping[str, Any], mapping: dict, contract: dict) -> frozenset[tuple[str, str]]:
+    type_keys = mapping["catalogos"]["Bien_Tipo_Id"]
+    keys = set()
+
+    for record in canonical_records(tables["cabecera"], "cabecera", mapping, contract):
+        code, account = clean_text(record.get("Bien_Tipo_Id")), clean_text(record.get("Cuenta"))
+
+        if code in type_keys and account is not None:
+            keys.add((type_keys[code], account))
+
+    return frozenset(keys)
+
+
 def _latest_source_update(objects: Iterable[PreparedObject]) -> str | None:
     dates = [
         parse_date(row.values.get("Fecha_Actualizacion"))
@@ -730,6 +745,7 @@ def prepare_batch(files: Mapping[str, Path], mapping: dict, contract: dict, cut_
         file_hashes=hashes,
         objects=objects,
         source_updated_at=_latest_source_update(objects),
+        file_object_keys=_file_object_keys(tables, mapping, contract),
     )
 
 
@@ -751,6 +767,32 @@ def required_catalog_keys(batch: PreparedBatch) -> dict[str, set[str]]:
         },
         "currency": {batch.mapping["moneda"]},
     }
+
+
+# V1 solo admite el lote completo. Lo publicado que el archivo ya no trae sería un delta o una baja, y darlo por válido
+# dejaría filas viejas contando en los perfiles: se rechaza hasta que ALIGN-031 defina esa política. Un objeto en
+# cuarentena sí viene en el archivo: conserva su estado previo y no se compara.
+def coverage_gaps(batch: PreparedBatch, published: Mapping[tuple[str | None, str], Mapping[str, set[int]]]) -> dict[str, int]:
+
+    accepted = {
+        (batch.debtor_type_keys[clean_text(item.headers[0].values.get("Bien_Tipo_Id"))],
+         clean_text(item.headers[0].values.get("Cuenta"))): item
+        for item in batch.objects
+    }
+    gaps: Counter[str] = Counter()
+
+    for key, rows in published.items():
+        if key not in batch.file_object_keys:
+            gaps["objetos"] += 1
+            continue
+
+        item = accepted.get(key)
+
+        if item is not None:
+            gaps["obligaciones"] += len(rows["obligaciones"] - {parse_int(row.values.get("DEUD_id")) for row in item.details})
+            gaps["relaciones"] += len(rows["relaciones"] - {parse_int(row.values.get("Destinatario_Id")) for row in item.headers})
+
+    return {name: count for name, count in sorted(gaps.items()) if count}
 
 
 def _lower_keys(values: Mapping[str, int]) -> dict[str, int]:

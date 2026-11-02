@@ -318,6 +318,8 @@ back/.venv/bin/python database/testing/etl_semantic_local.py sintetico    # bloq
 back/.venv/bin/python database/testing/etl_semantic_local.py municipio-b
 ```
 
+La campaña de carga V1 (ALIGN-027) repite el ciclo completo con las CLI reales: validar, cargar, conciliar, recargar, reimportar con una obligación modificada y rechazar. Se corre con `cd back && .venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q`, fuera de `testpaths`, sobre esta misma preparación. Procedimiento en [`docs/tesis/entorno-aislado.md` §8](docs/tesis/entorno-aislado.md#8-carga-v1-verificada-align-027).
+
 Reversión exacta: `npx --yes supabase@2.108.0 db reset --version 20261030100000` y luego `db reset`. Para conservar filas:
 
 ```sql

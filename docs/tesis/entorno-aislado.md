@@ -7,6 +7,7 @@
 | Versión fijada de la CLI | **Supabase CLI `2.108.0`** (`npx --yes supabase@2.108.0 …`), la misma con la que E06 creó las migraciones |
 | Configuración usada | [`supabase/config.toml`](../../supabase/config.toml) y las migraciones de [`supabase/migrations/`](../../supabase/migrations/) |
 | Documentos relacionados | [Supabase de testing y autorización (E06)](../../SUPABASE_TESTING_CALIDAD.md), [ejecución segura del ETL](../../back/ETL/README.md) (ALIGN-025), [ADR-001](adr-001-reglas-y-capas.md) |
+| Procedimiento de carga | [§8, carga V1 verificada](#8-carga-v1-verificada-align-027) (ALIGN-027) |
 | Exclusiones | No toca el proyecto original ni el de testing; no modifica fixtures e06 ni migraciones |
 
 ## 1. Para qué sirve
@@ -279,3 +280,99 @@ plan (fuera de git). Hay un log por comando y las claves figuran como `<REDACTAD
 | API local con la clave `anon` | Auth 200; `GET` de `tenant`, `debtor`, `debt`, `person` y `role` devuelve `[]`; `POST` rechazado con `42501`; signup 422 |
 | Guardia del ETL frente a la allowlist | 6/6: loopback aceptado; testing remoto `TARGET_HOST_FORBIDDEN`; original `TARGET_ORIGINAL_FORBIDDEN`; sin `EQUITAS_TARGET_ENV`, `TARGET_ENV_INVALID` |
 | Revisión independiente, ciclo 1 (30/10) | La precondición del §3.1, probada literal con una variable ficticia, sale con 1 y no muestra el valor. Se borraron las capturas crudas con claves; queda solo `/tmp/equitas-local-db/supabase-local.env` (carpeta 0700, archivo 0600, verificado sin mostrar contenido) |
+
+## 8. Carga V1 verificada (ALIGN-027)
+
+Primer ensayo del ETL contra una base reproducible: comprueba que el archivo aprobado es el que produce los objetos y
+perfiles que se publican. Solo este stack, solo datos sintéticos, comandos desde la raíz del worktree salvo que se
+indique otra cosa.
+
+### 8.1 Preparar la base y cargar un lote a mano
+
+```sh
+npx --yes supabase@2.108.0 db reset --local
+docker exec -i supabase_db_equitas-tp-testing psql -q -U postgres -d postgres -v ON_ERROR_STOP=1 < database/testing/etl-compat-catalogs.sql
+docker exec -i supabase_db_equitas-tp-testing psql -q -At -U postgres -d postgres -v ON_ERROR_STOP=1 < database/testing/etl-import-actor.sql   # imprime el id del actor
+back/.venv/bin/python -I database/testing/case_review_local.py mint-jwt --role equitas_import_server --hours 6
+```
+
+Después, desde `back/`, con el entorno que indica el [README del ETL](../../back/ETL/README.md) (`EQUITAS_TARGET_ENV=local`,
+`SUPABASE_URL`, las claves leídas de `/tmp/equitas-local-db/supabase-local.env` sin imprimirlas, el JWT y el actor):
+
+```sh
+.venv/bin/python -m ETL.validate_source --folder <lote> --contract ../contracts/source-contract.v1.json --cut-off 2026-09-30 --output <dir>
+.venv/bin/python -m ETL.run_etl --folder <lote> --execute --cut-off 2026-09-30 [--mapping perfil.json]
+```
+
+`validate_source` no necesita credenciales ni base. Sale con 0 si el lote queda `VALIDADO` y con 1 si queda `BLOQUEADO`.
+Justo después de `db reset` Auth puede responder 200 y la Data API `PGRST002` (503): esperar a que
+`GET /rest/v1/debtor?select=id&limit=1` dé 200 antes de cargar.
+
+### 8.2 Correr la campaña
+
+Fuera de `testpaths`: `python -m pytest` aislado no la recoge y sigue sin red ni secretos. Se corre con un comando
+explícito, con el turno de la base tomado y recién después de `db reset --local`. La prueba carga los catálogos y el
+actor, y emite el JWT:
+
+```sh
+cd back && .venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q
+```
+
+Con `EQUITAS_V1_EVIDENCE=<ruta>` escribe además la evidencia JSON: hash del dataset, corte, versión de contrato, SHA,
+entorno y un resumen por paso, sin filas ni claves. Exige la base vacía y al terminar vacía las tablas, porque sus semillas
+chocan con las de `test_imports_api.py` (ALIGN-052), que corre después en la misma sesión. La reversión es `db reset`.
+`tests_real/conftest.py` no fuerza variables ficticias y detiene la sesión si el destino no es loopback, si un valor de
+configuración nombra un proyecto remoto o si falta el turno.
+
+### 8.3 Qué comprueba
+
+| Paso | Resultado esperado |
+|---|---|
+| `sintetico-v1` completo sobre la base vacía | Siempre `BLOQUEADO`, a propósito: salida 1, `BATCH_BLOCKED`, 0 filas de cartera, un evento `FALLIDO` con los hashes y los conteos de `expected.json` |
+| Validar el lote derivado y cargar **esos mismos archivos** | `VALIDADO` → `PUBLICADO`. Todas las filas de cartera se escribieron después de confirmar `VALIDADO` y antes de `PUBLICADO` (por `xmin`) |
+| Conciliar con `expected.json` | Conteos y montos por tipo de objeto idénticos al oráculo y por tributo idénticos al archivo; aceptadas + rechazadas = leídas; perfil = Σ deudas por objeto (±0,01); `counts.estados_al_corte` = estados de `debt` |
+| Recargar el mismo lote | 0 insertados, 0 actualizados, y ninguna fila reescrita en la base (`xmin` igual), conteos y montos sin cambio |
+| Reimportar el lote completo con una obligación modificada | Cambian exactamente esa fila de `debt` y el perfil de su objeto, también su `profile_generated_at`. Nada más |
+| Archivo rechazado: bloqueado, sin una columna, ilegible, o parcial | Salida 1, ninguna fila reescrita, un evento `FALLIDO` sin antecedente |
+| Falla durante la carga, o rechazo de `PUBLICADO` después de escribir | `VALIDADO` → `FALLIDO` con antecedente y el código original. Ningún lote queda sin cerrar |
+| Corrección de un centavo en un importe de 100 billones o más | Se actualiza: exactamente la obligación y el perfil. La recarga da 0 y 0 |
+
+**El mismo archivo validado.** `sintetico-v1` completo nunca publica, por diseño: trae más cuarentena que el umbral del
+contrato y detalle sin cabecera. El lote que se carga es su derivado `VALIDADO` más grande que admite el umbral: los 31
+objetos aceptados por el oráculo más un caso en cuarentena (`derive_lot`, `back/tests/oracle_lots.py`, que no importa el
+ETL). Sus líneas son las de la fixture, sin alterar. Lo que se exige es que el SHA-256 de `cabecera` y `detalle` calculado
+al validar sea el que quede en `import_batch.file_hashes` en `VALIDADO` y en `PUBLICADO`.
+
+### 8.4 Reglas de la carga que esto fija
+
+- **Una escritura sin cambios no se hace.** Si la fila ya tiene esos valores no se envía el `UPDATE`. El evento `PUBLICADO`
+  guarda `filas_insertadas`, `filas_actualizadas`, `filas_sin_cambios` y el detalle por tabla en `escrituras`.
+- **`profile_generated_at` no distingue un perfil de otro.** Si una recarga obtiene los mismos valores, se conserva: sigue
+  siendo el momento del cálculo que los produjo. Cambia solo cuando cambia el perfil.
+- **Una persona se escribe una vez por carga**, con los datos de su última fila, y su dirección con la última fila que tenga
+  domicilio. Sin esto, una persona con datos distintos en dos objetos iría y volvería en cada recarga.
+- **Una localidad sin código postal reutiliza la existente** y no le borra el suyo.
+- **V1 solo admite el lote completo.** Antes de registrar `VALIDADO` se lee lo publicado del municipio. Si el archivo ya no
+  trae un objeto, una obligación de un objeto aceptado o una relación persona–objeto, es un delta o una baja: `FALLIDO` sin
+  antecedente, `PARTIAL_LOAD_REJECTED`, y `counts.faltantes` dice cuántos. Un objeto en cuarentena sí viene en el archivo:
+  conserva su estado previo y no se compara. `--limit-objects` y `--priority-tipo-ingreso` se rechazan antes de leer.
+
+### 8.5 Límites
+
+R05, R13 y R28 quedan **parciales**, no cerrados:
+
+- **ALIGN-031:** política de bajas y delta. También la de contactos y direcciones que dejan de venir: hoy un contacto
+  ausente queda en `debtor_contact` como estaba, sin desactivarse, y no bloquea el lote. Paginación de
+  `fetch_existing_debts_by_key` y `recompute_debtor_profiles`.
+- **ALIGN-032:** transacción, recuperación, concurrencia y clave de idempotencia por lote. Hoy una falla a mitad de carga
+  no revierte lo ya escrito, y cada ejecución agrega su propia cadena de eventos, también una recarga sin cambios. Si
+  `PUBLICADO` tiene resultado incierto (respuesta perdida, 5xx, 200 ilegible), la CLI imprime `PUBLISH_OUTCOME_UNKNOWN`, sale
+  con 1 y `VALIDADO` queda sin desenlace. Lo mismo si la base rechaza también el `FALLIDO`, por ejemplo con el actor revocado
+  durante la carga (`IMPORT_BATCH_FAILURE_NOT_RECORDED`). Un proceso muerto sin aviso tampoco cierra el lote.
+- **Exactitud de importes:** la carga compara los importes de `debt` y del perfil como texto, así que es exacta en todo el
+  rango que admite el validador (hasta 9.999.999.999.999.999,99; más allá, `IMPORTE_FUERA_DE_RANGO`). Quien lea esas columnas
+  como número no lo es: los mapeadores del frontend y la Data API sin `::text` pierden centavos desde unos 100 billones. No es
+  un importe municipal plausible y no se certifica ese rango en pantalla; queda como límite conocido de la lectura, sin
+  ticket asignado.
+- `person.external_id` es único global: el municipio B exige `--mapping` y una base recién reconstruida, y la CLI usa el
+  tenant 1 fijo. Un primer lote sobre una base vacía no tiene contra qué compararse: su completitud no se puede comprobar.
