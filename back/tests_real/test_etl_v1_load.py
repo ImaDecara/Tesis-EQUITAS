@@ -361,7 +361,8 @@ def test_la_carga_publica_lo_mismo_que_dice_el_oraculo(campaign, published):
     ids = catalogs()
     assert persisted_mismatches(tables, accepted_objects(), ids, published.validated.lot) == []
     assert line_value(published.result, "Resultado del lote") == "VALIDADO"
-    campaign.record("primera carga", salida=published.result.returncode, totales=_jsonable(amounts_and_counts(tables)))
+    campaign.record("primera carga", salida=published.result.returncode, eventos=[event["status"] for event in published.events],
+                    filas_insertadas=published.events[-1]["counts"]["filas_insertadas"], totales=_jsonable(amounts_and_counts(tables)))
 
 
 def test_conteos_y_montos_por_tipo_de_objeto_son_identicos_al_oraculo(published):
@@ -451,6 +452,15 @@ def test_la_cadena_de_eventos_termina_publicada(published):
     assert first["id"] < last["id"]
 
 
+def test_toda_escritura_de_cartera_ocurre_entre_validado_y_publicado(published):
+    """ALIGN-020: ninguna escritura antes de confirmar VALIDADO. xmin es el orden real de las transacciones."""
+    first, last = published.events
+    written = [int(row["_xmin"]) for rows in published.rows.values() for row in rows.values()]
+    assert written, "Sin filas esta prueba sería vacía"
+    assert int(first["_xmin"]) < min(written)
+    assert max(written) < int(last["_xmin"])
+
+
 def test_la_primera_carga_informa_cuantas_filas_inserto(published):
     counts = published.events[-1]["counts"]
     tables = published.rows
@@ -508,7 +518,9 @@ def test_reimportar_una_obligacion_modificada_solo_cambia_esa_y_el_perfil_de_su_
         "debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []},
     }
     assert after["debt"][debt["id"]]["current_amount"] == MODIFIED_AMOUNT[1]
-    for column in set(debt) - {"current_amount", "_xmin"}:
+    # updated_amount es una columna generada desde current_amount (ALIGN-017): cambia con ella.
+    assert after["debt"][debt["id"]]["updated_amount"] == MODIFIED_AMOUNT[1]
+    for column in set(debt) - {"current_amount", "updated_amount", "_xmin"}:
         assert after["debt"][debt["id"]][column] == debt[column], column
     new_profile = after["debtor_profile"][profile["id"]]
     assert Decimal(str(new_profile["total_debt_amount"])) == Decimal(MODIFIED_TOTAL[1])
@@ -641,7 +653,7 @@ def test_una_falla_durante_la_carga_termina_fallido_con_antecedente(campaign, pu
                     eventos=[event["status"] for event in events])
 
 
-def test_ningun_lote_queda_sin_cerrar_y_ninguna_escritura_precede_a_validado(campaign, published):
+def test_ningun_lote_queda_sin_cerrar(campaign, published):
     events = batches()
     closed = {event["supersedes"] for event in events}
     assert [event["id"] for event in events if event["status"] == "VALIDADO" and event["id"] not in closed] == []
