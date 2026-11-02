@@ -1,56 +1,84 @@
+import hashlib
+import json
 import re
-from collections.abc import Hashable, Mapping
+from collections import Counter
+from collections.abc import Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from ETL.config import settings
-from ETL.extract import extract_from_input_folder
+from ETL.config import ETLError, settings
+from ETL.extract import canonical_records, extract_from_input_folder, read_source_tables
+from ETL.validate_source import parse_amount as parse_source_amount
+from ETL.validate_source import parse_date as parse_source_date
+from ETL.validate_source import load_contract, validate_batch
 
 # ============================================================
-# IDS DE CATÁLOGOS SEGÚN SUPABASE
+# CATÁLOGOS: SIEMPRE POR CLAVE
 # ============================================================
 
-# document_type
-DOCUMENT_TYPE_DNI_ID = 1
-DOCUMENT_TYPE_CUIT_ID = 2
-DOCUMENT_TYPE_CUIL_ID = 3
-DOCUMENT_TYPE_UNKNOWN_ID = 4
+# Los payloads llevan la clave del catálogo; with_catalog_ids la cambia por el id de la base justo antes de escribir.
+# Ningún id de catálogo está fijo en el código y ningún código de origen se usa como id (contrato de origen §3.1).
+CATALOG_KEY_COLUMNS = {
+    "document_type": "key",
+    "person_type": "key",
+    "person_status": "key",
+    "debt_status": "key",
+    "contact_type": "key",
+    "debtor_type": "key",
+    "currency": "code",
+}
+CATALOG_FIELDS = {
+    "person": {"document_type": "document_type", "type": "person_type", "status": "person_status"},
+    "debtor": {"type": "debtor_type"},
+    "debt": {"currency": "currency", "status": "debt_status"},
+    "debtor_contact": {"type": "contact_type"},
+}
+DOCUMENT_TYPE_CUIT = "CUIT"
+DOCUMENT_TYPE_UNKNOWN = "UNKNOWN"
+PERSON_TYPE_INDIVIDUAL = "INDIVIDUAL"
+PERSON_TYPE_LEGAL_PERSON = "LEGAL_PERSON"
+PERSON_TYPE_UNKNOWN = "UNKNOWN"
+# El origen no informa el estado de la persona (PE07): no se afirma que esté activa.
+PERSON_STATUS_NOT_INFORMED = "UNKNOWN"
+CONTACT_TYPE_PHONE = "PHONE"
+CONTACT_TYPE_MOBILE = "MOBILE"
+CONTACT_TYPE_EMAIL = "EMAIL"
+DEBT_STATUS_OVERDUE = "OVERDUE"
+DEBT_STATUS_ACTIVE = "ACTIVE"
+ORIGIN_STATE_PENDING = "PENDIENTE"
+ORIGIN_STATE_UNKNOWN = "UNKNOWN"
 
-# person_type
-PERSON_TYPE_INDIVIDUAL_ID = 1
-PERSON_TYPE_LEGAL_PERSON_ID = 2
-PERSON_TYPE_COMPANY_ID = 3
-PERSON_TYPE_ASSOCIATION_ID = 4
-PERSON_TYPE_UNKNOWN_ID = 5
+# Formato del puente canónico (ETL.extract.canonical_records): decimal con punto, sin miles, fecha D/M/A.
+CANONICAL_DATE_FORMAT = "dd/mm/aaaa"
+CANONICAL_ID = re.compile(r"0|[1-9][0-9]{0,18}")
+BIGINT_MAX = 9223372036854775807
+ADDRESS_NUMBER = re.compile(r"[0-9]{1,9}")
+CUIT_PREFIXES_INDIVIDUAL = {"20", "23", "24", "27"}
+CUIT_PREFIXES_LEGAL = {"30", "33", "34"}
+CUIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+# El contrato v1 no declara una columna de período fiscal; si ALIGN-046 la homologa, llega con este nombre.
+SOURCE_PERIOD_COLUMN = "Periodo_Fiscal"
+UNUSABLE_CONTACT_CODES = {"CONTACTO_PLACEHOLDER", "CONTACTO_FORMATO_INVALIDO"}
+INACTIVE_CONTACT_CODE = "CONTACTO_INACTIVO"
+CONTACT_COLUMNS = (
+    ("Destinatario_Telefono", CONTACT_TYPE_PHONE),
+    ("Destinatario_Celular", CONTACT_TYPE_MOBILE),
+    ("Destinatario_Email", CONTACT_TYPE_EMAIL),
+)
 
-# person_status
-PERSON_STATUS_ACTIVE_ID = 1
-PERSON_STATUS_INACTIVE_ID = 2
-PERSON_STATUS_UNKNOWN_ID = 3
 
-# currency
-# Asumimos ARS = 1
-DEFAULT_CURRENCY_ID = 1
+class SemanticRejection(ValueError):
+    """Valor que no se puede publicar. Solo lleva el código del contrato, nunca el valor."""
 
-# debt_status
-DEBT_STATUS_ACTIVE_ID = 1
-DEBT_STATUS_OVERDUE_ID = 2
-DEBT_STATUS_PAYMENT_PLAN_ID = 3
-DEBT_STATUS_JUDICIAL_ID = 4
-DEBT_STATUS_CERTIFICATE_ACTIVE_ID = 5
-DEBT_STATUS_PAID_ID = 6
-DEBT_STATUS_CANCELLED_ID = 7
-DEBT_STATUS_UNKNOWN_ID = 8
-
-# contact_type
-CONTACT_TYPE_PHONE_ID = 1
-CONTACT_TYPE_MOBILE_ID = 2
-CONTACT_TYPE_EMAIL_ID = 3
-CONTACT_TYPE_LETTER_ID = 4
-CONTACT_TYPE_WHATSAPP_ID = 5
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
 
 
 # ============================================================
@@ -71,6 +99,11 @@ class TransformSummary:
 # ============================================================
 # FUNCIONES DE LIMPIEZA Y PARSEO
 # ============================================================
+
+@lru_cache(maxsize=1)
+def source_contract() -> dict:
+    return load_contract()
+
 
 # Limpia un valor y lo convierte a texto. Si viene vacío, devuelve None.
 def clean_text(value: Any) -> str | None:
@@ -98,124 +131,93 @@ def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
     return [row_to_str_dict(row) for row in raw_records]
 
 
-# Devuelve solo los dígitos de un valor. Sirve para CUIT, CUIL, DNI, Cuenta, DEUD_id, etc.
-def only_digits(value: Any) -> str | None:
-
-    text = clean_text(value)
-
-    if text is None:
-        return None
-
-    digits = re.sub(r"\D", "", text)
-
-    return digits or None
-
-
-# Convierte un valor a entero. Si no se puede, devuelve None o un default dado.
+# Identificador leído como texto: solo el decimal canónico de un bigint no negativo.
+# No quita ceros ni caracteres: "000123" y "R-0456" no son 123 ni 456 (la base conserva bigint, ALIGN-017).
 def parse_int(value: Any, default: int | None = None) -> int | None:
 
-    digits = only_digits(value)
+    text = clean_text(value)
 
-    if digits is None:
+    if text is None or not CANONICAL_ID.fullmatch(text) or int(text) > BIGINT_MAX:
         return default
 
-    try:
-        return int(digits)
-    except ValueError:
-        return default
+    return int(text)
 
 
-# Convierte un valor a decimal opcional.
-# Si el valor viene vacío, devuelve None.
-# Sirve para campos como number o floor, donde no queremos guardar 0 si el dato no existe.
-def parse_optional_decimal(value: Any) -> float | None:
+def _amount_text(value: Any) -> str:
+    return "" if value is None else str(value).strip()
 
-    text = clean_text(value)
 
-    if text is None:
+# Importe exacto. Vacío o inválido se rechaza con su código; el cero válido se conserva.
+# Rechaza fracciones de centavo: el motor de reglas v1 nunca recibe un importe que haya que redondear.
+def parse_decimal(value: Any, *, decimal: str = ".", thousands: str = "") -> Decimal:
+
+    cell = parse_source_amount(_amount_text(value), decimal, thousands)
+
+    if cell.value is None:
+        raise SemanticRejection(str(cell.code))
+
+    return cell.value
+
+
+# Igual que parse_decimal, pero el vacío significa no informado (None), nunca 0.
+def parse_optional_decimal(value: Any, *, decimal: str = ".", thousands: str = "") -> Decimal | None:
+
+    if not _amount_text(value):
         return None
 
-    return parse_decimal(text)
+    return parse_decimal(value, decimal=decimal, thousands=thousands)
 
 
-# Convierte un valor a decimal (float). Si no se puede, devuelve 0.0.
-def parse_decimal(value: Any) -> float:
-
-    text = clean_text(value)
-
-    if text is None:
-        return 0.0
-
-    cleaned = text.replace("$", "").replace(" ", "")
-
-    if "," in cleaned and "." in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    else:
-        cleaned = cleaned.replace(",", ".")
-
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
+# Texto exacto para numeric: PostgREST lo convierte sin pasar por float.
+def money_text(value: Decimal) -> str:
+    return format(value.quantize(Decimal("0.01")), "f")
 
 
-# Convierte fechas del TSV a formato ISO YYYY-MM-DD.
-def parse_date(value: Any) -> str | None:
+def plain_number_text(value: Decimal) -> str:
+    return format(value, "f")
 
-    text = clean_text(value)
 
-    if text is None:
+# Fecha del puente canónico a ISO. Vacía o centinela: None. Otra cosa se rechaza con su código.
+def parse_date(value: Any, date_format: str = CANONICAL_DATE_FORMAT) -> str | None:
+
+    text = "" if value is None else str(value).strip()
+    cell = parse_source_date(text, date_format, source_contract())
+
+    if cell.value is not None:
+        return cell.value.isoformat()
+
+    if cell.code in {"FECHA_VACIA", "FECHA_CENTINELA"}:
         return None
 
-    parsed = pd.to_datetime(text, dayfirst=True, errors="coerce")
+    raise SemanticRejection(str(cell.code))
 
-    if pd.isna(parsed):
+
+# Estado del objeto según el catálogo cerrado del contrato. Vacío no significa activo.
+def parse_object_status(value: Any) -> bool | None:
+
+    text = "" if value is None else str(value).strip()
+
+    if not text:
         return None
 
-    return parsed.date().isoformat()
+    catalog = {key.casefold(): state for key, state in source_contract()["catalogos"]["Estado"].items()}
+    state = catalog.get(text.casefold())
+
+    if state is None:
+        raise SemanticRejection("ESTADO_OBJETO_DESCONOCIDO")
+
+    return state == "ACTIVO"
 
 
-# Convierte textos del TSV a booleano.
-# Activo -> True
-# Inactivo -> False
-def parse_bool(value: Any, default: bool = True) -> bool:
+# Numeración o piso: columna numérica en la base. "S/N" o "PB" no son 0: quedan sin informar.
+def parse_address_number(value: Any) -> int | None:
 
     text = clean_text(value)
 
-    if text is None:
-        return default
+    if text is None or not ADDRESS_NUMBER.fullmatch(text):
+        return None
 
-    normalized = text.lower()
-
-    true_values = {
-        "true",
-        "t",
-        "1",
-        "si",
-        "sí",
-        "yes",
-        "y",
-        "activo",
-        "activa",
-    }
-
-    false_values = {
-        "false",
-        "f",
-        "0",
-        "no",
-        "n",
-        "inactivo",
-        "inactiva",
-    }
-
-    if normalized in true_values:
-        return True
-
-    if normalized in false_values:
-        return False
-
-    return default
+    return int(text)
 
 
 # Normaliza nombres simples, eliminando espacios extra y capitalizando cada palabra.
@@ -233,54 +235,80 @@ def normalize_name(value: Any) -> str | None:
 # REGLAS DE INFERENCIA
 # ============================================================
 
-# Estas funciones infieren valores a partir de otros campos, para completar los payloads.
-def infer_document_type_id(document_number: str | None) -> int:
-
-    if not document_number:
-        return DOCUMENT_TYPE_UNKNOWN_ID
-
-    return DOCUMENT_TYPE_CUIT_ID
+def _document_digits(document_number: Any) -> str:
+    return re.sub(r"\D", "", clean_text(document_number) or "")
 
 
-# Para este primer MVP, inferimos el tipo de persona a partir del prefijo de su CUIT/CUIL.
-def infer_person_type_id(document_number: str | None) -> int:
+def _has_cuit_structure(digits: str) -> bool:
+    if len(digits) != 11 or digits[:2] not in CUIT_PREFIXES_INDIVIDUAL | CUIT_PREFIXES_LEGAL:
+        return False
 
-    digits = only_digits(document_number)
+    remainder = sum(int(digit) * weight for digit, weight in zip(digits, CUIT_WEIGHTS, strict=False)) % 11
+    check_digit = {0: 0, 1: 9}.get(remainder, 11 - remainder)
 
-    if not digits or len(digits) < 2:
-        return PERSON_TYPE_UNKNOWN_ID
-
-    prefix = digits[:2]
-
-    if prefix in {"20", "23", "24", "27"}:
-        return PERSON_TYPE_INDIVIDUAL_ID
-
-    if prefix in {"30", "33", "34"}:
-        return PERSON_TYPE_LEGAL_PERSON_ID
-
-    return PERSON_TYPE_UNKNOWN_ID
+    return int(digits[10]) == check_digit
 
 
-# Inferimos el estado de la deuda a partir de su fecha de vencimiento.
-# Si la fecha de vencimiento es anterior a hoy, se marca como vencida.
-def infer_debt_status_id(due_date: str | None) -> int:
-
-    if not due_date:
-        return DEBT_STATUS_UNKNOWN_ID
-
-    parsed = pd.to_datetime(due_date, errors="coerce")
-
-    if pd.isna(parsed):
-        return DEBT_STATUS_UNKNOWN_ID
-
-    if parsed.date() < date.today():
-        return DEBT_STATUS_OVERDUE_ID
-
-    return DEBT_STATUS_ACTIVE_ID
+# La columna se llama Destinatario_CUIT, pero no todo lo que llega es un CUIT: solo se afirma si su estructura lo es.
+def infer_document_type_key(document_number: str | None) -> str:
+    return DOCUMENT_TYPE_CUIT if _has_cuit_structure(_document_digits(document_number)) else DOCUMENT_TYPE_UNKNOWN
 
 
-# Convierte el Tipo_Ingreso_Id del archivo origen a una clave textual para debt.type.
-# Para el MVP usamos strings en debt.type, no FK numérica.
+# Para este primer MVP, inferimos el tipo de persona a partir del prefijo de su CUIT/CUIL (PE04).
+def infer_person_type_key(document_number: str | None) -> str:
+
+    prefix = _document_digits(document_number)[:2]
+
+    if prefix in CUIT_PREFIXES_INDIVIDUAL:
+        return PERSON_TYPE_INDIVIDUAL
+
+    if prefix in CUIT_PREFIXES_LEGAL:
+        return PERSON_TYPE_LEGAL_PERSON
+
+    return PERSON_TYPE_UNKNOWN
+
+
+# Estado semántico de la obligación según el catálogo del lote. Nunca se deduce del vencimiento.
+def resolve_origin_state(row: dict[str, Any], state_catalogs: Mapping[str, Mapping[str, str]]) -> str:
+
+    states: set[str] = set()
+
+    for column in ("NOTD_ESTA_id", "NOTD_SITU_id"):
+        code = clean_text(row.get(column))
+
+        if code is None:
+            continue
+
+        state = state_catalogs.get(column, {}).get(code)
+
+        if state is None:
+            raise SemanticRejection("ESTADO_ORIGEN_DESCONOCIDO")
+
+        if state != ORIGIN_STATE_UNKNOWN:
+            states.add(state)
+
+    if len(states) > 1:
+        raise SemanticRejection("ESTADOS_ORIGEN_CONFLICTIVOS")
+
+    return states.pop() if states else ORIGIN_STATE_UNKNOWN
+
+
+# Clave de debt_status. "Vencida" es un derivado de una obligación pendiente respecto del corte declarado.
+def debt_status_key(origin_state: str, due_date: str | None, cut_off: date) -> str:
+
+    status_by_state = source_contract()["catalogos"]["debt_status_por_estado"]
+
+    if origin_state != ORIGIN_STATE_PENDING:
+        return status_by_state[origin_state]
+
+    if due_date is None:
+        raise SemanticRejection("FECHA_VACIA")
+
+    overdue = date.fromisoformat(due_date) < cut_off
+
+    return status_by_state["PENDIENTE_VENCIDA" if overdue else "PENDIENTE_VIGENTE"]
+
+
 # Convierte el Tipo_Ingreso_Id del archivo origen a una clave textual para debt.type.
 # Para el MVP usamos strings en debt.type, no FK numérica.
 def infer_debt_type_key(tipo_ingreso_id: Any) -> str:
@@ -312,30 +340,56 @@ def infer_debt_type_key(tipo_ingreso_id: Any) -> str:
 # BUILDERS DE PAYLOADS PARA SUPABASE
 # ============================================================
 
+# Reemplaza las claves de catálogo por los ids de la base. Una clave sin id falla antes de escribir.
+def with_catalog_ids(
+    entity: str,
+    payload: dict[str, Any],
+    catalogs: Mapping[str, Mapping[str, int]],
+) -> dict[str, Any]:
+
+    resolved = dict(payload)
+
+    for field, catalog in CATALOG_FIELDS[entity].items():
+        identifier = catalogs.get(catalog, {}).get(payload[field])
+
+        if identifier is None:
+            raise ETLError("CATALOG_KEY_MISSING")
+
+        resolved[field] = identifier
+
+    return resolved
+
+
 def build_person_payload(row: dict[str, Any]) -> dict[str, Any]:
 
     document_number = clean_text(row.get("Destinatario_CUIT"))
 
     return {
         "external_id": parse_int(row.get("Destinatario_Id")),
-        "document_type": infer_document_type_id(document_number),
+        "document_type": infer_document_type_key(document_number),
         "document_number": document_number,
         "full_name": clean_text(row.get("Destinatario")),
-        "type": infer_person_type_id(document_number),
+        "type": infer_person_type_key(document_number),
         "birth_date": None,
-        "status": PERSON_STATUS_ACTIVE_ID,
+        "status": PERSON_STATUS_NOT_INFORMED,
     }
 
 
-def build_debtor_payload(row: dict[str, Any]) -> dict[str, Any]:
+# debtor_type_keys es el mapa Bien_Tipo_Id → debtor_type.key que declara el perfil del lote.
+def build_debtor_payload(row: dict[str, Any], debtor_type_keys: Mapping[str, str]) -> dict[str, Any]:
+
+    code = clean_text(row.get("Bien_Tipo_Id"))
+
+    if code not in debtor_type_keys:
+        raise SemanticRejection("TIPO_BIEN_FUERA_DE_CATALOGO")
 
     return {
         "tenant": settings.tenant_id,
         "external_id": parse_int(row.get("Cuenta")),
-        "type": parse_int(row.get("Bien_Tipo_Id")),
+        "type": debtor_type_keys[code],
         "identifier": clean_text(row.get("Identificador")),
         "description": clean_text(row.get("Bien_Descripcion")),
-        "status": parse_bool(row.get("Estado"), default=True),
+        "status": parse_object_status(row.get("Estado")),
     }
 
 
@@ -345,10 +399,12 @@ def build_debtor_person_payload(
     person_id: int,
 ) -> dict[str, Any]:
 
+    declared = parse_optional_decimal(row.get("Destinatario_Porcentaje"))
+
     return {
         "debtor": debtor_id,
         "person": person_id,
-        "priority": parse_decimal(row.get("Destinatario_Porcentaje")),
+        "priority": None if declared is None else plain_number_text(declared),
         "role": clean_text(row.get("Destinatario_Tipo")),
         "active": True,
     }
@@ -357,26 +413,35 @@ def build_debtor_person_payload(
 def build_debt_payload(
     row: dict[str, Any],
     debtor_id: int,
-    issue_date: str | None = None,
-    last_collection_date: str | None = None,
+    *,
+    cut_off: date,
+    state_catalogs: Mapping[str, Mapping[str, str]],
+    currency_code: str,
 ) -> dict[str, Any]:
 
     debt_external_id = parse_int(row.get("DEUD_id"))
+
+    if debt_external_id is None:
+        raise SemanticRejection("IDENTIFICADOR_INVALIDO")
+
     due_date = parse_date(row.get("NOTD_vencimiento"))
+    origin_state = resolve_origin_state(row, state_catalogs)
 
     return {
         "external_id": debt_external_id,
         "debtor": debtor_id,
         "type": infer_debt_type_key(row.get("Tipo_Ingreso_Id")),
         "description": f"Deuda importada desde TSV - DEUD_id {debt_external_id}",
-        "original_amount": parse_decimal(row.get("NOTD_capital")),
-        "current_amount": parse_decimal(row.get("NOTD_totalActualizado")),
-        "currency": DEFAULT_CURRENCY_ID,
-        "issue_date": issue_date,
+        "original_amount": money_text(parse_decimal(row.get("NOTD_capital"))),
+        "current_amount": money_text(parse_decimal(row.get("NOTD_totalActualizado"))),
+        "currency": currency_code,
+        # Sin fuente real de emisión ni de gestión. Fecha_Actualizacion va a import_batch.source_updated_at.
+        "issue_date": None,
         "due_date": due_date,
-        "last_collection_date": last_collection_date,
-        "period": clean_text(row.get("DEUD_id")),
-        "status": infer_debt_status_id(due_date),
+        "last_collection_date": None,
+        # Solo un período de origen; nunca el identificador de la obligación.
+        "period": clean_text(row.get(SOURCE_PERIOD_COLUMN)),
+        "status": debt_status_key(origin_state, due_date, cut_off),
     }
 
 
@@ -427,8 +492,8 @@ def build_address_payload(
     """
 
     street = clean_text(row.get("Destinatario_Calle"))
-    number = parse_optional_decimal(row.get("Destinatario_Numeracion"))
-    floor = parse_optional_decimal(row.get("Destinatario_Piso"))
+    number = parse_address_number(row.get("Destinatario_Numeracion"))
+    floor = parse_address_number(row.get("Destinatario_Piso"))
     apartment = clean_text(row.get("Destinatario_Depto"))
 
     if not street and number is None and not apartment:
@@ -455,49 +520,32 @@ def build_address_payload(
 def build_debtor_contact_payloads(
     row: dict[str, Any],
     person_id: int,
+    findings: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Construye payloads para debtor_contact.
 
-    Una misma persona puede tener:
-    - teléfono
-    - celular
-    - email
+    Una misma persona puede tener teléfono, celular y email. `findings` son los hallazgos del validador
+    para esta fila, por columna: un marcador o un formato ilegible no es un contacto y no se carga;
+    una baja explícita se conserva con active=False.
     """
 
     payloads: list[dict[str, Any]] = []
+    findings = findings or {}
 
-    phone = clean_text(row.get("Destinatario_Telefono"))
-    mobile = clean_text(row.get("Destinatario_Celular"))
-    email = clean_text(row.get("Destinatario_Email"))
+    for column, contact_type in CONTACT_COLUMNS:
+        value = clean_text(row.get(column))
+        finding = findings.get(column)
 
-    if phone:
+        if value is None or finding in UNUSABLE_CONTACT_CODES:
+            continue
+
         payloads.append(
             {
                 "person": person_id,
-                "type": CONTACT_TYPE_PHONE_ID,
-                "value": phone,
-                "active": True,
-            }
-        )
-
-    if mobile:
-        payloads.append(
-            {
-                "person": person_id,
-                "type": CONTACT_TYPE_MOBILE_ID,
-                "value": mobile,
-                "active": True,
-            }
-        )
-
-    if email:
-        payloads.append(
-            {
-                "person": person_id,
-                "type": CONTACT_TYPE_EMAIL_ID,
-                "value": email.lower(),
-                "active": True,
+                "type": contact_type,
+                "value": value.lower() if contact_type == CONTACT_TYPE_EMAIL else value,
+                "active": finding != INACTIVE_CONTACT_CODE,
             }
         )
 
@@ -508,273 +556,233 @@ def build_debtor_contact_payloads(
 # BUILDERS PARA PERFIL CALCULADO
 # ============================================================
 
-# Calcula los días de antigüedad de una deuda a partir de su fecha de vencimiento.
-def calculate_debt_age_days(due_date: Any) -> int:
-    parsed_due_date = parse_date(due_date)
-
-    if parsed_due_date is None:
-        return 0
-
-    parsed = pd.to_datetime(parsed_due_date, errors="coerce")
-
-    if pd.isna(parsed):
-        return 0
-
-    return max((date.today() - parsed.date()).days, 0)
+def _rounded_average(values: list[int]) -> int:
+    return int((Decimal(sum(values)) / len(values)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
-# Limita un puntaje de riesgo para que quede dentro del rango 0 a 100.
-# Lo usamos para que todos los scores sean interpretables como porcentaje.
-def clamp_risk_score(value: float, minimum: int = 0, maximum: int = 100) -> int:
-    return int(max(minimum, min(round(value), maximum)))
-
-
-# Calcula el riesgo general del objeto de deuda en escala 0 a 100%.
-# Esta versión usa una regla relativa al promedio de deuda de la cartera importada.
-# La idea es obtener una escala más precisa que 1 a 5 y poder ordenar mejor los casos.
-def calculate_socioeconomic_risk_level(
-    total_debt_amount: float,
-    overdue_debt_amount: float,
-    overdue_debt_count: int,
-    oldest_debt_days: int,
-    active_person_count: int,
-    available_contact_count: int,
-    average_total_debt_amount: float,
-) -> int:
-
-    if total_debt_amount <= 0:
-        return 0
-
-    if average_total_debt_amount <= 0:
-        average_total_debt_amount = total_debt_amount
-
-    debt_ratio = total_debt_amount / average_total_debt_amount
-
-    # Componente principal: peso relativo de la deuda frente al promedio de la cartera.
-    # Tiene un máximo de 60 puntos sobre 100.
-    debt_amount_score = min(debt_ratio * 35, 60)
-
-    # Proporción de deuda vencida sobre deuda total.
-    # Tiene un máximo de 10 puntos.
-    overdue_amount_ratio = (
-        overdue_debt_amount / total_debt_amount
-        if total_debt_amount > 0
-        else 0
-    )
-    overdue_amount_score = min(overdue_amount_ratio * 10, 10)
-
-    # Cantidad de deudas vencidas.
-    # Tiene un máximo de 10 puntos.
-    overdue_count_score = min(overdue_debt_count, 10)
-
-    # Antigüedad de la deuda más vieja.
-    # A partir de un año o más, aporta el máximo de 15 puntos.
-    age_score = min((oldest_debt_days / 365) * 15, 15)
-
-    # Disponibilidad de contacto.
-    # Sin contactos sube bastante el riesgo operativo.
-    # Con un solo contacto sube levemente porque hay menor redundancia.
-    if available_contact_count == 0:
-        contact_score = 15
-    elif available_contact_count == 1:
-        contact_score = 5
-    else:
-        contact_score = 0
-
-    # Multiplicidad de personas asociadas al objeto.
-    # Suma un ajuste pequeño porque puede requerir gestión más compleja.
-    multi_person_score = 5 if active_person_count > 1 else 0
-
-    total_score = (
-        debt_amount_score
-        + overdue_amount_score
-        + overdue_count_score
-        + age_score
-        + contact_score
-        + multi_person_score
-    )
-
-    return clamp_risk_score(total_score)
-
-
-# Construye payload para debtor_profile a partir de las deudas, personas y contactos asociados a un debtor.
+# Perfil del objeto: agregados de sus obligaciones respecto del corte. debt_rows lleva claves de catálogo.
+# Antigüedad: días de atraso de las obligaciones vencidas al corte; sin vencidas no aplica (None), nunca 0.
+# El índice heredado no se calcula: dependía del promedio del lote y la severidad la calcula reglas v1 (ALIGN-008).
 def build_debtor_profile_payload(
     debtor_id: int,
     debt_rows: list[dict[str, Any]],
     active_person_count: int,
     available_contact_count: int,
-    average_total_debt_amount: float,
+    cut_off: date | None,
 ) -> dict[str, Any]:
-    current_amounts = [parse_decimal(row.get("current_amount")) for row in debt_rows]
 
-    total_debt_amount = round(sum(current_amounts), 2)
-
-    overdue_rows = [
-        row for row in debt_rows
-        if parse_int(row.get("status")) == DEBT_STATUS_OVERDUE_ID
-    ]
-
-    overdue_amounts = [parse_decimal(row.get("current_amount")) for row in overdue_rows]
-    overdue_debt_amount = round(sum(overdue_amounts), 2)
-
-    debt_ages = [calculate_debt_age_days(row.get("due_date")) for row in debt_rows]
-    debt_count = len(debt_rows)
-    overdue_debt_count = len(overdue_rows)
-
-    oldest_debt_days = max(debt_ages) if debt_ages else 0
-    average_debt_age_days = round(sum(debt_ages) / len(debt_ages)) if debt_ages else 0
-
-    risk_level = calculate_socioeconomic_risk_level(
-        total_debt_amount=total_debt_amount,
-        overdue_debt_amount=overdue_debt_amount,
-        overdue_debt_count=overdue_debt_count,
-        oldest_debt_days=oldest_debt_days,
-        active_person_count=active_person_count,
-        available_contact_count=available_contact_count,
-        average_total_debt_amount=average_total_debt_amount,
-    )
+    overdue_rows = [row for row in debt_rows if row["status"] == DEBT_STATUS_OVERDUE]
+    days_overdue = [(cut_off - date.fromisoformat(row["due_date"])).days for row in overdue_rows] if cut_off else []
+    total = sum((Decimal(str(row["current_amount"])) for row in debt_rows), Decimal(0))
+    overdue = sum((Decimal(str(row["current_amount"])) for row in overdue_rows), Decimal(0))
 
     return {
         "debtor": debtor_id,
-        "total_debt_amount": total_debt_amount,
-        "overdue_debt_amount": overdue_debt_amount,
-        "debt_count": debt_count,
-        "overdue_debt_count": overdue_debt_count,
-        "oldest_debt_days": oldest_debt_days,
-        "average_debt_age_days": average_debt_age_days,
+        "total_debt_amount": money_text(total),
+        "overdue_debt_amount": money_text(overdue),
+        "debt_count": len(debt_rows),
+        "overdue_debt_count": len(overdue_rows),
+        "oldest_debt_days": max(days_overdue) if days_overdue else None,
+        "average_debt_age_days": _rounded_average(days_overdue) if days_overdue else None,
         "active_person_count": active_person_count,
         "available_contact_count": available_contact_count,
-        "socioeconomic_risk_level": risk_level,
+        "socioeconomic_risk_level": None,
         "profile_generated_at": datetime.now(UTC).isoformat(),
         "active": True,
     }
 
 
-# Construye la razón textual para el riesgo de una persona dentro del perfil del objeto.
-# Explica el riesgo base del objeto, el ajuste individual y el riesgo final en porcentaje.
-def build_profile_detail_reason(
-    profile_risk_level: int,
-    final_risk_value: float,
-    person_contact_count: int,
-    role: str | None,
-    priority: float | None,
-) -> str:
-    reasons: list[str] = []
+# ============================================================
+# LOTE VALIDADO: LO ÚNICO QUE SE PUEDE PUBLICAR
+# ============================================================
 
-    base_risk = round(float(profile_risk_level), 2)
-    final_risk = round(float(final_risk_value), 2)
-    adjustment = round(final_risk - base_risk, 2)
+@dataclass(frozen=True)
+class SourceRowContext:
+    """Fila canónica aceptada, con los hallazgos de sus contactos por columna."""
 
-    reasons.append(f"Riesgo base del objeto: {base_risk}%.")
-    reasons.append(f"Riesgo individual final: {final_risk}%.")
-
-    if adjustment > 0:
-        reasons.append(f"El riesgo individual se elevó {adjustment} punto(s) por condiciones particulares de la persona.")
-    elif adjustment < 0:
-        reasons.append(f"El riesgo individual se redujo {abs(adjustment)} punto(s) por condiciones particulares de la persona.")
-
-    if person_contact_count == 0:
-        reasons.append("La persona no tiene contactos disponibles.")
-    elif person_contact_count == 1:
-        reasons.append("La persona tiene 1 contacto disponible.")
-    else:
-        reasons.append(f"La persona tiene {person_contact_count} contactos disponibles.")
-
-    if role:
-        reasons.append(f"Rol frente al objeto: {role}.")
-
-    if priority is not None:
-        reasons.append(f"Porcentaje/prioridad declarada: {priority}.")
-
-    return " ".join(reasons)
+    values: dict[str, Any]
+    line: int
+    contact_findings: dict[str, str]
 
 
-# Construye payload para debtor_profile_detail por cada persona asociada al objeto.
-# risk_value representa el riesgo individual de esa persona dentro del objeto, en escala 0 a 100%.
-def build_debtor_profile_detail_payload(
-    debtor_profile_id: int,
-    person_id: int,
-    profile_risk_level: int,
-    person_contact_count: int,
-    role: str | None = None,
-    priority: float | None = None,
-) -> dict[str, Any]:
-    risk_value = float(profile_risk_level)
+@dataclass(frozen=True)
+class PreparedObject:
+    reference: str
+    headers: tuple[SourceRowContext, ...]
+    details: tuple[SourceRowContext, ...]
 
-    # Ajuste por contacto individual.
-    # Si la persona no tiene contactos, se eleva el riesgo operativo.
-    # Si tiene un solo contacto, se suma un ajuste menor.
-    if person_contact_count == 0:
-        risk_value += 15
-    elif person_contact_count == 1:
-        risk_value += 3
 
-    # Ajuste leve por rol: si figura como responsable de pago, puede ser
-    # más relevante para la gestión operativa del caso.
-    normalized_role = role.lower() if role else ""
+@dataclass(frozen=True)
+class PreparedBatch:
+    """Resultado de validar los archivos, antes de crear cualquier cliente de base."""
 
-    if "responsable" in normalized_role:
-        risk_value += 5
+    report: dict[str, Any]
+    mapping: dict[str, Any]
+    cut_off: date
+    file_hashes: dict[str, str]
+    objects: tuple[PreparedObject, ...]
+    source_updated_at: str | None
 
-    # Ajuste leve por prioridad/porcentaje de responsabilidad.
-    # Un porcentaje alto indica mayor peso de esa persona frente al objeto.
-    if priority is not None and priority >= 75:
-        risk_value += 5
+    @property
+    def publishable(self) -> bool:
+        return self.report["publicacion_permitida"] is True
 
-    risk_value = round(max(0, min(risk_value, 100)), 2)
+    @property
+    def state_catalogs(self) -> dict[str, dict[str, str]]:
+        return {name: self.mapping["catalogos"][name] for name in ("NOTD_ESTA_id", "NOTD_SITU_id")}
 
-    reason = build_profile_detail_reason(
-        profile_risk_level=profile_risk_level,
-        final_risk_value=risk_value,
-        person_contact_count=person_contact_count,
-        role=role,
-        priority=priority,
+    @property
+    def debtor_type_keys(self) -> dict[str, str]:
+        return self.mapping["catalogos"]["Bien_Tipo_Id"]
+
+
+class StructuralRejection(Exception):
+    """El archivo no se pudo leer como lote: no hay reporte, pero sí hashes para registrar el rechazo."""
+
+    def __init__(self, code: str, file_hashes: dict[str, str]) -> None:
+        self.code = code
+        self.file_hashes = file_hashes
+        super().__init__(code)
+
+
+def canonical_json_hash(value: Any) -> str:
+    text = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _sha256_of_files(files: Mapping[str, Path]) -> dict[str, str]:
+    return {name: hashlib.sha256(Path(path).read_bytes()).hexdigest() for name, path in files.items()}
+
+
+def _accepted_rows(tables: Mapping[str, Any], report: dict, mapping: dict, contract: dict, kind: str):
+    """Une cada fila canónica con la decisión que tomó el motor para esa misma línea física."""
+    decisions = {item["linea"]: item for item in report["decisiones_filas"] if item["archivo"] == kind}
+    contact_findings: dict[int, dict[str, str]] = {}
+
+    for finding in report["hallazgos"]:
+        if finding["archivo"] == kind:
+            contact_findings.setdefault(finding["linea"], {})[finding["campo"]] = finding["codigo"]
+
+    table = tables[kind]
+
+    for source, record in zip(table.rows, canonical_records(table, kind, mapping, contract), strict=True):
+        decision = decisions.get(source.line)
+
+        if decision and decision["resultado"] == "ACEPTADA":
+            yield decision["objeto"], SourceRowContext(record, source.line, contact_findings.get(source.line, {}))
+
+
+def _group_objects(tables, report, mapping, contract) -> tuple[PreparedObject, ...]:
+    headers: dict[str, list[SourceRowContext]] = {}
+    details: dict[str, list[SourceRowContext]] = {}
+
+    for reference, row in _accepted_rows(tables, report, mapping, contract, "cabecera"):
+        headers.setdefault(reference, []).append(row)
+
+    for reference, row in _accepted_rows(tables, report, mapping, contract, "detalle"):
+        details.setdefault(reference, []).append(row)
+
+    return tuple(
+        PreparedObject(reference, tuple(rows), tuple(details.get(reference, ())))
+        for reference, rows in headers.items()
     )
 
+
+def _latest_source_update(objects: Iterable[PreparedObject]) -> str | None:
+    dates = [
+        parse_date(row.values.get("Fecha_Actualizacion"))
+        for item in objects
+        for row in item.headers
+    ]
+    return max((value for value in dates if value), default=None)
+
+
+# Lee, valida y agrupa. No crea clientes ni escribe: lo que devuelve es todo lo que la carga puede usar.
+def prepare_batch(files: Mapping[str, Path], mapping: dict, contract: dict, cut_off: str) -> PreparedBatch:
+
+    hashes = {
+        **_sha256_of_files(files),
+        "mapeo": canonical_json_hash(mapping),
+        "contrato": canonical_json_hash(contract),
+    }
+
+    try:
+        tables = read_source_tables(dict(files), mapping, contract=contract)
+    except ValueError as error:
+        raise StructuralRejection(str(error).split(":", 1)[0], hashes) from None
+
+    if _sha256_of_files(files) != {name: hashes[name] for name in files}:
+        raise ETLError("SOURCE_CHANGED_DURING_READ")
+
+    report = validate_batch(tables, mapping, contract, cut_off)
+    objects = _group_objects(tables, report, mapping, contract)
+
+    return PreparedBatch(
+        report=report,
+        mapping=mapping,
+        cut_off=date.fromisoformat(cut_off),
+        file_hashes=hashes,
+        objects=objects,
+        source_updated_at=_latest_source_update(objects),
+    )
+
+
+# Claves que la carga va a necesitar. Se resuelven todas antes de la primera escritura.
+def required_catalog_keys(batch: PreparedBatch) -> dict[str, set[str]]:
+
+    status_by_state = source_contract()["catalogos"]["debt_status_por_estado"]
+
     return {
-        "debtor_profile": debtor_profile_id,
-        "person": person_id,
-        "risk_value": risk_value,
-        "reason": reason,
-        "active": True,
+        "document_type": {DOCUMENT_TYPE_CUIT, DOCUMENT_TYPE_UNKNOWN},
+        "person_type": {PERSON_TYPE_INDIVIDUAL, PERSON_TYPE_LEGAL_PERSON, PERSON_TYPE_UNKNOWN},
+        "person_status": {PERSON_STATUS_NOT_INFORMED},
+        "debt_status": set(status_by_state.values()),
+        "contact_type": {CONTACT_TYPE_PHONE, CONTACT_TYPE_MOBILE, CONTACT_TYPE_EMAIL},
+        "debtor_type": {
+            batch.debtor_type_keys[clean_text(row.values.get("Bien_Tipo_Id"))]
+            for item in batch.objects
+            for row in item.headers
+        },
+        "currency": {batch.mapping["moneda"]},
     }
 
 
-# ============================================================
-# FUNCIONES AUXILIARES PARA TRANSFORMACIÓN
-# ============================================================
-
-# Crea un diccionario para acceder rápidamente a una fila de cabecera usando ClaveAgrupacion.
-# Esto servirá después para tomar Fecha_Actualizacion de cabecera cuando estemos procesando detalle.
-def build_header_context_by_clave(cabecera_df: pd.DataFrame) -> dict[str, dict[str, Any]]:
-
-    context: dict[str, dict[str, Any]] = {}
-
-    for row in dataframe_to_records(cabecera_df):
-        clave = clean_text(row.get("ClaveAgrupacion"))
-
-        if clave and clave not in context:
-            context[clave] = row
-
-    return context
+def _lower_keys(values: Mapping[str, int]) -> dict[str, int]:
+    return {code.lower(): count for code, count in values.items()}
 
 
-# Estas funciones toman la fecha de actualización de la cabecera para usarla como issue_date y last_collection_date de las deudas.
-def get_issue_date_from_header(header_row: dict[str, Any] | None) -> str | None:
-
-    if not header_row:
-        return None
-
-    return parse_date(header_row.get("Fecha_Actualizacion"))
+def _centavos(value: str | None) -> int | None:
+    return None if value is None else int(Decimal(value) * 100)
 
 
-# Para el MVP usamos Fecha_Actualizacion también como last_collection_date.
-def get_last_collection_date_from_header(header_row: dict[str, Any] | None) -> str | None:
+# Conteos para import_batch: solo enteros con claves propias, sin filas ni valores de origen. Un dato no calculado se omite.
+def batch_counts(report: dict[str, Any]) -> dict[str, Any]:
 
-    if not header_row:
-        return None
+    counts: dict[str, Any] = {name: value for name, value in report["conteos"].items() if value is not None}
 
-    return parse_date(header_row.get("Fecha_Actualizacion"))
+    for kind, rows in report["filas"].items():
+        counts[f"filas_{kind}_leidas"] = rows["leidas"]
+        counts[f"filas_{kind}_aceptadas"] = rows["aceptadas"]
+        counts[f"filas_{kind}_rechazadas"] = rows["rechazadas"]
+        counts[f"rechazos_{kind}"] = _lower_keys(rows["rechazadas_por_codigo"])
+
+    states: Counter[str] = Counter()
+
+    for item in report["objetos"]:
+        states.update(item["estados_al_corte"])
+
+    counts["estados_al_corte"] = {name.lower(): count for name, count in states.items() if count}
+    counts["hallazgos"] = _lower_keys(report["hallazgos_por_codigo"])
+    counts["bloqueos"] = _lower_keys(dict.fromkeys(report["motivos_bloqueo"], 1))
+
+    for name, source in (("importe_aceptado_centavos", "actualizado_aceptado"),
+                         ("importe_en_cuarentena_centavos", "actualizado_en_cuarentena_observado")):
+        cents = _centavos(report["importes"][source])
+
+        if cents is not None:
+            counts[name] = cents
+
+    return counts
 
 
 # ============================================================
@@ -859,44 +867,6 @@ def print_transform_summary(
     print(f"Deudas únicas por Bien_Tipo + Cuenta + DEUD_id: {summary.unique_debts_count}")
     print(f"Filas de deuda duplicadas a ignorar:    {summary.duplicated_debt_rows_count}")
     print("-" * 80)
-
-    if len(cabecera_df) > 0:
-        first_header_row = row_to_str_dict(cabecera_df.iloc[0].to_dict())
-
-        print("\nEjemplo person_payload:")
-        print(build_person_payload(first_header_row))
-
-        print("\nEjemplo debtor_payload:")
-        print(build_debtor_payload(first_header_row))
-
-        print("\nEjemplo debtor_person_payload con IDs internos simulados:")
-        print(
-            build_debtor_person_payload(
-                first_header_row,
-                debtor_id=999,
-                person_id=888,
-            )
-        )
-
-    if len(detalle_df) > 0:
-        first_detail_row = row_to_str_dict(detalle_df.iloc[0].to_dict())
-
-        header_context = build_header_context_by_clave(cabecera_df)
-        clave = clean_text(first_detail_row.get("ClaveAgrupacion"))
-        header_row = header_context.get(clave) if clave else None
-
-        issue_date = get_issue_date_from_header(header_row)
-        last_collection_date = get_last_collection_date_from_header(header_row)
-
-        print("\nEjemplo debt_payload con debtor_id interno simulado:")
-        print(
-            build_debt_payload(
-                first_detail_row,
-                debtor_id=999,
-                issue_date=issue_date,
-                last_collection_date=last_collection_date,
-            )
-        )
 
 
 if __name__ == "__main__":

@@ -1,38 +1,34 @@
-from dataclasses import replace
+"""Carga simulada de un lote validado. ALIGN-026: las filas salen de un lote derivado del oráculo, no de una
+fuente de dos objetos que el contrato pondría en cuarentena. La persistencia real es de ALIGN-027."""
+
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
-import pandas as pd
 import pytest
+from oracle_lots import AS_OF, accepted_objects, derive_lot
 
-from ETL import extract, run_etl
-
-
-def write_source_files(
-    tmp_path: Path,
-    cabecera_df: pd.DataFrame,
-    detalle_df: pd.DataFrame,
-) -> None:
-    source_dir = tmp_path / 'agua'
-    source_dir.mkdir()
-    cabecera_df.to_csv(source_dir / 'cabecera.tsv', sep='\t', index=False)
-    detalle_df.to_csv(source_dir / 'detalle.tsv', sep='\t', index=False)
+from ETL import run_etl
+from ETL.transform import CATALOG_KEY_COLUMNS
 
 
 def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setenv('EQUITAS_TARGET_ENV', 'local')
     monkeypatch.setenv('SUPABASE_URL', 'http://127.0.0.1:54321')
     monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'CLAVE_FICTICIA_ALIGN025')
+    monkeypatch.setenv('SUPABASE_ANON_KEY', 'CLAVE_PUBLICA_FICTICIA_ALIGN026')
+    monkeypatch.setenv('EQUITAS_IMPORT_SERVER_JWT', 'JWT_FICTICIO_ALIGN026')
+    monkeypatch.setenv('EQUITAS_IMPORT_ACTOR_USER', '7')
     state: dict[str, Any] = {
         'persons': {},
         'debtors': {},
         'relations': [],
         'contacts': [],
         'profiles': [],
-        'profile_details': [],
         'debt_batches': [],
         'stored_debts': {},
         'debt_summaries': [],
+        'batches': [],
     }
 
     def load_person(payload: dict[str, Any]) -> dict[str, int]:
@@ -64,9 +60,6 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         state['profiles'].append(payload)
         return {'id': 1_000 + int(payload['debtor'])}
 
-    def load_debtor_profile_detail(payload: dict[str, Any]) -> None:
-        state['profile_details'].append(payload)
-
     def load_debts_bulk(payloads: list[dict[str, Any]]) -> dict[str, int]:
         state['debt_batches'].append(payloads)
         summary = {
@@ -93,6 +86,14 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         state['debt_summaries'].append(summary)
         return summary
 
+    def resolve_catalogs(required: dict[str, set[str]], key_columns: dict[str, str]) -> dict[str, dict[str, int]]:
+        assert set(required) <= set(CATALOG_KEY_COLUMNS) and key_columns == CATALOG_KEY_COLUMNS
+        return {table: {key: index for index, key in enumerate(sorted(keys), start=1)} for table, keys in required.items()}
+
+    def record_import_batch(**event: Any) -> int:
+        state['batches'].append(event)
+        return len(state['batches'])
+
     monkeypatch.setattr(run_etl, 'load_person', load_person)
     monkeypatch.setattr(run_etl, 'load_debtor', load_debtor)
     monkeypatch.setattr(run_etl, 'load_debtor_person', load_debtor_person)
@@ -101,8 +102,9 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(run_etl, 'load_address', load_address)
     monkeypatch.setattr(run_etl, 'load_debtor_contact', load_debtor_contact)
     monkeypatch.setattr(run_etl, 'load_debtor_profile', load_debtor_profile)
-    monkeypatch.setattr(run_etl, 'load_debtor_profile_detail', load_debtor_profile_detail)
     monkeypatch.setattr(run_etl, 'load_debts_bulk', load_debts_bulk)
+    monkeypatch.setattr(run_etl, 'resolve_catalogs', resolve_catalogs)
+    monkeypatch.setattr(run_etl, 'record_import_batch', record_import_batch)
 
     return state
 
@@ -110,80 +112,57 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def test_etl_integrates_tsv_extraction_transformation_and_simulated_idempotent_load(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    cabecera_df: pd.DataFrame,
-    detalle_df: pd.DataFrame,
 ) -> None:
-    write_source_files(tmp_path, cabecera_df, detalle_df)
-    monkeypatch.setattr(extract, 'settings', replace(extract.settings, input_dir=tmp_path))
     state = install_fake_loaders(monkeypatch)
+    lot = derive_lot(tmp_path / 'lote')
+    debts = sum(item['obligaciones'] for item in accepted_objects())
 
-    run_etl.run_etl(folder_name='agua', execute=True)
-    run_etl.run_etl(folder_name='agua', execute=True)
+    run_etl.run_etl(str(lot), execute=True, cut_off=AS_OF)
+    run_etl.run_etl(str(lot), execute=True, cut_off=AS_OF)
 
-    first_batch = state['debt_batches'][0]
-    assert len(first_batch) == 2
-    assert {(payload['debtor'], payload['external_id']) for payload in first_batch} == {
-        (100, 9001),
-        (101, 9001),
-    }
+    assert len(state['debt_batches'][0]) == debts
     assert state['debt_summaries'][0] == {
-        'received': 2,
-        'unique': 2,
-        'inserted': 2,
+        'received': debts,
+        'unique': debts,
+        'inserted': debts,
         'updated': 0,
         'unchanged': 0,
     }
     assert state['debt_summaries'][1] == {
-        'received': 2,
-        'unique': 2,
+        'received': debts,
+        'unique': debts,
         'inserted': 0,
         'updated': 0,
-        'unchanged': 2,
+        'unchanged': debts,
     }
-    assert len(state['stored_debts']) == 2
-    assert len(state['profiles']) == 4
+    assert len(state['stored_debts']) == debts
+    assert len(state['profiles']) == 2 * len(accepted_objects())
+    assert [event['status'] for event in state['batches']] == ['VALIDADO', 'PUBLICADO'] * 2
 
 
-def test_etl_omits_invalid_rows_before_preparing_debts(
+def test_etl_excludes_a_quarantined_object_before_preparing_debts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    cabecera_df: pd.DataFrame,
-    detalle_df: pd.DataFrame,
 ) -> None:
-    invalid_cabecera_df = cabecera_df.copy()
-    invalid_cabecera_df.loc[0, 'Destinatario_Id'] = ''
-    write_source_files(tmp_path, invalid_cabecera_df, detalle_df)
-    monkeypatch.setattr(extract, 'settings', replace(extract.settings, input_dir=tmp_path))
     state = install_fake_loaders(monkeypatch)
+    target = accepted_objects()[0]
+    lot = derive_lot(tmp_path / 'lote', cabecera_cells={(target['clave_agrupacion'], None, 'Destinatario_Id'): ''})
 
-    run_etl.run_etl(folder_name='agua', execute=True)
+    run_etl.run_etl(str(lot), execute=True, cut_off=AS_OF)
 
-    assert state['persons'] == {502: 1}
-    assert state['debt_summaries'] == [
-        {
-            'received': 1,
-            'unique': 1,
-            'inserted': 1,
-            'updated': 0,
-            'unchanged': 0,
-        }
-    ]
+    assert set(target['personas']).isdisjoint(state['persons'])
+    assert state['debt_summaries'][0]['received'] == sum(item['obligaciones'] for item in accepted_objects()[1:])
 
 
 def test_etl_stops_when_the_simulated_debt_loader_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    cabecera_df: pd.DataFrame,
-    detalle_df: pd.DataFrame,
 ) -> None:
-    write_source_files(tmp_path, cabecera_df, detalle_df)
-    monkeypatch.setattr(extract, 'settings', replace(extract.settings, input_dir=tmp_path))
-    install_fake_loaders(monkeypatch)
-
-    def fail_loading_debts(payloads: list[dict[str, Any]]) -> dict[str, int]:
-        raise RuntimeError(f'fallo de carga simulado para {len(payloads)} deudas')
-
-    monkeypatch.setattr(run_etl, 'load_debts_bulk', fail_loading_debts)
+    state = install_fake_loaders(monkeypatch)
+    monkeypatch.setattr(run_etl, 'load_debts_bulk', Mock(side_effect=RuntimeError('fallo de carga simulado')))
 
     with pytest.raises(RuntimeError, match='codigo=ETL_FAILED'):
-        run_etl.run_etl(folder_name='agua', execute=True)
+        run_etl.run_etl(str(derive_lot(tmp_path / 'lote')), execute=True, cut_off=AS_OF)
+
+    assert [event['status'] for event in state['batches']] == ['VALIDADO', 'FALLIDO']
+    assert state['profiles'] == []

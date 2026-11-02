@@ -24,11 +24,6 @@ def test_preview_builders_deduplicate_and_calculate_profiles(
     address_df = export_preview.build_address_preview(cabecera_df)
     contact_df = export_preview.build_debtor_contact_preview(cabecera_df)
     profile_df = export_preview.build_debtor_profile_preview(debt_df, relation_df, contact_df)
-    profile_detail_df = export_preview.build_debtor_profile_detail_preview(
-        profile_df,
-        relation_df,
-        contact_df,
-    )
 
     assert person_df['external_id'].tolist() == [501, 502]
     assert debtor_df[['type', 'external_id']].values.tolist() == [[6, 1001], [1, 2001]]
@@ -40,7 +35,22 @@ def test_preview_builders_deduplicate_and_calculate_profiles(
     assert address_df['person_external_id'].tolist() == [501, 502]
     assert len(contact_df) == 2
     assert len(profile_df) == 2
-    assert len(profile_detail_df) == 2
+    # Sin perfil de lote no hay corte ni estado: la vista no afirma vencidas ni copia fechas o identificadores.
+    assert debt_df['period'].isna().all() and debt_df['issue_date'].isna().all() and debt_df['last_collection_date'].isna().all()
+    assert set(debt_df['status']) == {'UNKNOWN'}
+    assert profile_df['overdue_debt_count'].tolist() == [0, 0]
+    assert profile_df['socioeconomic_risk_level'].isna().all()
+    assert sorted(profile_df['total_debt_amount']) == ['1200.75', '600.00']
+
+
+def test_preview_no_convierte_importes_invalidos_en_cero(detalle_df: pd.DataFrame, cabecera_df: pd.DataFrame) -> None:
+    detalle = detalle_df.assign(NOTD_intereses='', NOTD_honorarios='')
+    detalle.loc[2, 'NOTD_totalActualizado'] = 'sin-monto'
+    detalle.loc[2, 'NOTD_vencimiento'] = '31/02/2024'
+    debt_df, _ = export_preview.build_debt_preview(cabecera_df, detalle)
+    invalid = debt_df[debt_df['debtor_external_id'] == 2001].iloc[0]
+    assert pd.isna(invalid['current_amount']) and pd.isna(invalid['due_date'])
+    assert pd.isna(invalid['interest_amount_source'])
 
 
 def test_export_preview_generates_all_sheets_with_temporary_source_data(
@@ -74,7 +84,6 @@ def test_export_preview_generates_all_sheets_with_temporary_source_data(
         '01_summary', '02_person', '03_debtor', '04_debtor_person',
         '05_debt_unique', '06_debt_duplicates_skipped', '07_province',
         '08_city', '09_address', '10_debtor_contact', '11_debtor_profile',
-        '12_debtor_profile_detail',
     ]
     assert summary_df.loc[summary_df['metric'] == 'debt_unique_preview_rows', 'value'].item() == 2
 
@@ -82,8 +91,4 @@ def test_export_preview_generates_all_sheets_with_temporary_source_data(
 def test_profile_preview_returns_empty_dataframes_without_debts_or_relations() -> None:
     empty = pd.DataFrame()
 
-    profiles = export_preview.build_debtor_profile_preview(empty, empty, empty)
-    profile_details = export_preview.build_debtor_profile_detail_preview(empty, empty, empty)
-
-    assert profiles.empty
-    assert profile_details.empty
+    assert export_preview.build_debtor_profile_preview(empty, empty, empty).empty

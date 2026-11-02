@@ -9,9 +9,9 @@ def build_debt_payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         'external_id': 9001, 'debtor': 77, 'type': 'water_connection',
         'description': 'Deuda de prueba', 'original_amount': 1000.0,
-        'current_amount': 1200.0, 'currency': 1, 'issue_date': '2025-01-10',
-        'due_date': '2020-01-01', 'last_collection_date': '2025-01-10',
-        'period': '9001', 'status': 2,
+        'current_amount': 1200.0, 'currency': 1, 'issue_date': None,
+        'due_date': '2020-01-01', 'last_collection_date': None,
+        'period': None, 'status': 2,
     }
     payload.update(overrides)
     return payload
@@ -30,13 +30,19 @@ def test_debt_comparison_tolerates_numeric_format_and_detects_changes() -> None:
     payload = build_debt_payload(current_amount=1200.0)
     existing = deepcopy(payload)
     existing['id'] = 1
-    existing['current_amount'] = '1200.0000001'
+    existing['current_amount'] = '1200.00'
 
     matches = load.debt_payload_matches_existing(payload, existing)
     changed = load.debt_payload_matches_existing(build_debt_payload(current_amount=1300.0), existing)
+    # ALIGN-026: reemplaza la tolerancia de 0.000001 con float. El formato no importa, pero un centavo sí,
+    # y un nulo nunca equivale a 0.
+    one_cent = load.debt_payload_matches_existing(build_debt_payload(current_amount='1200.01'), existing)
+    null_is_not_zero = load.debt_values_are_equal('current_amount', None, 0)
 
     assert matches is True
     assert changed is False
+    assert one_cent is False
+    assert null_is_not_zero is False
 
 
 def test_bulk_loader_deduplicates_payloads_before_inserting(monkeypatch: pytest.MonkeyPatch) -> None:

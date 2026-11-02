@@ -76,7 +76,6 @@ def test_loader_base_operations_use_mocked_supabase_responses(monkeypatch: pytes
         (load.load_address, {'person': 1}, load.ADDRESS_TABLE, {'person': 1}),
         (load.load_debtor_contact, {'person': 1, 'type': 1, 'value': '341'}, load.DEBTOR_CONTACT_TABLE, {'person': 1, 'type': 1, 'value': '341'}),
         (load.load_debtor_profile, {'debtor': 2}, load.DEBTOR_PROFILE_TABLE, {'debtor': 2}),
-        (load.load_debtor_profile_detail, {'debtor_profile': 3, 'person': 1}, load.DEBTOR_PROFILE_DETAIL_TABLE, {'debtor_profile': 3, 'person': 1}),
     ],
 )
 def test_specific_loaders_keep_their_deduplication_contracts(

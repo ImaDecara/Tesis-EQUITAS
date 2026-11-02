@@ -251,6 +251,11 @@ def _canonical_dataframe(table, kind, mapping, contract):
     return pd.DataFrame(records, columns=list(columns), dtype=str)
 
 
+def canonical_records(table, kind, mapping, contract):
+    """Filas canónicas en el mismo orden que table.rows, para unirlas con las decisiones del motor por línea."""
+    return _canonical_dataframe(table, kind, mapping, contract).to_dict(orient='records')
+
+
 @dataclass
 class ExtractedSourceData:
     cabecera_df: pd.DataFrame
@@ -312,10 +317,15 @@ def extract_source_files(
     )
 
 
+# Carpeta de un lote dentro de data/input. Una ruta absoluta se usa tal cual.
+def source_folder(folder_name: str) -> Path:
+    return settings.input_dir / folder_name
+
+
 # Extrae los archivos de cabecera y detalle a partir de una carpeta de input.
 def extract_from_input_folder(folder_name: str) -> ExtractedSourceData:
 
-    source_dir = settings.input_dir / folder_name
+    source_dir = source_folder(folder_name)
 
     cabecera_path = source_dir / "cabecera.tsv"
     detalle_path = source_dir / "detalle.tsv"

@@ -1,5 +1,6 @@
 import argparse
 from collections.abc import Hashable, Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -9,24 +10,46 @@ import pandas as pd
 from ETL.config import settings
 from ETL.extract import extract_from_input_folder_limited
 from ETL.transform import (
-    DEFAULT_CURRENCY_ID,
+    ORIGIN_STATE_UNKNOWN,
+    SemanticRejection,
     build_debtor_contact_payloads,
-    build_debtor_payload,
-    build_debtor_profile_detail_payload,
     build_debtor_profile_payload,
-    build_header_context_by_clave,
     build_person_payload,
     build_province_payload,
     clean_text,
-    get_issue_date_from_header,
-    get_last_collection_date_from_header,
-    infer_debt_status_id,
     infer_debt_type_key,
+    parse_address_number,
     parse_date,
-    parse_decimal,
     parse_int,
+    parse_object_status,
     parse_optional_decimal,
 )
+
+# Esta vista no tiene perfil de lote: no valida, no carga y no resuelve catálogos. Muestra claves y códigos de
+# origen. Lee el formato del único perfil de TSV de la cartera; lo que no entiende queda en blanco, nunca en 0.
+PREVIEW_DECIMAL = ","
+PREVIEW_THOUSANDS = "."
+
+
+def preview_amount(value: Any) -> Decimal | None:
+    try:
+        return parse_optional_decimal(value, decimal=PREVIEW_DECIMAL, thousands=PREVIEW_THOUSANDS)
+    except SemanticRejection:
+        return None
+
+
+def preview_date(value: Any) -> str | None:
+    try:
+        return parse_date(value)
+    except SemanticRejection:
+        return None
+
+
+def preview_object_status(value: Any) -> bool | None:
+    try:
+        return parse_object_status(value)
+    except SemanticRejection:
+        return None
 
 
 def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
@@ -57,14 +80,20 @@ def build_debtor_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
     rows: dict[tuple[int, int], dict[str, Any]] = {}
 
     for row in dataframe_to_records(cabecera_df):
-        payload = build_debtor_payload(row)
-        external_id = payload.get("external_id")
-        debtor_type = payload.get("type")
+        external_id = parse_int(row.get("Cuenta"))
+        debtor_type = parse_int(row.get("Bien_Tipo_Id"))
 
         if external_id is None or debtor_type is None:
             continue
 
-        rows[(int(debtor_type), int(external_id))] = payload
+        rows[(debtor_type, external_id)] = {
+            "tenant": settings.tenant_id,
+            "external_id": external_id,
+            "type": debtor_type,
+            "identifier": clean_text(row.get("Identificador")),
+            "description": clean_text(row.get("Bien_Descripcion")),
+            "status": preview_object_status(row.get("Estado")),
+        }
 
     return pd.DataFrame(rows.values())
 
@@ -86,7 +115,7 @@ def build_debtor_person_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
             "debtor_type_id": debtor_type_id,
             "debtor_external_id": debtor_external_id,
             "person_external_id": person_external_id,
-            "priority": parse_decimal(row.get("Destinatario_Porcentaje")),
+            "priority": preview_amount(row.get("Destinatario_Porcentaje")),
             "role": clean_text(row.get("Destinatario_Tipo")),
             "active": True,
             "source_clave_agrupacion": clean_text(row.get("ClaveAgrupacion")),
@@ -99,8 +128,6 @@ def build_debt_preview(
     cabecera_df: pd.DataFrame,
     detalle_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    header_context = build_header_context_by_clave(cabecera_df)
-
     unique_debts: dict[tuple[int, int, int], dict[str, Any]] = {}
     duplicated_rows: list[dict[str, Any]] = []
 
@@ -115,11 +142,7 @@ def build_debt_preview(
         debt_key = (debtor_type_id, account, debt_external_id)
 
         clave = clean_text(row.get("ClaveAgrupacion"))
-        header_row = header_context.get(clave) if clave else None
-
-        issue_date = get_issue_date_from_header(header_row)
-        last_collection_date = get_last_collection_date_from_header(header_row)
-        due_date = parse_date(row.get("NOTD_vencimiento"))
+        due_date = preview_date(row.get("NOTD_vencimiento"))
 
         preview_row = {
             "debtor_type_id": debtor_type_id,
@@ -127,16 +150,16 @@ def build_debt_preview(
             "external_id": debt_external_id,
             "type": infer_debt_type_key(row.get("Tipo_Ingreso_Id")),
             "description": f"Deuda importada desde TSV - DEUD_id {debt_external_id}",
-            "original_amount": parse_decimal(row.get("NOTD_capital")),
-            "interest_amount_source": parse_decimal(row.get("NOTD_intereses")),
-            "fee_amount_source": parse_decimal(row.get("NOTD_honorarios")),
-            "current_amount": parse_decimal(row.get("NOTD_totalActualizado")),
-            "currency": DEFAULT_CURRENCY_ID,
-            "issue_date": issue_date,
+            "original_amount": preview_amount(row.get("NOTD_capital")),
+            "interest_amount_source": preview_amount(row.get("NOTD_intereses")),
+            "fee_amount_source": preview_amount(row.get("NOTD_honorarios")),
+            "current_amount": preview_amount(row.get("NOTD_totalActualizado")),
+            "currency": settings.default_currency_code,
+            "issue_date": None,
             "due_date": due_date,
-            "last_collection_date": last_collection_date,
-            "period": clean_text(row.get("DEUD_id")),
-            "status": infer_debt_status_id(due_date),
+            "last_collection_date": None,
+            "period": None,
+            "status": ORIGIN_STATE_UNKNOWN,
             "source_clave_agrupacion": clave,
             "source_cuenta": account,
             "source_notd_esta_id": clean_text(row.get("NOTD_ESTA_id")),
@@ -218,9 +241,9 @@ def build_address_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
             "province_name": province_name,
             "city_name": city_name,
             "street": clean_text(row.get("Destinatario_Calle")),
-            "number": parse_optional_decimal(row.get("Destinatario_Numeracion")),
+            "number": parse_address_number(row.get("Destinatario_Numeracion")),
             "neighborhood": None,
-            "floor": parse_optional_decimal(row.get("Destinatario_Piso")),
+            "floor": parse_address_number(row.get("Destinatario_Piso")),
             "apartment": clean_text(row.get("Destinatario_Depto")),
             "tower": None,
             "building_name": None,
@@ -235,7 +258,7 @@ def build_address_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_debtor_contact_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
-    rows: dict[tuple[int, int, str], dict[str, Any]] = {}
+    rows: dict[tuple[int, str, str], dict[str, Any]] = {}
 
     for row in dataframe_to_records(cabecera_df):
         person_external_id = parse_int(row.get("Destinatario_Id"))
@@ -251,7 +274,7 @@ def build_debtor_contact_preview(cabecera_df: pd.DataFrame) -> pd.DataFrame:
 
         for payload in payloads:
             value = str(payload["value"])
-            contact_type = int(payload["type"])
+            contact_type = str(payload["type"])
 
             key = (person_external_id, contact_type, value)
 
@@ -275,18 +298,6 @@ def build_debtor_profile_preview(
 
     if debt_df.empty:
         return pd.DataFrame(rows)
-
-    total_debt_by_debtor = (
-        debt_df.groupby(["debtor_type_id", "debtor_external_id"])["current_amount"]
-        .sum()
-        .tolist()
-    )
-
-    average_total_debt_amount = (
-        sum(total_debt_by_debtor) / len(total_debt_by_debtor)
-        if total_debt_by_debtor
-        else 0.0
-    )
 
     debtor_keys_df = (
         debt_df[["debtor_type_id", "debtor_external_id"]]
@@ -324,70 +335,19 @@ def build_debtor_profile_preview(
         else:
             available_contact_count = 0
 
+        # Sin corte ni estado de origen no hay vencidas: la vista solo suma los importes observados.
+        observed_debts = [row for row in debtor_debts.to_dict(orient="records") if row["current_amount"] is not None]
+
         payload = build_debtor_profile_payload(
             debtor_id=debtor_external_id,
-            debt_rows=debtor_debts.to_dict(orient="records"),
+            debt_rows=observed_debts,
             active_person_count=len(person_external_ids),
             available_contact_count=available_contact_count,
-            average_total_debt_amount=average_total_debt_amount,
+            cut_off=None,
         )
 
         payload["debtor_type_id"] = debtor_type_id
         payload["debtor_external_id"] = payload.pop("debtor")
-        rows.append(payload)
-
-    return pd.DataFrame(rows)
-
-
-# Construye la hoja de preview para debtor_profile_detail por cada persona asociada a cada objeto.
-def build_debtor_profile_detail_preview(
-    debtor_profile_df: pd.DataFrame,
-    debtor_person_df: pd.DataFrame,
-    debtor_contact_df: pd.DataFrame,
-) -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
-
-    if debtor_profile_df.empty or debtor_person_df.empty:
-        return pd.DataFrame(rows)
-
-    profile_by_debtor = {
-        (
-            int(row["debtor_type_id"]),
-            int(row["debtor_external_id"]),
-        ): row
-        for row in debtor_profile_df.to_dict(orient="records")
-    }
-
-    for relation in debtor_person_df.to_dict(orient="records"):
-        debtor_type_id = int(relation["debtor_type_id"])
-        debtor_external_id = int(relation["debtor_external_id"])
-        person_external_id = int(relation["person_external_id"])
-
-        profile = profile_by_debtor.get((debtor_type_id, debtor_external_id))
-
-        if not profile:
-            continue
-
-        if not debtor_contact_df.empty:
-            person_contacts = debtor_contact_df[
-                debtor_contact_df["person_external_id"] == person_external_id
-            ]
-            person_contact_count = len(person_contacts)
-        else:
-            person_contact_count = 0
-
-        payload = build_debtor_profile_detail_payload(
-            debtor_profile_id=debtor_external_id,
-            person_id=person_external_id,
-            profile_risk_level=int(profile["socioeconomic_risk_level"]),
-            person_contact_count=person_contact_count,
-            role=clean_text(relation.get("role")),
-            priority=parse_decimal(relation.get("priority")),
-        )
-
-        payload["debtor_type_id"] = debtor_type_id
-        payload["debtor_external_id"] = payload.pop("debtor_profile")
-        payload["person_external_id"] = payload.pop("person")
         rows.append(payload)
 
     return pd.DataFrame(rows)
@@ -407,7 +367,6 @@ def build_summary_sheet(
     address_df: pd.DataFrame,
     debtor_contact_df: pd.DataFrame,
     debtor_profile_df: pd.DataFrame,
-    debtor_profile_detail_df: pd.DataFrame,
     limit_objects: int | None,
     priority_tipo_ingreso_ids: list[int] | None,
 ) -> pd.DataFrame:
@@ -430,7 +389,6 @@ def build_summary_sheet(
             {"metric": "address_preview_rows", "value": len(address_df)},
             {"metric": "debtor_contact_preview_rows", "value": len(debtor_contact_df)},
             {"metric": "debtor_profile_preview_rows", "value": len(debtor_profile_df)},
-            {"metric": "debtor_profile_detail_preview_rows", "value": len(debtor_profile_detail_df)},
         ]
     )
 
@@ -499,12 +457,6 @@ def export_preview(
         debtor_contact_df=debtor_contact_df,
     )
 
-    debtor_profile_detail_df = build_debtor_profile_detail_preview(
-        debtor_profile_df=debtor_profile_df,
-        debtor_person_df=debtor_person_df,
-        debtor_contact_df=debtor_contact_df,
-    )
-
     summary_df = build_summary_sheet(
         folder_name=folder_name,
         cabecera_df=cabecera_df,
@@ -519,7 +471,6 @@ def export_preview(
         address_df=address_df,
         debtor_contact_df=debtor_contact_df,
         debtor_profile_df=debtor_profile_df,
-        debtor_profile_detail_df=debtor_profile_detail_df,
         limit_objects=limit_objects,
         priority_tipo_ingreso_ids=priority_tipo_ingreso_ids,
     )
@@ -542,7 +493,6 @@ def export_preview(
             "09_address": address_df,
             "10_debtor_contact": debtor_contact_df,
             "11_debtor_profile": debtor_profile_df,
-            "12_debtor_profile_detail": debtor_profile_detail_df,
         }
 
         for sheet_name, dataframe in sheets.items():

@@ -1,13 +1,16 @@
+import re
 import time
-from collections.abc import Callable
+import uuid
+from collections.abc import Callable, Iterable, Mapping
 from contextvars import ContextVar, Token
+from decimal import Decimal
 from hashlib import blake2b
 from secrets import token_bytes
 from typing import Any, TypeVar, cast
 
 import httpx
 
-from ETL.config import ETLError, supabase
+from ETL.config import ETLError, get_import_credentials, get_settings, supabase
 
 # La sal es efímera: las claves solo se correlacionan dentro del mismo proceso.
 _LOG_HASH_KEY = token_bytes(32)
@@ -51,7 +54,6 @@ CITY_TABLE = "city"
 ADDRESS_TABLE = "address"
 DEBTOR_CONTACT_TABLE = "debtor_contact"
 DEBTOR_PROFILE_TABLE = "debtor_profile"
-DEBTOR_PROFILE_DETAIL_TABLE = "debtor_profile_detail"
 
 TRANSIENT_SUPABASE_ERRORS = (
     httpx.RemoteProtocolError,
@@ -79,6 +81,14 @@ DEBT_COMPARE_COLUMNS = (
 )
 DEBT_NUMERIC_COLUMNS = {"original_amount", "current_amount"}
 DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
+
+IMPORT_BATCH_RPC_PATH = "/rest/v1/rpc/record_import_batch"
+IMPORT_BATCH_TIMEOUT_SECONDS = 15
+# Códigos estables de record_import_batch (SUPABASE_TESTING_CALIDAD.md). Cualquier otro texto no se propaga.
+IMPORT_BATCH_STABLE_ERROR = re.compile(
+    r"ROLE_NOT_ALLOWED|ACTOR_NOT_ACTIVE_MEMBER|IDEMPOTENCY_KEY_CONFLICT|SUPERSEDES_NOT_FOUND"
+    r"|INVALID_IMPORT_BATCH:[a-z0-9_]{1,63}"
+)
 
 T = TypeVar("T")
 
@@ -267,13 +277,14 @@ def normalize_debt_key(payload: dict[str, Any]) -> tuple[int, int]:
 
 
 def debt_values_are_equal(column: str, current_value: Any, next_value: Any) -> bool:
+    if current_value is None or next_value is None:
+        return current_value is None and next_value is None
+
+    # Exacto y sin float: un centavo es un cambio y un nulo nunca equivale a 0.
     if column in DEBT_NUMERIC_COLUMNS:
-        return abs(float(current_value or 0) - float(next_value or 0)) < 0.000001
+        return Decimal(str(current_value)) == Decimal(str(next_value))
 
     if column in DEBT_INTEGER_COLUMNS:
-        if current_value is None or next_value is None:
-            return current_value is None and next_value is None
-
         return int(current_value) == int(next_value)
 
     return current_value == next_value
@@ -696,30 +707,6 @@ def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-# Inserta o actualiza el detalle de riesgo de una persona dentro de un perfil.
-def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Regla de deduplicación:
-    debtor_profile_detail.debtor_profile + debtor_profile_detail.person
-    """
-
-    debtor_profile = payload.get("debtor_profile")
-    person = payload.get("person")
-
-    if debtor_profile is None:
-        raise ValueError(etl_message("DETAIL_PROFILE_MISSING"))
-
-    if person is None:
-        raise ValueError(etl_message("DETAIL_PERSON_MISSING"))
-
-    return insert_or_update_by_filters(
-        table_name=DEBTOR_PROFILE_DETAIL_TABLE,
-        payload=payload,
-        lookup_filters={
-            "debtor_profile": debtor_profile,
-            "person": person,
-        },
-    )
 # ============================================================
 # FUNCIONES AUXILIARES PARA CATÁLOGOS
 # ============================================================
@@ -728,11 +715,12 @@ def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
 def get_catalog_id_by_key(
     table_name: str,
     key: str,
+    key_column: str = "key",
 ) -> int:
     row = fetch_one(
         table_name=table_name,
-        filters={"key": key},
-        columns="id,key,value",
+        filters={key_column: key},
+        columns=f"id,{key_column}",
     )
 
     if not row:
@@ -744,6 +732,79 @@ def get_catalog_id_by_key(
         raise ETLError("CATALOG_ID_MISSING", etl_message("CATALOG_ID_MISSING", key=key))
 
     return int(row_id)
+
+
+# Resuelve todas las claves que la carga necesita, antes de la primera escritura. Una clave ausente detiene la carga.
+def resolve_catalogs(
+    required: Mapping[str, Iterable[str]],
+    key_columns: Mapping[str, str],
+) -> dict[str, dict[str, int]]:
+    return {
+        table_name: {
+            key: get_catalog_id_by_key(table_name, key, key_columns[table_name])
+            for key in sorted(keys)
+        }
+        for table_name, keys in required.items()
+    }
+
+
+# ============================================================
+# REGISTRO DEL LOTE
+# ============================================================
+
+def _import_batch_error(response: httpx.Response) -> ETLError:
+    try:
+        message = response.json().get("message")
+    except (ValueError, AttributeError):
+        message = None
+
+    if isinstance(message, str) and IMPORT_BATCH_STABLE_ERROR.fullmatch(message):
+        return ETLError(message, etl_message(message))
+
+    return ETLError("IMPORT_BATCH_REJECTED", etl_message("IMPORT_BATCH_REJECTED"))
+
+
+# Agrega un evento a import_batch por la función de servidor (ALIGN-018): credencial propia del servicio de
+# importación, nunca la clave general, que no tiene EXECUTE. Cada llamada es un evento: la clave de idempotencia
+# solo protege los reintentos de esa misma llamada. La clave por lote la define ALIGN-032.
+def record_import_batch(
+    *,
+    tenant: int,
+    source: str,
+    file_hashes: dict[str, str],
+    as_of: str,
+    rules_version: str,
+    status: str,
+    counts: dict[str, Any],
+    source_updated_at: str | None = None,
+    supersedes: int | None = None,
+) -> int:
+    credentials = get_import_credentials()
+    url = get_settings(execute=True).supabase_url.rstrip("/") + IMPORT_BATCH_RPC_PATH
+    body = {
+        "p_actor_user": credentials.actor_user,
+        "p_tenant": tenant,
+        "p_source": source,
+        "p_file_hashes": file_hashes,
+        "p_as_of": as_of,
+        "p_rules_version": rules_version,
+        "p_status": status,
+        "p_idempotency_key": str(uuid.uuid4()),
+        "p_source_updated_at": source_updated_at,
+        "p_counts": counts,
+        "p_supersedes": supersedes,
+    }
+    headers = {"apikey": credentials.public_key, "Authorization": f"Bearer {credentials.server_jwt}"}
+
+    def record_operation() -> httpx.Response:
+        return httpx.post(url, headers=headers, json=body, timeout=IMPORT_BATCH_TIMEOUT_SECONDS, trust_env=False)
+
+    response = execute_supabase_operation(f"record {status}", record_operation)
+
+    if response.status_code != 200:
+        raise _import_batch_error(response)
+
+    return int(response.json()["batch_id"])
 
 
 # ============================================================
