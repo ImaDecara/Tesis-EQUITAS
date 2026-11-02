@@ -2019,6 +2019,17 @@ def test_a_child_that_dies_or_answers_nonsense_never_gives_a_batch(tmp_path, mon
     assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA'
 
 
+@pytest.mark.parametrize('row', [[2, [1]], ['2', ['a']], [2.0, ['a']], [True, ['a']], [2, ['a', 'b']], [2, 'a'], [2, ['a'], 'c']],
+                         ids=['celda-numero', 'linea-texto', 'linea-decimal', 'linea-booleana', 'ancho-distinto', 'celdas-no-lista', 'campos-de-mas'])
+def test_a_complete_answer_with_a_row_out_of_shape_never_gives_a_batch(tmp_path, monkeypatch, row):
+    answer = [{'tabla': 'cabecera', 'columnas': ['A']}, row, {'tabla': 'detalle', 'columnas': ['A']}, {'hojas_ignoradas': []}]
+    script = 'import sys; sys.stdin.read(); ' + '; '.join(f'print({json.dumps(line)!r})' for line in answer)
+    monkeypatch.setattr(supervised, '_worker_command', lambda: [sys.executable, '-B', '-c', script])
+    book = write(tmp_path, 'libro', minimal_workbook())
+    message, _ = supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile())
+    assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA'
+
+
 def test_a_child_that_cannot_start_has_a_safe_code(tmp_path, monkeypatch):
     def refused(*_, **__):
         raise OSError(str(tmp_path))
