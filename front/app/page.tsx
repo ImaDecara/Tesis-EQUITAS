@@ -155,7 +155,7 @@ export default async function HomePage() {
                 <CardDescription>Top 5 operativo por prioridad, deuda y riesgo.</CardDescription>
               </div>
               <Link href="/priority-cases" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-                Ver ranking
+                Ver colas
               </Link>
             </CardHeader>
             <CardContent>
