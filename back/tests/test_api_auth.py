@@ -225,6 +225,19 @@ def test_rejected_tokens_get_401_with_the_same_body(client, supabase, case):
     assert response.json() == {"detail": "AUTH_REQUIRED"}
 
 
+@pytest.mark.parametrize("forge", [forged_hs256_secret, key_confusion, alg_none, forged_rs256])
+def test_disallowed_algorithm_is_rejected_before_any_key_lookup(client, supabase, caplog, forge):
+    with caplog.at_level(logging.INFO, logger="equitas.api"):
+        response = client.get("/health", headers=bearer(forge(supabase)))
+    assert response.status_code == 401
+    assert "motivo=ALGORITMO" in caplog.text
+    assert supabase.calls == []
+
+
+def test_only_the_algorithm_the_issuer_uses_is_allowed():
+    assert auth.ALLOWED_ALGORITHMS == ("ES256",)
+
+
 def test_valid_token_is_accepted_and_scheme_is_case_insensitive(client, supabase):
     assert client.get("/health", headers=bearer(supabase.token())).json() == {
         "status": "ok"
@@ -436,6 +449,23 @@ def test_revocation_applies_to_the_next_request(client, supabase):
 
 
 def test_inactive_tenant_is_denied(client, supabase):
+    supabase.tables["tenant"][0]["status"] = "INACTIVE"
+    response = client.get("/case-groups", params=ASOF, headers=bearer(supabase.token()))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "MEMBERSHIP_REQUIRED"}
+
+
+def test_inactive_user_is_denied_even_with_a_broken_policy(client, supabase):
+    supabase.rls_off.update({"tenant", "role"})
+    response = client.get(
+        "/case-groups", params=ASOF, headers=bearer(supabase.token(AUTH_INACTIVO))
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "MEMBERSHIP_REQUIRED"}
+
+
+def test_inactive_tenant_is_denied_even_with_a_broken_policy(client, supabase):
+    supabase.rls_off.add("tenant")
     supabase.tables["tenant"][0]["status"] = "INACTIVE"
     response = client.get("/case-groups", params=ASOF, headers=bearer(supabase.token()))
     assert response.status_code == 403

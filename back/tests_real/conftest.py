@@ -28,7 +28,8 @@ AUTH_CONTAINER = "supabase_auth_equitas-tp-testing"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 ROOT = Path(__file__).resolve().parents[2]
 BACK = ROOT / "back"
-FRONT = ROOT / "front"
+# Permite repetir el recorrido sobre otro árbol, como el combinado con otra rama.
+FRONT = Path(os.environ.get("EQUITAS_E2E_FRONT", ROOT / "front"))
 TESTING = ROOT / "database" / "testing"
 GENERAL_KEYS = ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY", "SERVICE_ROLE_KEY", "SECRET_KEY")
 
@@ -224,7 +225,9 @@ def next_server(env, api_server, tmp_path_factory):
         "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": env["PUBLISHABLE_KEY"],
         "EQUITAS_IMPORT_API_URL": api_server.url,
     }
-    subprocess.run([npm, "run", "build"], cwd=FRONT, env=environment, check=True,
+    # Con `node_modules` enlazado desde otro directorio, Turbopack rechaza el enlace.
+    bundler = ["--", "--webpack"] if os.environ.get("EQUITAS_E2E_FRONT") else []
+    subprocess.run([npm, "run", "build", *bundler], cwd=FRONT, env=environment, check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
     port = free_port()
     log_path = tmp_path_factory.mktemp("next") / "next.log"

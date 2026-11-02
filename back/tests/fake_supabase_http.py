@@ -150,6 +150,8 @@ class FakeSupabase:
         self.raise_on: set[str] = set()
         self.fail_tables: set[str] = set()
         self.rpc_message: str | None = None
+        # Tablas cuya política se simula rota: fija las comprobaciones propias de la API.
+        self.rls_off: set[str] = set()
 
     # ---- Tokens
     def claims(self, sub: str = AUTH_OPERADOR, **overrides: Any) -> dict[str, Any]:
@@ -225,6 +227,8 @@ class FakeSupabase:
 
     def _visible(self, table: str, sub: str) -> list[dict[str, Any]]:
         rows = self.tables.get(table, [])
+        if table in self.rls_off:
+            return rows
         tenants = self._member_tenants(sub)
         own = {u["id"] for u in self.tables["user"] if u["auth_user"] == sub}
         debtors = {d["id"] for d in self.tables["debtor"] if d["tenant"] in tenants}

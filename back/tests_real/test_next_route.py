@@ -1,7 +1,10 @@
 """ALIGN-052: el recorrido navegador → Route Handler de Next → FastAPI, con procesos reales."""
 
+import base64
 import hashlib
+import json
 import os
+import time
 
 import httpx
 import pytest
@@ -174,6 +177,41 @@ def test_browser_never_receives_the_internal_url_or_credentials(
         assert b"EQUITAS_IMPORT_API_URL" not in data, path.name
         assert next_server.internal_url.encode() not in data, path.name
         assert import_jwt.encode() not in data, path.name
+
+
+def session_from(cookie: str) -> tuple[str, dict]:
+    """Reúne la sesión de @supabase/ssr, que puede venir partida en varias cookies."""
+    pairs = sorted(part.split("=", 1) for part in cookie.split("; "))
+    name = pairs[0][0].split(".")[0]
+    value = "".join(item for _, item in pairs).removeprefix("base64-")
+    value += "=" * (-len(value) % 4)
+    return name, json.loads(base64.urlsafe_b64decode(value))
+
+
+def cookie_with(name: str, session: dict) -> str:
+    encoded = base64.urlsafe_b64encode(json.dumps(session).encode()).decode().rstrip("=")
+    return f"{name}=base64-{encoded}"
+
+
+def test_expired_session_is_refreshed_because_the_proxy_does_not_run_here(
+    browser, next_server, session_cookie
+):
+    """Fuera del proxy, nadie más renueva la sesión: lo hace el Route Handler."""
+    name, session = session_from(session_cookie("importador"))
+    session["expires_at"] = int(time.time()) - 60
+    response = browser.get("/api/imports/900000000", headers={"Cookie": cookie_with(name, session)})
+    assert response.status_code == 404, response.text
+    assert response.json() == {"detail": "BATCH_NOT_FOUND"}
+    assert any(name in value for value in response.headers.get_list("set-cookie"))
+
+
+def test_forged_session_cookie_is_rejected_by_fastapi(browser, next_server, session_cookie):
+    """`getSession` no valida el token: la autoridad es la API, y responde 401."""
+    name, session = session_from(session_cookie("importador"))
+    session["access_token"] = "a.b.c"
+    response = browser.get("/api/imports/1", headers={"Cookie": cookie_with(name, session)})
+    assert response.status_code == 401
+    assert response.json() == {"detail": "AUTH_REQUIRED"}
 
 
 def test_next_logs_carry_no_sentinels_or_session_data(browser, next_server, session_cookie):

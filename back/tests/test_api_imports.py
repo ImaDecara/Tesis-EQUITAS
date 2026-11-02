@@ -189,6 +189,8 @@ HOSTILE = {
     "cierre con basura": (
         f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="a"\r\n\r\n1\r\n--{BOUNDARY}XY'
     ).encode(),
+    "cortado con guiones": f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="a"\r\n\r\n--x'.encode(),
+    "otro delimitador": b"X" * (len(BOUNDARY) + 2) + b"--\r\n",
     "codificacion de transferencia": (
         f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="a"\r\n'
         f"Content-Transfer-Encoding: base64\r\n\r\nMQ==\r\n--{BOUNDARY}--\r\n"
@@ -203,6 +205,33 @@ def test_parser_rejects_malformed_input_without_echoing_it(case, chunk):
         parse(HOSTILE[case], chunk=chunk)
     assert error.value.code == "MULTIPART_INVALIDO"
     assert "basura" not in str(error.value)
+
+
+def test_parser_emits_bytes_as_they_arrive_and_holds_only_the_marker_tail():
+    """Es el motivo de existir de este lector: un archivo grande no se arma en memoria."""
+    chunk = b"x" * 1_000_000
+    head = f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="a"; filename="f"\r\n\r\n'.encode()
+    consumed = []
+    tail = f"\r\n--{BOUNDARY}--\r\n".encode()
+
+    async def stream():
+        yield head
+        for index in range(5):
+            consumed.append(index)
+            yield chunk
+        yield tail
+
+    async def run():
+        pending = []
+        async for event in multipart_events(stream(), BOUNDARY.encode()):
+            if isinstance(event, bytes):
+                pending.append((len(consumed), len(event)))
+        return pending
+
+    pending = asyncio.run(run())
+    assert pending[0][0] == 1, "El primer trozo debe salir antes de pedir el segundo"
+    assert all(size <= len(chunk) + len(BOUNDARY) + 4 for _, size in pending)
+    assert sum(size for _, size in pending) == 5 * len(chunk)
 
 
 def test_parser_limits_headers_and_parts():
@@ -533,6 +562,31 @@ def test_declared_oversize_is_rejected_without_reading(client, supabase, store, 
     assert stored_files(store.root) == []
 
 
+def test_declared_size_is_checked_before_reading_the_body(monkeypatch):
+    monkeypatch.setattr(imports, "MAX_REQUEST_BYTES", 100)
+
+    async def receive():
+        raise AssertionError("No debe leerse el cuerpo")
+
+    def request(length):
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/imports",
+            "headers": [(b"content-length", length)],
+            "query_string": b"",
+        }
+        return imports.Request(scope, receive)
+
+    imports._check_declared_size(request(b"100"))
+    with pytest.raises(imports.HTTPException) as error:
+        imports._check_declared_size(request(b"101"))
+    assert error.value.status_code == 413
+    with pytest.raises(imports.HTTPException) as error:
+        imports._check_declared_size(request(b"x"))
+    assert error.value.status_code == 400
+
+
 def test_invalid_content_length_is_rejected(client, supabase):
     response = upload(client, supabase, headers={"Content-Length": "x"})
     assert response.status_code in {400, 413}
@@ -732,6 +786,18 @@ def test_upload_logs_carry_no_sentinels(client, supabase, caplog):
 # ---- GET /imports/{id}
 
 
+def test_batch_reads_filter_by_the_resolved_tenant_with_the_user_token(client, supabase):
+    identifier = upload(client, supabase).json()["id"]
+    token = supabase.token(AUTH_IMPORTADOR)
+    supabase.calls.clear()
+    client.get(f"/imports/{identifier}", headers={"Authorization": f"Bearer {token}"})
+    reads = [c for c in supabase.calls if c.url.path.endswith("/import_batch")]
+    assert reads
+    for call in reads:
+        assert f"tenant=eq.{TENANT_A}" in str(call.url)
+        assert call.headers["authorization"] == f"Bearer {token}"
+
+
 def test_get_returns_the_batch_without_private_fields(client, supabase):
     identifier = upload(client, supabase).json()["id"]
     response = client.get(f"/imports/{identifier}", headers=auth_headers(supabase))
@@ -866,6 +932,13 @@ def test_discard_appends_an_event_and_removes_the_copy(client, supabase, store):
     assert rows[1]["created_by"] == 4
     assert store.files(TENANT_A, identifier) == {}
     assert stored_files(store.root) == []
+
+
+def test_discard_key_is_derived_so_concurrent_requests_make_one_event(client, supabase):
+    identifier = upload(client, supabase).json()["id"]
+    client.post(f"/imports/{identifier}/discard", headers=auth_headers(supabase))
+    expected = uuid.uuid5(uuid.NAMESPACE_URL, f"equitas:discard:{TENANT_A}:{identifier}")
+    assert supabase.tables["import_batch"][1]["idempotency_key"] == str(expected)
 
 
 def test_repeated_discard_is_idempotent(client, supabase):
