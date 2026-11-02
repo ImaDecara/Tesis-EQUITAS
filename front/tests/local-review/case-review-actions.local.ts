@@ -191,6 +191,8 @@ describe('caso valido', () => {
     expect({ tenant, debtor, version, asOf, hash, decision, reviewer, role, reason, explanationOk }).toEqual({
       tenant: TENANT_A, debtor: '920001', version: RULES_VERSION, asOf: '2026-10-30', hash: screen.inputsHash, decision: 'ACEPTA', reviewer: OPERADOR, role: 'operador', reason: 'NULO', explanationOk: 't',
     })
+    const explanation = sql(`select explanation::text from public.case_review where id = ${result.reviewId}`)
+    for (const personal of ['TP-A020 Persona', '@example.test', 'TP-A018-1']) expect(explanation).not.toContain(personal)
     expect(suggested).toBe(screen.suggestedIntervention)
     expect(Number(intensity)).toBe(screen.suggestedIntensity)
     expect(decided).toBe(screen.suggestedIntervention)
@@ -297,6 +299,30 @@ describe('cadena', () => {
     if (!replaced.ok) throw new Error(replaced.code)
     expect(sql(`select supersedes from public.case_review where id = ${replaced.reviewId}`)).toBe(before.currentReviewId)
     await expect(shown('920014')).resolves.toMatchObject({ currentReviewId: replaced.reviewId })
+  })
+})
+
+describe('las cinco decisiones contra las restricciones reales', () => {
+  it('MODIFICA igual a la sugerencia se rechaza; a otra de hasta 2 queda registrada sin aprobacion', async () => {
+    actAs('operador')
+    const screen = await shown('920014')
+    await expect(recordCaseDecision(await inputFor('920014', { decision: 'MODIFICA', reasonCode: 'MOTIVO_SINTETICO', decidedIntervention: screen.suggestedIntervention, decidedIntensity: screen.suggestedIntensity }))).resolves.toMatchObject({ ok: false, code: 'MODIFICA_WITHOUT_CHANGE' })
+    const other = screen.suggestedIntervention === 'SEGUIMIENTO' ? 'MEJORAR_DATOS' : 'SEGUIMIENTO'
+    const result = await recordCaseDecision(await inputFor('920014', { decision: 'MODIFICA', reasonCode: 'MOTIVO_SINTETICO', decidedIntervention: other, decidedIntensity: 1 }))
+    expect(result).toMatchObject({ ok: true, created: true, status: 'REGISTRADA' })
+    if (!result.ok) throw new Error(result.code)
+    expect(sql(`select decided_intervention, decided_intensity, suggested_intervention from public.case_review where id = ${result.reviewId}`)).toBe(`${other}|1|${screen.suggestedIntervention}`)
+  })
+
+  it('DERIVA sin intervencion queda sin decidida; con 4 requiere lista y queda pendiente', async () => {
+    actAs('operador')
+    const plain = await recordCaseDecision(await inputFor('920014', { decision: 'DERIVA', reasonCode: 'MOTIVO_SINTETICO' }))
+    expect(plain).toMatchObject({ ok: true, created: true, status: 'REGISTRADA' })
+    if (!plain.ok) throw new Error(plain.code)
+    expect(sql(`select decided_intervention is null, decided_intensity is null from public.case_review where id = ${plain.reviewId}`)).toBe('t|t')
+    const fourth = { decision: 'DERIVA', reasonCode: 'MOTIVO_SINTETICO', decidedIntervention: 'DERIVACION_PROCURACION', decidedIntensity: 4 }
+    await expect(recordCaseDecision(await inputFor('920014', fourth))).resolves.toMatchObject({ ok: false, code: 'CHECKLIST_REQUIRED' })
+    await expect(recordCaseDecision(await inputFor('920014', { ...fourth, checklist: READY_CHECKLIST }))).resolves.toMatchObject({ ok: true, created: true, status: 'PENDIENTE_SUPERVISOR' })
   })
 })
 

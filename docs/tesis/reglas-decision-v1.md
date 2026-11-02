@@ -310,6 +310,11 @@ argumento del mapper permite inyectar `computedAt` para reproducir la consulta.
 La fecha persistida del perfil sigue en `computedAt`; no se confunde con
 `decisionComputedAt`. La versión y la fecha usada acompañan el motivo visible.
 
+Las acciones de revisión (ALIGN-020) sí completan `batch` con el último evento
+`PUBLICADO` de `import_batch`, y sin ese corte no registran: no usan la fecha de
+cálculo. Hasta que ALIGN-021 lea la sugerencia con `getCaseReviewSnapshot`, los
+listados pueden mostrar un motivo calculado con otra fecha que la de la decisión.
+
 Los campos `estado_origen` y `periodo_fiscal` solo se consideran integrados si
 llegan explícitamente. `debt.status` sigue siendo el catálogo persistido;
 `debt.period` no se interpreta como período fiscal, ni `issue_date`/

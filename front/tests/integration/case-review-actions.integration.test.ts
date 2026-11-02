@@ -200,7 +200,12 @@ describe('ALIGN-020: recordCaseDecision', () => {
       expect(request.select, request.table).not.toContain('*')
       expect(request.select, request.table).not.toContain('reason_text')
     }
-    expect(JSON.stringify(result)).not.toContain('sintetico@example.test')
+    // Lo que queda en la explicacion y sale en la respuesta no lleva datos personales.
+    for (const text of [JSON.stringify(result), JSON.stringify(args.p_explanation)]) {
+      expect(text).not.toContain('sintetico@example.test')
+      expect(text).not.toContain('Persona sintetica')
+      expect(text).not.toContain('OBJ-SINTETICO')
+    }
   })
 
   it('el hash es SHA-256 de los insumos canonicos, no depende del orden de lectura', async () => {
@@ -638,6 +643,13 @@ describe('ALIGN-020: instantanea para la pantalla', () => {
     session()
     serverClient.mockRejectedValue(new Error('detalle interno'))
     await expect(getCaseReviewSnapshot(String(DEBTOR))).resolves.toEqual({ ok: false, code: 'SUGGESTION_UNAVAILABLE', message: CASE_REVIEW_MESSAGES.SUGGESTION_UNAVAILABLE })
+  })
+
+  it('un error de control de Next no se confunde con una falla', async () => {
+    session()
+    const dynamicUsage = Object.assign(new Error('Uso dinamico'), { digest: 'DYNAMIC_SERVER_USAGE' })
+    serverClient.mockRejectedValue(dynamicUsage)
+    await expect(getCaseReviewSnapshot(String(DEBTOR))).rejects.toBe(dynamicUsage)
   })
 
   it('un id invalido no consulta', async () => {

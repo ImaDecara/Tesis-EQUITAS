@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createHash } from 'node:crypto'
+import { unstable_rethrow } from 'next/navigation'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { databaseId } from '@/lib/auth/tenant-access'
@@ -32,6 +33,8 @@ async function failClosed<T>(run: () => Promise<T | CaseReviewFailure>, unexpect
   try {
     return await run()
   } catch (error) {
+    // Los errores de control de Next (por ejemplo, al detectar uso dinámico) no son fallas.
+    unstable_rethrow(error)
     return caseReviewFailure(error instanceof DataAccessError ? error.code : unexpected)
   }
 }

@@ -19,8 +19,7 @@ export function readLocalReviewConfig(): LocalReviewConfig {
   if (!real.startsWith('/tmp/') && !real.startsWith('/private/tmp/')) throw new Error('La configuracion privada debe vivir en /tmp.')
   if (statSync(real).mode & 0o077) throw new Error('La configuracion privada debe tener modo 0600.')
   const raw = readFileSync(real, 'utf8')
-  if (/folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo|supabase\.co/i.test(raw) ||
-      Object.values(process.env).some(value => /folyslqzqvnpolexcxjo|iylwghgvtydpmwidojdo/i.test(value ?? ''))) {
+  if (/supabase\.co/i.test(raw) || Object.values(process.env).some(value => /supabase\.co/i.test(value ?? ''))) {
     throw new Error('Configuracion remota rechazada antes de crear clientes.')
   }
   const config = JSON.parse(raw) as LocalReviewConfig

@@ -171,7 +171,7 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
 
 ### Uso desde el servidor (ALIGN-020)
 
-1. La credencial es un JWT con `role = equitas_review_server`, firmado con el secreto del proyecto. Va en una variable **sin** prefijo `NEXT_PUBLIC_` (`EQUITAS_REVIEW_SERVER_JWT`), leída solo en un módulo con `import 'server-only'`. Nunca llega al navegador, a un componente cliente ni a un log.
+1. La credencial es un JWT con `role = equitas_review_server`, firmado con el secreto del proyecto. Va en la variable `EQUITAS_REVIEW_SERVER_JWT`, **sin** prefijo `NEXT_PUBLIC_`, y se lee en un solo archivo: `front/lib/server/case-review-writer.ts`, con `import 'server-only'`. Nunca llega al navegador, a un componente cliente ni a un log. Si falta, o si el JWT es de otro rol (`service_role`, por ejemplo), no hay cliente y la acción responde `WRITE_NOT_CONFIGURED`.
 2. En local se emite fuera del repositorio con vigencia corta. El comando no la imprime:
 
    ```sh
@@ -179,8 +179,15 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
    # escribe /tmp/equitas-local-db/equitas_review_server.jwt (0600)
    ```
 
-3. La Server Action verifica sesión, membresía y rol con la DAL (cliente de sesión). Toma el actor de esa sesión (`public.user.id`), **nunca** de la entrada del navegador; la función vuelve a verificar membresía y rol.
-4. Crea un cliente aparte para la escritura y no reutiliza el de sesión:
+3. Las Server Actions `recordCaseDecision` y `approveCaseDecision` (`front/app/debtors/[debtorId]/actions.ts`) verifican sesión, membresía y rol con la DAL (cliente de sesión). Toman el actor y el tenant de esa sesión, **nunca** de la entrada: un campo desconocido, como `tenant`, `reviewer` o `inputsHash`, se rechaza con `INVALID_INPUT`. La función vuelve a verificar membresía y rol.
+4. Recalculan la sugerencia en el servidor (`front/lib/server/case-review-snapshot.ts`) con la sesión del usuario, por objeto y con las reglas v1. `as_of` y `source_updated_at` salen de `import_batch`, nunca del reloj:
+   - Vale el último evento `PUBLICADO` que ningún otro reemplaza.
+   - Un `VALIDADO` o `CONFIRMADO` más nuevo significa una carga en curso, y un `FALLIDO` que reemplaza a uno de ellos pudo dejar escrituras parciales (ALIGN-026). En ambos casos no hay corte vigente y responde `CUTOFF_NOT_AVAILABLE`.
+   - `RECIBIDO`, `DESCARTADO`, `REQUIERE_NUEVO_PREVIEW` y un `FALLIDO` sin antecedente no tocaron la cartera: sigue el publicado anterior.
+   - ALIGN-032 debe revisar esta regla si un lote `VALIDADO` por la web puede quedar a la espera sin escribir: hoy eso bloquearía las decisiones de ese municipio.
+5. Si la pantalla vio otros insumos, otra versión u otro corte, no se confirma en silencio: responde `SUGGESTION_OUTDATED`, con qué cambió y lo vigente. Lo mismo vale para `APRUEBA` frente a lo guardado en la propuesta. `OBJETA` sigue disponible, porque frena la propuesta y no confirma nada.
+6. La clave de idempotencia la deriva el servidor del antecedente: `(tenant, objeto, supersedes)` para una decisión y `(tenant, revisión, supersedes)` para una aprobación. Para cada decisión vigente cabe una sola sucesora, y la función compara bajo su bloqueo: el mismo contenido devuelve la fila existente (`created = false`) y otro contenido da `IDEMPOTENCY_KEY_CONFLICT`, que la acción traduce a `REVIEW_CONFLICT` o `APPROVAL_CONFLICT`. Así, dos envíos distintos y simultáneos tampoco abren dos cadenas sobre un objeto. Esta garantía es de la acción: las funciones aceptan otras claves, y `http-check` las usa para ejercitarlas.
+7. Escribe con un cliente aparte, que no reutiliza el de sesión:
 
    ```ts
    import 'server-only'
@@ -191,7 +198,13 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
    const { data, error } = await writer.rpc('record_case_review', { p_reviewer_user, p_tenant, /* … */ })
    ```
 
-5. `error.message` trae el código estable de la tabla anterior; se traduce a un mensaje de pantalla sin mostrar valores. La lectura del historial usa el cliente de sesión con columnas explícitas. El servicio de importación usa `equitas_import_server` de la misma forma.
+8. `error.message` trae el código estable de la tabla anterior. La acción lo traduce con `CASE_REVIEW_MESSAGES` (`front/lib/domain/case-review-contract.ts`) y nunca reenvía el texto de la base; lo que no está en la tabla sale como `WRITE_REJECTED` o `WRITE_UNAVAILABLE`. La lectura del historial usa el cliente de sesión con columnas explícitas. El servicio de importación usa `equitas_import_server` de la misma forma.
+
+`reason_text` se guarda tal como llega: la acción no recorta ni normaliza. Rechaza el texto en blanco, con más de 500 caracteres contados como `char_length` (puntos de código, no unidades UTF-16) o con caracteres que PostgreSQL no guarda. La acción es más estricta que la restricción con el blanco: tampoco acepta un texto de solo espacios duros o caracteres de ancho cero. Un formulario con el campo vacío debe enviar `null`.
+
+**Límites.** No hay catálogo aprobado de `reason_code` ni de intervenciones de intensidad 3 y 4: la acción valida el formato y la lista la fija ALIGN-021. El estado `PENDIENTE_SUPERVISOR` de un reenvío (`created = false`) sale de la intensidad, igual que `pending_supervisor`: para saber si ya se aprobó, la pantalla lee `case_review_approval`.
+
+**Verificación.** `npm run test:integration` usa un cliente simulado. La prueba real contra la base local y por HTTP contra `next start`, y la búsqueda de la credencial en `.next/static`, están en [`front/tests/local-review/README.md`](front/tests/local-review/README.md).
 
 ### Semillas y escenarios
 
