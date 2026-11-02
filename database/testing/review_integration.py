@@ -270,8 +270,8 @@ def sha256_of(relative):
 
 
 def read_results(path, returncode, report):
-    results = json.loads(path.read_text(encoding='utf-8'))
     report['exit_code'] = returncode
+    results = json.loads(path.read_text(encoding='utf-8'))
     report['cases'] = [{'name': case['title'], 'status': case['status'], 'duration_ms': case.get('duration')}
                        for suite in results['testResults'] for case in suite['assertionResults']]
     statuses = [case['status'] for case in report['cases']]
@@ -296,7 +296,8 @@ def run_vitest(output, config_file, http_base, campaign, report):
 def junit_document(report, campaign):
     cases = [case for case in report['cases'] if isinstance(case, dict)]
     known = {CASE_ID.match(case['name']).group(1) for case in cases if CASE_ID.match(case['name'])}
-    missing = sorted(campaign.required_cases - known) if report['cases'] or report['exit_code'] is not None else []
+    # Un rechazo antes de ejecutar no queda como 0 fallas: todo lo que no tiene resultado es un fallo.
+    missing = sorted(campaign.required_cases - known)
     failed = sum(case['status'] == 'failed' for case in cases) + len(missing)
     skipped = sum(case['status'] not in ('passed', 'failed') for case in cases)
     root = ET.Element('testsuites', name=f'{campaign.ticket} {campaign.name}')
@@ -380,7 +381,7 @@ def run(output, config_file, http_base, campaign):
         validate_build(build, sha)
         report['environment'] = {'target': 'local', 'supabase_url': config['supabaseUrl'], 'http_base': http_base, 'project_ref': None,
                                  'build_sha': build['sourceSha'], 'python': platform.python_version(), **tool_versions()}
-        run_vitest(output, Path(config_file), http_base, campaign, report)
+        run_vitest(output, Path(config_file).resolve(), http_base, campaign, report)
         validate_report(report, campaign, sha, test_hash)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         report['passed'] = False

@@ -403,6 +403,29 @@ class RunnerTests(unittest.TestCase):
                 self.assertNotIn(ORIGINAL, json.dumps(report))
                 self.assertNotIn(TESTING, json.dumps(report))
 
+    def test_rejected_run_is_a_failure_in_junit_too(self):
+        self.config_file.write_text(json.dumps(local_config(supabaseUrl=f'https://{ORIGINAL}.supabase.co')), encoding='utf-8')
+        with mock.patch.object(runner.subprocess, 'run'):
+            self.assertEqual(self.execute(), 1)
+        suite = ET.parse(self.output / 'review.xml').getroot().find('testsuite')
+        self.assertEqual(int(suite.get('failures')), len(CAMPAIGN.required_cases))
+        self.assertEqual({item.get('name'): item.get('value') for item in suite.find('properties')}['passed'], 'False')
+
+    def test_exit_code_survives_when_vitest_writes_no_report(self):
+        with mock.patch.object(runner.subprocess, 'run', return_value=mock.Mock(returncode=1)) as launched:
+            launched.side_effect = None
+            self.assertEqual(self.execute(), 1)
+        report = self.saved()
+        self.assertEqual(report['exit_code'], 1)
+        self.assertFalse(report['passed'])
+        self.assertTrue(report['report_errors'])
+
+    def test_vitest_receives_an_absolute_config_path(self):
+        relative = self.config_file.relative_to(Path.cwd()) if self.config_file.is_relative_to(Path.cwd()) else self.config_file
+        with self.vitest() as launched:
+            self.execute(relative)
+        self.assertTrue(Path(launched.call_args.kwargs['env']['EQUITAS_REVIEW_LOCAL_CONFIG']).is_absolute())
+
     def test_build_of_another_commit_is_rejected_before_running(self):
         self.mocks['build'].return_value = {'sourceSha': 'c' * 40, 'supabaseProjectRef': None}
         with mock.patch.object(runner.subprocess, 'run') as launched:
