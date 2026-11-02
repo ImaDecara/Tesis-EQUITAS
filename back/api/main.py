@@ -4,12 +4,16 @@ El navegador nunca la llama: el Route Handler de Next reenvía servidor a servid
 token de la sesión. Por eso no hay CORS, ni documentación publicada, ni redirecciones.
 """
 
-import logging
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from api.auth import (
@@ -17,7 +21,13 @@ from api.auth import (
     UserClientDep,
     require_session,
 )
+from api.imports import (
+    purge_interval_seconds,
+    purge_once,
+    purge_periodically,
+)
 from api.imports import router as imports_router
+from api.log_guard import install_log_guards
 from services.decision_rules_v1 import RULES_VERSION, parse_date
 from services.paginated_reader import DataReadError
 from services.scoring_service import (
@@ -26,58 +36,23 @@ from services.scoring_service import (
     get_case_groups_summary,
 )
 
-logger = logging.getLogger("equitas.api")
-# Uvicorn solo configura sus propios registros: sin esto, los de la API no salen a ningún lado.
-if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
-    logger.addHandler(_handler)
-    logger.setLevel(logging.INFO)
+logger = install_log_guards()
 
 LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "[::1]"]
-# Una ruta nueva que no se agregue acá se ve como `<x>` en el registro: nunca al revés.
-LOGGABLE_SEGMENTS = frozenset(
-    {"", "health", "case-groups", "summary", "definitions", "imports", "discard"}
-)
 
 
-class SafeAccessPath(logging.Filter):
-    """El registro de acceso de uvicorn imprime la ruta y la consulta tal como llegaron, y
-    ambas las escribe el cliente: `search` o un segmento pueden traer datos. Se conserva la
-    forma de la ruta y lo que no está en la lista cerrada se reemplaza."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        arguments = record.args
-        if isinstance(arguments, tuple) and len(arguments) == 5:
-            path = str(arguments[2]).split("?", 1)[0]
-            safe = "/".join(
-                part if part in LOGGABLE_SEGMENTS or part.isdecimal() else "<x>"
-                for part in path.split("/")
-            )
-            record.args = (*arguments[:2], safe, *arguments[3:])
-        return True
-
-
-class DropTraceback(logging.Filter):
-    """Uvicorn imprime el traceback de una excepción sin tratar, con los valores que citen
-    sus mensajes: de ese registro queda solo la clase."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.exc_info:
-            error = record.exc_info[1]
-            record.msg = "ERROR_NO_TRATADO clase=%s"
-            record.args = (type(error).__name__,)
-        record.exc_info = None
-        record.exc_text = None
-        record.stack_info = None
-        return True
-
-
-logging.getLogger("uvicorn.access").addFilter(SafeAccessPath())
-logging.getLogger("uvicorn.error").addFilter(DropTraceback())
-# httpx anuncia en INFO cada URL saliente, con sus filtros.
-for _noisy in ("httpx", "httpcore", "hpack"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """El TTL del temporal rige sin solicitudes: al arrancar se retira lo que venció con el
+    proceso detenido, y mientras corre, periódicamente."""
+    await run_in_threadpool(purge_once)
+    task = asyncio.create_task(purge_periodically(purge_interval_seconds()))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 class NoStoreMiddleware:
@@ -109,6 +84,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
     redirect_slashes=False,
+    lifespan=lifespan,
 )
 app.include_router(imports_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOOPBACK_HOSTS)

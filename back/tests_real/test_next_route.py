@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import time
+import uuid
 
 import httpx
 import pytest
@@ -30,7 +31,12 @@ def post(browser, next_server, cookie, body, content_type, **extra):
     return browser.post(
         "/api/imports",
         content=body,
-        headers={**as_browser(next_server, cookie, write=True), **content_type, **extra},
+        headers={
+            **as_browser(next_server, cookie, write=True),
+            **content_type,
+            "Idempotency-Key": str(uuid.uuid4()),
+            **extra,
+        },
     )
 
 
@@ -117,6 +123,17 @@ def test_big_file_without_the_role_is_a_clean_403_and_not_a_broken_connection(
     assert response.json() == {"detail": "ROLE_FORBIDDEN"}
 
 
+def test_b1_upload_without_a_key_is_rejected_through_next(browser, next_server, session_cookie):
+    body, content_type = batch()
+    response = browser.post(
+        "/api/imports",
+        content=body,
+        headers={**as_browser(next_server, session_cookie("importador"), write=True), **content_type},
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "IDEMPOTENCY_KEY_REQUERIDA"}
+
+
 def test_big_file_with_another_rejection_keeps_its_code(browser, next_server, session_cookie):
     body, content_type = batch(cabecera=b"x" * 30_000_000, as_of=b"no-es-fecha")
     response = post(browser, next_server, session_cookie("importador"), body, content_type)
@@ -130,6 +147,29 @@ def test_batch_of_another_tenant_is_404(browser, next_server, session_cookie):
     identifier = created.json()["id"]
     other = session_cookie("otro-importador")
     assert browser.get(f"/api/imports/{identifier}", headers={"Cookie": other}).status_code == 404
+
+
+def test_m1_origin_with_another_scheme_is_rejected(browser, next_server, session_cookie):
+    cookie = session_cookie("importador")
+    body, content_type = batch()
+    for origin in (
+        next_server.url.replace("http://", "https://"),
+        f"{next_server.url}/ruta",
+        next_server.url.replace("http://", "ftp://"),
+    ):
+        response = browser.post(
+            "/api/imports",
+            content=body,
+            headers={"Cookie": cookie, "Origin": origin, **content_type},
+        )
+        assert response.status_code == 403, origin
+        assert response.json() == {"detail": "ORIGIN_NOT_ALLOWED"}
+
+
+def test_m1_the_real_origin_is_still_accepted(browser, next_server, session_cookie):
+    body, content_type = batch()
+    response = post(browser, next_server, session_cookie("importador"), body, content_type)
+    assert response.status_code == 201
 
 
 @pytest.mark.parametrize(

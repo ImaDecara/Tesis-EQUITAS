@@ -3,6 +3,8 @@
 import concurrent.futures
 import hashlib
 import os
+import shutil
+import socket
 import stat
 import subprocess
 import sys
@@ -79,7 +81,12 @@ def post_batch(http, token, *extra, headers=None, params=None, **files):
     return http.post(
         "/imports",
         content=body,
-        headers={**bearer(token), **content_type, **(headers or {})},
+        headers={
+            **bearer(token),
+            **content_type,
+            "Idempotency-Key": str(uuid.uuid4()),
+            **(headers or {}),
+        },
         params=params,
     )
 
@@ -479,7 +486,8 @@ def test_oversize_declared_and_streamed_are_413_and_leave_nothing(http, login, a
     token = login("importador")
     before = psql("select count(*) from public.import_batch").strip()
     body, content_type = batch(cabecera=b"x" * 25_000_001, detalle=b"y")
-    streamed = http.post("/imports", content=body, headers={**bearer(token), **content_type})
+    key = {"Idempotency-Key": str(uuid.uuid4())}
+    streamed = http.post("/imports", content=body, headers={**bearer(token), **content_type, **key})
     assert streamed.status_code == 413
     assert streamed.json() == {"detail": "LIMITE_ARCHIVO_EXCEDIDO"}
 
@@ -487,7 +495,9 @@ def test_oversize_declared_and_streamed_are_413_and_leave_nothing(http, login, a
         for _ in range(60):
             yield b"z" * 1_000_000
 
-    chunked = http.post("/imports", content=chunks(), headers={**bearer(token), **content_type})
+    chunked = http.post(
+        "/imports", content=chunks(), headers={**bearer(token), **content_type, **key}
+    )
     assert chunked.status_code in {413, 422}
     assert psql("select count(*) from public.import_batch").strip() == before
     assert list((api_server.store_root / "incoming").iterdir()) == []
@@ -500,6 +510,176 @@ def test_file_at_the_limit_is_stored_whole(http, login, api_server):
     assert response.json()["file_hashes"]["cabecera"] == hashlib.sha256(content).hexdigest()
     path = Path(api_server.store_root, "lotes", str(TENANT_A), str(response.json()["id"]), "cabecera")
     assert path.stat().st_size == 25_000_000
+
+
+# ---- Ciclo 1, B1: fila y copia no se contradicen, con Auth y PostgREST reales
+
+
+def copy_dir(api_server, identifier, tenant=TENANT_A) -> Path:
+    return api_server.store_root / "lotes" / str(tenant) / str(identifier)
+
+
+def age_copy(path: Path) -> None:
+    old = time.time() - 86_401
+    os.utime(path, (old, old))
+
+
+def rows_with_key(key: str) -> str:
+    return psql(f"select count(*) from public.import_batch where idempotency_key = '{key}'").strip()
+
+
+def assert_whole_copy(directory: Path) -> None:
+    assert (directory / "cabecera").read_bytes() == CABECERA
+    assert (directory / "detalle").read_bytes() == DETALLE
+
+
+def test_b1_planted_file_in_the_destination_gives_503_and_no_row(http, login, api_server):
+    # Una subida asegura que el almacén existe; se ocupa el lugar del directorio del municipio B.
+    assert post_batch(http, login("importador")).status_code == 201
+    tenant_dir = api_server.store_root / "lotes" / str(TENANT_B)
+    if tenant_dir.exists():
+        shutil.rmtree(tenant_dir)
+    tenant_dir.write_bytes(b"ocupa el lugar del directorio")
+    key = str(uuid.uuid4())
+    try:
+        response = post_batch(http, login("otro-importador"), headers={"Idempotency-Key": key})
+    finally:
+        tenant_dir.unlink()
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert rows_with_key(key) == "0"
+    assert list((api_server.store_root / "incoming").iterdir()) == []
+    # Quitado el obstáculo, el mismo envío funciona.
+    assert post_batch(http, login("otro-importador"), headers={"Idempotency-Key": key}).status_code == 201
+
+
+def test_b1_retry_restores_a_copy_lost_after_the_row_was_recorded(http, login, api_server):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    identifier = post_batch(http, token, headers={"Idempotency-Key": key}).json()["id"]
+    shutil.rmtree(copy_dir(api_server, identifier))
+    state = http.get(f"/imports/{identifier}", headers=bearer(token)).json()
+    assert state["status"] == "RECIBIDO"
+    assert state["copy_available"] is False
+    retry = post_batch(http, token, headers={"Idempotency-Key": key})
+    assert retry.status_code == 200
+    assert retry.json()["id"] == identifier
+    assert retry.json()["copy_available"] is True
+    assert rows_with_key(key) == "1"
+    assert_whole_copy(copy_dir(api_server, identifier))
+
+
+def test_b1_retry_after_the_ttl_restores_the_copy(http, login, api_server):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    identifier = post_batch(http, token, headers={"Idempotency-Key": key}).json()["id"]
+    age_copy(copy_dir(api_server, identifier))
+    retry = post_batch(http, token, headers={"Idempotency-Key": key})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "RECIBIDO"
+    assert retry.json()["copy_available"] is True
+    assert rows_with_key(key) == "1"
+    assert_whole_copy(copy_dir(api_server, identifier))
+
+
+def test_b1_retry_of_a_discarded_batch_does_not_bring_the_copy_back(http, login, api_server):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    identifier = post_batch(http, token, headers={"Idempotency-Key": key}).json()["id"]
+    assert http.post(f"/imports/{identifier}/discard", headers=bearer(token)).status_code == 200
+    retry = post_batch(http, token, headers={"Idempotency-Key": key})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "DESCARTADO"
+    assert retry.json()["copy_available"] is False
+    assert not copy_dir(api_server, identifier).exists()
+
+
+def test_b1_eight_simultaneous_sends_make_one_batch_and_one_whole_copy(login, api_server):
+    token = login("importador")
+    key = str(uuid.uuid4())
+    body, content_type = batch()
+
+    def send(_):
+        with httpx.Client(base_url=api_server.url, trust_env=False, timeout=60) as client:
+            return client.post(
+                "/imports",
+                content=body,
+                headers={**bearer(token), **content_type, "Idempotency-Key": key},
+            )
+
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        responses = list(pool.map(send, range(8)))
+    assert sorted(response.status_code for response in responses) == [200] * 7 + [201]
+    assert {response.json()["id"] for response in responses} == {responses[0].json()["id"]}
+    assert all(response.json()["copy_available"] is True for response in responses)
+    assert rows_with_key(key) == "1"
+    assert_whole_copy(copy_dir(api_server, responses[0].json()["id"]))
+    assert list((api_server.store_root / "incoming").iterdir()) == []
+
+
+def test_b1_upload_without_a_key_is_422_and_makes_no_row(http, login, api_server):
+    token = login("importador")
+    before = psql("select count(*) from public.import_batch").strip()
+    body, content_type = batch()
+    response = http.post("/imports", content=body, headers={**bearer(token), **content_type})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "IDEMPOTENCY_KEY_REQUERIDA"}
+    assert psql("select count(*) from public.import_batch").strip() == before
+
+
+# ---- Ciclo 1, B2: el vencimiento no depende de otra subida
+
+
+def test_b2_expired_copy_is_not_offered_by_get_and_its_bytes_go(http, login, api_server):
+    token = login("importador")
+    identifier = post_batch(http, token).json()["id"]
+    directory = copy_dir(api_server, identifier)
+    age_copy(directory)
+    response = http.get(f"/imports/{identifier}", headers=bearer(token))
+    assert response.status_code == 200
+    assert response.json()["copy_available"] is False
+    assert not directory.exists()
+
+
+def test_b2_idle_process_purges_without_any_request(api_server, tmp_path):
+    """Otro uvicorn real, con su almacén y sin ninguna solicitud después de arrancar."""
+    root = tmp_path / "almacen"
+    (root / "incoming").mkdir(parents=True, mode=0o700)
+    (root / "lotes" / str(TENANT_A)).mkdir(parents=True, mode=0o700)
+    os.chmod(tmp_path, 0o700)
+    os.chmod(root, 0o700)
+    at_boot = root / "lotes" / str(TENANT_A) / "1"
+    at_boot.mkdir(mode=0o700)
+    (at_boot / "cabecera").write_bytes(b"vencida antes de arrancar")
+    age_copy(at_boot)
+    log_path = tmp_path / "uvicorn.log"
+    port = free_port()
+    environment = {
+        **api_server.environment,
+        "EQUITAS_IMPORT_TMP_DIR": str(root),
+        "EQUITAS_IMPORT_PURGE_SECONDS": "1",
+    }
+    with log_path.open("wb") as log:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1",
+             "--port", str(port), "--log-level", "info"],
+            cwd=BACK, env=environment, stdout=log, stderr=subprocess.STDOUT,
+        )
+    try:
+        wait_for_port(port, process)
+        # Reinicio: lo vencido mientras no corría se fue al arrancar.
+        assert not at_boot.exists()
+        while_idle = root / "lotes" / str(TENANT_A) / "2"
+        while_idle.mkdir(mode=0o700)
+        (while_idle / "cabecera").write_bytes(b"vence con el proceso inactivo")
+        age_copy(while_idle)
+        deadline = time.monotonic() + 15
+        while while_idle.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not while_idle.exists()
+    finally:
+        process.terminate()
+        process.wait(timeout=20)
 
 
 def test_expired_temporary_is_purged_on_the_next_upload(http, login, api_server):
@@ -541,7 +721,11 @@ def test_logs_and_errors_carry_no_sentinels_or_credentials(http, login, api_serv
         http.post(
             "/imports",
             content=SENTINELS["file_person"].encode(),
-            headers={**bearer(token), "Content-Type": f"multipart/form-data; boundary={SENTINELS['header']}"},
+            headers={
+                **bearer(token),
+                "Idempotency-Key": str(uuid.uuid4()),
+                "Content-Type": f"multipart/form-data; boundary={SENTINELS['header']}",
+            },
         ),
     ]
     assert responses[0].status_code == 201
@@ -559,6 +743,85 @@ def test_logs_and_errors_carry_no_sentinels_or_credentials(http, login, api_serv
         assert credential not in logs
     assert "Traceback" not in logs
     assert str(api_server.store_root) not in logs
+
+
+# ---- Ciclo 1, B3: ningún dato del cliente llega a los registros, con o sin sesión
+
+NUMERIC = "20000000000"
+
+
+def raw_exchange(url: str, request: str) -> bytes:
+    host, port = url.removeprefix("http://").split(":")
+    with socket.create_connection((host, int(port)), timeout=10) as connection:
+        connection.sendall(request.encode())
+        try:
+            return connection.recv(200)
+        except OSError:
+            return b""
+
+
+def numeric_requests(url: str) -> dict[str, str]:
+    host = url.removeprefix("http://")
+    common = f"Host: {host}\r\nConnection: close\r\n"
+    return {
+        "segmento": f"GET /imports/{NUMERIC} HTTP/1.1\r\n{common}\r\n",
+        "ruta inexistente": f"GET /no-existe/{NUMERIC} HTTP/1.1\r\n{common}\r\n",
+        "ceros iniciales": f"POST /imports/000{NUMERIC}/discard HTTP/1.1\r\n{common}Content-Length: 0\r\n\r\n",
+        "consulta": f"GET /health?dni={NUMERIC} HTTP/1.1\r\n{common}\r\n",
+        "x-forwarded-for": f"GET /health HTTP/1.1\r\n{common}X-Forwarded-For: {NUMERIC}\r\n\r\n",
+        "metodo": f"X{NUMERIC} /health HTTP/1.1\r\n{common}\r\n",
+        "host": f"GET /health HTTP/1.1\r\nHost: {NUMERIC}\r\nConnection: close\r\n\r\n",
+        "websocket": (
+            f"GET /imports/{NUMERIC}?dni={NUMERIC} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\n"
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        ),
+        "http invalido": f"GET /{NUMERIC} HTTP/9.9 basura\r\n\r\n",
+    }
+
+
+def test_b3_numeric_data_without_a_session_stays_out_of_the_logs(api_server):
+    before = len(api_server.logs())
+    for name, request in numeric_requests(api_server.url).items():
+        assert raw_exchange(api_server.url, request), name
+    time.sleep(0.5)
+    logs = api_server.logs()[before:]
+    assert '"GET /imports/<x> HTTP' in logs, "El registro de acceso debe estar activo"
+    assert NUMERIC not in logs
+
+
+@pytest.mark.parametrize("level", ["debug", "trace"])
+def test_b3_most_verbose_levels_do_not_print_client_data_or_tokens(api_server, login, tmp_path, level):
+    log_path = tmp_path / f"uvicorn-{level}.log"
+    port = free_port()
+    url = f"http://127.0.0.1:{port}"
+    with log_path.open("wb") as log:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1",
+             "--port", str(port), "--log-level", level, "--access-log"],
+            cwd=BACK, env=api_server.environment, stdout=log, stderr=subprocess.STDOUT,
+        )
+    token = login("operador")
+    try:
+        wait_for_port(port, process)
+        for request in numeric_requests(url).values():
+            raw_exchange(url, request)
+        response = httpx.get(
+            f"{url}/case-groups",
+            params={**ASOF, "search": NUMERIC},
+            headers=bearer(token),
+            trust_env=False,
+            timeout=30,
+        )
+        assert response.status_code == 200
+    finally:
+        process.terminate()
+        process.wait(timeout=20)
+    logs = log_path.read_text(encoding="utf-8", errors="replace")
+    assert "Application startup complete" in logs
+    assert NUMERIC not in logs
+    assert token not in logs
+    assert "Bearer" not in logs
 
 
 def test_unhandled_error_gives_500_and_uvicorn_prints_no_traceback(api_server, login, tmp_path):

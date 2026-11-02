@@ -43,14 +43,16 @@ function internalBaseUrl(): string | null {
   }
 }
 
-// Las cookies de sesion viajan solas: una escritura solo se acepta desde este mismo origen.
+// Las cookies de sesion viajan solas: una escritura solo se acepta desde este mismo origen,
+// comparado entero (esquema, host y puerto). Lo serializa el navegador: otra forma no es suya.
 function isSameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin')
   const host = request.headers.get('host')
   const fetchSite = request.headers.get('sec-fetch-site')
   if (!origin || !host || (fetchSite && fetchSite !== 'same-origin')) return false
   try {
-    return new URL(origin).host === host
+    const url = new URL(origin)
+    return url.origin === origin && url.protocol === request.nextUrl.protocol && url.host === host
   } catch {
     return false
   }

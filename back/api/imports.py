@@ -8,6 +8,7 @@ servidor. Escrituras por `record_import_batch` con la credencial dedicada
 `equitas_import_server`: no lee tablas y no es la clave de servicio general.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -16,7 +17,7 @@ import re
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -67,8 +68,14 @@ BOUNDARY = re.compile(
 FORM_FIELDS = frozenset({"as_of", "source_updated_at"})
 STATUS_RECEIVED = "RECIBIDO"
 STATUS_DISCARDED = "DESCARTADO"
-# Mientras ALIGN-032 no defina las transiciones: los estados cerrados no se descartan.
-DISCARDABLE = frozenset({STATUS_RECEIVED, "VALIDADO", "REQUIERE_NUEVO_PREVIEW"})
+# Mientras ALIGN-032 no defina las transiciones: los estados cerrados no se descartan
+# y su copia no se restaura.
+OPEN_STATES = frozenset({STATUS_RECEIVED, "VALIDADO", "REQUIERE_NUEVO_PREVIEW"})
+STORE_UNAVAILABLE = "ALMACEN_TEMPORAL_NO_DISPONIBLE"
+STORE_ERRORS = (UploadStoreError, OSError)
+PURGE_ERRORS = (*STORE_ERRORS, ValueError, TypeError, RuntimeError)
+DEFAULT_PURGE_SECONDS = 900.0
+MAX_PURGE_SECONDS = 3600
 BATCH_COLUMNS = (
     "id,tenant,source,file_hashes,as_of,source_updated_at,rules_version,counts,"
     "status,created_by_role,created_at,supersedes"
@@ -99,14 +106,45 @@ BatchId = Annotated[int, PathParam(ge=1, le=MAX_BIGINT)]
 # ---- Configuración de escritura y temporal
 
 
-def load_store() -> UploadStore:
+def open_store() -> UploadStore:
     root = os.getenv("EQUITAS_IMPORT_TMP_DIR", "").strip()
     uid = os.getuid() if hasattr(os, "getuid") else "local"
     path = Path(root) if root else Path(tempfile.gettempdir()) / f"equitas-imports-{uid}"
+    return UploadStore(path)
+
+
+def load_store() -> UploadStore:
     try:
-        return UploadStore(path)
+        return open_store()
     except UploadStoreError:
         raise HTTPException(503, "ALMACEN_TEMPORAL_INSEGURO") from None
+
+
+def _store_unavailable() -> HTTPException:
+    return HTTPException(503, STORE_UNAVAILABLE)
+
+
+def purge_once() -> None:
+    """Una purga que falla se informa y no detiene nada: la próxima vuelve a intentar, y
+    mientras tanto `UploadStore.files` no entrega lo vencido. Solo la clase, sin rutas."""
+    try:
+        open_store().purge_expired()
+    except PURGE_ERRORS as error:
+        logger.error("PURGA_FALLIDA clase=%s", type(error).__name__)
+
+
+def purge_interval_seconds() -> float:
+    """Acotado: un valor inválido no puede alargar la retención más allá de una hora."""
+    value = os.getenv("EQUITAS_IMPORT_PURGE_SECONDS", "").strip()
+    if value.isascii() and value.isdigit() and 1 <= int(value) <= MAX_PURGE_SECONDS:
+        return float(value)
+    return DEFAULT_PURGE_SECONDS
+
+
+async def purge_periodically(interval: float) -> None:
+    while True:
+        await asyncio.sleep(interval)
+        await run_in_threadpool(purge_once)
 
 
 def writer_client(config: ApiConfig) -> SyncPostgrestClient:
@@ -219,11 +257,25 @@ def _resolve_chain(
     raise DataReadError("import_batch")
 
 
-def _batch_view(origin: int, row: dict[str, Any]) -> dict[str, Any]:
+def _batch_view(
+    store: UploadStore, tenant: int, origin: int, row: dict[str, Any]
+) -> dict[str, Any]:
+    """`copy_available` sale del disco, no de la fila: una copia perdida o vencida se ve."""
+    counts = row["counts"] if isinstance(row["counts"], dict) else {}
+    try:
+        available, expires_at = store.describe(
+            tenant, origin, row["file_hashes"], counts.get("bytes")
+        )
+    except STORE_ERRORS:
+        raise _store_unavailable() from None
     return {
         "id": row_id(row["id"]),
         "root_id": origin,
         **{name: row[name] for name in RESPONSE_FIELDS},
+        "copy_available": available,
+        "copy_expires_at": (
+            None if expires_at is None else datetime.fromtimestamp(expires_at, UTC).isoformat()
+        ),
     }
 
 
@@ -330,7 +382,10 @@ async def _receive_form(
     request: Request, boundary: bytes, store: UploadStore
 ) -> ReceivedForm:
     """Si no termina bien, no queda nada en disco. Quien llama confirma o descarta."""
-    token = store.begin()
+    try:
+        token = store.begin()
+    except STORE_ERRORS:
+        raise _store_unavailable() from None
     sink = _FormSink(store, token)
     try:
         with anyio.fail_after(UPLOAD_SECONDS):
@@ -346,6 +401,8 @@ async def _receive_form(
             raise HTTPException(408, "UPLOAD_TIEMPO_EXCEDIDO") from None
         if isinstance(error, ClientDisconnect):
             raise HTTPException(400, "UPLOAD_INTERRUMPIDO") from None
+        if isinstance(error, STORE_ERRORS):
+            raise _store_unavailable() from None
         raise
     return sink.form
 
@@ -366,8 +423,10 @@ def _check_declared_size(request: Request) -> None:
 
 
 def _idempotency_key(value: str | None) -> str:
+    """Obligatoria: es lo que permite reintentar sin duplicar y restaurar una copia perdida.
+    Sin ella, una fila cuya copia no se pudo guardar no tendría forma de recuperarse."""
     if value is None:
-        return str(uuid.uuid4())
+        raise _unprocessable("IDEMPOTENCY_KEY_REQUERIDA")
     try:
         return str(uuid.UUID(value))
     except ValueError:
@@ -400,6 +459,46 @@ def _validated_batch(form: ReceivedForm) -> tuple[str, str | None]:
     return as_of, source_updated_at
 
 
+def _install_copy(store: UploadStore, form: ReceivedForm, tenant: int, origin: int) -> None:
+    """Deja en el lote una copia completa con los hashes declarados, o falla. Si otra
+    solicitud ya la instaló se conserva; si la que hay no verifica, se reemplaza."""
+    try:
+        if not store.commit(form.token, tenant, origin) and not store.verify(
+            tenant, origin, form.hashes
+        ):
+            store.replace(form.token, tenant, origin)
+        verified = store.verify(tenant, origin, form.hashes)
+    except STORE_ERRORS:
+        raise _store_unavailable() from None
+    if not verified:
+        raise _store_unavailable()
+
+
+def _settle_copy(
+    store: UploadStore,
+    client: SyncPostgrestClient,
+    tenant: int,
+    batch_id: int,
+    created: bool,
+    form: ReceivedForm,
+) -> tuple[int, dict[str, Any]]:
+    """La fila ya está registrada: no se anuncia éxito sin copia. Un reintento del mismo
+    contenido (la base garantizó que los hashes coinciden) restaura una copia perdida o
+    vencida mientras el lote siga abierto. Lo cerrado no se resucita."""
+    if created:
+        _install_copy(store, form, tenant, batch_id)
+        return _resolve_chain(client, tenant, batch_id)
+    origin, row = _resolve_chain(client, tenant, batch_id)
+    if row["status"] not in OPEN_STATES:
+        return origin, row
+    _install_copy(store, form, tenant, origin)
+    # Un descarte pudo ganar la carrera y borrar antes de que esta copia llegara.
+    origin, row = _resolve_chain(client, tenant, batch_id)
+    if row["status"] == STATUS_DISCARDED:
+        store.release(tenant, origin)
+    return origin, row
+
+
 @router.post("", status_code=201)
 async def create_import(
     request: Request,
@@ -414,7 +513,11 @@ async def create_import(
     _check_declared_size(request)
     key = _idempotency_key(idempotency_key)
     store = load_store()
-    await run_in_threadpool(store.purge_expired)
+    await run_in_threadpool(purge_once)
+    try:
+        store.prepare(context.tenant_id)
+    except STORE_ERRORS:
+        raise _store_unavailable() from None
     form = await _receive_form(request, boundary, store)
     try:
         as_of, source_updated_at = _validated_batch(form)
@@ -429,8 +532,9 @@ async def create_import(
             source_updated_at=source_updated_at,
             counts={"archivos": len(form.hashes), "bytes": sum(form.sizes.values())},
         )
-        if created:
-            store.commit(form.token, context.tenant_id, batch_id)
+        origin, row = await run_in_threadpool(
+            _settle_copy, store, client, context.tenant_id, batch_id, created, form
+        )
     finally:
         store.discard(form.token)
     logger.info(
@@ -442,18 +546,17 @@ async def create_import(
     )
     if not created:
         response.status_code = 200
-    origin, row = await run_in_threadpool(
-        _resolve_chain, client, context.tenant_id, batch_id
-    )
-    return {**_batch_view(origin, row), "created": created}
+    view = await run_in_threadpool(_batch_view, store, context.tenant_id, origin, row)
+    return {**view, "created": created}
 
 
 @router.get("/{batch_id}")
 def read_import(
     batch_id: BatchId, context: ImporterContext, client: UserClientDep
 ) -> dict[str, Any]:
+    store = load_store()
     origin, row = _resolve_chain(client, context.tenant_id, batch_id)
-    return _batch_view(origin, row)
+    return _batch_view(store, context.tenant_id, origin, row)
 
 
 @router.post("/{batch_id}/discard")
@@ -464,12 +567,12 @@ def discard_import(
     client: UserClientDep,
 ) -> dict[str, Any]:
     store = load_store()
-    store.purge_expired()
+    purge_once()
     origin, current = _resolve_chain(client, context.tenant_id, batch_id)
     if current["status"] == STATUS_DISCARDED:
         store.release(context.tenant_id, origin)
-        return _batch_view(origin, current)
-    if current["status"] not in DISCARDABLE:
+        return _batch_view(store, context.tenant_id, origin, current)
+    if current["status"] not in OPEN_STATES:
         raise HTTPException(409, "BATCH_NOT_DISCARDABLE")
     current_id = row_id(current["id"])
     # Clave derivada: un reintento o dos clics concurrentes producen un solo evento.
@@ -490,4 +593,4 @@ def discard_import(
     store.release(context.tenant_id, origin)
     logger.info("IMPORT_DESCARTADO lote=%s evento=%s", origin, event_id)
     origin, row = _resolve_chain(client, context.tenant_id, event_id)
-    return _batch_view(origin, row)
+    return _batch_view(store, context.tenant_id, origin, row)

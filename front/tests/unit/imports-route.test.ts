@@ -151,6 +151,42 @@ describe('ALIGN-052: reenvio de lotes desde Next a FastAPI', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['otro esquema, mismo host y puerto', 'https://equitas.example.test'],
+    ['otro puerto', 'http://equitas.example.test:8443'],
+    ['otro host', 'http://otro.example.test'],
+    ['esquema que no es web', 'ftp://equitas.example.test'],
+    ['esquema de archivo', 'file://equitas.example.test'],
+    ['origen con ruta', 'http://equitas.example.test/ruta'],
+    ['origen con credenciales', 'http://usuario@equitas.example.test'],
+    ['origen con barra final', 'http://equitas.example.test/'],
+    ['origen en mayusculas', 'HTTP://EQUITAS.EXAMPLE.TEST'],
+  ])('M1: rechaza %s', async (_case, origin) => {
+    const fetchMock = upstreamReturns()
+    const response = await createBatch(request('/api/imports', { method: 'POST', headers: { origin } }))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ detail: 'ORIGIN_NOT_ALLOWED' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('M1: https propio se acepta cuando la aplicacion corre en https', async () => {
+    const fetchMock = upstreamReturns()
+    const response = await createBatch(new NextRequest('https://equitas.example.test/api/imports', {
+      method: 'POST', headers: { host: 'equitas.example.test', origin: 'https://equitas.example.test' },
+    }))
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('M1: el esquema se compara tambien en el descarte', async () => {
+    const fetchMock = upstreamReturns()
+    const response = await batchAction(request('/api/imports/1/discard', {
+      method: 'POST', headers: { origin: 'https://equitas.example.test' },
+    }), context('1', 'discard'))
+    expect(response.status).toBe(403)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('acepta una escritura del mismo origen con sec-fetch-site', async () => {
     upstreamReturns()
     const response = await batchAction(request('/api/imports/1/discard', {

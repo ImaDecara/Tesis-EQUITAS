@@ -674,56 +674,142 @@ def test_unhandled_error_gives_500_without_details_or_traceback(
     assert all(record.exc_info is None for record in caplog.records)
 
 
+def after_filters(logger_name, message, args=(), level=logging.INFO, exc_info=None):
+    """Lo que dejan pasar los filtros instalados en ese registrador: None si lo descartan."""
+    record = logging.LogRecord(logger_name, level, __file__, 1, message, args, exc_info)
+    return record.getMessage() if logging.getLogger(logger_name).filter(record) else None
+
+
+ACCESS_FORMAT = '%s - "%s %s HTTP/%s" %d'
+
+
+def access_line(path, *, client="127.0.0.1:1", method="GET", version="1.1"):
+    return after_filters("uvicorn.access", ACCESS_FORMAT, (client, method, path, version, 200))
+
+
 def test_uvicorn_error_log_keeps_only_the_exception_class():
     try:
         raise RuntimeError("CENTINELA_EXCEPCION")
     except RuntimeError:
-        record = logging.LogRecord(
+        message = after_filters(
             "uvicorn.error",
-            logging.ERROR,
-            __file__,
-            1,
             "Exception in ASGI application\n",
-            (),
-            sys.exc_info(),
+            level=logging.ERROR,
+            exc_info=sys.exc_info(),
         )
-    assert main.DropTraceback().filter(record) is True
-    assert record.exc_info is None
-    assert record.getMessage() == "ERROR_NO_TRATADO clase=RuntimeError"
-    plain = logging.LogRecord(
-        "uvicorn.error", logging.INFO, __file__, 1, "Started server", (), None
+    assert message == "ERROR_NO_TRATADO clase=RuntimeError"
+    assert after_filters("uvicorn.error", "Started server process [%d]", (7,)) == (
+        "Started server process [7]"
     )
-    assert main.DropTraceback().filter(plain) is True
-    assert plain.getMessage() == "Started server"
 
 
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
+        ("/health", "/health"),
         ("/case-groups?search=CENTINELA", "/case-groups"),
-        ("/imports/12/discard", "/imports/12/discard"),
+        ("/case-groups/summary?as_of=2026-09-30", "/case-groups/summary"),
+        ("/imports", "/imports"),
         ("/imports/CENTINELA", "/imports/<x>"),
-        ("/imports/12/CENTINELA?x=CENTINELA", "/imports/12/<x>"),
+        ("/imports/12/CENTINELA?x=CENTINELA", "/imports/<x>/<x>"),
         ("/CENTINELA/health", "/<x>/health"),
     ],
 )
 def test_access_log_keeps_only_the_shape_of_the_path(path, expected):
+    message = access_line(path)
+    assert "CENTINELA" not in message
+    assert f"GET {expected} HTTP" in message
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/imports/20000000000", "/imports/<x>"),
+        ("/imports/00020000000000/discard", "/imports/<x>/discard"),
+        ("/no-existe/20000000000", "/<x>/<x>"),
+        ("/20000000000", "/<x>"),
+        ("/imports/12", "/imports/<x>"),
+        ("/imports/٢٠٠٠", "/imports/<x>"),
+        ("/imports/%32%30%30", "/imports/<x>"),
+        ("/imports/20000000000?z=20000000000", "/imports/<x>"),
+    ],
+)
+def test_b3_numeric_segments_of_the_client_never_reach_the_access_log(path, expected):
+    message = access_line(path)
+    assert f"GET {expected} HTTP" in message
+    for value in ("20000000000", "٢٠٠٠", "%32"):
+        assert value not in message
+
+
+def test_b3_client_address_is_not_logged_because_it_can_come_from_a_header():
+    # Uvicorn toma X-Forwarded-For como cliente cuando la conexión viene de loopback.
+    message = access_line("/health", client="20000000000:0")
+    assert "20000000000" not in message
+    assert message.startswith('- - "GET /health')
+
+
+@pytest.mark.parametrize("method", ["X20000000000M", "20000000000", "get"])
+def test_b3_only_known_http_methods_reach_the_access_log(method):
+    message = access_line("/health", method=method)
+    assert "20000000000" not in message
+    assert '- - "<x> /health' in message
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "HEAD", "OPTIONS", "PUT", "PATCH", "DELETE"])
+def test_b3_known_http_methods_stay_useful(method):
+    assert f'"{method} /health' in access_line("/health", method=method)
+
+
+def test_b3_unexpected_http_version_is_replaced():
+    assert "20000000000" not in access_line("/health", version="20000000000")
+
+
+@pytest.mark.parametrize("args", [(), ("/imports/20000000000",), ("a", "b", "c")])
+def test_b3_an_access_record_of_unknown_shape_is_dropped_not_printed(args):
+    record = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, "%s" * len(args), args, None)
+    assert not logging.getLogger("uvicorn.access").filter(record)
+
+
+@pytest.mark.parametrize(
+    ("message", "args"),
+    [
+        ('%s - "WebSocket %s" 403', ("127.0.0.1:1", "/imports/20000000000?y=20000000000")),
+        ('%s - "WebSocket %s" [accepted]', ("20000000000:0", "/20000000000")),
+        ("< GET /imports/20000000000 HTTP/1.1", ()),
+        ("%sHTTP connection made", ("20000000000 - ",)),
+    ],
+)
+def test_b3_websocket_and_debug_lines_of_the_server_do_not_carry_client_data(message, args):
+    assert after_filters("uvicorn.error", message, args) is None
+
+
+def test_b3_an_unknown_server_warning_is_kept_without_its_values():
+    message = after_filters("uvicorn.error", "Algo con %s", ("20000000000",), logging.WARNING)
+    assert message == "REGISTRO_SERVIDOR_OMITIDO"
+
+
+@pytest.mark.parametrize(
+    ("message", "args"),
+    [
+        ("Started server process [%d]", (1,)),
+        ("Waiting for application startup.", ()),
+        ("Application startup complete.", ()),
+        ("Uvicorn running on %s://%s:%d (Press CTRL+C to quit)", ("http", "127.0.0.1", 1)),
+        ("Shutting down", ()),
+        ("Waiting for application shutdown.", ()),
+        ("Application shutdown complete.", ()),
+        ("Finished server process [%d]", (1,)),
+    ],
+)
+def test_b3_the_server_lifecycle_stays_visible(message, args):
+    assert after_filters("uvicorn.error", message, args) == message % args
+
+
+def test_b3_the_asgi_trace_with_the_whole_scope_is_dropped():
     record = logging.LogRecord(
-        "uvicorn.access",
-        logging.INFO,
-        __file__,
-        1,
-        '%s - "%s %s HTTP/%s" %d',
-        ("127.0.0.1:1", "GET", path, "1.1", 200),
-        None,
+        "uvicorn.asgi", 5, __file__, 1, "ASGI [1] Started scope=%s", ({"path": "/20000000000"},), None
     )
-    assert main.SafeAccessPath().filter(record) is True
-    assert "CENTINELA" not in record.getMessage()
-    assert f"GET {expected} HTTP" in record.getMessage()
-
-
-def test_access_log_filter_ignores_other_records():
-    assert main.SafeAccessPath().filter(SimpleNamespace(args=None)) is True
+    assert not logging.getLogger("uvicorn.asgi").filter(record)
 
 
 def test_api_logger_writes_somewhere_without_extra_configuration():
@@ -733,7 +819,7 @@ def test_api_logger_writes_somewhere_without_extra_configuration():
 
 
 def test_noisy_loggers_do_not_print_outgoing_urls():
-    for name in ("httpx", "httpcore", "hpack"):
+    for name in ("httpx", "httpcore", "hpack", "websockets"):
         assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING
 
 

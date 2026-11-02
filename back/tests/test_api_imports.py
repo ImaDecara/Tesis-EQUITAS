@@ -1,12 +1,16 @@
 """ALIGN-052: recepción de lotes por streaming, temporal privado, consulta y descarte."""
 
 import asyncio
+import errno
 import hashlib
 import logging
 import os
 import random
+import shutil
 import stat
+import time
 import uuid
+from pathlib import Path
 
 import httpx
 import jwt
@@ -100,11 +104,15 @@ def auth_headers(supabase, user=AUTH_IMPORTADOR) -> dict[str, str]:
     return {"Authorization": f"Bearer {supabase.token(user)}"}
 
 
+def new_key() -> dict[str, str]:
+    return {"Idempotency-Key": str(uuid.uuid4())}
+
+
 def upload(client, supabase, body=None, *, user=AUTH_IMPORTADOR, headers=None, **kwargs):
     return client.post(
         "/imports",
         content=batch_form() if body is None else body,
-        headers={**auth_headers(supabase, user), **MULTIPART, **(headers or {})},
+        headers={**auth_headers(supabase, user), **MULTIPART, **new_key(), **(headers or {})},
         **kwargs,
     )
 
@@ -502,6 +510,7 @@ def test_upload_accepts_a_quoted_boundary(client, supabase):
         content=batch_form(),
         headers={
             **auth_headers(supabase),
+            **new_key(),
             "Content-Type": f'multipart/form-data; boundary="{BOUNDARY}"',
         },
     )
@@ -612,7 +621,9 @@ def test_chunked_body_over_the_request_limit_stops(client, supabase, monkeypatch
             yield b"x" * 10
 
     response = client.post(
-        "/imports", content=chunks(), headers={**auth_headers(supabase), **MULTIPART}
+        "/imports",
+        content=chunks(),
+        headers={**auth_headers(supabase), **MULTIPART, **new_key()},
     )
     assert response.status_code == 413
     assert stored_files(store.root) == []
@@ -701,7 +712,7 @@ def test_invalid_idempotency_key_is_rejected(client, supabase):
     assert response.json() == {"detail": "IDEMPOTENCY_KEY_INVALIDA"}
 
 
-def test_each_upload_without_key_is_a_new_batch(client, supabase):
+def test_each_new_key_is_a_new_batch(client, supabase):
     assert upload(client, supabase).json()["id"] == 1
     assert upload(client, supabase).json()["id"] == 2
 
@@ -1003,3 +1014,530 @@ def test_unexpected_rpc_payload_is_503(client, supabase, monkeypatch):
     response = upload(client, supabase)
     assert response.status_code == 503
     assert response.json() == {"detail": "BATCH_WRITE_FAILED"}
+
+
+# ---- Ciclo 1, B1: ninguna fila anuncia una copia que no existe
+
+KEY = "11111111-1111-4111-8111-111111111111"
+EXPIRED_AGE = 86_401
+
+
+def batch_dir(store, batch=1, tenant=TENANT_A):
+    return store.root / "lotes" / str(tenant) / str(batch)
+
+
+def age_copy(path) -> None:
+    old = time.time() - EXPIRED_AGE
+    os.utime(path, (old, old))
+
+
+def assert_whole_copy(store, batch=1):
+    assert store.files(TENANT_A, batch)["cabecera"].read_bytes() == CABECERA
+    assert store.files(TENANT_A, batch)["detalle"].read_bytes() == DETALLE
+
+
+def incoming_is_empty(store) -> bool:
+    return list((store.root / "incoming").iterdir()) == []
+
+
+def test_b1_upload_without_a_key_is_rejected_because_it_could_not_be_retried(
+    client, supabase, store
+):
+    response = client.post(
+        "/imports", content=batch_form(), headers={**auth_headers(supabase), **MULTIPART}
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "IDEMPOTENCY_KEY_REQUERIDA"}
+    assert supabase.tables["import_batch"] == []
+    assert stored_files(store.root) == []
+
+
+def test_b1_destination_is_prepared_before_registering_the_batch(client, supabase, store):
+    (store.root / "lotes" / str(TENANT_A)).write_bytes(b"ocupa el lugar del directorio")
+    response = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert supabase.tables["import_batch"] == []
+    assert not any(c.url.path.endswith("record_import_batch") for c in supabase.calls)
+    assert incoming_is_empty(store)
+    assert str(store.root) not in response.text
+
+
+@pytest.mark.parametrize(
+    "failure", [OSError(errno.ENOSPC, "sin espacio"), PermissionError(errno.EACCES, "negado")]
+)
+def test_b1_failed_move_is_not_success_and_the_retry_restores_the_copy(
+    client, supabase, store, monkeypatch, failure
+):
+    original = UploadStore.commit
+    monkeypatch.setattr(UploadStore, "commit", lambda *_args: (_ for _ in ()).throw(failure))
+    first = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert first.status_code == 503
+    assert first.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert len(supabase.tables["import_batch"]) == 1
+    # El estado queda explícito: la fila existe y la copia no.
+    state = client.get("/imports/1", headers=auth_headers(supabase)).json()
+    assert state["status"] == "RECIBIDO"
+    assert state["copy_available"] is False
+    assert state["copy_expires_at"] is None
+    monkeypatch.setattr(UploadStore, "commit", original)
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["created"] is False
+    assert retry.json()["copy_available"] is True
+    assert len(supabase.tables["import_batch"]) == 1
+    assert_whole_copy(store)
+    assert incoming_is_empty(store)
+
+
+def test_b1_success_is_not_announced_if_the_stored_copy_does_not_verify(
+    client, supabase, store, monkeypatch
+):
+    monkeypatch.setattr(UploadStore, "verify", lambda *_args: False)
+    response = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+
+
+def test_b1_lost_response_retry_keeps_the_first_copy_without_a_second_row(
+    client, supabase, store
+):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    first = store.files(TENANT_A, 1)["cabecera"].stat().st_ino
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["copy_available"] is True
+    assert store.files(TENANT_A, 1)["cabecera"].stat().st_ino == first
+    assert len(supabase.tables["import_batch"]) == 1
+    assert incoming_is_empty(store)
+
+
+def test_b1_retry_after_the_ttl_restores_the_copy_with_a_new_term(client, supabase, store):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    age_copy(batch_dir(store))
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "RECIBIDO"
+    assert retry.json()["copy_available"] is True
+    assert retry.json()["copy_expires_at"] is not None
+    assert_whole_copy(store)
+    assert batch_dir(store).stat().st_mtime > time.time() - 60
+
+
+def test_b1_retry_repairs_a_truncated_copy(client, supabase, store):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    store.files(TENANT_A, 1)["cabecera"].write_bytes(CABECERA[:5])
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["copy_available"] is True
+    assert_whole_copy(store)
+    assert incoming_is_empty(store)
+
+
+def test_b1_retry_does_not_bring_back_a_discarded_batch(client, supabase, store):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    client.post("/imports/1/discard", headers=auth_headers(supabase))
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "DESCARTADO"
+    assert retry.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+@pytest.mark.parametrize("status", ["CONFIRMADO", "PUBLICADO", "FALLIDO"])
+def test_b1_retry_does_not_touch_the_copy_of_a_closed_batch(client, supabase, store, status):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    supabase.add_batch(TENANT_A, 4, "importador", status=status, supersedes=1)
+    store.release(TENANT_A, 1)
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == status
+    assert retry.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+@pytest.mark.parametrize("status", ["VALIDADO", "REQUIERE_NUEVO_PREVIEW"])
+def test_b1_retry_restores_the_copy_of_an_open_batch(client, supabase, store, status):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    root = supabase.tables["import_batch"][0]
+    supabase.add_batch(
+        TENANT_A,
+        4,
+        "importador",
+        status=status,
+        supersedes=1,
+        file_hashes=root["file_hashes"],
+        counts=root["counts"],
+    )
+    store.release(TENANT_A, 1)
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["root_id"] == 1
+    assert retry.json()["copy_available"] is True
+    assert_whole_copy(store)
+
+
+def test_b1_discard_that_wins_the_race_with_a_restore_leaves_no_copy(
+    client, supabase, store, monkeypatch
+):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    store.release(TENANT_A, 1)
+    original = UploadStore.commit
+
+    def discard_meanwhile(self, *args):
+        supabase.add_batch(TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1)
+        return original(self, *args)
+
+    monkeypatch.setattr(UploadStore, "commit", discard_meanwhile)
+    retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "DESCARTADO"
+    assert retry.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+def test_b1_conflicting_retry_does_not_touch_the_first_copy_after_a_failed_move(
+    client, supabase, store, monkeypatch
+):
+    assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
+    conflict = upload(
+        client, supabase, batch_form(cabecera=b"otro"), headers={"Idempotency-Key": KEY}
+    )
+    assert conflict.status_code == 409
+    assert_whole_copy(store)
+
+
+def test_b1_two_retries_at_once_keep_one_whole_copy(store):
+    """Dos reintentos sin copia previa: gana uno, el otro comprueba y no pisa."""
+    hashes = {"cabecera": hashlib.sha256(b"x").hexdigest()}
+    tokens = [store.begin(), store.begin()]
+    for token in tokens:
+        with store.open_part(token, "cabecera") as handle:
+            handle.write(b"x")
+    assert store.commit(tokens[0], TENANT_A, 1) is True
+    assert store.commit(tokens[1], TENANT_A, 1) is False
+    assert store.verify(TENANT_A, 1, hashes) is True
+    store.discard(tokens[1])
+    assert incoming_is_empty(store)
+
+
+def test_b1_replace_swaps_a_damaged_copy_and_leaves_no_residue(store):
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(b"danada")
+    store.commit(token, TENANT_A, 1)
+    fresh = store.begin()
+    with store.open_part(fresh, "cabecera") as handle:
+        handle.write(b"entera")
+    store.replace(fresh, TENANT_A, 1)
+    assert store.files(TENANT_A, 1)["cabecera"].read_bytes() == b"entera"
+    assert incoming_is_empty(store)
+    # Sin nada que reemplazar también instala.
+    store.release(TENANT_A, 1)
+    other = store.begin()
+    with store.open_part(other, "cabecera") as handle:
+        handle.write(b"nueva")
+    store.replace(other, TENANT_A, 1)
+    assert store.files(TENANT_A, 1)["cabecera"].read_bytes() == b"nueva"
+
+
+def test_b1_replace_that_loses_the_race_keeps_the_winner(store, monkeypatch):
+    stored_first = store.begin()
+    with store.open_part(stored_first, "cabecera") as handle:
+        handle.write(b"danada")
+    store.commit(stored_first, TENANT_A, 1)
+    late = store.begin()
+    with store.open_part(late, "cabecera") as handle:
+        handle.write(b"tardia")
+    original = os.rename
+    calls = []
+
+    def rename(source, target):
+        calls.append(target)
+        if len(calls) < 2:
+            return original(source, target)
+        # Otra solicitud instaló la suya justo antes.
+        os.mkdir(target, 0o700)
+        Path(target, "cabecera").write_bytes(b"ganadora")
+        raise OSError(errno.ENOTEMPTY, "ocupado")
+
+    monkeypatch.setattr(os, "rename", rename)
+    store.replace(late, TENANT_A, 1)
+    monkeypatch.undo()
+    assert store.files(TENANT_A, 1)["cabecera"].read_bytes() == b"ganadora"
+
+
+def test_b1_replace_that_cannot_install_reports_the_failure(store, monkeypatch):
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(b"x")
+    monkeypatch.setattr(os, "rename", lambda *_args: (_ for _ in ()).throw(OSError(errno.EIO, "x")))
+    with pytest.raises(OSError):
+        store.replace(token, TENANT_A, 1)
+    monkeypatch.undo()
+
+
+def test_b1_verify_rejects_missing_extra_or_altered_files(store):
+    token = store.begin()
+    for kind, content in (("cabecera", b"a"), ("detalle", b"b")):
+        with store.open_part(token, kind) as handle:
+            handle.write(content)
+    store.commit(token, TENANT_A, 1)
+    good = {"cabecera": hashlib.sha256(b"a").hexdigest(), "detalle": hashlib.sha256(b"b").hexdigest()}
+    assert store.verify(TENANT_A, 1, good) is True
+    assert store.verify(TENANT_A, 1, {"cabecera": good["cabecera"]}) is False
+    assert store.verify(TENANT_A, 1, {**good, "libro": good["cabecera"]}) is False
+    assert store.verify(TENANT_A, 1, {**good, "detalle": "0" * 64}) is False
+    assert store.verify(TENANT_A, 2, good) is False
+
+
+def test_b1_get_reports_the_state_of_the_copy(client, supabase, store):
+    identifier = upload(client, supabase).json()["id"]
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is True
+    expires = batch_dir(store).stat().st_mtime + 86_400
+    assert abs(_timestamp(body["copy_expires_at"]) - expires) < 1
+    # Un archivo que no coincide en tamaño con lo registrado no cuenta como copia.
+    store.files(TENANT_A, identifier)["detalle"].write_bytes(b"corto")
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is False
+    store.release(TENANT_A, identifier)
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is False
+    assert body["copy_expires_at"] is None
+
+
+def test_b1_get_with_an_incomplete_set_of_files_reports_no_copy(client, supabase, store):
+    identifier = upload(client, supabase).json()["id"]
+    store.files(TENANT_A, identifier)["detalle"].unlink()
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is False
+
+
+def test_b1_batch_without_a_declared_size_is_judged_by_its_files(client, supabase, store):
+    identifier = supabase.add_batch(TENANT_A, 4, "importador")
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(b"x")
+    store.commit(token, TENANT_A, identifier)
+    body = client.get(f"/imports/{identifier}", headers=auth_headers(supabase)).json()
+    assert body["copy_available"] is True
+
+
+def test_b1_full_disk_while_receiving_is_503_and_leaves_nothing(client, supabase, store, monkeypatch):
+    original = UploadStore.open_part
+
+    class FullDisk:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def write(self, _chunk):
+            raise OSError(errno.ENOSPC, "sin espacio")
+
+        def close(self):
+            self.handle.close()
+
+    monkeypatch.setattr(UploadStore, "open_part", lambda *args: FullDisk(original(*args)))
+    response = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert supabase.tables["import_batch"] == []
+    assert stored_files(store.root) == []
+
+
+def test_b1_unusable_temporary_area_is_503_before_reading_the_body(
+    client, supabase, store, monkeypatch
+):
+    def fails(_self):
+        raise OSError(errno.EACCES, "negado")
+
+    monkeypatch.setattr(UploadStore, "begin", fails)
+    response = upload(client, supabase, headers={"Idempotency-Key": KEY})
+    assert response.status_code == 503
+    assert response.json() == {"detail": "ALMACEN_TEMPORAL_NO_DISPONIBLE"}
+    assert supabase.tables["import_batch"] == []
+
+
+# ---- Ciclo 1, B2: el TTL rige sin que nadie suba ni descarte
+
+
+def _timestamp(value: str) -> float:
+    from datetime import datetime
+
+    return datetime.fromisoformat(value).timestamp()
+
+
+def clocked_store(tmp_path, now):
+    return UploadStore(tmp_path / "almacen", ttl_seconds=100, clock=lambda: now[0])
+
+
+def stored(store, tenant=1, batch=1, content=b"x"):
+    token = store.begin()
+    with store.open_part(token, "cabecera") as handle:
+        handle.write(content)
+    store.commit(token, tenant, batch)
+
+
+def test_b2_an_expired_copy_is_not_handed_out_and_disappears(tmp_path):
+    now = [1_000_000.0]
+    store = clocked_store(tmp_path, now)
+    stored(store)
+    assert list(store.files(1, 1)) == ["cabecera"]
+    now[0] += 99
+    assert list(store.files(1, 1)) == ["cabecera"]
+    now[0] += 1
+    assert store.files(1, 1) == {}
+    assert not (store.root / "lotes" / "1" / "1").exists()
+    assert store.verify(1, 1, {"cabecera": hashlib.sha256(b"x").hexdigest()}) is False
+
+
+def test_b2_expiry_is_reported_from_the_copy_itself(tmp_path):
+    now = [1_000_000.0]
+    store = clocked_store(tmp_path, now)
+    stored(store)
+    available, expires = store.describe(1, 1, {"cabecera": "a" * 64}, 1)
+    assert (available, expires) == (True, 1_000_100.0)
+    now[0] += 100
+    assert store.describe(1, 1, {"cabecera": "a" * 64}, 1) == (False, None)
+
+
+def test_b2_get_of_an_expired_copy_does_not_offer_it_and_the_bytes_go(client, supabase, store):
+    identifier = upload(client, supabase).json()["id"]
+    age_copy(batch_dir(store, identifier))
+    response = client.get(f"/imports/{identifier}", headers=auth_headers(supabase))
+    assert response.status_code == 200
+    assert response.json()["status"] == "RECIBIDO"
+    assert response.json()["copy_available"] is False
+    assert stored_files(store.root) == []
+
+
+def test_b2_only_regular_files_of_the_batch_are_handed_out(store, tmp_path):
+    stored(store)
+    outside = tmp_path / "fuera"
+    outside.write_bytes(b"secreto")
+    (store.root / "lotes" / "1" / "1" / "detalle").symlink_to(outside)
+    (store.root / "lotes" / "1" / "1" / "otro").write_bytes(b"x")
+    assert list(store.files(1, 1)) == ["cabecera"]
+
+
+def test_b2_a_planted_file_instead_of_a_batch_directory_is_no_copy(store):
+    store.prepare(1)
+    (store.root / "lotes" / "1" / "1").write_bytes(b"x")
+    assert store.files(1, 1) == {}
+
+
+def test_b2_prepare_refuses_foreign_ids_and_planted_files(store):
+    with pytest.raises(UploadStoreError):
+        store.prepare(0)
+    (store.root / "lotes" / "1").write_bytes(b"x")
+    with pytest.raises(UploadStoreError):
+        store.prepare(1)
+
+
+def test_b2_startup_purges_what_expired_while_the_process_was_down(supabase, store):
+    stored(store)
+    age_copy(store.root / "lotes" / "1" / "1")
+    token = store.begin()
+    age_copy(store.root / "incoming" / token)
+    with TestClient(main.app, base_url="http://127.0.0.1"):
+        assert stored_files(store.root) == []
+        assert not (store.root / "incoming" / token).exists()
+
+
+def test_b2_purge_runs_periodically_without_requests(supabase, store, monkeypatch):
+    moments = []
+
+    async def fake_sleep(seconds):
+        moments.append(seconds)
+        if len(moments) == 1:
+            stored(store)
+            age_copy(store.root / "lotes" / "1" / "1")
+            return
+        assert stored_files(store.root) == []
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(imports.asyncio, "sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(imports.purge_periodically(7.0))
+    assert moments == [7.0, 7.0]
+
+
+def test_b2_the_periodic_task_runs_inside_the_real_lifespan(supabase, store, monkeypatch):
+    monkeypatch.setenv("EQUITAS_IMPORT_PURGE_SECONDS", "1")
+    with TestClient(main.app, base_url="http://127.0.0.1"):
+        stored(store)
+        age_copy(store.root / "lotes" / "1" / "1")
+        deadline = time.monotonic() + 15
+        while stored_files(store.root) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert stored_files(store.root) == []
+
+
+def test_b2_a_failed_purge_is_logged_and_does_not_stop_the_next_one(
+    supabase, store, monkeypatch, caplog
+):
+    original = UploadStore.purge_expired
+    attempts = []
+
+    def flaky(self):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise OSError(errno.EIO, f"{self.root} CENTINELA_RUTA")
+        return original(self)
+
+    monkeypatch.setattr(UploadStore, "purge_expired", flaky)
+    with caplog.at_level(logging.INFO, logger="equitas.api"):
+        imports.purge_once()
+        imports.purge_once()
+    assert len(attempts) == 2
+    assert "PURGA_FALLIDA clase=OSError" in caplog.text
+    assert "CENTINELA" not in caplog.text
+    assert str(store.root) not in caplog.text
+
+
+def test_b2_a_purge_that_cannot_delete_says_so_and_the_copy_stays_unreadable(
+    store, monkeypatch, caplog
+):
+    stored(store)
+    age_copy(store.root / "lotes" / "1" / "1")
+    monkeypatch.setattr(shutil, "rmtree", lambda *_args, **_kwargs: None)
+    with caplog.at_level(logging.WARNING, logger="equitas.api"):
+        assert store.purge_expired() == 0
+    assert "PURGA_INCOMPLETA pendientes=1" in caplog.text
+    assert store.files(1, 1) == {}
+
+
+def test_b2_an_insecure_store_does_not_stop_the_process_or_the_loop(
+    supabase, tmp_path, monkeypatch, caplog
+):
+    shared = tmp_path / "compartido"
+    shared.mkdir()
+    os.chmod(shared, 0o755)
+    monkeypatch.setenv("EQUITAS_IMPORT_TMP_DIR", str(shared))
+    with caplog.at_level(logging.ERROR, logger="equitas.api"):
+        imports.purge_once()
+    assert "PURGA_FALLIDA clase=UploadStoreError" in caplog.text
+    assert str(shared) not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, 900.0),
+        ("", 900.0),
+        ("60", 60.0),
+        ("1", 1.0),
+        ("3600", 3600.0),
+        ("0", 900.0),
+        ("-5", 900.0),
+        ("3601", 900.0),
+        ("abc", 900.0),
+        ("١٢", 900.0),
+    ],
+)
+def test_b2_purge_interval_has_a_bounded_value(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("EQUITAS_IMPORT_PURGE_SECONDS", raising=False)
+    else:
+        monkeypatch.setenv("EQUITAS_IMPORT_PURGE_SECONDS", value)
+    assert imports.purge_interval_seconds() == expected
