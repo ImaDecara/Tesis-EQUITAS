@@ -37,14 +37,14 @@ async function sessionCookie(label) {
 const REPORTS = ['queue', 'decisions', 'supervision', 'data-quality']
 const results = []
 
-async function record(account, path, cookie, tenant) {
+async function record(account, path, cookie, tenant, method = 'GET') {
   const headers = { cookie: [cookie, tenant ? `equitas_tenant_id=${tenant}` : ''].filter(Boolean).join('; ') }
-  const response = await fetch(new URL(path, base), { redirect: 'manual', headers })
+  const response = await fetch(new URL(path, base), { method, redirect: 'manual', headers })
   const bytes = new Uint8Array(await response.arrayBuffer())
-  const file = `${account}${tenant ? `__t${tenant}` : ''}__${path.replace(/^\//, '').replace(/[^a-zA-Z0-9]+/g, '_')}`
+  const file = `${method === 'GET' ? '' : `${method}__`}${account}${tenant ? `__t${tenant}` : ''}__${path.replace(/^\//, '').replace(/[^a-zA-Z0-9]+/g, '_')}`
   writeFileSync(join(output, file), bytes)
   const row = {
-    account, path, tenant: tenant ?? null, status: response.status, file,
+    account, path, method, tenant: tenant ?? null, status: response.status, file,
     contentType: response.headers.get('content-type'),
     disposition: response.headers.get('content-disposition'),
     cacheControl: response.headers.get('cache-control'),
@@ -89,6 +89,11 @@ for (const query of ['?corte=2026-09-30', '?corte=2026-10-15', '?corte=2030-01-0
   await record('supervisor', `${reportPath('supervision')}${query}`, cookies.supervisor)
   await record('supervisor', `${reportPath('decisions')}${query}`, cookies.supervisor)
 }
+
+// HEAD pasa por la misma autorizacion; un metodo de escritura no existe.
+await record('supervisor', reportPath('supervision'), cookies.supervisor, undefined, 'HEAD')
+await record('consulta', reportPath('supervision'), cookies.consulta, undefined, 'HEAD')
+await record('supervisor', reportPath('supervision'), cookies.supervisor, undefined, 'POST')
 
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 1))
 console.log(`solicitudes=${results.length}`)

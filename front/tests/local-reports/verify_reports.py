@@ -25,8 +25,8 @@ def check(name, condition, detail=""):
         failures.append(f"{name} {detail}".strip())
 
 
-def result(account, path, tenant=None):
-    return next(r for r in results if r["account"] == account and r["path"] == path and r["tenant"] == tenant)
+def result(account, path, tenant=None, method="GET"):
+    return next(r for r in results if r["account"] == account and r["path"] == path and r["tenant"] == tenant and r["method"] == method)
 
 
 def read_csv(row):
@@ -109,6 +109,10 @@ for account, allowed in ALLOWED.items():
             check(f"{account}/{name} denegado", row["status"] == 403, str(row["status"]))
             check(f"{account}/{name} sin CSV", "application/json" in (row["contentType"] or "") and row["disposition"] is None)
 
+check("HEAD autorizado", result("supervisor", PATHS["supervision"], method="HEAD")["status"] == 200)
+check("HEAD denegado", result("consulta", PATHS["supervision"], method="HEAD")["status"] == 403)
+check("POST no existe", result("supervisor", PATHS["supervision"], method="POST")["status"] == 405)
+
 # 2. Dos membresias y cookies ajenas.
 for name in REPORTS:
     check(f"multi sin eleccion {name}", result("otro-supervisor", PATHS[name])["status"] == 409)
@@ -120,7 +124,7 @@ for name in REPORTS:
 
 # 3. Ningun archivo trae datos personales, texto libre ni identidad; ninguno cruza municipios.
 for row in results:
-    if row["status"] != 200 or row["contentType"] != "text/csv; charset=utf-8":
+    if row["method"] != "GET" or row["status"] != 200 or row["contentType"] != "text/csv; charset=utf-8":
         continue
     raw = (folder / row["file"]).read_bytes()
     for secret in SECRETS:
