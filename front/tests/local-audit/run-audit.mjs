@@ -220,7 +220,7 @@ for (const label of ['consulta', 'operador', 'importador', 'sin-membresia', 'ina
   const read = await restTenants(sessions[label].token)
   check(`Data API, ${label}: cero filas`, read.status === 200 && read.rows === 0, `status=${read.status} filas=${read.rows}`)
 }
-for (const [name, bearer] of [['anon', env.PUBLISHABLE_KEY], ['service_role', env.SERVICE_ROLE_KEY], ['credencial de servidor', reviewJwt]]) {
+for (const [name, bearer] of [['anon', null], ['service_role', env.SERVICE_ROLE_KEY], ['credencial de servidor', reviewJwt]]) {
   const read = await restTenants(bearer)
   check(`Data API, ${name}: lectura rechazada`, read.status >= 400 && read.body?.code === '42501', `status=${read.status} codigo=${read.body?.code}`)
 }
@@ -229,7 +229,7 @@ for (const [name, bearer] of [['anon', env.PUBLISHABLE_KEY], ['service_role', en
 const fingerprint = auditFingerprint()
 const anyId = sql('select id from public.access_audit order by id limit 1')
 const forged = { tenant: Number(TENANT_A), actor: 1, actor_role: 'supervisor', action: 'CASE_OPEN', target: OWN, idempotency_key: randomUUID() }
-for (const [name, bearer] of [['anon', env.PUBLISHABLE_KEY], ['consulta', sessions.consulta.token], ['supervisor', sessions.supervisor.token], ['service_role', env.SERVICE_ROLE_KEY], ['credencial de servidor', reviewJwt], ['credencial de importacion', importJwt]]) {
+for (const [name, bearer] of [['anon', null], ['consulta', sessions.consulta.token], ['supervisor', sessions.supervisor.token], ['service_role', env.SERVICE_ROLE_KEY], ['credencial de servidor', reviewJwt], ['credencial de importacion', importJwt]]) {
   for (const [verb, path, init] of [
     ['INSERT', '/access_audit', { method: 'POST', body: JSON.stringify(forged) }],
     ['UPDATE', `/access_audit?id=eq.${anyId}`, { method: 'PATCH', body: JSON.stringify({ actor: 1 }) }],
@@ -241,7 +241,7 @@ for (const [name, bearer] of [['anon', env.PUBLISHABLE_KEY], ['consulta', sessio
   }
 }
 const goodArgs = overrides => ({ p_actor_user: USERS.operador, p_tenant: TENANT_A, p_action: 'CASE_OPEN', p_target: OWN, p_idempotency_key: randomUUID(), ...overrides })
-for (const [name, bearer] of [['anon', env.PUBLISHABLE_KEY], ['consulta', sessions.consulta.token], ['supervisor', sessions.supervisor.token], ['service_role', env.SERVICE_ROLE_KEY]]) {
+for (const [name, bearer] of [['anon', null], ['consulta', sessions.consulta.token], ['supervisor', sessions.supervisor.token], ['service_role', env.SERVICE_ROLE_KEY]]) {
   const response = await rpc(bearer, goodArgs())
   const body = await response.json().catch(() => ({}))
   check(`Data API, ${name}: la funcion de escritura no se ejecuta`, response.status >= 400 && body.code === '42501', `status=${response.status} codigo=${body.code}`)
