@@ -573,6 +573,18 @@ def test_volver_al_lote_original_solo_toca_esas_mismas_dos_filas(campaign, publi
     assert persisted_mismatches(tenant_tables(after), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
+def test_un_objeto_publicado_que_cae_en_cuarentena_conserva_su_estado_y_no_es_una_baja(campaign, published):
+    key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
+    lot = derive_lot(campaign.work / "cae-en-cuarentena", detalle_cells={(key, MODIFIED_DEBT, "NOTD_capital"): "sin-monto"})
+    before = snapshot()
+    result = campaign.etl(lot)
+    assert result.returncode == 0, result.stderr
+    assert line_value(result, "objetos_en_cuarentena") == "1"
+    assert changes(before, snapshot()) == {}
+    assert batches()[-1]["status"] == "PUBLICADO"
+    campaign.record("objeto publicado en cuarentena", salida=result.returncode, filas_reescritas_en_la_base=0)
+
+
 def test_una_persona_con_datos_distintos_en_varios_objetos_no_se_reescribe_al_recargar(campaign, published):
     """90015 viene en tres objetos. Con datos distintos, escribirla por fila iría y volvería en cada recarga."""
     objects = ("3-10012", "6-10013", "1-10014")
