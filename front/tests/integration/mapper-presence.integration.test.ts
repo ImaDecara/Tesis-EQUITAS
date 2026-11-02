@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPresencePeopleData, buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
-import { createPaginatedSupabase } from '../fixtures/paginated-supabase'
+import { createAuthorizedPaginatedSupabase as createPaginatedSupabase } from '../fixtures/paginated-supabase'
 
 const { clientMock } = vi.hoisted(() => ({ clientMock: vi.fn() }))
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
 vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: clientMock }))
 

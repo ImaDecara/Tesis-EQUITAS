@@ -2,6 +2,7 @@ import Image from 'next/image'
 import { AlertCircle, CheckCircle2, CircleDollarSign, PhoneOff } from 'lucide-react'
 
 import { LoginForm } from '@/components/auth/login-form'
+import { safeNextPath } from '@/lib/auth/session-routing'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const PREVIEW_METRICS = [
@@ -44,10 +45,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>
 }) {
   const resolvedSearchParams = await searchParams
-  const nextPath =
-    resolvedSearchParams.next && resolvedSearchParams.next.startsWith('/')
-      ? resolvedSearchParams.next
-      : '/'
+  const nextPath = safeNextPath(resolvedSearchParams.next) ?? '/'
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,_#F8F7F3_0%,_#EEF2F7_100%)] p-4">

@@ -5,7 +5,7 @@ const { browserClient } = vi.hoisted(() => ({ browserClient: vi.fn() }))
 vi.mock('@/lib/supabase-browser', () => ({ createBrowserSupabaseClient: browserClient }))
 
 import {
-  getCurrentAuthUser, mapAuthErrorMessage, signInWithPassword, signOutCurrentSession,
+  getCurrentAuthUser, mapAuthErrorMessage, selectCurrentTenant, signInWithPassword, signOutCurrentSession,
   validateAuthUserTenantAccess, validateCurrentUserTenantAccess,
 } from '@/lib/services/auth-service'
 
@@ -86,24 +86,34 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   })
 
   it('AUTH-06: usa el usuario validado por Auth y la pertenencia activa', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: '42' }]), ok([{ tenant: 7, role: 'operator' }])])
+    const { client, queries } = clientWithReplies([ok([{ id: '42', auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     expect(await validateCurrentUserTenantAccess()).toEqual({ isAuthorized: true, requiresLogin: false,
-      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: 'operator' } })
+      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' } })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
     expect(queries).toEqual([
-      { table: 'user', filters: [['auth_user', 'auth-test']], limit: 1 },
-      { table: 'tenant_user', filters: [['user', 42], ['status', true]], limit: 1 },
+      { table: 'user', filters: [['auth_user', 'auth-test']], limit: 2 },
+      { table: 'tenant_user', filters: [['user', '42'], ['status', true]], limit: 2 },
+      { table: 'tenant', filters: [['id', '7']], limit: 1 },
+      { table: 'role', filters: [['id', '3']], limit: 1 },
     ])
   })
 
   it('AUTH-06 / E06: conserva el cliente y su sesion al validar pertenencia', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: 42 }]), ok([{ tenant: 7, role: 1 }])])
+    const { client, queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
     browserClient.mockClear()
     expect(await validateAuthUserTenantAccess('auth-test', client as unknown as SupabaseClient)).toMatchObject({
-      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '1' },
+      isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' },
     })
     expect(browserClient).not.toHaveBeenCalled()
-    expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user'])
+    expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user', 'tenant', 'role'])
+  })
+
+  it('SUP-AUTH-01: el resultado publico lleva el ID del rol y ningun campo mas, tambien con la fixture E06', async () => {
+    clientWithReplies([ok([{ id: 910001, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 910001, tenant: 910001, role: 910001, status: true }]), ok([{ id: 910001, status: 'ACTIVE' }]), ok([{ id: 910001, name: 'tp_operator' }])])
+    expect(await validateAuthUserTenantAccess('auth-test')).toEqual({
+      isAuthorized: true, requiresLogin: false,
+      context: { authUserId: 'auth-test', appUserId: '910001', tenantId: '910001', role: '910001' },
+    })
   })
 
   it.each([
@@ -111,16 +121,16 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
     [ok([{ status: false }]), 'TENANT_ACCESS_INACTIVE'],
     [{ data: null, error: { message: 'membership read failed', code: '42501' } }, 'DATABASE_ERROR'],
   ] as const)('AUTH-07: sin pertenencia activa consulta estados y rechaza %s', async (fallback, code) => {
-    const { queries } = clientWithReplies([ok([{ id: 42 }]), ok([]), fallback])
+    const { queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([]), fallback])
     const result = await validateAuthUserTenantAccess('auth-test')
     expect(result).toMatchObject({ isAuthorized: false, requiresLogin: false, code })
     expect(result.context).toBeUndefined()
-    expect(queries[2]).toEqual({ table: 'tenant_user', filters: [['user', 42]], limit: 20 })
+    expect(queries[2]).toEqual({ table: 'tenant_user', filters: [['user', '42']], limit: 2 })
   })
 
   it('AUTH-08: error leyendo pertenencia no autoriza ni consulta estados adicionales', async () => {
-    const { queries } = clientWithReplies([ok([{ id: 42 }]), { data: null, error: { message: 'permission denied' } }])
-    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'Error consultando tenant_user: permission denied' })
+    const { queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), { data: null, error: { message: 'permission denied' } }])
+    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'No disponible: no se pudo verificar la membresia.' })
     expect(queries).toHaveLength(2)
   })
 
@@ -128,5 +138,52 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
     const { queries } = clientWithReplies([ok([row])])
     expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'APP_USER_NOT_FOUND' })
     expect(queries).toHaveLength(1)
+  })
+})
+
+describe('ALIGN-019: la seleccion de municipio es explicita y no confiere permisos', () => {
+  beforeEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
+  const authorized = () => [ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]),
+    ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])]
+
+  it.each(['https:', 'http:'])('guarda la eleccion solo despues de validarla (%s)', async protocol => {
+    const document = { cookie: '' }
+    vi.stubGlobal('document', document)
+    vi.stubGlobal('location', { protocol })
+    const { queries } = clientWithReplies(authorized())
+    expect((await selectCurrentTenant('7')).isAuthorized).toBe(true)
+    expect(queries[1].filters).toContainEqual(['tenant', '7'])
+    expect(document.cookie).toBe(`equitas_tenant_id=7; Path=/; SameSite=Lax${protocol === 'https:' ? '; Secure' : ''}`)
+  })
+
+  it('una seleccion denegada no escribe cookies', async () => {
+    const document = { cookie: 'preferencia=valor' }
+    vi.stubGlobal('document', document)
+    clientWithReplies([authorized()[0], ok([]), ok([])])
+    expect((await selectCurrentTenant('8')).isAuthorized).toBe(false)
+    expect(document.cookie).toBe('preferencia=valor')
+    expect((await selectCurrentTenant('8inyectado')).isAuthorized).toBe(false)
+    expect(document.cookie).toBe('preferencia=valor')
+  })
+
+  it('cerrar o iniciar sesion borra selecciones anteriores', async () => {
+    const document = { cookie: 'equitas_tenant_id=8' }
+    vi.stubGlobal('document', document)
+    clientWithReplies([])
+    await signOutCurrentSession()
+    expect(document.cookie).toContain('Max-Age=0')
+    document.cookie = 'equitas_tenant_id=8'
+    await signInWithPassword('test@example.test', 'test-only-password')
+    expect(document.cookie).toContain('Max-Age=0')
+  })
+
+  it('null pide opciones nuevas mientras la consulta normal revalida la cookie', async () => {
+    vi.stubGlobal('document', { cookie: 'preferencia=valor; equitas_tenant_id=7' })
+    const first = clientWithReplies(authorized())
+    await validateCurrentUserTenantAccess()
+    expect(first.queries[1].filters).toContainEqual(['tenant', '7'])
+    const second = clientWithReplies(authorized())
+    await validateCurrentUserTenantAccess(null)
+    expect(second.queries[1].filters).not.toContainEqual(['tenant', '7'])
   })
 })

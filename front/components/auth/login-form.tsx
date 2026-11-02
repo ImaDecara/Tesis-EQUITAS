@@ -34,6 +34,11 @@ export function LoginForm({ nextPath }: LoginFormProps) {
         return
       }
 
+      if (result.code === 'TENANT_SELECTION_REQUIRED') {
+        router.replace('/select-tenant')
+        return
+      }
+
       if (result.isAuthorized) {
         router.replace(nextPath)
         return
@@ -63,6 +68,11 @@ export function LoginForm({ nextPath }: LoginFormProps) {
     }
 
     const access = await validateCurrentUserTenantAccess()
+
+    if (access.code === 'TENANT_SELECTION_REQUIRED') {
+      router.replace('/select-tenant')
+      return
+    }
 
     if (!access.isAuthorized) {
       await signOutCurrentSession()

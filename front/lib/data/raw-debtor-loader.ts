@@ -1,13 +1,12 @@
-import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { RAW_DEBTOR_TABLE_LOAD_ORDER } from '@/lib/data/table-names'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createTenantReader } from '@/lib/server/dal'
 import type { DataWarning, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // Punto de entrada de datos crudos para objetos de deuda.
 export async function loadRawDebtorData(): Promise<RawDebtorDataBundle> {
-  const supabase = await createServerSupabaseClient()
+  const reader = await createTenantReader()
   const results = await Promise.all(
-    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => loadAllTableRows(table, supabase))
+    RAW_DEBTOR_TABLE_LOAD_ORDER.map((table) => reader.readTable(table))
   )
   const warnings = results
     .map((result) => result.warning)

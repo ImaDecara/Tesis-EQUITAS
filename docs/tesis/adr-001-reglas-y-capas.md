@@ -193,3 +193,136 @@ El [README interno de la API](../../back/api/README.md) detalla contrato HTTP,
 adaptación de faltantes, restricciones y reproducibilidad. Los resultados de
 rendimiento E08/E11 no se extrapolan a esta versión: véase la nota en
 [`RENDIMIENTO_CALIDAD.md`](../../RENDIMIENTO_CALIDAD.md).
+
+## 9. Frontera de autorización de lecturas (ALIGN-019, 30/10/2026)
+
+Las pantallas de servidor ya no dependen del `AuthGuard` de navegador para impedir
+la lectura. `front/lib/server/dal.ts` usa `auth.getUser()` con el cliente de sesión,
+resuelve el usuario de aplicación por `auth_user`, exige `user.status = ACTIVE`,
+una membresía `tenant_user.status = true`, municipio activo y rol aprobado en el
+catálogo `role.name`. No acepta roles enviados por el navegador ni equivalencias
+implícitas (`admin`, `operator` o un ID de rol no conceden permisos). El catálogo es
+una precondición de despliegue; ver «Precondición de despliegue» más abajo.
+
+Sin selección se exige exactamente una membresía activa. Con varias, se devuelve
+`TENANT_SELECTION_REQUIRED`; el llamador puede indicar `tenantId` o la cookie
+`equitas_tenant_id`. Esa selección es entrada no confiable: se vuelve a comprobar
+contra las membresías del usuario en cada entrada, y nunca concede acceso sola.
+El conteo exacto evita que un límite de filas oculte una segunda membresía.
+El ingreso deriva a `/select-tenant` cuando hace falta elegir. Esa pantalla carga
+las membresías propias paginadas, sin opción preseleccionada; vuelve a validar la
+elección antes de guardar la cookie. Ingresar o salir borra la selección anterior.
+
+`requireTenantAccess({ permission, tenantId? })` devuelve contexto y cliente de
+sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`,
+`supervisor`; registro de decisiones: `operador`; aprobación y supervisión:
+`supervisor`; importación: `importador`. Coincide con ALIGN-003 y con las funciones
+de ALIGN-018: quien sea supervisor e importe necesita además una membresía
+`importador`. `importador_sistema` no tiene acceso web. Estos permisos no
+implementan escrituras.
+
+Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
+`validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en
+`context.role` el **ID** del rol en texto, sin campos adicionales. El contexto de la
+DAL separa `roleId` y `roleName`, sin un campo `role`, para que nadie lea uno por otro.
+
+`createTenantReader()` es la entrada de los cargadores de objetos y personas.
+Cada consulta de negocio lleva el filtro del municipio autorizado, directamente o
+por relaciones `!inner`, incluidas todas las páginas de una lectura paginada. Los
+alias de relación se eliminan de las filas antes de mapearlas. Solo los catálogos
+compartidos carecen de filtro de municipio; también requieren autorización previa.
+RLS sigue siendo una segunda barrera, necesaria para las lecturas directas por la
+Data API. La DAL no reemplaza RLS ni audita accesos directos a PostgREST.
+
+Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores de
+consulta conservan `DataWarning`: los indicadores dicen «No disponible» y hay aviso,
+sin convertir el fallo en un cero (ALIGN-011/012, contrato §4.1.6). Esa garantía no
+cubre todavía todas las pantallas. Con una lectura fallida, algunas listas muestran
+su texto de vacío («No hay casos sin contacto», «Mostrando 0-0 de 0 casos», «No hay
+objetos…») y, con `debtor` caído, el detalle dice «no encontrado» sin aviso. Ya
+pasaba antes de ALIGN-019, no entrega cartera y se traspasa a ALIGN-014. No hay caché
+de autorización entre solicitudes, clave de servicio ni secretos nuevos.
+
+**Sin sesión** (cookie ausente o rechazada por Auth), `front/proxy.ts` responde 307 a
+`/login?next=<ruta>` en HTML y RSC, antes del streaming. Solo `/login`,
+`/select-tenant` y `/api/build-info` quedan fuera, por ruta exacta. Es una comprobación
+optimista: la DAL sigue siendo la autoridad y no depende de ella. `next` lleva solo
+la ruta, sin consulta, y `safeNextPath` lo valida al crearlo y en `/login`, de modo que
+no puede llevar a otro host. Si Auth no responde (red, 5xx, 429 o respuesta
+ilegible) no se puede saber si hay sesión: el proxy deja seguir la solicitud y la DAL
+falla cerrada con `AUTH_UNAVAILABLE`, sin mandar a nadie a ingresar.
+
+**Con sesión, la denegación es siempre HTTP 200**, en HTML y RSC. `app/loading.tsx`
+inicia el streaming antes de que corra la DAL, así que el error llega al límite
+`app/error.tsx` como registro Flight con digest, sin el mensaje, sin cartera y con
+un `Cache-Control` que incluye `private` y `no-store`. Por eso el estado HTTP no sirve como señal de
+monitoreo: hay que mirar el contenido. Esa pantalla ofrece «Intentar nuevamente», que
+recarga el documento, y «Cerrar sesión», la salida de quien tiene sesión válida y no
+puede leer cartera, como `importador`. Los futuros Route Handlers deben traducir
+`error.status` a un estado HTTP explícito (401/403/409/503), sin serializar el
+cliente de sesión. Un anónimo recibe antes el 307 del proxy; si ALIGN-028 necesita
+responderle 401, debe exceptuar esa ruta en `proxy.ts` y seguir autorizando en el handler.
+
+**Excepción de compatibilidad: `tp_operator` (campaña E06).**
+`E06_READ_ONLY_COMPAT_ROLE` (`front/lib/auth/tenant-access.ts`) admite ese nombre con
+una sola capacidad, `portfolio:read`, igual que `consulta`. **No es un rol aprobado por
+ALIGN-003:** está fuera de `WEB_ROLES`, no aparece en el selector ni en la interfaz
+y no depende del entorno.
+
+- *Por qué existe.* Es el rol de las cuentas sintéticas de `database/testing/fixtures.sql`.
+  Sin esta excepción, esas cuentas no entran y fallan `test:supabase`, obligatoria en
+  `main` y `quality/tp-testing`, y SMOKE-01. El plan congelado prohíbe modificar esa
+  fixture, la campaña de 12 casos y SMOKE-01 (ALIGN-016, ALIGN-022, `TEST-PLAN.md`), y
+  cambiarla exigiría además un paso humano sobre el proyecto de pruebas.
+- *Qué no amplía.* Antes de ALIGN-019 ninguna capa miraba el nombre del rol: estas cuentas
+  ya entraban y leían lo que RLS les permitiera. Ahora leen por la DAL, filtradas por su
+  municipio. No registran, aprueban, supervisan ni importan: la DAL lo deniega y
+  las funciones de ALIGN-018 tampoco aceptan ese nombre. No cambia la Data API.
+- *Riesgo que queda.* Sin interruptor por entorno, una fila `role.name = 'tp_operator'`
+  en cualquier base da lectura de cartera a sus miembros, en su municipio.
+- *Cómo se retira.* Cuando un ticket autorizado pase la campaña E06 a un rol aprobado
+  (fixture, `cleanup.sql`, fila del proyecto de pruebas), se borran
+  `E06_READ_ONLY_COMPAT_ROLE`, `ResolvedRoleName` y su entrada en `portfolio:read`, y su
+  fila en las pruebas de permisos. No requiere migración de datos.
+
+**Precondición de despliegue: el catálogo `role.name`.** La DAL compara el nombre
+exacto y ninguna migración carga los roles aprobados. En el proyecto original se
+desconoce el contenido de `role`, porque el repositorio solo tiene el esquema. Antes
+de apuntar esta versión a una base hay que mapear sus roles a `consulta`, `operador`,
+`supervisor` e `importador`, y comprobar que no exista `tp_operator`. Sin ese mapeo
+el bloqueo es total: toda cuenta recibe `ROLE_FORBIDDEN`, sin datos.
+
+Puntos cubiertos: tablero `/`, objetos `/debtors`, detalle `/debtors/[debtorId]`,
+personas `/people`, colas `/priority-cases`, sin contacto `/no-contact`, mora
+`/debt-aging`, riesgo `/risk-analysis`, acciones recomendadas `/recommended-actions`.
+Las futuras Server Actions (ALIGN-020), lecturas de revisión (021) y rutas CSV (028)
+deben autorizar **dentro de cada entrada** y extender el lector con filtros de tenant
+para tablas nuevas. La auditoría de apertura de detalle y exportación (069) debe
+insertarse después de autorizar y antes de entregar el DTO, sin datos personales.
+
+Validación del 30/10: pruebas negativas y positivas con Auth/REST simulados y ocho
+pruebas directas HTML/RSC sobre Supabase local con `USING(true)`, tanto con Next dev
+como con compilación de producción. La precondición verifica que REST entrega
+ambas carteras al usuario sin membresía; la DAL deniega esa misma identidad en las
+nueve rutas. Los controles positivos comprueban separación A/B, detalle ajeno,
+personas y selección explícita, sin avisos de consulta fallida. Se restauraron las
+tres migraciones antes de liberar el lock. Evidencia depurada: paquete del plan,
+`execution/evidence/ALIGN-019/`.
+
+Validación del 31/10, ciclo de corrección 1. La revisión independiente pidió cambios
+por dos regresiones sin fuga: la fixture E06 quedaba sin acceso y sin sesión no se
+llegaba a `/login`. Con la fixture E06 sin tocar, `test:supabase` da 12/12 y SMOKE-01
+5/5, igual que la base; corrieron en copias locales, sin ningún proyecto remoto. Sobre
+`USING(true)` pasan los diez casos directos en HTML y RSC. El barrido adicional de
+contextos quedó no concluyente por la carga de la máquina: sin hallazgos, pero con
+sesión no llegó a medir. Con la cuenta E06 se comprobó que solo lee: la DAL deniega
+los demás permisos, la Data API con RLS rechaza sus escrituras y las funciones de
+ALIGN-018 responden `ROLE_NOT_ALLOWED`. Falta la re-revisión independiente.
+
+Validación del 02/11, con la máquina libre y sobre `f547bba`. `test:supabase` da 12/12
+y SMOKE-01 5/5. El barrido de contextos reemplaza al no concluyente del 31/10: aprobado,
+con 1.140 solicitudes en 29 contextos, sin hallazgos y sin contextos sin medir; antes,
+un mutante de la DAL comprobó que la sonda puede fallar. En los gates, el único control
+en falla es `audit`, por el aviso GHSA-g3hv-75wg-m249 (solo desarrollo, 0 hallazgos en
+producción), desvío declarado que autorizó el usuario. Falta la re-revisión
+independiente.
