@@ -10,6 +10,7 @@ sintetico-v1 completo siempre queda BLOQUEADO; estos lotes permiten ejercitar un
 import csv
 import io
 import json
+import re
 import shutil
 from collections import Counter
 from datetime import date
@@ -143,6 +144,23 @@ def oracle_with_file_states(item: dict, lot: Path, catalogs: dict[str, dict[str,
         'valor': max(ages, default=None), 'presencia': presence, 'completo': not not_observed,
         'filas_no_observadas': {NO_OBSERVADO: not_observed} if not_observed else {},
     }}
+
+
+def accepted_with_altered(cases: tuple[str, ...], lot: Path, catalogs: dict[str, dict[str, str]] | None = None,
+                          cut_off: str = AS_OF) -> list[dict]:
+    """Objetos aceptados tal cual en expected.json, salvo los que una prueba alteró, recalculados del archivo."""
+    return [oracle_with_file_states(item, lot, catalogs, cut_off) if item['caso'] in cases else item
+            for item in accepted_objects()]
+
+
+def debt_ids(case: str, lot: Path = FIXTURE) -> list[str]:
+    return list(_details_by_key(lot).get(object_by_case(case)['clave_agrupacion'], {}))
+
+
+def to_iso_dates(lot: Path) -> None:
+    """Pasa las fechas del detalle a aaaa-mm-dd, para probar un lote que declara ese formato."""
+    path = lot / 'detalle.tsv'
+    path.write_text(re.sub(r'\b(\d{2})/(\d{2})/(\d{4})\b', r'\3-\2-\1', path.read_text(encoding='utf-8')), encoding='utf-8')
 
 
 def _sum(rows: list[dict], column: str) -> Decimal:

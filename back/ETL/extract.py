@@ -245,7 +245,8 @@ def _canonical_dataframe(table, kind, mapping, contract):
             elif field_type == 'fecha':
                 parsed = parse_date(value, fmt['fecha'], contract)
                 if parsed.value is not None:
-                    value = parsed.value.strftime('%d/%m/%Y')
+                    # Sin strftime: según la plataforma, %Y no rellena los años anteriores a 1000.
+                    value = f'{parsed.value.day:02}/{parsed.value.month:02}/{parsed.value.year:04}'
                 elif parsed.code == 'FECHA_CENTINELA':
                     # Queda sin informar en cualquier formato de lote: no se reinterpreta aguas abajo.
                     value = ''
