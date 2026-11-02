@@ -308,7 +308,7 @@ notify pgrst, 'reload schema';
 
 `supabase/migrations/20261102170000_access_audit.sql` agrega `access_audit` y `record_access_audit`. No toca políticas ni grants de las 23 tablas: `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` no cambian. Contrato: `docs/tesis/contrato-dominio-v1.md` §15. Prueba real: `front/tests/local-audit/README.md`.
 
-`case-review-verify.sql` no enumera esta tabla. Sus 23 y sus tablas nuevas son listas fijas, así que solo cambian los valores que recorren todo `public`: `funciones_security_definer` y `funciones_definer_dueno_definidor` pasan a 5, y `funciones_servidor_revision` y `funciones_servidor_importacion` a 4 y 2.
+`case-review-verify.sql` no enumera esta tabla ni esta función: sus listas son fijas y sus valores no cambian. Los metadatos de la auditoría (dueño, `search_path`, privilegios, política) los comprueba `front/tests/local-audit/run-audit.mjs`.
 
 **Precondición de despliegue:** la aplicación falla cerrada. Sin esta migración o sin `EQUITAS_REVIEW_SERVER_JWT` no entrega ninguna ficha ni reporte: la ficha cae en la pantalla de error y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`.
 

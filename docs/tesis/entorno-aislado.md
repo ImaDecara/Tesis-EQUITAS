@@ -185,7 +185,7 @@ de seguir.
 - Para pruebas de aplicación y de RLS se usa la clave publicable o `anon`. La de
   servicio solo para cargas locales del ETL (`EQUITAS_TARGET_ENV=local`, ver §4) y
   siempre contra `http://127.0.0.1:54321`.
-- Las escrituras de revisión y de lote usan un JWT propio de los roles de servidor
+- Las escrituras de revisión, de lote y de auditoría (ALIGN-069) usan un JWT propio de los roles de servidor
   de ALIGN-018, no la clave de servicio. Se emite con
   `database/testing/case_review_local.py mint-jwt` en esta misma carpeta y con el mismo
   trato. Las contraseñas de las cuentas sintéticas tampoco salen de ella

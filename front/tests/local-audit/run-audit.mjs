@@ -333,6 +333,27 @@ await rejected('sin clave de idempotencia', reviewJwt, goodArgs({ p_idempotency_
   check('sin credencial, reporte: 503 sin archivo', exported.status === 503 && exported.body.includes('AUDITORIA_NO_DISPONIBLE') && exported.added === 0, `status=${exported.status}`)
 }
 
+// 9. Metadatos: lo que `case-review-verify.sql` no enumera.
+{
+  const [definer, config, owner] = sql("select prosecdef, array_to_string(proconfig, ','), pg_get_userbyid(proowner) from pg_proc where oid = 'public.record_access_audit(bigint, bigint, text, text, uuid)'::regprocedure").split('|')
+  check('funcion: SECURITY DEFINER, search_path vacio y dueno definidor', definer === 't' && config === 'search_path=""' && owner === 'equitas_write_definer', `${definer} ${config} ${owner}`)
+  const WRITE = "(values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')) p(priv)"
+  const clients = sql(`select count(*) from (values ('anon'), ('authenticated'), ('service_role'), ('equitas_review_server'), ('equitas_import_server')) r(rol) cross join ${WRITE} where has_table_privilege(r.rol, 'public.access_audit', p.priv)`)
+  check('tabla: ningun rol de cliente ni de servidor tiene privilegios de escritura', clients === '0', `privilegios=${clients}`)
+  const definerPrivileges = sql(`select count(*) from ${WRITE} where p.priv <> 'INSERT' and has_table_privilege('equitas_write_definer', 'public.access_audit', p.priv)`)
+  check('tabla: el definidor solo inserta y lee', definerPrivileges === '0', `privilegios=${definerPrivileges}`)
+  const readers = sql("select string_agg(r.rol, ',' order by r.rol) from (values ('anon'), ('authenticated'), ('service_role'), ('equitas_review_server'), ('equitas_import_server')) r(rol) where has_table_privilege(r.rol, 'public.access_audit', 'SELECT')")
+  check('tabla: solo authenticated puede leer, y la politica limita a supervisor', readers === 'authenticated', readers)
+  const executors = sql("select string_agg(r.rol, ',' order by r.rol) from (values ('anon'), ('authenticated'), ('service_role'), ('postgres'), ('equitas_review_server'), ('equitas_import_server')) r(rol) where has_function_privilege(r.rol, 'public.record_access_audit(bigint, bigint, text, text, uuid)', 'EXECUTE')")
+  check('funcion: solo la ejecutan los roles de servidor', executors === 'equitas_import_server,equitas_review_server', executors)
+  const publicExecute = sql("select count(*) from pg_proc f, aclexplode(coalesce(f.proacl, acldefault('f', f.proowner))) a where f.oid = 'public.record_access_audit(bigint, bigint, text, text, uuid)'::regprocedure and a.grantee = 0")
+  check('funcion: PUBLIC no la ejecuta', publicExecute === '0', `public=${publicExecute}`)
+  const [rls, policies, using] = sql("select c.relrowsecurity, (select count(*) from pg_policies p where p.tablename = 'access_audit'), (select string_agg(p.cmd || ':' || array_to_string(p.roles, ','), ' ') from pg_policies p where p.tablename = 'access_audit') from pg_class c where c.oid = 'public.access_audit'::regclass").split('|')
+  check('tabla: RLS activa y una sola politica, de lectura para authenticated', rls === 't' && policies === '1' && using === 'SELECT:authenticated', `${rls} ${policies} ${using}`)
+  const e06 = sql("select count(*) from pg_constraint where conrelid = 'public.access_audit'::regclass and contype = 'f'")
+  check('tabla: sin claves foraneas, para que la limpieza de fixtures no dependa del rastro', e06 === '0', `fk=${e06}`)
+}
+
 const failed = results.filter(result => !result.pass)
 writeFileSync(output, JSON.stringify({ casos: results.length, fallas: failed.length, resultados: results }, null, 1), { mode: 0o600 })
 console.log(`CASOS|${results.length}\nFALLAS|${failed.length}`)
