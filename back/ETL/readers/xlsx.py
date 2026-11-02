@@ -12,7 +12,9 @@ Orden de defensa, cada paso antes del siguiente:
 
 1. Fin del ZIP: cantidad de partes y tamaño del directorio, sin armarlo.
 2. Directorio: tamaños y razón declarados, nombres, cifrado y macros, sin abrir ninguna parte.
-3. Todas las partes en flujo: CRC, tamaño real y ningún DTD en el XML.
+3. Todas las partes byte a byte: cabecera local igual al directorio, partes contiguas, flujo
+   comprimido consumido entero, bytes reales y CRC. Desde acá, lo declarado es lo real: los
+   límites del paso 2 quedan acreditados. Después, ningún DTD en el XML.
 4. Tipos de contenido, libro, relaciones y estilos: bytes y elementos acotados antes de que
    openpyxl los arme enteros.
 5. Cadenas y hojas elegidas: en flujo, con tope de elementos y profundidad; ningún elemento
@@ -78,6 +80,12 @@ MAX_CELL_FORMATS = 65_490
 _END_RECORD = b'PK\x05\x06'
 _END_RECORD_TAIL = 22 + 65_535
 _ZIP64_LOCATOR = b'PK\x06\x07'
+_LOCAL_HEADER = struct.Struct('<4s5H3I2H')
+_LOCAL_SIGNATURE = b'PK\x03\x04'
+_DESCRIPTOR_SIGNATURE = b'PK\x07\x08'
+_ZIP64_EXTRA = 1
+_FLAG_ENCRYPTED, _FLAG_DESCRIPTOR, _FLAG_PATCHED, _FLAG_STRONG, _FLAG_UTF8, _FLAG_MASKED = 0x1, 0x8, 0x20, 0x40, 0x800, 0x2000
+_FLAGS_UNSUPPORTED = _FLAG_ENCRYPTED | _FLAG_PATCHED | _FLAG_STRONG | _FLAG_MASKED
 _CHUNK = 1 << 16
 _MACRO_MARKS = ('macroenabled', 'vbaproject', 'macrosheet')
 # Excel guarda los caracteres de control de una celda como texto: _x0007_.
@@ -110,28 +118,47 @@ def _check_end_record(stream, kind, limits):
     position = tail.rfind(_END_RECORD)
     if position < 0 or position + 22 > len(tail):
         source_error('ZIP_CORRUPTO', kind)
-    entries, directory_bytes = struct.unpack('<HI', tail[position + 10:position + 16])
+    disks = struct.unpack('<HH', tail[position + 4:position + 8])
+    entries, directory_bytes, directory_offset, comment = struct.unpack('<HIIH', tail[position + 10:position + 22])
     # Zip64 es innecesario hasta 25 MB y su registro reemplazaría los valores que se miden acá.
     if entries == 0xFFFF or directory_bytes == 0xFFFFFFFF or tail[max(0, position - 20):position].startswith(_ZIP64_LOCATOR):
         source_error('ZIP_CORRUPTO', kind)
+    # El fin cierra el archivo y el directorio termina donde el fin empieza: sin datos delante ni detrás.
+    end_at = size - len(tail) + position
+    if disks != (0, 0) or position + 22 + comment != len(tail) or directory_offset + directory_bytes != end_at:
+        source_error('ZIP_CORRUPTO', kind)
     if entries > limits.zip_parts or directory_bytes > limits.zip_directory_bytes:
         source_error('LIMITE_PARTES_ZIP_EXCEDIDO', kind)
+    return entries
 
 
-def _check_directory(archive, kind, limits):
+def _has_zip64(extra):
+    position = 0
+    while position + 4 <= len(extra):
+        tag, size = struct.unpack_from('<HH', extra, position)
+        if tag == _ZIP64_EXTRA:
+            return True
+        position += 4 + size
+    return False
+
+
+def _check_directory(archive, kind, limits, entries):
     """Tamaño y razón declarados, antes de descomprimir nada."""
     infos = archive.infolist()
     if len(infos) > limits.zip_parts:
         source_error('LIMITE_PARTES_ZIP_EXCEDIDO', kind)
     names = [info.filename for info in infos]
-    if len(set(names)) != len(names):
+    if len(set(names)) != len(names) or len(infos) != entries:
         source_error('ZIP_CORRUPTO', kind)
     uncompressed = compressed = 0
     for info in infos:
         segments = info.filename.split('/')
-        if info.filename.startswith('/') or '\\' in info.filename or '..' in segments:
+        # zipfile corta el nombre en el NUL: ``orig_filename`` conserva el que trae el archivo.
+        if info.filename.startswith('/') or '\\' in info.filename or '..' in segments or '\x00' in info.orig_filename:
             source_error('ZIP_CORRUPTO', kind)
-        if info.flag_bits & 0x1 or info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+        if info.flag_bits & _FLAGS_UNSUPPORTED or info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            source_error('ZIP_CORRUPTO', kind)
+        if _has_zip64(info.extra):
             source_error('ZIP_CORRUPTO', kind)
         if segments[-1].lower() == 'vbaproject.bin':
             source_error('MACRO_NO_PERMITIDA', kind)
@@ -146,15 +173,99 @@ def _check_directory(archive, kind, limits):
     return infos
 
 
+def _check_local_header(stream, info, kind):
+    """La cabecera local tiene que decir lo mismo que el directorio; devuelve dónde empiezan los datos."""
+    stream.seek(info.header_offset)
+    raw = stream.read(_LOCAL_HEADER.size)
+    if len(raw) != _LOCAL_HEADER.size:
+        source_error('ZIP_CORRUPTO', kind)
+    signature, _, flags, method, _, _, *sizes, name_bytes, extra_bytes = _LOCAL_HEADER.unpack(raw)
+    name = stream.read(name_bytes).decode('utf-8' if flags & _FLAG_UTF8 else 'cp437', 'replace')
+    extra = stream.read(extra_bytes)
+    declared = (info.CRC, info.compress_size, info.file_size)
+    if flags & _FLAG_DESCRIPTOR:
+        # Quien escribe en flujo todavía no los conoce: pueden faltar, pero no pueden contradecir.
+        coherent = all(value in (0, expected) for value, expected in zip(sizes, declared, strict=True))
+    else:
+        coherent = tuple(sizes) == declared
+    if (signature != _LOCAL_SIGNATURE or name != info.orig_filename or method != info.compress_type or not coherent
+            or (flags ^ info.flag_bits) & (_FLAG_DESCRIPTOR | _FLAGS_UNSUPPORTED) or _has_zip64(extra)):
+        source_error('ZIP_CORRUPTO', kind)
+    return info.header_offset + _LOCAL_HEADER.size + name_bytes + extra_bytes
+
+
+def _check_stream(stream, info, start, kind, deadline):
+    """Bytes reales, fin del flujo y CRC completo; ``ZipExtFile`` termina donde el directorio le dice.
+
+    Nunca produce más de un byte sobre lo declarado, y descarta lo que produce.
+    """
+    deflated = info.compress_type == zipfile.ZIP_DEFLATED
+    inflater = zlib.decompressobj(-15) if deflated else None
+    stream.seek(start)
+    left, pending, produced, crc = info.compress_size, b'', 0, 0
+    while True:
+        deadline.check(kind)
+        if left and not pending:
+            pending = stream.read(min(left, _CHUNK))
+            if not pending:
+                source_error('ZIP_CORRUPTO', kind)
+            left -= len(pending)
+        if deflated:
+            output = inflater.decompress(pending, min(_CHUNK, info.file_size - produced + 1))
+            pending = inflater.unconsumed_tail
+        else:
+            output, pending = pending, b''
+        produced += len(output)
+        if produced > info.file_size:
+            source_error('ZIP_CORRUPTO', kind)
+        crc = zlib.crc32(output, crc)
+        if (deflated and inflater.eof) or not (output or pending or left):
+            break
+    # Una entrada vacía puede no traer flujo. Lo demás tiene que terminar justo donde termina lo declarado.
+    if deflated and info.compress_size and (not inflater.eof or inflater.unused_data or left or pending):
+        source_error('ZIP_CORRUPTO', kind)
+    if produced != info.file_size or crc != info.CRC:
+        source_error('ZIP_CORRUPTO', kind)
+
+
+def _check_entry_end(stream, info, data_end, next_offset, kind):
+    """Entre el fin de los datos y lo que sigue solo puede ir el descriptor que el directorio confirma."""
+    gap = next_offset - data_end
+    if not info.flag_bits & _FLAG_DESCRIPTOR:
+        if gap:
+            source_error('ZIP_CORRUPTO', kind)
+        return
+    if gap not in (12, 16):
+        source_error('ZIP_CORRUPTO', kind)
+    stream.seek(data_end)
+    record = stream.read(gap)
+    if gap == 16 and not record.startswith(_DESCRIPTOR_SIGNATURE):
+        source_error('ZIP_CORRUPTO', kind)
+    if record[-12:] != struct.pack('<III', info.CRC, info.compress_size, info.file_size):
+        source_error('ZIP_CORRUPTO', kind)
+
+
 def _check_parts(archive, infos, kind, deadline):
-    """CRC y tamaño real de cada parte, y ningún DTD en el XML; nada más se interpreta acá."""
+    """Acredita con bytes reales lo que el directorio declara, y ningún DTD en el XML.
+
+    Las partes tienen que ocupar el archivo sin huecos ni solapes. Nada se interpreta acá.
+    """
+    stream = archive.fp
+    ordered = sorted(infos, key=lambda info: info.header_offset)
+    position = 0
+    for index, info in enumerate(ordered):
+        if info.header_offset != position:
+            source_error('ZIP_CORRUPTO', kind)
+        start = _check_local_header(stream, info, kind)
+        _check_stream(stream, info, start, kind, deadline)
+        position = ordered[index + 1].header_offset if index + 1 < len(ordered) else archive.start_dir
+        _check_entry_end(stream, info, start + info.compress_size, position, kind)
     for info in infos:
-        with archive.open(info) as part:
-            if info.filename.lower().endswith(('.xml', '.rels')):
-                # Un DOCTYPE solo puede ir antes del elemento raíz.
+        # Un DOCTYPE solo puede ir antes del elemento raíz.
+        if info.filename.lower().endswith(('.xml', '.rels')):
+            with archive.open(info) as part:
                 next(iterparse(part, events=('start',), forbid_dtd=True), None)
-            while part.read(_CHUNK):
-                deadline.check(kind)
+            deadline.check(kind)
 
 
 def _checked_tree(archive, name, kind, limits):
@@ -322,11 +433,12 @@ class _PackageReader(ExcelReader):
     """``load_workbook`` sin lo que este lector no usa: propiedades, tema, nombres definidos,
     hojas no elegidas. Cada parte se acota antes de que openpyxl la interprete."""
 
-    def __init__(self, stream, kind, limits, deadline):
+    def __init__(self, stream, kind, limits, deadline, entries):
         super().__init__(stream, read_only=True, data_only=True, keep_links=False)
         self.kind = kind
         self.limits = limits
         self.deadline = deadline
+        self.entries = entries
 
     def _tree(self, name):
         return _checked_tree(self.archive, name, self.kind, self.limits)
@@ -348,7 +460,7 @@ class _PackageReader(ExcelReader):
                 strings.append(text)
 
     def read(self):
-        infos = _check_directory(self.archive, self.kind, self.limits)
+        infos = _check_directory(self.archive, self.kind, self.limits, self.entries)
         _check_parts(self.archive, infos, self.kind, self.deadline)
         if ARC_CONTENT_TYPES not in self.valid_files:
             source_error('FORMATO_NO_SOPORTADO', self.kind)
@@ -500,8 +612,8 @@ def read_workbook(stream, selection, fmt, field_types, limits, deadline):
     try:
         if not DEFUSEDXML:
             source_error('XML_SEGURO_NO_DISPONIBLE', kind)
-        _check_end_record(stream, kind, limits)
-        reader = _PackageReader(stream, kind, limits, deadline)
+        entries = _check_end_record(stream, kind, limits)
+        reader = _PackageReader(stream, kind, limits, deadline, entries)
         # Las advertencias de openpyxl pueden citar valores de celda.
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')

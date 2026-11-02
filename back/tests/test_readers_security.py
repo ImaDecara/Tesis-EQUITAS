@@ -12,6 +12,7 @@ import sys
 import time
 import traceback
 import zipfile
+import zlib
 from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
@@ -1189,12 +1190,13 @@ def test_reader_refuses_to_run_without_defusedxml(tmp_path, monkeypatch):
 
 
 def test_openpyxl_warnings_never_reach_the_caller(tmp_path, recwarn):
-    # openpyxl avisa con el valor cuando un serial con estilo de fecha queda fuera de rango.
+    # openpyxl avisaría con el valor si convirtiera un serial fuera de rango; ya no convierte por estilo,
+    # y en una columna que no es de fecha ese serial no pasa por un número válido.
     def date_style(workbook):
         workbook['cabecera']['A2'].number_format = 'dd/mm/yyyy'
     data = workbook_bytes({'cabecera': [['A'], [10**12]], 'detalle': [['A'], ['1']]}, configure=date_style)
     assert b's="1"' in sheet_part(data)
-    reject(write(tmp_path, 'libro', data), xlsx_profile(fecha_serial='1900'), 'CELDA_CON_ERROR')
+    reject(write(tmp_path, 'libro', data), xlsx_profile(fecha_serial='1900'), 'CELDA_TIPO_NO_SOPORTADO')
     assert not recwarn.list
 
 
@@ -1523,3 +1525,215 @@ def test_every_number_form_of_the_format_is_read(tmp_path, text, expected):
 def test_a_cell_type_outside_the_format_is_rejected(tmp_path):
     path = write(tmp_path, 'libro', with_sheet(f'{HEADER_ROW}<row r="2"><c r="A2" t="zz"><v>1</v></c></row>'))
     reject(path, xlsx_profile(), 'ESTRUCTURA_INVALIDA')
+
+
+# ------------------------------------------------------------- ciclo 1: ZIP byte a byte
+
+
+def handmade_zip(data, change=None, *, lead=b'', trailer=b'', entries_delta=0):
+    """Arma el paquete a mano: ``change`` altera lo que cada parte declara, sin pasar por zipfile."""
+    entries = {}
+    with zipfile.ZipFile(io.BytesIO(data)) as source:
+        for name in source.namelist():
+            content = source.read(name)
+            packer = zlib.compressobj(wbits=-15)
+            entries[name] = {'name': name.encode(), 'stream': packer.compress(content) + packer.flush(), 'method': 8,
+                             'crc': zlib.crc32(content), 'size': len(content), 'flags': 0, 'extra': b'', 'after': b''}
+    if change:
+        change(entries)
+    output, directory = bytearray(lead), bytearray()
+    for entry in entries.values():
+        offset = len(output)
+        stream, compressed = entry['stream'], entry.get('compressed', len(entry['stream']))
+        declared = (entry['crc'], compressed, entry['size'])
+        local = (entry.get('local_crc', declared[0]), entry.get('local_compressed', declared[1]), entry.get('local_size', declared[2]))
+        local_name, local_extra = entry.get('local_name', entry['name']), entry.get('local_extra', b'')
+        output += struct.pack('<4s5H3I2H', b'PK\x03\x04', 20, entry.get('local_flags', entry['flags']), entry.get('local_method', entry['method']),
+                              0, 33, *local, len(local_name), len(local_extra)) + local_name + local_extra + stream + entry['after']
+        directory += struct.pack('<4s6H3I5H2I', b'PK\x01\x02', 20, 20, entry['flags'], entry['method'], 0, 33, *declared,
+                                 len(entry['name']), len(entry['extra']), 0, 0, 0, 0, offset) + entry['name'] + entry['extra']
+    start = len(output)
+    count = len(entries) + entries_delta
+    return bytes(output + directory + struct.pack('<4s4H2IH', b'PK\x05\x06', 0, 0, count, count, len(directory), start, 0) + trailer)
+
+
+STYLES_PART = 'xl/styles.xml'
+
+
+def _prefix_of_a_longer_stream(entries, extra=b'<!-- mas datos -->' * 40):
+    """Directorio y cabecera local describen un XML completo, pero el flujo comprimido sigue."""
+    entry = entries[STYLES_PART]
+    prefix = zlib.decompress(entry['stream'], -15)
+    packer = zlib.compressobj(wbits=-15)
+    entry['stream'] = packer.compress(prefix + extra) + packer.flush()
+
+
+def _descriptor(entry, *, signature=True, crc=None):
+    record = struct.pack('<III', entry['crc'] if crc is None else crc, len(entry['stream']), entry['size'])
+    return (b'PK\x07\x08' if signature else b'') + record
+
+
+def _with_descriptor(**options):
+    def change(entries):
+        for entry in entries.values():
+            entry.update(flags=0x8, local_crc=0, local_compressed=0, local_size=0, after=_descriptor(entry, **options))
+    return change
+
+
+def _set(**values):
+    def change(entries):
+        entries[STYLES_PART].update(values)
+    return change
+
+
+def _truncated(entries):
+    entries[STYLES_PART]['stream'] = entries[STYLES_PART]['stream'][:-3]
+
+
+def _trailing_bytes(entries):
+    entries[STYLES_PART]['stream'] += b'datos que el flujo no consume'
+
+
+def _nul_in_name(entries):
+    entries['xl/media/oculto.bin\x00.xml'] = {**entries[STYLES_PART], 'name': b'xl/media/oculto.bin\x00.xml'}
+
+
+def _shorter_compressed_size(entries):
+    entries[STYLES_PART].update(compressed=len(entries[STYLES_PART]['stream']) - 3, after=b'')
+
+
+def _bad_descriptor(entries):
+    _with_descriptor()(entries)
+    entries[STYLES_PART]['after'] = _descriptor(entries[STYLES_PART], crc=1)
+
+
+def _local_zip64(entries):
+    entry = entries[STYLES_PART]
+    entry['local_extra'] = struct.pack('<HHQQ', 1, 16, entry['size'], len(entry['stream']))
+
+
+def _central_zip64(entries):
+    entry = entries[STYLES_PART]
+    entry['extra'] = struct.pack('<HHQ', 1, 8, entry['size'])
+
+
+def _local_sizes_marked_zip64(entries):
+    entries[STYLES_PART].update(local_compressed=0xFFFFFFFF, local_size=0xFFFFFFFF)
+
+
+FORGED_PACKAGES = [
+    ('prefijo-en-ambas-cabeceras', _prefix_of_a_longer_stream, {}),
+    ('tamano-falso-solo-en-la-local', _set(local_size=999), {}),
+    ('crc-falso-solo-en-la-local', _set(local_crc=1), {}),
+    ('comprimido-falso-solo-en-la-local', _set(local_compressed=1), {}),
+    ('nombre-distinto-en-la-local', _set(local_name=b'xl/stylez.xml'), {}),
+    ('metodo-distinto-en-la-local', _set(local_method=0), {}),
+    ('descriptor-solo-en-la-local', _set(local_flags=0x8), {}),
+    ('tamano-real-menor-al-declarado', _set(size=7_000), {}),
+    ('crc-falso-en-ambas', _set(crc=1), {}),
+    ('flujo-truncado', _truncated, {}),
+    ('bytes-tras-el-fin-del-flujo', _trailing_bytes, {}),
+    ('tamano-comprimido-menor-al-flujo', _shorter_compressed_size, {}),
+    ('hueco-entre-partes', _set(after=b'relleno'), {}),
+    ('datos-antes-de-la-primera-parte', None, {'lead': b'PK\x03\x04relleno'}),
+    ('datos-tras-el-fin-del-zip', None, {'trailer': b'relleno'}),
+    ('contador-del-fin-menor', None, {'entries_delta': -1}),
+    ('contador-del-fin-mayor', None, {'entries_delta': 1}),
+    ('descriptor-falso', _bad_descriptor, {}),
+    ('descriptor-sin-bandera', _set(after=b'PK\x07\x08' + bytes(12)), {}),
+    ('nul-en-el-nombre', _nul_in_name, {}),
+    ('zip64-solo-en-la-local', _local_zip64, {}),
+    ('zip64-solo-en-el-directorio', _central_zip64, {}),
+    ('tamanos-marcados-zip64-en-la-local', _local_sizes_marked_zip64, {}),
+    ('datos-parcheados', _set(flags=0x20), {}),
+    ('cifrado-fuerte', _set(flags=0x40), {}),
+    ('cabeceras-enmascaradas', _set(flags=0x2000), {}),
+]
+
+
+def test_a_handmade_package_with_nothing_changed_is_validated(tmp_path):
+    assert lot_result(write(tmp_path, 'libro', handmade_zip(validated_data())), xlsx_profile()) == 'VALIDADO'
+
+
+@pytest.mark.parametrize(('name', 'change', 'options'), FORGED_PACKAGES, ids=[case[0] for case in FORGED_PACKAGES])
+def test_a_package_whose_structures_disagree_is_rejected_before_reading_it(tmp_path, name, change, options):
+    path = write(tmp_path, name, handmade_zip(validated_data(), change, **options))
+    reject(path, xlsx_profile(), 'ZIP_CORRUPTO')
+
+
+@pytest.mark.parametrize('options', [{}, {'signature': False}], ids=['con-firma', 'sin-firma'])
+def test_a_streaming_writer_with_data_descriptors_is_validated(tmp_path, options):
+    path = write(tmp_path, 'libro', handmade_zip(validated_data(), _with_descriptor(**options)))
+    assert lot_result(path, xlsx_profile()) == 'VALIDADO'
+
+
+def test_a_real_writer_to_an_unseekable_stream_is_validated(tmp_path):
+    class Unseekable(io.BytesIO):
+        def seekable(self):
+            return False
+
+        def seek(self, *_):
+            raise io.UnsupportedOperation
+
+        def tell(self):
+            raise io.UnsupportedOperation
+    output = io.BytesIO()
+
+    class Forward(Unseekable):
+        def write(self, chunk):
+            return output.write(chunk)
+    with zipfile.ZipFile(io.BytesIO(validated_data())) as source, zipfile.ZipFile(Forward(), 'w', zipfile.ZIP_DEFLATED) as target:
+        for name in source.namelist():
+            target.writestr(name, source.read(name))
+    assert struct.unpack('<H', output.getvalue()[6:8])[0] & 0x8
+    assert lot_result(write(tmp_path, 'libro', output.getvalue()), xlsx_profile()) == 'VALIDADO'
+
+
+def test_a_stored_package_is_validated_and_its_real_bytes_are_checked_too(tmp_path):
+    stored = rewrite_zip(validated_data(), compression=zipfile.ZIP_STORED)
+    assert lot_result(write(tmp_path, 'libro', stored), xlsx_profile()) == 'VALIDADO'
+
+    def inflate(entries):
+        entry = entries[STYLES_PART]
+        entry.update(stream=zlib.decompress(entry['stream'], -15) + b'<!-- mas -->', method=0)
+    reject(write(tmp_path, 'libro2', handmade_zip(validated_data(), inflate)), xlsx_profile(), 'ZIP_CORRUPTO')
+
+
+def test_real_bytes_beyond_the_declared_size_are_cut_at_once(tmp_path, monkeypatch):
+    """Más de 200 MB reales detrás de un tamaño declarado chico: se corta sin descomprimirlos."""
+    def huge(entries):
+        entry = entries[STYLES_PART]
+        prefix = zlib.decompress(entry['stream'], -15)
+        packer = zlib.compressobj(wbits=-15)
+        entry['stream'] = packer.compress(prefix) + b''.join(packer.compress(bytes(1 << 20)) for _ in range(210)) + packer.flush()
+    path = write(tmp_path, 'libro', handmade_zip(validated_data(), huge))
+    produced = []
+    real = zlib.decompressobj
+
+    class Counting:
+        def __init__(self, *args):
+            self.inner = real(*args)
+
+        def decompress(self, *args):
+            output = self.inner.decompress(*args)
+            produced.append(len(output))
+            return output
+
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
+    monkeypatch.setattr('ETL.readers.xlsx.zlib.decompressobj', Counting)
+    reject(path, xlsx_profile(), 'ZIP_CORRUPTO')
+    assert sum(produced) < 1 << 20
+
+
+def test_an_entry_declared_empty_without_a_stream_is_read_as_empty(tmp_path):
+    def empty(entries):
+        entries['xl/vacia.bin'] = {'name': b'xl/vacia.bin', 'stream': b'', 'method': 8, 'crc': 0, 'size': 0, 'flags': 0, 'extra': b'', 'after': b''}
+    assert lot_result(write(tmp_path, 'libro', handmade_zip(validated_data(), empty)), xlsx_profile()) == 'VALIDADO'
+
+
+def test_a_zip_comment_of_the_declared_length_is_accepted(tmp_path):
+    data = validated_data()
+    position = data.rindex(b'PK\x05\x06')
+    commented = data[:position + 20] + struct.pack('<H', 7) + b'esquema'
+    assert lot_result(write(tmp_path, 'libro', commented), xlsx_profile()) == 'VALIDADO'
