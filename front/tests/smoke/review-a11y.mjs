@@ -170,6 +170,11 @@ function overlapsIn(root) {
     }
   }
   const outside = elements.filter(({ box }) => box.left < -1 || box.right > window.innerWidth + 1).map(({ element }) => name(element))
+  // Tampoco se sale de su formulario, aunque entre en la ventana.
+  for (const { element, box } of elements) {
+    const form = element.closest('form')?.getBoundingClientRect()
+    if (form && (box.left < form.left - 1 || box.right > form.right + 1)) outside.push(`${name(element)} fuera de su formulario`)
+  }
   return { checked: elements.length, overlaps: found, outside, pageWidth: document.documentElement.scrollWidth, viewport: window.innerWidth }
 }
 

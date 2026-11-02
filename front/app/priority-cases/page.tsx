@@ -214,7 +214,7 @@ export default async function PriorityCasesPage({
                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
                 />
               </div>
-              <div className="flex items-end gap-2 xl:col-span-6">
+              <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-6">
                 <button type="submit" className={buttonVariants({ variant: 'default' })}>
                   Aplicar filtros
                 </button>
