@@ -38,6 +38,7 @@ from oracle_lots import (  # noqa: E402
     ESTADOS_A_CLAVE,
     FIXTURE,
     accepted_objects,
+    accepted_with_altered,
     derive_lot,
     object_by_case,
     oracle,
@@ -619,8 +620,27 @@ def test_la_funcion_sql_coincide_con_los_dos_oraculos_en_un_lote_validado(campai
         differences += [(profile["debtor"], column) for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], wanted[column])]
     assert differences == []
     observed = {(row["overdue_debt_amount"] is None, row["debt_state_not_observed_count"] > 0) for row in tables["debtor_profile"]}
-    assert {(False, False), (True, True), (False, True)} <= observed, "La fixture debe ejercitar las tres reglas de §4.1"
+    assert {(False, False), (False, True)} <= observed, "Completo, y subtotal con estados faltantes"
     campaign.record("paridad SQL y oráculos", objetos=len(debtors), diferencias=len(differences))
+
+
+def test_con_estados_faltantes_y_sin_vencidas_la_paridad_se_mantiene_en_un_lote_validado(campaign, published):
+    item = object_by_case(MODIFIED_CASE)
+    ids = catalogs()
+    status_keys = {value: key for key, value in ids["debt_status"].items()}
+    lot = derive_lot(campaign.work / "sin-estados", (QUARANTINED_CASE,), detalle_cells={(item["clave_agrupacion"], None, "NOTD_ESTA_id"): ""})
+    result = campaign.etl(lot)
+    assert result.returncode == 0, result.stderr
+    assert line_value(result, "Resultado del lote") == "VALIDADO"
+    tables = tenant_tables(snapshot())
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor_of(tables, ids["debtor_type"], MODIFIED_CASE)["id"])
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (None, None), "Regla 2 de §4.1: no es un cero"
+    assert profile["debt_state_not_observed_count"] == item["obligaciones"]
+    assert persisted_mismatches(tables, accepted_with_altered((MODIFIED_CASE,), lot), ids, lot) == []
+    wanted = _python_oracle(tables, status_keys, profile["debtor"])
+    assert [column for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], wanted[column])] == []
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), ids, published.validated.lot) == []
 
 
 def _recompute_in_rollback(debts: list[tuple], *, integrated: bool = True, extra: str = "") -> tuple[dict, dict]:
