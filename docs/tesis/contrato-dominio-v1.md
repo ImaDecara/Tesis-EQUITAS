@@ -447,6 +447,8 @@ agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
 | v1 (corrección 1) | 29/10/2026 | Revisión independiente de ALIGN-007: inventario de cálculos de páginas y componentes (§7.9) y separación de AG08/VP07; claves internas separadas de las externas (§2, OB01/OB02, DE00/DE01, PE00/PE01, CO04); procedencia temporal y rótulos (§5.1); AG07 dividido en AG07a–c; reglas de agregación (§4.1) |
 | v1 (adenda ALIGN-018) | 30/10/2026 | §13: decisión humana, aprobación y lote, solo base local. DE06 refleja `updated_amount` generado en la base local (ALIGN-017); `as_of` y `source_updated_at` nombran su destino en `import_batch` |
 | v1 (adenda ALIGN-018, corrección 1) | 31/10/2026 | Revisión independiente de ALIGN-018: antecedente siempre anterior en las cadenas; límite de `reason_text` sobre lo almacenado; `supervisor` no registra lotes; límites y claves de `counts` |
+| v1 (adenda ALIGN-026) | 02/11/2026 | §14: semántica de la carga V1 en la base local. Prevalece sobre las columnas de faltantes y las brechas de §5, §7.1–§7.5, §8 y §10 para los campos que lista |
+| v1 (adenda ALIGN-026, corrección 1) | 02/11/2026 | Revisión independiente de ALIGN-026: sin estados observados no hay cero de deuda vencida; `debt_state_not_observed_count`; `debt.status` sale del estado que resolvió el validador; documento y persona se clasifican sobre el valor tal como llegó; gestiones y contactos sin insumos quedan nulos |
 
 ## 13. Decisión humana, aprobación y lote (ALIGN-018)
 
@@ -470,3 +472,38 @@ Tablas append-only `case_review`, `case_review_approval` e `import_batch`, **sol
 | `import_batch.created_by`, `import_batch.created_by_role`, `import_batch.created_at` | Quién registró el lote, con qué rol en ese momento y cuándo | Base de datos, a partir de la membresía activa | Solo `importador` o `importador_sistema`: `supervisor` no adquiere el permiso por serlo |
 
 **Regla de lectura:** las lecturas de `case_review` listan columnas y no incluyen `reason_text`; solo se obtiene con `read_case_review_reason_text`, para quien decide o supervisa en ese tenant.
+
+## 14. Semántica de la carga V1 (ALIGN-026)
+
+Vale para lo que carga `python -m ETL.run_etl --execute`, **solo en la base local**, y prevalece sobre lo que §5, §7.1–§7.5, §8 y §10 describen @36f35b4 para estos campos. **No corrige datos ya cargados en el original**, que conservan la semántica heredada. Un mismo nombre de columna significa aquí lo que dice el origen a la fecha de corte del lote. Detalle del archivo: [`contrato-origen-v1.md` §9](contrato-origen-v1.md).
+
+| ID | Variable | Fuente → regla en la carga V1 | Faltantes | Clase |
+|---|---|---|---|---|
+| L03 | `import_batch.as_of` | `--cut-off`, obligatorio con `--execute` e igual a la fecha que declara el perfil. Edades y "vencida" se calculan contra él, nunca contra el reloj | Sin corte no hay carga (`CUT_OFF_REQUIRED`) | O |
+| L05 | `import_batch.source_updated_at` | Mayor `Fecha_Actualizacion` de las cabeceras aceptadas | Ausente o centinela → nula = `NO_INFORMADO_EN_ORIGEN` | O (semántica P) |
+| L02, DE12 | `debt.currency` | `moneda` del perfil → `currency.code` | Clave ausente: no hay carga (`CATALOG_KEY_MISSING`) | O |
+| OB02, DE01, PE01 | `debtor.external_id`, `debt.external_id`, `person.external_id` | Texto → decimal canónico de bigint no negativo. No se quitan ceros ni caracteres | No canónico → `INVALIDO`, objeto en cuarentena, sin colapsar con el canónico | O |
+| OB03 | `debtor.type` | `Bien_Tipo_Id` → valor declarado en el perfil → `debtor_type.key` | Fuera de catálogo → `INVALIDO`, cuarentena | O |
+| OB06 | `debtor.status` | `Estado` → verdadero/falso con el catálogo del contrato | Vacío → nulo = `NO_INFORMADO_EN_ORIGEN`, no activo | O (P) |
+| DE02 | `debt.period` | Período de origen si existiera. El contrato v1 no declara esa columna: hoy siempre nulo. Nunca `DEUD_id` | Nulo = `NO_INFORMADO_EN_ORIGEN`; `DEUD_id` no es período | A (P) |
+| DE04, DE05 | `debt.original_amount`, `debt.current_amount` | `NOTD_capital`, `NOTD_totalActualizado`, exactos con dos decimales, sin `float` | Vacío o inválido → `INVALIDO`/`NO_INFORMADO_EN_ORIGEN` y nunca se guardan. Fracción de centavo → `INVALIDO`. Cero observado se conserva | O |
+| DE08, DE09 | `debt.issue_date`, `debt.last_collection_date` | Nulas: no hay fuente real. `Fecha_Actualizacion` ya no se copia aquí | `NO_INTEGRADO` | A |
+| DE03 | `debt.type` | Clave de los 8 códigos con mapeo, comparados como texto. Otro código catalogado → `unknown_<código>`, sin colapsar en una clave genérica | Sin código → `unknown` | O |
+| DE10 | `debt.status` | Estado que resolvió el validador con el catálogo del lote → `debt_status.key`, con `SUSPENDED`. "Vencida" = `PENDIENTE` con vencimiento anterior al corte. Un código catalogado se conserva aunque se escriba `null` o `NaN` | Sin estado → `UNKNOWN`, nunca inferido por vencimiento | O (semántica P) |
+| PE04 | `person.type` | Prefijo de un documento con estructura de CUIT válida (PE05); si no, `UNKNOWN` | Sin esa estructura → `UNKNOWN`. Nunca es factor de prioridad | D |
+| PE05 | `person.document_type` | `CUIT` solo si el valor, **tal como llegó** y sin borrar nada, es `NN-NNNNNNNN-N` o 11 dígitos ASCII, con prefijo conocido y dígito verificador correcto; si no, `UNKNOWN`. Validez ante el organismo no verificada | Con letras, otros separadores o sin esa estructura → `UNKNOWN`. El valor se conserva en `document_number` | D |
+| PE07 | `person.status` | `UNKNOWN`: el origen no lo informa | `NO_INTEGRADO` en origen | A |
+| RE01 | `debtor_person.priority` | `Destinatario_Porcentaje`, exacto | Vacío → nulo, no 0 | O (semántica P) |
+| CO01, CO03 | `debtor_contact.value`, `debtor_contact.active` | Solo valores con formato utilizable. Baja explícita → `active=false` | Marcador o formato ilegible: no se carga. Activo sigue sin significar verificado | O; validez A |
+| PR01 | `debtor_profile.total_debt_amount` | Σ `current_amount` de las obligaciones del objeto, incluidas las pagadas, anuladas y suspendidas, porque así lo define el oráculo | Sin obligaciones → 0 derivado (§4.1) | D |
+| PR02, PR03 | `debtor_profile.overdue_debt_amount`, `debtor_profile.overdue_debt_count` | Σ y conteo de las obligaciones vencidas al corte | Todos los estados observados o sin obligaciones: completo, y 0 derivado si no hay vencidas (§4.1 reglas 2 y 5). Estados faltantes con vencidas observadas: **subtotal**, con PR11 al lado (regla 3). Estados faltantes sin vencidas observadas: **nulos**, no 0 (reglas 2 y 4) | D |
+| PR04 | `debtor_profile.oldest_debt_days`, `debtor_profile.average_debt_age_days` | Máximo y promedio, redondeado a entero medio hacia arriba, de los días de atraso al corte de las vencidas observadas | Nulos sin vencidas observadas, nunca 0: con PR11 = 0 es `NO_APLICA`; con PR11 > 0, `NO_INFORMADO_EN_ORIGEN`. Con vencidas observadas y PR11 > 0 es un subtotal | D |
+| PR06 | `debtor_profile.available_contact_count` | Contactos activos con formato utilizable de las personas del objeto en este lote | Celdas vacías con columna presente: 0 derivado, como el oráculo. Ninguna de las tres columnas en el archivo: nulo = `NO_INFORMADO_EN_ORIGEN` | D |
+| PR07 | `debtor_profile.previous_contact_count`, `debtor_profile.previous_response_count` | Nulos: no hay fuente | `NO_INTEGRADO`, ya no un 0 por defecto | A |
+| PR11 | `debtor_profile.debt_state_not_observed_count` | Obligaciones del objeto cuyo estado de origen no está observado. Columna nueva, solo base local | 0 = PR02–PR04 completos. Nula en un perfil que no la calculó | D |
+| PR08 | `debtor_profile.socioeconomic_risk_level` | **No se calcula.** Nulo: dependía del promedio del lote. La severidad la calculan las reglas v1 al leer (ALIGN-008) | Legado del original; nulo aquí = `NO_INTEGRADO` | A |
+| PR09, PR10 | `debtor_profile_detail.risk_value`, `debtor_profile_detail.reason` | **No se calcula.** Una fila por relación, con `risk_value` nulo y `reason` que lo declara: derivaba de PR08 | Nulo, nunca 0 ni BAJO. El mapeador actual lo presenta como no informado (§9 regla 6) | A |
+
+El mapeador de objetos (FO02) ya no lee PR02 como total cuando alguna obligación del objeto no tiene estado observado: recalcula desde las obligaciones para conservar el subtotal y su desglose (`front/lib/mappers/debtor-object-mapper.ts`). Con todos los estados observados sigue usando el valor persistido. FO04 y FO05 ya se comportaban así.
+
+`import_batch` (§13) recibe los eventos de cada carga: `VALIDADO` → `PUBLICADO`, o `FALLIDO` si el lote se bloquea o la carga falla, con hashes de archivo, mapeo y contrato, conteos, corte y versión de reglas. `counts.estados_al_corte` concilia con las filas de `debt` de los objetos publicados; los objetos en cuarentena se cuentan aparte, en `counts.estados_al_corte_en_cuarentena`. Quien lo escribe es `equitas_import_server`, con un actor `importador_sistema`. **Pendiente de otros tickets:** los adaptadores de decisión (`back/services/decision_input.py`, `front/lib/mappers/debtor-object-mapper.ts`) siguen declarando `estado_origen`, `periodo_fiscal` y `source_updated_at` como `NO_INTEGRADO`, aunque el estado y la actualización ya tienen destino; conectarlos no pertenece a este carril. La semántica real de período y estado sigue siendo **P** hasta la homologación (ALIGN-046).

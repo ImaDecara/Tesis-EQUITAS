@@ -223,8 +223,10 @@ Coherencia con lo implementado (comprobado, §7):
   etiqueta en loopback: la guardia **no** habilita el proyecto testing remoto
   (`TARGET_HOST_FORBIDDEN`), más estricta que esta tabla.
 - Para cargar en este stack: `EQUITAS_TARGET_ENV=local`,
-  `SUPABASE_URL=http://127.0.0.1:54321` y la clave de servicio leída de
-  `/tmp/equitas-local-db/supabase-local.env` (ver el [README del ETL](../../back/ETL/README.md)).
+  `SUPABASE_URL=http://127.0.0.1:54321`, la clave de servicio y la clave `anon` leídas de
+  `/tmp/equitas-local-db/supabase-local.env`, el JWT de `equitas_import_server` y el actor
+  de `etl-import-actor.sql`, con `--execute --cut-off <fecha>` (ver el
+  [README del ETL](../../back/ETL/README.md), ALIGN-026).
 - Un runner nuevo valida el destino **antes** de la primera solicitud y con la misma
   regla: host exacto de la lista, sin credenciales en la URL, y rechazo del original en
   cualquier valor de configuración.

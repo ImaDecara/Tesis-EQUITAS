@@ -5,6 +5,67 @@ import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-me
 import { buildIncompleteStatusRawData, buildPresenceRawData, buildPresencePeopleData } from '@/tests/helpers/equitas-fixtures'
 import { buildDebtAgingSummary } from '@/lib/equitas-view-selectors'
 
+describe('ALIGN-026: perfil tal como lo persiste la carga V1', () => {
+  const NO_INFORMADO = 'NO_INFORMADO_EN_ORIGEN'
+  const debt = (id: number, status: number, currentAmount: number, dueDate = '2020-01-01') => ({
+    id, debtor: 901, original_amount: currentAmount, current_amount: currentAmount, status, due_date: dueDate,
+  })
+
+  it('sin ningún estado observado, la mora no se muestra como cero observado', () => {
+    const raw = buildPresenceRawData()
+    raw.debts = [debt(801, 8, 125), debt(802, 8, 75)]
+    raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: null, overdue_debt_count: null,
+      oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 2 }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.overdueDebt).toBeNull()
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: null, presence: NO_INFORMADO, missing: { [NO_INFORMADO]: 2 } })
+    expect(debtor.overdueDebtsCount).toBeNull()
+    expect(debtor.maxDaysOverdue).toBeNull()
+    expect(debtor.metrics?.maxDaysOverdue.presence).toBe(NO_INFORMADO)
+  })
+
+  it('en un caso mixto conserva el subtotal observado con su desglose', () => {
+    const raw = buildPresenceRawData()
+    raw.debts = [debt(801, 2, 125), debt(802, 8, 75)]
+    raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: 125, overdue_debt_count: 1,
+      oldest_debt_days: 2000, average_debt_age_days: 2000, debt_state_not_observed_count: 1 }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 125, presence: 'OBSERVADO', missing: { [NO_INFORMADO]: 1 } })
+  })
+
+  it.each([
+    ['nulo, como lo persiste la carga', null],
+    ['cero, como en un perfil anterior', 0],
+  ])('con un estado faltante y sin vencidas observadas no hay cero legítimo: %s', (_label, overdueAmount) => {
+    const raw = buildPresenceRawData()
+    raw.debtStatuses.push({ id: 1, key: 'ACTIVE', value: 'Vigente' })
+    raw.debts = [debt(801, 1, 125, '2999-01-01'), debt(802, 8, 75)]
+    raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: overdueAmount, overdue_debt_count: overdueAmount,
+      oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 1 }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: null, presence: NO_INFORMADO, missing: { [NO_INFORMADO]: 1 } })
+  })
+
+  it('con todos los estados observados y sin vencidas, el cero del perfil es un cero derivado completo', () => {
+    const raw = buildPresenceRawData()
+    raw.debts = [debt(801, 3, 125)]
+    raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 125, overdue_debt_amount: 0, overdue_debt_count: 0,
+      oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 0 }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 0, presence: 'OBSERVADO', missing: {} })
+  })
+
+  it('tampoco declara faltantes en un objeto sin obligaciones', () => {
+    const raw = buildPresenceRawData()
+    raw.debts = []
+    raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 0, overdue_debt_amount: 0, overdue_debt_count: 0,
+      oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 0 }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 0, presence: 'OBSERVADO', missing: {} })
+    expect(debtor.metrics?.maxDaysOverdue.presence).toBe('NO_APLICA')
+  })
+})
+
 describe('ALIGN-011: presencia con filas de forma real', () => {
   it('conserva cero actual y cero persistido, sin sustituirlos por capital', () => {
     const raw = buildPresenceRawData()

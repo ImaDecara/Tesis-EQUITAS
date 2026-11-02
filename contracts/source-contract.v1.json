@@ -80,6 +80,15 @@
       "SUSPENDIDA",
       "UNKNOWN"
     ],
+    "debt_status_por_estado": {
+      "PENDIENTE_VENCIDA": "OVERDUE",
+      "PENDIENTE_VIGENTE": "ACTIVE",
+      "PAGADA": "PAID",
+      "ANULADA": "CANCELLED",
+      "SUSPENDIDA": "SUSPENDED",
+      "UNKNOWN": "UNKNOWN"
+    },
+    "destino_Bien_Tipo_Id": "debtor_type.key: cada valor de catalogos.Bien_Tipo_Id del perfil del lote es la clave del tipo de objeto en la base; el código de origen nunca es su id.",
     "Estado": {
       "Activo": "ACTIVO",
       "Inactivo": "INACTIVO"

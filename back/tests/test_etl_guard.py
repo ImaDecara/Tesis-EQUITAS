@@ -13,6 +13,8 @@ import httpx
 import pandas as pd
 import pytest
 
+from oracle_lots import AS_OF, accepted_objects, derive_lot
+
 from ETL import config, extract, load, run_etl
 
 ORIGINAL = "folyslqzqvnpolexcxjo"
@@ -41,6 +43,9 @@ def preparar_ejecucion(monkeypatch):
     monkeypatch.setenv("EQUITAS_TARGET_ENV", "local")
     monkeypatch.setenv("SUPABASE_URL", "http://127.0.0.1:54321")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "CLAVE_FICTICIA_ALIGN025")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "CLAVE_PUBLICA_FICTICIA_ALIGN026")
+    monkeypatch.setenv("EQUITAS_IMPORT_SERVER_JWT", "JWT_FICTICIO_ALIGN026")
+    monkeypatch.setenv("EQUITAS_IMPORT_ACTOR_USER", "7")
 
 
 def fuente_sintetica():
@@ -57,6 +62,31 @@ def fuente_sintetica():
         "NOTD_totalActualizado": "120", "NOTD_vencimiento": "01/01/2020",
     }
     return cabecera, detalle
+
+
+# ALIGN-026: --execute valida el lote completo antes de cargar. Un lote derivado del oráculo, con centinelas
+# en los campos personales de un objeto, reemplaza a la fuente de una sola fila que ya no sería publicable.
+def lote_con_centinelas(tmp_path):
+    objeto = accepted_objects()[0]["clave_agrupacion"]
+    nombre, documento, email, telefono = CENTINELAS
+    return objeto, derive_lot(tmp_path / "lote", cabecera_cells={
+        (objeto, None, "Destinatario"): nombre,
+        (objeto, None, "Destinatario_CUIT"): documento,
+        (objeto, None, "Destinatario_Email"): email,
+        (objeto, None, "Destinatario_Telefono"): telefono,
+    })
+
+
+def simular_carga(monkeypatch):
+    monkeypatch.setattr(run_etl, "resolve_catalogs", lambda required, _columns: {
+        table: {key: index for index, key in enumerate(sorted(keys), start=1)} for table, keys in required.items()
+    })
+    monkeypatch.setattr(run_etl, "record_import_batch", Mock(return_value=1))
+    for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact", "load_debtor_profile",
+                   "load_debtor_profile_detail", "load_province", "load_city", "load_address"):
+        monkeypatch.setattr(run_etl, nombre, Mock(return_value={"id": 1}))
+    monkeypatch.setattr(run_etl, "load_debts_bulk",
+                        Mock(return_value={"unique": 1, "inserted": 1, "updated": 0, "unchanged": 0}))
 
 
 def comprobar_salida_segura(texto):
@@ -201,54 +231,76 @@ def test_dry_run_real_desde_tsv_sin_credenciales(monkeypatch, tmp_path, capsys):
     config.create_client.assert_not_called()
 
 
-def test_omisiones_tienen_fila_hash_y_codigo_sin_datos(monkeypatch, capsys):
+# ALIGN-026: reemplaza la omisión fila por fila del cargador. Una fila sin clave ahora la rechaza el validador,
+# con código por fila y objeto en cuarentena, antes de cualquier escritura.
+@pytest.mark.parametrize(("columna", "codigo"), [
+    ("Destinatario_Id", "IDENTIFICADOR_INVALIDO"), ("Cuenta", "CUENTA_NO_CANONICA"), ("Bien_Tipo_Id", "CAMPO_OBLIGATORIO_VACIO"),
+])
+def test_filas_sin_clave_se_rechazan_con_codigo_y_sin_datos(monkeypatch, capsys, tmp_path, columna, codigo):
     preparar_ejecucion(monkeypatch)
-    cabecera, detalle = fuente_sintetica()
-    headers = [{**cabecera, field: ""} for field in ("Destinatario_Id", "Cuenta", "Bien_Tipo_Id")]
-    details = [{**detalle, field: ""} for field in ("Bien_Tipo_Id", "Cuenta", "DEUD_id")]
-    source = SimpleNamespace(cabecera_df=pd.DataFrame(headers), detalle_df=pd.DataFrame([*details, detalle]))
-    monkeypatch.setattr(run_etl, "extract_from_input_folder_limited", lambda **kwargs: source)
-    run_etl.run_etl("sintetico", execute=True)
+    simular_carga(monkeypatch)
+    objeto, carpeta = lote_con_centinelas(tmp_path)
+    (carpeta / "cabecera.tsv").write_text(
+        "\n".join(_vaciar_celda(linea, columna, objeto) for linea in (carpeta / "cabecera.tsv").read_text("utf-8").splitlines()) + "\n",
+        "utf-8",
+    )
+    run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
-    for code in ("PERSON_EXTERNAL_ID_MISSING", "DEBTOR_EXTERNAL_ID_MISSING", "DEBTOR_TYPE_MISSING",
-                 "DETAIL_TYPE_MISSING", "DETAIL_ACCOUNT_MISSING", "DETAIL_EXTERNAL_ID_MISSING", "DETAIL_DEBTOR_MISSING"):
-        assert re.search(r"fila=\d+ clave_hash=[0-9a-f]{24} codigo=" + code, salida.out)
+    assert f"Rechazo {codigo}: 1" in salida.out
+    registradas = [llamada.args[0].get("full_name") for llamada in run_etl.load_person.call_args_list]
+    assert CENTINELAS[0] not in registradas
 
 
-def test_error_del_proveedor_no_sale_en_cli_ni_traceback(monkeypatch, capsys):
+def _vaciar_celda(linea, columna, objeto, encabezado=[]):  # noqa: B006
+    celdas = linea.split("\t")
+    if not encabezado:
+        encabezado.extend(celdas)
+    if celdas[0] == objeto:
+        celdas[encabezado.index(columna)] = ""
+    return "\t".join(celdas)
+
+
+def test_error_del_proveedor_no_sale_en_cli_ni_traceback(monkeypatch, capsys, tmp_path):
     preparar_ejecucion(monkeypatch)
-    cabecera, detalle = fuente_sintetica()
-    source = SimpleNamespace(cabecera_df=pd.DataFrame([cabecera]), detalle_df=pd.DataFrame([detalle]))
-    monkeypatch.setattr(run_etl, "extract_from_input_folder_limited", lambda **kwargs: source)
+    simular_carga(monkeypatch)
+    _, carpeta = lote_con_centinelas(tmp_path)
     monkeypatch.setattr(run_etl, "load_person", Mock(side_effect=RuntimeError(" ".join(CENTINELAS))))
     with pytest.raises(RuntimeError) as error:
-        run_etl.run_etl("sintetico", execute=True)
+        run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
     comprobar_salida_segura("".join(traceback.format_exception(error.value)))
-    monkeypatch.setattr(sys, "argv", ["etl", "--execute", "--folder", "sintetico"])
+    monkeypatch.setattr(sys, "argv", ["etl", "--execute", "--folder", str(carpeta), "--cut-off", AS_OF])
     with pytest.raises(SystemExit) as exit_info:
         run_etl.main()
     assert exit_info.value.code == 1
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
-    assert re.search(r"fila=1 clave_hash=[0-9a-f]{24} codigo=ETL_FAILED", salida.err)
+    assert re.search(r"fila=2 clave_hash=[0-9a-f]{24} codigo=ETL_FAILED", salida.err)
 
 
-def test_execute_completo_preserva_payloads_y_no_los_imprime(monkeypatch, capsys):
+def test_execute_completo_preserva_payloads_y_no_los_imprime(monkeypatch, capsys, tmp_path):
     preparar_ejecucion(monkeypatch)
-    cabecera, detalle = fuente_sintetica()
-    source = SimpleNamespace(cabecera_df=pd.DataFrame([cabecera]), detalle_df=pd.DataFrame([detalle]))
-    monkeypatch.setattr(run_etl, "extract_from_input_folder_limited", lambda **kwargs: source)
-    for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact",
-                   "load_debtor_profile", "load_debtor_profile_detail"):
-        monkeypatch.setattr(run_etl, nombre, Mock(return_value={"id": 1}))
-    monkeypatch.setattr(run_etl, "load_debts_bulk", Mock(return_value={"inserted": 1, "updated": 0, "unchanged": 0}))
-    run_etl.run_etl("sintetico", execute=True)
-    assert run_etl.load_person.call_args.args[0]["full_name"] == CENTINELAS[0]
-    assert run_etl.load_debtor_contact.call_count == 2
+    simular_carga(monkeypatch)
+    _, carpeta = lote_con_centinelas(tmp_path)
+    run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
+    assert CENTINELAS[0] in [llamada.args[0]["full_name"] for llamada in run_etl.load_person.call_args_list]
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
     assert "CARGA FINALIZADA" in salida.out
+
+
+def test_falla_del_registro_de_una_falla_no_oculta_la_causa(monkeypatch, capsys, tmp_path):
+    preparar_ejecucion(monkeypatch)
+    simular_carga(monkeypatch)
+    _, carpeta = lote_con_centinelas(tmp_path)
+    monkeypatch.setattr(run_etl, "load_person", Mock(side_effect=config.ETLError("CAUSA_ORIGINAL")))
+    monkeypatch.setattr(run_etl, "record_import_batch", Mock(side_effect=[1, RuntimeError(CENTINELAS[0])]))
+    with pytest.raises(config.ETLError) as error:
+        run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
+    assert error.value.code == "CAUSA_ORIGINAL"
+    salida = capsys.readouterr()
+    comprobar_salida_segura(salida.out + salida.err)
+    assert "IMPORT_BATCH_FAILURE_NOT_RECORDED" in salida.out
 
 
 @pytest.mark.parametrize("operacion", ["insertar", "actualizar", "bulk", "respuesta", "clave", "persona"])

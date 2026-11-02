@@ -75,11 +75,12 @@ O = observado; P = pendiente. El snapshot del 21/10 (`database/schema-observado-
 
 ### Catálogos del ETL y e06 son excluyentes
 
-`etl-compat-catalogs.sql` no forma parte de la migración. El ETL actual solo usa IDs fijos, pero las claves canónicas de esas constantes, que el contrato ya lee (`OVERDUE`/`UNKNOWN` en `debt_status`, `docs/tesis/contrato-dominio-v1.md` §9 regla 4), coinciden con cuatro claves únicas de e06: `ARS`, `OVERDUE`, `EMAIL` y `ACTIVE` (`database/testing/fixtures.sql:15-21`). Si las semillas estuvieran en la migración, `fixtures.sql` fallaría en `currency_code_key` después de cada `db reset` (verificado el 30/10, ver más abajo). Cambiar esas claves rompería el conteo de vencidas del frontend, y cambiar e06 está excluido. Por eso:
+`etl-compat-catalogs.sql` no forma parte de la migración. Desde ALIGN-026 el ETL resuelve los catálogos por clave y no usa IDs fijos. Las claves canónicas, que el contrato ya lee (`OVERDUE`/`UNKNOWN` en `debt_status`, `docs/tesis/contrato-dominio-v1.md` §9 regla 4), coinciden con cuatro claves únicas de e06: `ARS`, `OVERDUE`, `EMAIL` y `ACTIVE` (`database/testing/fixtures.sql:15-21`). Si las semillas estuvieran en la migración, `fixtures.sql` fallaría en `currency_code_key` después de cada `db reset` (verificado el 30/10, ver más abajo). Cambiar esas claves rompería el conteo de vencidas del frontend, y cambiar e06 está excluido. Por eso:
 
 - `db reset` deja la base sin filas y e06 carga igual que antes.
 - `etl-compat-catalogs.sql` exige la migración `20261030090000` (registrada solo en la base local) y una base sin e06. Ante un id o una clave ya usados falla y no modifica nada. Repetirlo no cambia la base.
-- Para pasar de un escenario al otro: `db reset`. ALIGN-026 puede resolver los catálogos por `key` con estas mismas claves.
+- Para pasar de un escenario al otro: `db reset`.
+- El script agrega `debt_status` `SUSPENDED` (id 9): el contrato de origen distingue `SUSPENDIDA` y no hay otra clave con ese significado. Es una novena fila frente a las 8 del original, cuyas claves no se observaron: se homologa en ALIGN-046.
 
 ### Procedimiento y esperados
 
@@ -90,8 +91,9 @@ npx --yes supabase@2.108.0 db reset
 P="docker exec -i supabase_db_equitas-tp-testing psql -U postgres -d postgres -v ON_ERROR_STOP=1"
 $P -At -F '|' < database/testing/etl-compat-verify.sql            # solo metadatos y conteos
 $P < database/testing/etl-compat-catalogs.sql                     # escenario ETL (no con e06)
+$P -At < database/testing/etl-import-actor.sql                    # actor del lote; imprime su id (ALIGN-026)
 cd back && EQUITAS_TARGET_ENV=local SUPABASE_URL=http://127.0.0.1:54321 \
-  .venv/bin/python -m ETL.run_etl --folder <lote sintético> --execute  # clave de servicio local: back/ETL/README.md
+  .venv/bin/python -m ETL.run_etl --folder <lote sintético> --execute --cut-off <fecha>  # credenciales: back/ETL/README.md
 ```
 
 | Verificación (`etl-compat-verify.sql`) | Tras `db reset` | Tras catálogos + ETL |
@@ -104,7 +106,7 @@ cd back && EQUITAS_TARGET_ENV=local SUPABASE_URL=http://127.0.0.1:54321 \
 | `secuencias_sin_superar_maximo` | 0 | 0 (con e06 cargado da 14: los IDs explícitos no avanzan la secuencia) |
 | `debt_updated_amount` | `numeric:ALWAYS:current_amount:15` | igual |
 | `debt_updated_distinto_current` | 0 | 0 |
-| `filas_total` | 0 | 30 tras los catálogos (29 filas + el tenant 1); con el ETL, según el lote |
+| `filas_total` | 0 | 31 tras los catálogos (30 filas + el tenant 1) y 34 con el actor; con el ETL, según el lote |
 
 Los valores de la tabla corresponden a la base hasta ALIGN-017. Con `20261030100000_case_review` (ALIGN-018) este verificador suma las tablas nuevas: `migraciones` agrega esa versión; `tablas_public`, `tablas_con_rls` y `politicas` pasan a 26; `tablas_identity_always` a 3; y `politicas_md5` y `grants_tablas_md5` cambian porque recorren todo `public`. Para comparar las 23 tablas de E06 se usa `politicas_23_md5` y `grants_23_md5` de `case-review-verify.sql`.
 
@@ -266,6 +268,46 @@ delete from supabase_migrations.schema_migrations where version = '2026103010000
 commit;
 notify pgrst, 'reload schema';
 ```
+
+## Semántica de la carga ETL (ALIGN-026, solo base local)
+
+`supabase/migrations/20261102100000_etl_semantic_nullables.sql` se aplica **solo en la base local**. Quita `not null` de `debtor_profile.socioeconomic_risk_level`, `oldest_debt_days`, `average_debt_age_days`, `overdue_debt_amount`, `overdue_debt_count`, `available_contact_count`, `previous_contact_count` y `previous_response_count`, de `debtor_profile_detail.risk_value` y de `debtor.status`, para que una ausencia no se guarde como cero o como activo. Agrega `debtor_profile.debt_state_not_observed_count`, nula si el perfil no la calculó. Conserva los valores por defecto, porque e06 no escribe algunas de esas columnas. No toca políticas, RLS ni grants, y agrega `columnas_nulables_etl` al verificador.
+
+`etl-import-actor.sql` crea, después de los catálogos, un usuario `importador_sistema` del tenant 1, sin `auth_user`, que es el actor de los eventos de `import_batch`. Sus eventos se registran con el JWT de `equitas_import_server`. La clave de servicio general no tiene permiso y la carga se detiene con `IMPORT_BATCH_REJECTED` antes de escribir cartera.
+
+`database/testing/etl_semantic_local.py` corre la CLI real y compara lo persistido contra `back/tests/fixtures/sintetico-v1/expected.json`. También pasa las filas leídas de la base por el mapeador real del frontend (`etl-persisted-mapper.test.ts`, con su propia configuración de vitest, fuera de la suite aislada). Requiere `db reset`, los catálogos, el actor y `front/node_modules`; publica solo casos, códigos y conteos, y deja filas: al terminar corresponde `db reset`.
+
+```sh
+back/.venv/bin/python database/testing/etl_semantic_local.py sintetico    # bloqueado, validado, recarga, cuarentenas
+# db reset, catálogos y actor otra vez: la persona externa es única global (§2 del contrato de dominio)
+back/.venv/bin/python database/testing/etl_semantic_local.py municipio-b
+```
+
+Reversión exacta: `npx --yes supabase@2.108.0 db reset --version 20261030100000` y luego `db reset`. Para conservar filas:
+
+```sql
+begin;
+update public.debtor_profile set socioeconomic_risk_level = coalesce(socioeconomic_risk_level, 0),
+  oldest_debt_days = coalesce(oldest_debt_days, 0), average_debt_age_days = coalesce(average_debt_age_days, 0),
+  overdue_debt_amount = coalesce(overdue_debt_amount, 0), overdue_debt_count = coalesce(overdue_debt_count, 0),
+  available_contact_count = coalesce(available_contact_count, 0), previous_contact_count = coalesce(previous_contact_count, 0),
+  previous_response_count = coalesce(previous_response_count, 0);
+update public.debtor_profile_detail set risk_value = coalesce(risk_value, 0);
+update public.debtor set status = coalesce(status, true);
+alter table public.debtor_profile drop column debt_state_not_observed_count,
+  alter column socioeconomic_risk_level set not null,
+  alter column oldest_debt_days set not null, alter column average_debt_age_days set not null,
+  alter column overdue_debt_amount set not null, alter column overdue_debt_count set not null,
+  alter column available_contact_count set not null, alter column previous_contact_count set not null,
+  alter column previous_response_count set not null;
+alter table public.debtor_profile_detail alter column risk_value set not null;
+alter table public.debtor alter column status set not null;
+delete from supabase_migrations.schema_migrations where version = '20261102100000';
+commit;
+notify pgrst, 'reload schema';
+```
+
+Esta inversa vuelve a escribir ceros que no son datos: úsela solo para volver a la semántica anterior de forma deliberada. El código de ALIGN-026 no funciona sin esta migración.
 
 ## Alta de fixtures y secretos
 

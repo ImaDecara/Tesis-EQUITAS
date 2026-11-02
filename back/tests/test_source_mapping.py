@@ -15,6 +15,7 @@ from ETL.transform import (
     build_debtor_payload,
     build_debtor_person_payload,
     build_person_payload,
+    prepare_batch,
 )
 from ETL.validate_source import load_contract, load_mapping, validate_batch
 
@@ -39,13 +40,17 @@ def converted_fixture(folder, mapping, *, aliases=False):
     return files
 
 
-def payloads(source):
-    headers = source.cabecera_df.to_dict('records')
+def payloads(files, mapping):
+    """ALIGN-026: los builders solo reciben filas aceptadas del puente canónico, sea cual sea el formato."""
+    batch = prepare_batch(files, mapping, load_contract(), mapping['fecha_corte'])
+    headers = [row.values for item in batch.objects for row in item.headers]
+    details = [row for item in batch.objects for row in item.details]
     return {
         'personas': [build_person_payload(row) for row in headers],
-        'objetos': [build_debtor_payload(row) for row in headers],
+        'objetos': [build_debtor_payload(row, batch.debtor_type_keys) for row in headers],
         'relaciones': [build_debtor_person_payload(row, 1, 2) for row in headers],
-        'obligaciones': [build_debt_payload(row, 1) for row in source.detalle_df.to_dict('records')],
+        'obligaciones': [build_debt_payload(row.values, 1, cut_off=batch.cut_off, origin_state=row.origin_state,
+                                            currency_code=batch.mapping['moneda']) for row in details],
     }
 
 
@@ -57,24 +62,29 @@ def test_synthetic_tsv_csv_have_identical_payloads_and_validation(tmp_path, sepa
     original = {kind: FIXTURE / f'{kind}.tsv' for kind in KINDS}
     contract = load_contract()
     expected = validate_batch(original, mapping, contract, mapping['fecha_corte'])
-    baseline = extract.extract_source_files(*original.values())
+    baseline = payloads(original, mapping)
     mapping['formato'].update(tipo='csv', separador=separator, codificacion=encoding)
     files = converted_fixture(tmp_path, mapping, aliases=aliases)
     before = copy.deepcopy(mapping)
     tables = extract.read_source_tables(files, mapping, contract=contract)
     report = validate_batch(tables, mapping, contract, mapping['fecha_corte'])
-    actual = extract.extract_source_files(*files.values(), mapping=mapping, contract=contract)
-    assert payloads(actual) == payloads(baseline)
+    assert payloads(files, mapping) == baseline
     assert report == expected
     assert mapping == before
     assert [row.line for row in tables['cabecera'].rows] == list(range(2, 44))
 
 
-def test_profile_tsv_also_matches_the_legacy_payloads():
+def test_profile_tsv_conserves_identifiers_and_only_normalizes_valid_formats():
+    """ALIGN-026: reemplaza la igualdad con los payloads heredados, que ya no se construyen desde filas crudas."""
     files = {kind: FIXTURE / f'{kind}.tsv' for kind in KINDS}
-    profile = load_mapping(FIXTURE)
-    assert payloads(extract.extract_source_files(*files.values(), mapping=profile)) == payloads(
-        extract.extract_source_files(*files.values()))
+    canonical = extract.extract_source_files(*files.values(), mapping=load_mapping(FIXTURE))
+    raw = extract.extract_source_files(*files.values())
+    for column in ('Cuenta', 'Destinatario_Id', 'Bien_Tipo_Id', 'ClaveAgrupacion'):
+        assert canonical.cabecera_df[column].tolist() == raw.cabecera_df[column].str.strip().tolist()
+    assert canonical.detalle_df['DEUD_id'].tolist() == raw.detalle_df['DEUD_id'].str.strip().tolist()
+    pairs = zip(canonical.detalle_df['NOTD_totalActualizado'], raw.detalle_df['NOTD_totalActualizado'], strict=True)
+    for normalized, source in pairs:
+        assert normalized == source.strip().replace('.', '').replace(',', '.') or normalized == source.strip()
 
 
 def test_dry_run_reads_only_and_does_not_create_a_client(tmp_path, monkeypatch):
@@ -198,7 +208,7 @@ def test_explicit_number_and_date_formats_produce_identical_payloads(tmp_path):
             elif spec['tipo'] == 'fecha':
                 rows[0][name] = '29/09/2026'
     original = write_records(tmp_path, records)
-    expected = extract.extract_source_files(*original.values(), mapping=mapping)
+    expected = payloads(original, mapping)
     expected_report = extract.validate_source_files(original, mapping, cut_off=mapping['fecha_corte'])
     for rows in records.values():
         for row in rows:
@@ -207,7 +217,7 @@ def test_explicit_number_and_date_formats_produce_identical_payloads(tmp_path):
     files = write_records(tmp_path, records, separator=',', suffix='csv')
     mapping['formato'].update(tipo='csv', separador=',', decimal='.', miles=',', fecha='aaaa-mm-dd')
     actual = extract.extract_source_files(*files.values(), mapping=mapping)
-    assert payloads(actual) == payloads(expected)
+    assert payloads(files, mapping) == expected
     assert actual.detalle_df.iloc[0]['NOTD_totalActualizado'] == '1234.56'
     assert actual.detalle_df.iloc[0]['NOTD_vencimiento'] == '29/09/2026'
     assert extract.validate_source_files(files, mapping, cut_off=mapping['fecha_corte']) == expected_report

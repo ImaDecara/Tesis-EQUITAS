@@ -481,7 +481,8 @@ export function mapDebtorObjectsFromRawData(
       .map(debt => unavailable(debt.statusPresence))
     const statusIncomplete = missingStatuses.length > 0
     const overdueMetric = debtFailed || profileFailed ? unavailable()
-      : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
+      // Con estados faltantes, el valor persistido es un subtotal: leerlo solo perdería su desglose (§4.1).
+      : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN' || statusIncomplete
         ? aggregateData([...overdueDebts.map(debt => metric(debt, 'updatedAmount')), ...missingStatuses])
         : overdueFromProfile
     const totalDebt = totalMetric.value

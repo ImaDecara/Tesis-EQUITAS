@@ -1,4 +1,5 @@
 import os
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -126,6 +127,27 @@ def get_settings(*, execute: bool = False) -> Settings:
 
 
 settings = get_settings()
+
+
+@dataclass(frozen=True)
+class ImportCredentials:
+    """Registro de lotes: el JWT de equitas_import_server (ALIGN-018), nunca la clave general de servicio."""
+
+    server_jwt: str = field(repr=False)
+    public_key: str = field(repr=False)
+    actor_user: int
+
+
+def get_import_credentials() -> ImportCredentials:
+    load_dotenv(ENV_PATH)
+    server_jwt = os.getenv("EQUITAS_IMPORT_SERVER_JWT", "").strip()
+    public_key = os.getenv("SUPABASE_ANON_KEY", "").strip()
+    if not server_jwt or not public_key:
+        raise ETLError("IMPORT_CREDENTIAL_MISSING")
+    actor_user = os.getenv("EQUITAS_IMPORT_ACTOR_USER", "").strip()
+    if not re.fullmatch(r"[1-9][0-9]{0,18}", actor_user):
+        raise ETLError("IMPORT_ACTOR_INVALID")
+    return ImportCredentials(server_jwt=server_jwt, public_key=public_key, actor_user=int(actor_user))
 
 
 

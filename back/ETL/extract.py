@@ -245,10 +245,19 @@ def _canonical_dataframe(table, kind, mapping, contract):
             elif field_type == 'fecha':
                 parsed = parse_date(value, fmt['fecha'], contract)
                 if parsed.value is not None:
-                    value = parsed.value.strftime('%d/%m/%Y')
+                    # Sin strftime: según la plataforma, %Y no rellena los años anteriores a 1000.
+                    value = f'{parsed.value.day:02}/{parsed.value.month:02}/{parsed.value.year:04}'
+                elif parsed.code == 'FECHA_CENTINELA':
+                    # Queda sin informar en cualquier formato de lote: no se reinterpreta aguas abajo.
+                    value = ''
             record[name] = value
         records.append(record)
     return pd.DataFrame(records, columns=list(columns), dtype=str)
+
+
+def canonical_records(table, kind, mapping, contract):
+    """Filas canónicas en el mismo orden que table.rows, para unirlas con las decisiones del motor por línea."""
+    return _canonical_dataframe(table, kind, mapping, contract).to_dict(orient='records')
 
 
 @dataclass
@@ -312,10 +321,21 @@ def extract_source_files(
     )
 
 
+# Carpeta de un lote dentro de data/input. Una ruta absoluta se usa tal cual.
+def source_folder(folder_name: str) -> Path:
+    return settings.input_dir / folder_name
+
+
+# Archivos de un lote según el formato que declara su perfil.
+def source_files(folder: Path, mapping: dict) -> dict[str, Path]:
+    kind, _ = _source_format(mapping)
+    return {name: folder / f'{name}.{kind}' for name in ('cabecera', 'detalle')}
+
+
 # Extrae los archivos de cabecera y detalle a partir de una carpeta de input.
 def extract_from_input_folder(folder_name: str) -> ExtractedSourceData:
 
-    source_dir = settings.input_dir / folder_name
+    source_dir = source_folder(folder_name)
 
     cabecera_path = source_dir / "cabecera.tsv"
     detalle_path = source_dir / "detalle.tsv"
