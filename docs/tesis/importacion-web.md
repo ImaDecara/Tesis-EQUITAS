@@ -58,6 +58,8 @@ La respuesta lleva `id` (evento vigente), `root_id` (lote), `tenant`, `status`, 
 ```text
 <raíz>/incoming/<token de 128 bits>/<clase>   mientras se recibe
 <raíz>/lotes/<tenant>/<root_id>/<clase>       desde que el lote queda registrado
+<raíz>/retirados/<token>/                     una generación retirada, hasta borrarla
+<raíz>/bloqueos/<NN>.lock                     exclusión por lote; no guardan datos
 ```
 
 Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda. Un error, un corte de conexión o un tiempo excedido no dejan nada. El descarte borra la copia.
@@ -75,6 +77,8 @@ Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda.
 - **Instalar** lee el estado bajo la exclusión y decide con él: abierto, instala y verifica; descartado, retira. **Descartar** escribe el evento y retira la copia bajo la misma exclusión. Una creación pendiente que llega después de un descarte ya ve `DESCARTADO`.
 - **Nada se borra por el nombre del lote.** Bajo la exclusión, la generación se mueve a `retirados/` con un nombre privado, y recién ahí se borra. La purga solo toma una candidata al recorrer: vuelve a decidir bajo la exclusión. Una decisión vieja no alcanza a una copia nueva. Si el lote está ocupado, queda para la próxima purga, sin entregarse.
 - Un descarte interrumpido entre el evento y el borrado se repara en el siguiente `GET`, reintento o descarte.
+- **Quien agregue un cierre (ALIGN-057 al publicar) debe escribir el evento y llamar a `release` bajo `store.lock(tenant, root_id)`.** Instalar relee el estado después de copiar, así que un cierre sin exclusión tampoco deja copia de un `DESCARTADO`, pero esa relectura no sustituye a la exclusión.
+- **Costo:** `GET`, descarte y reintento leen todos los eventos del municipio, paginados, para no poner el `{id}` en una URL. Son pocos: un lote produce un puñado de eventos.
 
 **Para quien lea el archivo (ALIGN-054, 056).** `UploadStore.files(tenant, root_id)` devuelve las rutas de la copia vigente y `verify(tenant, root_id, file_hashes)` comprueba el contenido antes de confiar en él. Si no están, se perdió o venció: hay que pedir que se reenvíe con la misma clave. Cuando ALIGN-053 esté integrado, el lector corre **en un proceso aparte, con tope de memoria y de tiempo**, y hay que decidir si este almacén se unifica con `PrivateUploadStore`, que resuelve lo mismo por token.
 
@@ -83,5 +87,5 @@ Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda.
 - **Usuario con dos membresías activas:** recibe `409 TENANT_SELECTION_REQUIRED`, sin filas. El ticket pide ignorar cualquier municipio enviado por el cliente, así que no se usa la cookie de selección de la web. Si esas personas deben importar o leer por esta API, hace falta una decisión expresa sobre cómo llega la selección.
 - **`importador_sistema`:** credencial de máquina, por ALIGN-060.
 - **Cuota por municipio:** un importador autorizado puede ocupar disco hasta que venza el TTL. Lo cubre la campaña de tamaño y tiempo de ALIGN-059.
-- **Registros de Kong fuera de esta API.** Esta API no pone ningún valor del cliente en una URL (`back/api/README.md`). La web sí lee por la Data API con la DAL de ALIGN-019: `front/lib/auth/tenant-access.ts` filtra `tenant_user` por el valor de la cookie de selección de municipio, antes de saber si hay membresía, y Kong registra ese valor. Es otro recorrido, con otras pantallas: cerrarlo exige cambiar ese ticket y queda fuera de este. Tampoco se cambia la configuración de Kong: la genera la CLI de Supabase del stack local.
+- **Registros de Kong fuera de esta API.** Esta API no pone ningún valor del cliente en una URL (`back/api/README.md`). La web sí lee por la Data API con la DAL de ALIGN-019: `front/lib/auth/tenant-access.ts` filtra `tenant_user` por el valor de la cookie de selección de municipio, antes de saber si hay membresía, y Kong registra ese valor. `front/lib/server/case-review-snapshot.ts` (ALIGN-020) filtra por el objeto de la decisión. Es otro recorrido, con otras pantallas: cerrarlo exige cambiar esos tickets y queda fuera de este. Tampoco se cambia la configuración de Kong: la genera la CLI de Supabase del stack local.
 - **Despliegue fuera de loopback:** ALIGN-050. El origen se compara entero contra el esquema con que Next recibió la solicitud y el `Host`. Detrás de otro proxy hay que fijar el origen confiable de la aplicación y revisar `X-Forwarded-*`.
