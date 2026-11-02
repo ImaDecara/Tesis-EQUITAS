@@ -1080,6 +1080,15 @@ def test_una_misma_cifra_con_otra_escala_no_cuenta_como_cambio():
     assert load._same_value('no-numero', '33.3', numeric=True) is False
 
 
+def test_un_perfil_escrito_con_otra_escala_no_se_reescribe(database):
+    """El texto exacto de un numeric puede traer otra escala si otro camino escribió la fila: no es un cambio."""
+    database.tables['debtor_profile'].append({'id': 1, 'debtor': 7, 'total_debt_amount': '10.5', 'overdue_debt_amount': None})
+    load.load_debtor_profile({'debtor': 7, 'total_debt_amount': '10.50', 'overdue_debt_amount': None, 'profile_generated_at': 'ahora'})
+    assert database.updates == 0
+    load.load_debtor_profile({'debtor': 7, 'total_debt_amount': '10.51', 'overdue_debt_amount': None, 'profile_generated_at': 'ahora'})
+    assert database.updates == 1
+
+
 def _drop_lines(path, *cells):
     lines = path.read_text(encoding='utf-8').splitlines()
     kept = [line for line in lines if not set(cells) <= set(line.split('\t'))]
