@@ -1,90 +1,19 @@
-import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { createServerClient } from '@supabase/ssr'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { readLocalReviewConfig, type ReviewAccount } from './config'
+import type { ReviewAccount } from './config'
+import { actionIds, cookieFor, post, READY_CHECKLIST, registerBatch, reviews, sql } from './http-support'
 
 // ALIGN-020. Las acciones por HTTP real contra `next start`: compiladas, con proxy, cookies y CSRF de Next.
-const config = readLocalReviewConfig()
-const BASE = process.env.EQUITAS_REVIEW_HTTP_BASE ?? ''
-if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE)) throw new Error('Falta EQUITAS_REVIEW_HTTP_BASE local; la prueba no se omite.')
-const PAGE = `${BASE}/align020-probe`
-const CONTAINER = 'supabase_db_equitas-tp-testing'
-const READY_CHECKLIST = { situacion_hogar: 'NO_DISPONIBLE', estado_juridico_verificado: true, canal_valido: true, alternativa_asistida_ofrecida: true }
-
-function sql(statement: string): string {
-  return execFileSync('docker', ['exec', '-i', CONTAINER, 'psql', '-X', '-U', 'postgres', '-d', 'postgres', '-At', '-F', '|', '-v', 'ON_ERROR_STOP=1', '-c', statement], { encoding: 'utf8' }).trim()
-}
-const reviews = (debtor: string) => Number(sql(`select count(*) from public.case_review where debtor = ${debtor}`))
-
-function actionIds() {
-  const manifest = JSON.parse(readFileSync('.next/server/server-reference-manifest.json', 'utf8')) as { node: Record<string, { exportedName: string }> }
-  const find = (name: string) => {
-    const id = Object.keys(manifest.node).find(item => manifest.node[item].exportedName === name)
-    if (!id) throw new Error(`No se encontro la accion ${name}`)
-    return id
-  }
-  return { record: find('recordCaseDecision'), approve: find('approveCaseDecision') }
-}
-
-async function cookieFor(label: ReviewAccount, tenant?: string) {
-  const cookies = new Map<string, string>()
-  const client = createServerClient(config.supabaseUrl, config.publishableKey, {
-    cookies: {
-      getAll: () => [...cookies].map(([name, value]) => ({ name, value })),
-      setAll: values => { for (const { name, value } of values) cookies.set(name, value) },
-    },
-  })
-  const { error } = await client.auth.signInWithPassword(config.accounts[label])
-  expect(error?.code ?? null, `login ${label}`).toBeNull()
-  if (tenant) cookies.set('equitas_tenant_id', tenant)
-  return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
-}
-
-async function post(actionId: string, input: unknown, options: { cookie?: string; origin?: string } = {}) {
-  const response = await fetch(PAGE, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      'Next-Action': actionId,
-      Accept: 'text/x-component',
-      'Content-Type': 'text/plain;charset=UTF-8',
-      Origin: options.origin ?? BASE,
-      ...(options.cookie ? { Cookie: options.cookie } : {}),
-    },
-    body: JSON.stringify([input]),
-  })
-  const body = await response.text()
-  expect(body, 'la respuesta nunca trae la credencial').not.toContain(config.reviewJwt)
-  expect(body).not.toContain('EQUITAS_REVIEW_SERVER_JWT')
-  const row = body.split('\n').find(line => line.startsWith('1:{'))
-  return { status: response.status, location: response.headers.get('location'), body, result: row ? JSON.parse(row.slice(2)) as Record<string, unknown> : null }
-}
-
 let ids: ReturnType<typeof actionIds>
 const session: Partial<Record<ReviewAccount, string>> = {}
 const blind = (debtorId: string, overrides: Record<string, unknown> = {}) => ({
   debtorId, decision: 'ACEPTA', expected: { asOf: '2026-10-30', rulesVersion: '1.0.0', inputsHash: 'a'.repeat(64) }, ...overrides,
 })
 
-async function registerBatch(status: string, key: string, supersedes: number | null) {
-  const response = await fetch(`${config.supabaseUrl}/rest/v1/rpc/record_import_batch`, {
-    method: 'POST',
-    headers: { apikey: config.publishableKey, Authorization: `Bearer ${config.importJwt}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      p_actor_user: 920009, p_tenant: 920001, p_source: 'ETL_CLI', p_file_hashes: { cabecera: 'b'.repeat(64) }, p_as_of: '2026-10-30', p_rules_version: '1.0.0',
-      p_status: status, p_idempotency_key: key, p_counts: { filas: 1 }, p_source_updated_at: '2026-10-29', p_supersedes: supersedes,
-    }),
-  })
-  expect(response.status, 'lote registrado').toBe(200)
-  return (await response.json() as { batch_id: number }).batch_id
-}
-
 beforeAll(async () => {
   ids = actionIds()
-  const validated = await registerBatch('VALIDADO', '00000000-0000-4000-8000-0000000a0001', null)
-  await registerBatch('PUBLICADO', '00000000-0000-4000-8000-0000000a0002', validated)
+  const validated = await registerBatch('VALIDADO', '2026-10-30')
+  await registerBatch('PUBLICADO', '2026-10-30', validated)
   for (const label of ['operador', 'supervisor', 'importador', 'consulta'] as const) session[label] = await cookieFor(label)
 })
 
