@@ -60,6 +60,9 @@ async function readChain(supabase: SupabaseClient, table: string, filters: reado
   return result.rows.map(row => ({ id: String(row.id), supersedes: databaseId(row.supersedes), idempotencyKey: row.idempotency_key }))
 }
 
+const decisionChain = (supabase: SupabaseClient, context: DalContext, debtorId: string) =>
+  readChain(supabase, 'case_review', [['tenant', context.tenantId], ['debtor', debtorId]])
+
 // Vigente = la que ninguna otra reemplaza. Por esta vía la cadena es lineal; si otra
 // carga dejó dos, manda la más nueva. Las filas llegan ordenadas por id.
 function currentOf(chain: readonly ChainRow[]): string | null {
@@ -120,13 +123,25 @@ export async function getCaseReviewSnapshot(rawDebtorId: string): Promise<CaseRe
     if (!debtorId) return caseReviewFailure('INVALID_INPUT')
     const computed = await computeCaseReviewSnapshot(supabase, context.tenantId, debtorId)
     if (!computed.ok) return caseReviewFailure(computed.code)
-    const chain = await readChain(supabase, 'case_review', [['tenant', context.tenantId], ['debtor', debtorId]])
+    const chain = await decisionChain(supabase, context, debtorId)
     if (!chain) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
     return { ok: true, snapshot: { ...computed.value, currentReviewId: currentOf(chain) } } as const
   }, 'SUGGESTION_UNAVAILABLE')
 }
 
-async function insertDecision(context: DalContext, input: RecordCaseDecisionInput, snapshot: ComputedSnapshot, idempotencyKey: string): Promise<RecordCaseDecisionResult> {
+// La función rechazó porque el corte dejó de estar vigente después del recálculo (ALIGN-020,
+// ciclo 1). No se confirma nada: se vuelve a calcular para mostrar lo vigente, o para avisar
+// que hay una carga en curso. Si el contenido dio igual, lo que cambió es el corte.
+async function afterCutoffChange(supabase: SupabaseClient, context: DalContext, debtorId: string, seen: ExpectedSuggestion): Promise<CaseReviewFailure> {
+  const computed = await computeCaseReviewSnapshot(supabase, context.tenantId, debtorId)
+  if (!computed.ok) return caseReviewFailure(computed.code)
+  const chain = await decisionChain(supabase, context, debtorId)
+  if (!chain) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
+  const changes = changesBetween(seen, computed.value)
+  return outdated(changes.length > 0 ? changes : ['CORTE'], computed.value, currentOf(chain))
+}
+
+async function insertDecision(supabase: SupabaseClient, context: DalContext, input: RecordCaseDecisionInput, snapshot: ComputedSnapshot, cutoffBatchId: string, idempotencyKey: string): Promise<RecordCaseDecisionResult> {
   const writer = createCaseReviewWriter()
   if (!writer) return caseReviewFailure('WRITE_NOT_CONFIGURED')
   const decided = input.decision === 'ACEPTA'
@@ -136,6 +151,7 @@ async function insertDecision(context: DalContext, input: RecordCaseDecisionInpu
     p_reviewer_user: context.appUserId,
     p_tenant: context.tenantId,
     p_debtor: input.debtorId,
+    p_cutoff_batch: cutoffBatchId,
     p_rules_version: snapshot.rulesVersion,
     p_as_of: snapshot.asOf,
     p_inputs_hash: snapshot.inputsHash,
@@ -151,6 +167,7 @@ async function insertDecision(context: DalContext, input: RecordCaseDecisionInpu
     p_checklist: input.checklist,
     p_supersedes: input.supersedes,
   })
+  if (error?.message === 'CUTOFF_CHANGED') return afterCutoffChange(supabase, context, input.debtorId, snapshot)
   if (error) return functionFailure(error, 'REVIEW_CONFLICT')
   const reviewId = databaseId(data?.review_id)
   if (!reviewId || typeof data.created !== 'boolean' || typeof data.pending_supervisor !== 'boolean') {
@@ -180,7 +197,7 @@ export async function recordCaseDecisionInSession(raw: unknown): Promise<RecordC
     const computed = await computeCaseReviewSnapshot(supabase, context.tenantId, input.debtorId)
     if (!computed.ok) return caseReviewFailure(computed.code)
     const snapshot = computed.value
-    const chain = await readChain(supabase, 'case_review', [['tenant', context.tenantId], ['debtor', input.debtorId]])
+    const chain = await decisionChain(supabase, context, input.debtorId)
     if (!chain) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
 
     const changes = changesBetween(input.expected, snapshot)
@@ -194,11 +211,11 @@ export async function recordCaseDecisionInSession(raw: unknown): Promise<RecordC
     // Si esa clave ya existe decide la función (doble envío o conflicto), sin importar qué rige hoy.
     const alreadySent = chain.some(row => row.idempotencyKey === idempotencyKey)
     if (!alreadySent && currentOf(chain) !== input.supersedes) return caseReviewFailure('REVIEW_CONFLICT')
-    return insertDecision(context, input, snapshot, idempotencyKey)
+    return insertDecision(supabase, context, input, snapshot, computed.cutoffBatchId, idempotencyKey)
   })
 }
 
-async function insertApproval(context: DalContext, input: ApproveCaseDecisionInput, debtorId: string, idempotencyKey: string): Promise<ApproveCaseDecisionResult> {
+async function insertApproval(supabase: SupabaseClient, context: DalContext, input: ApproveCaseDecisionInput, debtorId: string, verified: { seen: ExpectedSuggestion; cutoffBatchId: string } | null, idempotencyKey: string): Promise<ApproveCaseDecisionResult> {
   const writer = createCaseReviewWriter()
   if (!writer) return caseReviewFailure('WRITE_NOT_CONFIGURED')
   const { data, error } = await writer.rpc('record_case_review_approval', {
@@ -207,10 +224,12 @@ async function insertApproval(context: DalContext, input: ApproveCaseDecisionInp
     p_case_review: input.caseReviewId,
     p_decision: input.decision,
     p_idempotency_key: idempotencyKey,
+    p_cutoff_batch: verified?.cutoffBatchId ?? null,
     p_reason_code: input.reasonCode,
     p_checklist: input.checklist,
     p_supersedes: input.supersedes,
   })
+  if (error?.message === 'CUTOFF_CHANGED' && verified) return afterCutoffChange(supabase, context, debtorId, verified.seen)
   if (error) return functionFailure(error, 'APPROVAL_CONFLICT')
   const approvalId = databaseId(data?.approval_id)
   if (!approvalId || typeof data.created !== 'boolean') return caseReviewFailure('WRITE_UNAVAILABLE')
@@ -242,20 +261,22 @@ export async function approveCaseDecisionInSession(raw: unknown): Promise<Approv
     if (Number(review.decided_intensity ?? 0) < INTENSE_FROM) return caseReviewFailure('APPROVAL_NOT_REQUIRED')
 
     const [chain, approvals] = await Promise.all([
-      readChain(supabase, 'case_review', [['tenant', context.tenantId], ['debtor', debtorId]]),
+      decisionChain(supabase, context, debtorId),
       readChain(supabase, 'case_review_approval', [['tenant', context.tenantId], ['case_review', input.caseReviewId]]),
     ])
     if (!chain || !approvals) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
 
     // Una objeción frena la propuesta y no confirma nada: sigue disponible aunque los
-    // datos cambien o falte el corte, para poder cerrarla. Aprobar exige que sean los mismos.
+    // datos cambien o falte el corte, para poder cerrarla. Aprobar exige que sean los mismos,
+    // y la función lo vuelve a verificar contra el corte al insertar.
+    let verified: { seen: ExpectedSuggestion; cutoffBatchId: string } | null = null
     if (input.decision === 'APRUEBA') {
       const computed = await computeCaseReviewSnapshot(supabase, context.tenantId, debtorId)
       if (!computed.ok) return caseReviewFailure(computed.code)
-      const changes = changesBetween({
-        asOf: String(review.as_of), rulesVersion: String(review.rules_version), inputsHash: String(review.inputs_hash),
-      }, computed.value)
+      const seen = { asOf: String(review.as_of), rulesVersion: String(review.rules_version), inputsHash: String(review.inputs_hash) }
+      const changes = changesBetween(seen, computed.value)
       if (changes.length > 0) return outdated(changes, computed.value, currentOf(chain))
+      verified = { seen, cutoffBatchId: computed.cutoffBatchId }
     }
 
     const idempotencyKey = deriveIdempotencyKey('case_review_approval', context.tenantId, input.caseReviewId, input.supersedes)
@@ -263,6 +284,6 @@ export async function approveCaseDecisionInSession(raw: unknown): Promise<Approv
       if (currentOf(chain) !== input.caseReviewId) return caseReviewFailure('REVIEW_SUPERSEDED')
       if (currentOf(approvals) !== input.supersedes) return caseReviewFailure('APPROVAL_CONFLICT')
     }
-    return insertApproval(context, input, debtorId, idempotencyKey)
+    return insertApproval(supabase, context, input, debtorId, verified, idempotencyKey)
   })
 }

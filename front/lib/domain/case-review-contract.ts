@@ -55,7 +55,7 @@ export const CASE_REVIEW_MESSAGES = {
   CHECKLIST_INVALID: 'La lista de control solo admite sus casillas y códigos, sin texto libre.',
   OBJECT_NOT_IN_TENANT: 'El objeto no existe en este municipio.',
   REVIEW_NOT_IN_TENANT: 'La decisión no existe en este municipio.',
-  CUTOFF_NOT_AVAILABLE: 'No hay un corte publicado y vigente: sin corte no se puede registrar una decisión.',
+  CUTOFF_NOT_AVAILABLE: 'No hay un corte publicado y vigente, quizá por una carga en curso. Revisa el caso de nuevo cuando termine: sin corte no se puede registrar.',
   SUGGESTION_UNAVAILABLE: 'No se pudo calcular la sugerencia con datos completos. Intenta de nuevo más tarde.',
   SUGGESTION_OUTDATED: 'Los datos o las reglas cambiaron desde que abriste el caso. Revisa la sugerencia vigente antes de confirmar.',
   REVIEW_CONFLICT: 'Ya hay otra decisión registrada sobre este objeto. Recarga el caso antes de continuar.',

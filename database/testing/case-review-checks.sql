@@ -47,22 +47,34 @@ language sql as $f$
   insert into a018_result(caso, esperado, obtenido) values (p_caso, p_esperado, p_obtenido);
 $f$;
 
+-- ALIGN-020: evento PUBLICADO por debajo de la funcion, para fijar el corte vigente de cada municipio. Lo guarda en a018.corte_<tenant>.
+create function pg_temp.publish_cutoff(p_tenant bigint, p_as_of date default '2026-10-30') returns bigint
+language plpgsql as $f$
+declare v bigint;
+begin
+  insert into public.import_batch(tenant, source, file_hashes, as_of, rules_version, status, created_by, created_by_role, idempotency_key)
+  values (p_tenant, 'ETL_CLI', jsonb_build_object('cabecera', repeat('b', 64)), p_as_of, '1.0.0', 'PUBLICADO', 920004, 'importador', gen_random_uuid())
+  returning id into v;
+  perform set_config('a018.corte_' || p_tenant, v::text, true);
+  return v;
+end $f$;
+
 -- Llamadas con valores validos por defecto: cada caso cambia solo lo que prueba.
 create function pg_temp.review(p_user bigint, p_tenant bigint, p_debtor bigint, p_decision text default 'ACEPTA', p_extra text default null) returns text
 language sql as $f$
   select format($s$select set_config('a018.id', r.review_id::text, true) from public.record_case_review(
-    p_reviewer_user => %s, p_tenant => %s, p_debtor => %s, p_rules_version => '1.0.0', p_as_of => '2026-10-30',
+    p_reviewer_user => %s, p_tenant => %s, p_debtor => %s, p_cutoff_batch => %s, p_rules_version => '1.0.0', p_as_of => '2026-10-30',
     p_inputs_hash => repeat('a', 64), p_suggested_intervention => 'RECORDATORIO_INFORMATIVO', p_suggested_intensity => 1,
     p_explanation => '{"factores":[]}', p_decision => %L, p_idempotency_key => gen_random_uuid()%s) r$s$,
-    p_user, p_tenant, p_debtor, p_decision,
+    p_user, p_tenant, p_debtor, coalesce(current_setting('a018.corte_' || p_tenant, true), 'null'), p_decision,
     coalesce(', ' || p_extra, case when p_decision = 'ACEPTA' then ', p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1' else '' end));
 $f$;
 
 create function pg_temp.approval(p_user bigint, p_tenant bigint, p_review bigint, p_decision text default 'APRUEBA', p_extra text default null) returns text
 language sql as $f$
   select format($s$select set_config('a018.id', r.approval_id::text, true) from public.record_case_review_approval(
-    p_approver_user => %s, p_tenant => %s, p_case_review => %s, p_decision => %L, p_idempotency_key => gen_random_uuid()%s) r$s$,
-    p_user, p_tenant, p_review, p_decision,
+    p_approver_user => %s, p_tenant => %s, p_case_review => %s, p_decision => %L, p_idempotency_key => gen_random_uuid(), p_cutoff_batch => %s%s) r$s$,
+    p_user, p_tenant, p_review, p_decision, coalesce(current_setting('a018.corte_' || p_tenant, true), 'null'),
     coalesce(', ' || p_extra, case when p_decision = 'APRUEBA' then ', p_checklist => ''{"situacion_hogar":"NO_DISPONIBLE","estado_juridico_verificado":true,"canal_valido":true,"alternativa_asistida_ofrecida":true}''' else '' end));
 $f$;
 
@@ -155,6 +167,8 @@ begin
   if sub_op is null or not exists(select 1 from public.tenant where id = t_a) then
     raise exception 'Cargar antes case-review-auth-fixtures.sql y case-review-fixtures.sql';
   end if;
+  perform pg_temp.publish_cutoff(t_a);
+  perform pg_temp.publish_cutoff(t_b);
 
   -- A. Escritura directa: falla por falta de privilegio para todos los roles de aplicacion.
   foreach rol in array array['anon', 'authenticated', 'service_role', 'equitas_review_server', 'equitas_import_server'] loop
@@ -226,7 +240,8 @@ begin
   perform pg_temp.expect('codigo de motivo con salto final', invalid || 'case_review_reason_code_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => %L', E'X\n'))));
   perform pg_temp.expect('intervencion de 65 caracteres', invalid || 'case_review_decided_intervention_format', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'DERIVA', format('p_reason_code => ''X'', p_decided_intervention => %L, p_decided_intensity => 1', 'X' || repeat('Y', 64)))));
   perform pg_temp.expect('explicacion no es objeto', invalid || 'case_review_explanation_object', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''{"factores":[]}''', '''[]''')));
-  perform pg_temp.expect('corte nulo', invalid || 'not_null', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''2026-10-30''', 'null')));
+  -- ALIGN-020: un corte nulo ya no llega a la tabla: no coincide con el del evento declarado.
+  perform pg_temp.expect('corte nulo', 'CUTOFF_CHANGED', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''2026-10-30''', 'null')));
   perform pg_temp.expect('texto de 501 caracteres', invalid || 'case_review_reason_text_length', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat('x', 501)))));
   perform pg_temp.expect('texto de 500 caracteres', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', format('p_reason_code => ''X'', p_reason_text => %L', repeat('x', 500)))));
   perform pg_temp.expect('texto en blanco', invalid || 'case_review_reason_text_not_blank', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''X'', p_reason_text => ''   ''')));
@@ -438,7 +453,8 @@ begin
   perform pg_temp.expect('motivo: otro tenant no lo lee', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_a, review_nota)));
   perform pg_temp.expect('motivo: revision de otro tenant', 'REVIEW_NOT_IN_TENANT', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_b, review_nota)));
 
-  -- J. Un rechazo no publica el contenido de la fila.
+  -- J. Un rechazo no publica el contenido de la fila. El bloque G dejo un VALIDADO abierto: sin un corte nuevo, el rechazo seria por el corte y este caso no probaria nada.
+  perform pg_temp.publish_cutoff(t_a);
   begin
     set local role equitas_review_server;
     execute pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''MOTIVO_SINTETICO'', p_reason_text => ''SECRETO_SINTETICO'', p_decided_intervention => ''SEGUIMIENTO'', p_decided_intensity => 1');
@@ -463,6 +479,128 @@ begin
   perform pg_temp.expect('postgres sin INHERIT sobre el definidor', 'false', pg_has_role('postgres', 'equitas_write_definer', 'USAGE')::text);
   perform pg_temp.expect('authenticator sin SET sobre el definidor', 'false', pg_has_role('authenticator', 'equitas_write_definer', 'SET')::text);
   perform pg_temp.expect('authenticator sin ADMIN sobre el definidor', 'false', pg_has_role('authenticator', 'equitas_write_definer', 'MEMBER WITH ADMIN OPTION')::text);
+end $body$;
+
+-- N. ALIGN-020, ciclo 1: la decision y la aprobacion quedan atadas al corte vigente, dentro de la transaccion de la insercion.
+-- La concurrencia real, con el bloqueo, se prueba por HTTP en front/tests/local-review/case-review-intercalaciones.http.ts.
+create function pg_temp.cutoff_case(p_caso text, p_eventos text[], p_esperado integer) returns void
+language plpgsql as $f$
+declare
+  v_tenant bigint := 920100 + (select count(*) from a018_result);
+  v_ids bigint[] := '{}';
+  v_evento text;
+  v_id bigint;
+  v_status text;
+  v_antecedente integer;
+begin
+  insert into public.tenant(id, name) values (v_tenant, 'TP A020 corte');
+  foreach v_evento in array p_eventos loop
+    v_status := split_part(v_evento, '<', 1);
+    v_antecedente := nullif(split_part(v_evento, '<', 2), '')::integer;
+    insert into public.import_batch(tenant, source, file_hashes, as_of, rules_version, status, created_by, created_by_role, supersedes, idempotency_key)
+    values (v_tenant, 'ETL_CLI', jsonb_build_object('cabecera', repeat('b', 64)), '2026-10-30', '1.0.0', v_status, 920004, 'importador', v_ids[v_antecedente], gen_random_uuid())
+    returning id into v_id;
+    v_ids := v_ids || v_id;
+  end loop;
+  perform pg_temp.expect('corte vigente: ' || p_caso, coalesce(v_ids[p_esperado]::text, 'sin corte'), coalesce(public.equitas_current_cutoff(v_tenant)::text, 'sin corte'));
+end $f$;
+
+do $body$
+declare
+  t_a constant bigint := 920001;
+  t_b constant bigint := 920002;
+  d_a constant bigint := 920001;
+  u_operador constant bigint := 920002;
+  u_supervisor constant bigint := 920003;
+  cambio constant text := 'CUTOFF_CHANGED';
+  decidido constant text := 'p_decided_intervention => ''RECORDATORIO_INFORMATIVO'', p_decided_intensity => 1';
+  lista constant text := 'p_checklist => ''{"situacion_hogar":"CONSULTADA","estado_juridico_verificado":true,"canal_valido":true,"alternativa_asistida_ofrecida":true}''';
+  intensa constant text := 'p_decided_intervention => ''INTIMACION_ADMINISTRATIVA'', p_decided_intensity => 3, p_reason_code => ''MOTIVO_SINTETICO'', ' || lista;
+  sin_parametro constant text := ',? *p_cutoff_batch => \w+,?';
+  con_corte constant text := 'p_cutoff_batch => \w+';
+  rol text;
+  corte bigint;
+  corte_viejo bigint;
+  corte_b bigint;
+  validado bigint;
+  prop bigint;
+  clave uuid := gen_random_uuid();
+begin
+  -- Firma: el parametro no se puede omitir ni queda una sobrecarga anterior.
+  perform pg_temp.expect('firma anterior de la revision', 'no existe', coalesce(to_regprocedure('public.record_case_review(bigint, bigint, bigint, text, date, text, text, integer, jsonb, text, uuid, text, integer, text, text, jsonb, bigint)')::text, 'no existe'));
+  perform pg_temp.expect('firma anterior de la aprobacion', 'no existe', coalesce(to_regprocedure('public.record_case_review_approval(bigint, bigint, bigint, text, uuid, text, jsonb, bigint)')::text, 'no existe'));
+  perform pg_temp.expect('revision sin el parametro', '42883', pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), sin_parametro, ',')));
+  perform pg_temp.expect('aprobacion sin el parametro', '42883', pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.approval(u_supervisor, t_a, 1), sin_parametro, ',')));
+
+  -- Las auxiliares no se ejecutan desde afuera de las funciones.
+  foreach rol in array array['anon', 'authenticated', 'service_role', 'postgres', 'equitas_review_server', 'equitas_import_server'] loop
+    perform pg_temp.expect(format('funcion %s equitas_current_cutoff', rol), '42501', pg_temp.probe(rol, null, format('select public.equitas_current_cutoff(%s)', t_a)));
+    perform pg_temp.expect(format('funcion %s equitas_verify_cutoff', rol), '42501', pg_temp.probe(rol, null, format($s$select public.equitas_verify_cutoff(%s, 1, '2026-10-30')$s$, t_a)));
+  end loop;
+
+  -- Que corte vale: la misma tabla de casos que selectCurrentCutoff en front/tests/unit/case-review-snapshot.test.ts.
+  perform pg_temp.cutoff_case('sin lote', '{}', 0);
+  perform pg_temp.cutoff_case('solo validado', '{VALIDADO}', 0);
+  perform pg_temp.cutoff_case('carga en curso sobre uno publicado', '{PUBLICADO,VALIDADO}', 0);
+  perform pg_temp.cutoff_case('confirmado sobre uno publicado', '{PUBLICADO,CONFIRMADO}', 0);
+  perform pg_temp.cutoff_case('carga fallida a mitad de camino', '{PUBLICADO,VALIDADO,FALLIDO<2}', 0);
+  perform pg_temp.cutoff_case('lote bloqueado antes de escribir', '{PUBLICADO,FALLIDO}', 1);
+  perform pg_temp.cutoff_case('recibido y descartado no cuentan', '{PUBLICADO,RECIBIDO,DESCARTADO}', 1);
+  perform pg_temp.cutoff_case('requiere nuevo preview no cuenta', '{PUBLICADO,REQUIERE_NUEVO_PREVIEW}', 1);
+  perform pg_temp.cutoff_case('publicado reemplazado por descartado', '{PUBLICADO,DESCARTADO<1}', 0);
+  perform pg_temp.cutoff_case('publicado reemplazado por nuevo preview', '{PUBLICADO,REQUIERE_NUEVO_PREVIEW<1}', 0);
+  perform pg_temp.cutoff_case('validado y publicado', '{VALIDADO,PUBLICADO<1}', 2);
+  perform pg_temp.cutoff_case('el ultimo publicado gana', '{VALIDADO,PUBLICADO<1,VALIDADO,PUBLICADO<3}', 4);
+  perform pg_temp.cutoff_case('dos publicados sin cadena', '{PUBLICADO,PUBLICADO}', 2);
+
+  corte_viejo := pg_temp.publish_cutoff(t_a);
+  corte := pg_temp.publish_cutoff(t_a);
+  corte_b := pg_temp.publish_cutoff(t_b);
+  perform pg_temp.expect('corte vigente del municipio, no del otro', corte::text, public.equitas_current_cutoff(t_a)::text);
+
+  -- Revision: que evento se declara.
+  perform pg_temp.expect('corte vigente pasa', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a)));
+  perform pg_temp.expect('corte declarado nulo', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), con_corte, 'p_cutoff_batch => null')));
+  perform pg_temp.expect('corte anterior', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), con_corte, 'p_cutoff_batch => ' || corte_viejo)));
+  perform pg_temp.expect('corte de otro municipio', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), con_corte, 'p_cutoff_batch => ' || corte_b)));
+  perform pg_temp.expect('corte inexistente', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), con_corte, 'p_cutoff_batch => 999999999')));
+  perform pg_temp.expect('fecha distinta de la del evento', cambio, pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), '''2026-10-30''', '''2026-10-31''')));
+
+  -- Eventos que no tocan la cartera: el corte sigue vigente.
+  perform pg_temp.probe('equitas_import_server', null, pg_temp.batch(920004, t_a, 'RECIBIDO'), true);
+  perform pg_temp.expect('RECIBIDO no invalida', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a)));
+  perform pg_temp.probe('equitas_import_server', null, pg_temp.batch(920004, t_a, 'FALLIDO'), true);
+  perform pg_temp.expect('FALLIDO sin antecedente no invalida', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a)));
+
+  -- Respuesta idempotente: lo guardado se responde igual aunque despues cambie el corte. Solo una insercion nueva lo verifica.
+  perform pg_temp.expect('propuesta con el corte vigente', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa), true));
+  prop := current_setting('a018.id')::bigint;
+  perform pg_temp.expect('alta con clave fija', 'OK', pg_temp.probe('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a), 'gen_random_uuid()', quote_literal(clave)), true));
+
+  -- Empieza una carga: nada que confirme pasa, por la funcion de lotes real.
+  perform pg_temp.expect('lote VALIDADO por su funcion', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(920004, t_a, 'VALIDADO'), true));
+  validado := current_setting('a018.id')::bigint;
+  perform pg_temp.expect('corte con VALIDADO mas nuevo', 'sin corte', coalesce(public.equitas_current_cutoff(t_a)::text, 'sin corte'));
+  perform pg_temp.expect('revision con VALIDADO mas nuevo', cambio, pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a)));
+  perform pg_temp.expect('APRUEBA con VALIDADO mas nuevo', cambio, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop)));
+  perform pg_temp.expect('reenvio de lo ya guardado responde igual', 'false', pg_temp.scalar('equitas_review_server', null, replace(replace(pg_temp.review(u_operador, t_a, d_a), 'gen_random_uuid()', quote_literal(clave)), $s$select set_config('a018.id', r.review_id::text, true)$s$, 'select r.created::text')));
+  perform pg_temp.expect('OBJETA con VALIDADO mas nuevo y corte nulo', 'OK', pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', 'p_reason_code => ''X'''), con_corte, 'p_cutoff_batch => null')));
+  perform pg_temp.expect('APRUEBA con corte nulo y VALIDADO mas nuevo', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.approval(u_supervisor, t_a, prop), con_corte, 'p_cutoff_batch => null')));
+  perform pg_temp.expect('decision fuera de lista no saltea la restriccion', 'INVALID_CASE_REVIEW_APPROVAL:case_review_approval_decision_valid', pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.approval(u_supervisor, t_a, prop, 'OTRA', 'p_reason_code => ''X'''), con_corte, 'p_cutoff_batch => null')));
+
+  -- Termina con otra publicacion: el evento anterior no vale, el nuevo si.
+  perform pg_temp.expect('lote PUBLICADO por su funcion', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(920004, t_a, 'PUBLICADO', format('p_supersedes => %s', validado)), true));
+  corte_viejo := corte;
+  corte := current_setting('a018.id')::bigint;
+  perform set_config('a018.corte_' || t_a, corte::text, true);
+  perform pg_temp.expect('revision con el corte anterior a la publicacion', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.review(u_operador, t_a, d_a), con_corte, 'p_cutoff_batch => ' || corte_viejo)));
+  perform pg_temp.expect('APRUEBA con el corte anterior a la publicacion', cambio, pg_temp.probe('equitas_review_server', null, regexp_replace(pg_temp.approval(u_supervisor, t_a, prop), con_corte, 'p_cutoff_batch => ' || corte_viejo)));
+  perform pg_temp.expect('APRUEBA con el corte nuevo y la propuesta de esa fecha', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop)));
+
+  -- Una propuesta de otra fecha no se aprueba con el corte vigente, aunque la accion no lo hubiera notado.
+  perform pg_temp.publish_cutoff(t_a, '2026-11-15');
+  perform pg_temp.expect('APRUEBA de una propuesta de otro corte', cambio, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop)));
+  perform pg_temp.publish_cutoff(t_a);
 end $body$;
 
 -- M. Cadena invalida preexistente. Por las funciones y por la tabla ya no se puede crear (bloques E, F y G): se retiran aca sus restricciones,

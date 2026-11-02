@@ -14,6 +14,7 @@ vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: writ
 import { approveCaseDecision, recordCaseDecision } from '@/app/debtors/[debtorId]/actions'
 import { CASE_REVIEW_MESSAGES, type CaseReviewErrorCode } from '@/lib/domain/case-review-contract'
 import { getCaseReviewSnapshot } from '@/lib/server/case-review-service'
+import { selectCurrentCutoff, type BatchEvent } from '@/lib/server/case-review-snapshot'
 import type { RawRow } from '@/types/equitas-domain'
 import { createPaginatedSupabase } from '../fixtures/paginated-supabase'
 
@@ -52,12 +53,19 @@ function portfolio(): Rows {
 }
 
 // Replica las funciones de ALIGN-018 en memoria: lo real se demuestra en tests/local-review.
-function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error'] } = {}) {
+function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } = {}) {
   let nextId = 100
   const created: Record<string, RawRow[]> = { case_review: [], case_review_approval: [] }
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>): Promise<RpcReply> => {
     if (overrides.failWith) return { data: null, error: overrides.failWith }
     const table = name === 'record_case_review' ? 'case_review' : 'case_review_approval'
+    // La ventana de la revision: otro proceso importa entre el recalculo de la accion y la funcion.
+    overrides.beforeWrite?.(tables)
+    const replay = created[table].some(item => item.idempotency_key === args.p_idempotency_key)
+    if (!replay && (table === 'case_review' || args.p_decision === 'APRUEBA')) {
+      const current = selectCurrentCutoff(tables.import_batch.filter(row => row.tenant === Number(args.p_tenant)) as unknown as BatchEvent[])
+      if (String(current?.id) !== String(args.p_cutoff_batch)) return { data: null, error: { message: 'CUTOFF_CHANGED', code: 'P0001' } }
+    }
     const row = { ...args, tenant: Number(args.p_tenant), idempotency_key: args.p_idempotency_key }
     const existing = created[table].find(item => item.idempotency_key === args.p_idempotency_key)
     const reply = (id: unknown, isNew: boolean) => table === 'case_review'
@@ -81,7 +89,7 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error'] } 
   return { rpc, created }
 }
 
-function session({ role = 'operador' as RoleName, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, database = {} as { failWith?: RpcReply['error'] } } = {}) {
+function session({ role = 'operador' as RoleName, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, database = {} as { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } } = {}) {
   const fixture = createPaginatedSupabase({
     user: [{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }],
     tenant_user: [{ id: 1, user: 42, tenant: memberTenant, role: ROLE_IDS[role], status: true }],
@@ -309,6 +317,69 @@ describe('ALIGN-020: recordCaseDecision', () => {
       tables.import_batch.push({ id: 3, tenant: TENANT, as_of: '2026-11-15', source_updated_at: '2026-11-14', status: 'PUBLICADO', supersedes: null })
       await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', changed: ['INSUMOS', 'CORTE'] })
       expect(rpc).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('importacion entre el recalculo y la escritura', () => {
+    const published = (id: number, asOf: string, supersedes: number | null = null) => ({ id, tenant: TENANT, as_of: asOf, source_updated_at: '2026-11-14', status: 'PUBLICADO', supersedes })
+
+    it('la funcion recibe el evento de corte con que se calculo, y el navegador no lo ve', async () => {
+      const { rpc } = session()
+      const input = await acceptInput()
+      const result = await recordCaseDecision(input)
+      expect(rpc.mock.calls[0][1].p_cutoff_batch).toBe('2')
+      expect(JSON.stringify(result)).not.toContain('cutoffBatch')
+      expect(JSON.stringify(await getCaseReviewSnapshot(String(DEBTOR)))).not.toContain('cutoffBatch')
+    })
+
+    it('el corte se lee antes que la cartera: una importacion posterior siempre lo invalida', async () => {
+      const { requests } = session()
+      await getCaseReviewSnapshot(String(DEBTOR))
+      const position = (table: string) => requests.findIndex(request => request.table === table)
+      for (const table of ['debt', 'debtor_person', 'person', 'debtor_contact']) expect(position('import_batch'), table).toBeLessThan(position(table))
+    })
+
+    it('se publica otro lote: rechazado, sin fila y con lo vigente', async () => {
+      const { created } = session({ database: { beforeWrite: tables => {
+        if (tables.import_batch.length === 2) {
+          tables.import_batch.push(published(3, '2026-11-15'))
+          tables.debt[0].current_amount = 90001
+        }
+      } } })
+      const result = await recordCaseDecision(await acceptInput())
+      expect(result).toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', changed: ['INSUMOS', 'CORTE'], current: { asOf: '2026-11-15' } })
+      expect(JSON.stringify(result)).not.toContain('cutoffBatch')
+      expect(created.case_review).toHaveLength(0)
+      expect(revalidatePath).not.toHaveBeenCalled()
+    })
+
+    it('empieza una carga: rechazado por falta de corte', async () => {
+      const { created } = session({ database: { beforeWrite: tables => {
+        tables.import_batch.push({ ...published(3, '2026-11-15'), status: 'VALIDADO' })
+      } } })
+      await expect(recordCaseDecision(await acceptInput())).resolves.toMatchObject({ ok: false, code: 'CUTOFF_NOT_AVAILABLE' })
+      expect(created.case_review).toHaveLength(0)
+    })
+
+    it('un lote nuevo con el mismo contenido: lo que cambio es el corte, y con lo vigente vuelve a entrar', async () => {
+      let fired = false
+      const { created } = session({ database: { beforeWrite: tables => {
+        if (!fired) tables.import_batch.push({ ...published(3, '2026-10-30'), source_updated_at: '2026-10-29' })
+        fired = true
+      } } })
+      const input = await acceptInput()
+      await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', changed: ['CORTE'] })
+      expect(created.case_review).toHaveLength(0)
+      await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: true, created: true })
+    })
+
+    it('una lectura fallida despues del rechazo no se confunde con exito', async () => {
+      const tables = portfolio()
+      let failing = false
+      const { rpc } = session({ tables, fail: request => failing && request.table === 'case_review' ? { message: 'detalle interno', code: '42501' } : null, database: { failWith: { message: 'CUTOFF_CHANGED', code: 'P0001' } } })
+      const input = await acceptInput()
+      writerFactory.mockReturnValue({ rpc: async (...args: Parameters<typeof rpc>) => { failing = true; return rpc(...args) } })
+      await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_UNAVAILABLE' })
     })
   })
 
@@ -555,6 +626,44 @@ describe('ALIGN-020: approveCaseDecision', () => {
     signInAs('supervisor', tables, rpc)
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'REVIEW_SUPERSEDED' })
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  describe('importacion entre el recalculo y la aprobacion', () => {
+    function intercalated(reviewId: string, tables: Rows, created: Record<string, RawRow[]>, change: (tables: Rows) => void) {
+      const database = fakeDatabase(tables, { beforeWrite: change })
+      signInAs('supervisor', tables, database.rpc)
+      return { reviewId, approvals: () => database.created.case_review_approval, created }
+    }
+
+    it('empieza un lote VALIDADO: APRUEBA rechazada y sin fila', async () => {
+      const { reviewId, tables, created } = await proposal()
+      const run = intercalated(reviewId, tables, created, current => {
+        current.import_batch.push({ id: 3, tenant: TENANT, as_of: '2026-11-15', source_updated_at: null, status: 'VALIDADO', supersedes: null })
+        current.debt[0].current_amount = 90001
+      })
+      await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'CUTOFF_NOT_AVAILABLE' })
+      expect(run.approvals()).toHaveLength(0)
+    })
+
+    it('se publica otro lote: APRUEBA rechazada, sin fila y con lo vigente', async () => {
+      const { reviewId, tables, created } = await proposal()
+      const run = intercalated(reviewId, tables, created, current => {
+        current.import_batch.push({ id: 3, tenant: TENANT, as_of: '2026-11-15', source_updated_at: '2026-11-14', status: 'PUBLICADO', supersedes: null })
+      })
+      await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', current: { asOf: '2026-11-15' } })
+      expect(run.approvals()).toHaveLength(0)
+    })
+
+    it('OBJETA no depende del corte: entra con la carga en curso y declara el corte nulo', async () => {
+      const { reviewId, tables, created } = await proposal()
+      const database = fakeDatabase(tables, { beforeWrite: current => {
+        current.import_batch.push({ id: 3, tenant: TENANT, as_of: '2026-11-15', source_updated_at: null, status: 'VALIDADO', supersedes: null })
+      } })
+      signInAs('supervisor', tables, database.rpc)
+      await expect(approveCaseDecision({ caseReviewId: reviewId, decision: 'OBJETA', reasonCode: 'MOTIVO_SINTETICO' })).resolves.toMatchObject({ ok: true, status: 'OBJETADA' })
+      expect(database.rpc.mock.calls[0][1].p_cutoff_batch).toBeNull()
+      expect(created.case_review).toHaveLength(1)
+    })
   })
 
   describe('insumos cambiados desde la propuesta', () => {

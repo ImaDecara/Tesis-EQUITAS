@@ -132,7 +132,7 @@ notify pgrst, 'reload schema';
 
 ## Revisión humana, aprobación y lote (ALIGN-018, solo base local)
 
-`supabase/migrations/20261030100000_case_review.sql` se aplica **solo en la base local** con `db reset`: nunca en el original ni en el proyecto testing. Registra quién decidió qué, cuándo, con qué información y por qué. El diccionario de columnas está en [`docs/tesis/contrato-dominio-v1.md`](docs/tesis/contrato-dominio-v1.md) §13; la escala y los roles, en la decisión de ALIGN-003.
+`supabase/migrations/20261030100000_case_review.sql`, y `20261102120000_case_review_cutoff.sql` que reemplaza sus dos funciones de escritura (ALIGN-020), se aplican **solo en la base local** con `db reset`: nunca en el original ni en el proyecto testing. Registra quién decidió qué, cuándo, con qué información y por qué. El diccionario de columnas está en [`docs/tesis/contrato-dominio-v1.md`](docs/tesis/contrato-dominio-v1.md) §13; la escala y los roles, en la decisión de ALIGN-003.
 
 | Tabla | Registra | Lectura |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ Las tres son append-only: una corrección o un cambio de estado es una fila nuev
 | --- | --- | --- |
 | `equitas_review_server` | `NOLOGIN`, sin `BYPASSRLS`; `authenticator` lo asume con un JWT server-only | `EXECUTE` de `record_case_review`, `record_case_review_approval` y `read_case_review_reason_text`. No lee ni escribe tablas |
 | `equitas_import_server` | Igual | `EXECUTE` de `record_import_batch`. No lee ni escribe tablas |
-| `equitas_write_definer` | `NOLOGIN`, `BYPASSRLS`, ningún JWT lo asume | Dueño de las funciones `SECURITY DEFINER`. `SELECT` e `INSERT` en las tres tablas y `SELECT` de 12 columnas de `user`, `tenant_user`, `role`, `tenant` y `debtor`. `BYPASSRLS` es necesario porque no se agregan políticas a tablas existentes |
+| `equitas_write_definer` | `NOLOGIN`, `BYPASSRLS`, ningún JWT lo asume | Dueño de las funciones `SECURITY DEFINER` y de las auxiliares `equitas_member_role`, `equitas_current_cutoff` y `equitas_verify_cutoff`, que ningún otro rol ejecuta. `SELECT` e `INSERT` en las tres tablas y `SELECT` de 12 columnas de `user`, `tenant_user`, `role`, `tenant` y `debtor`. `BYPASSRLS` es necesario porque no se agregan políticas a tablas existentes |
 
 Los roles de servidor son propios y no `service_role` para que una filtración del servidor web no entregue la cartera ni la escritura general. Las funciones tienen `search_path` vacío y nombres calificados. Las columnas `reviewer_role`, `approver_role`, `created_by_role` y las fechas las fija la base: no son parámetros.
 
@@ -156,8 +156,8 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
 
 | Función | Quién actúa | Rechazos (mensaje estable, sin valores) |
 | --- | --- | --- |
-| `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW:<restricción>` |
-| `record_case_review_approval` | `supervisor` activo del tenant, distinto de quien propuso esa versión o una anterior de la cadena | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `SUPERSEDES_CHAIN_INVALID`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
+| `record_case_review` | `operador` activo del tenant. Decide ≤2 y propone ≥3; `pending_supervisor` indica que falta aprobación | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `OBJECT_NOT_IN_TENANT`, `IDEMPOTENCY_KEY_CONFLICT`, `CUTOFF_CHANGED`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW:<restricción>` |
+| `record_case_review_approval` | `supervisor` activo del tenant, distinto de quien propuso esa versión o una anterior de la cadena | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT`, `SUPERSEDES_CHAIN_INVALID`, `APPROVER_IS_PROPONENT`, `APPROVAL_NOT_REQUIRED`, `REVIEW_SUPERSEDED`, `IDEMPOTENCY_KEY_CONFLICT`, `CUTOFF_CHANGED`, `SUPERSEDES_NOT_FOUND`, `INVALID_CASE_REVIEW_APPROVAL:<restricción>` |
 | `read_case_review_reason_text` | `operador` o `supervisor` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `REVIEW_NOT_IN_TENANT` |
 | `record_import_batch` | `importador` o `importador_sistema` activo del tenant | `ACTOR_NOT_ACTIVE_MEMBER`, `ROLE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`, `SUPERSEDES_NOT_FOUND`, `INVALID_IMPORT_BATCH:<restricción>` |
 
@@ -168,6 +168,24 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
 - **`reason_text`.** Hasta 500 caracteres contando los espacios: se guarda tal como llega, sin normalizar, y tiene que tener algún carácter que no sea espacio, tabulación o salto de línea. Si el servidor quiere recortarlo, lo hace antes de llamar a la función. El formulario debe advertir: "No incluyas datos personales ni información del hogar". Ningún rol de cliente tiene `SELECT` de esa columna: `select=*` falla con `42501` y hay que listar columnas. Se lee solo con `read_case_review_reason_text`, nunca en evidencias ni exportaciones. Un rechazo reemplaza el `DETAIL` de PostgreSQL, que contendría la fila.
 - **Límites de `import_batch`.** `file_hashes` y `counts` tienen hasta 16384 bytes y `rules_version` hasta seis dígitos por segmento (también en `case_review`). `counts` admite solo objetos anidados con claves en código (`^[a-z][a-z0-9_]{0,63}$`) y enteros no negativos: texto libre no entra ni como valor ni como clave, y un conteo ausente se omite.
 - **Idempotencia.** Cada llamada lleva `p_idempotency_key` (uuid), única por tenant. Repetirla con la misma carga devuelve la fila existente con `created = false`; con otra carga, `IDEMPOTENCY_KEY_CONFLICT`. Un bloqueo por objeto serializa los envíos simultáneos.
+
+### Corte atómico con la inserción (ALIGN-020, ciclo 1)
+
+Comparar el corte y después llamar a la función deja una ventana: en el medio otro proceso puede registrar `VALIDADO`, cambiar la cartera y publicar. Por eso la verificación ocurre **dentro de la transacción de la inserción**:
+
+- `record_case_review` y `record_case_review_approval` reciben `p_cutoff_batch`, el `import_batch.id` con que la acción calculó. **No tiene valor por defecto ni hay una firma anterior:** omitirlo da `42883` en SQL y `PGRST202` por la API. La acción no toma ese ID del navegador ni se lo devuelve.
+- Antes de insertar, `equitas_verify_cutoff` toma `pg_advisory_xact_lock_shared` sobre la clave `import_batch:<tenant>`, la misma que `record_import_batch` toma en exclusiva. Después comprueba que el evento siga siendo el corte vigente (`equitas_current_cutoff`) y que su `as_of` sea el de la decisión. Si no, `CUTOFF_CHANGED`, sin fila.
+- El bloqueo se retiene hasta el fin de la transacción. Una vez verificado, ningún evento de lote puede confirmarse antes que la inserción. Y si el evento se confirmó antes, la función espera el bloqueo y lo ve, porque lee después de tomarlo.
+- Es compartido para que las revisiones no se frenen entre sí. Orden en ambas funciones: primero el bloqueo del objeto, después el de lotes. `record_import_batch` solo toma el de lotes, así que no hay ciclo.
+- `equitas_current_cutoff` aplica la misma regla que `selectCurrentCutoff`: el evento más nuevo que ninguno reemplaza y que afecta la cartera, si es `PUBLICADO`. La base es la autoridad; la acción la replica para saber con qué calcular. `case-review-checks.sql` y `case-review-snapshot.test.ts` prueban los mismos casos.
+- `RECIBIDO`, `DESCARTADO`, `REQUIERE_NUEVO_PREVIEW` y un `FALLIDO` sin antecedente no invalidan, porque no tocaron la cartera. Si invalidaran, un lote bloqueado antes de escribir dejaría al municipio sin decisiones hasta otra publicación.
+- `APRUEBA` verifica además que la propuesta sea de ese corte. `OBJETA` no verifica, y la acción declara `p_cutoff_batch = null`: frena la propuesta, no confirma nada, y puede cerrarla con una carga en curso.
+- Reenviar lo ya guardado (`created = false`) no verifica: no escribe, y la fila devuelta sigue siendo cierta.
+- La acción traduce `CUTOFF_CHANGED`: vuelve a calcular y responde `SUGGESTION_OUTDATED` con lo vigente, o `CUTOFF_NOT_AVAILABLE` si hay una carga en curso.
+
+**Qué no cubre.** Una escritura de cartera que **no pase por `record_import_batch`**: un `UPDATE` directo, un script o un ETL que escriba sin registrar el evento antes. La acción detecta ese cambio solo si ocurre antes de su recálculo, por el hash; entre el recálculo y la inserción no lo ve. Tampoco detecta un proceso caído que dejó de escribir sin registrar nada.
+
+**Quien escriba cartera debe respetarlo.** Toda escritura de cartera va después de un evento `VALIDADO` ya confirmado, o en la misma transacción que un evento y bajo el bloqueo exclusivo `pg_advisory_xact_lock(hashtextextended(format('import_batch:%s', <tenant>), 0))`. `PUBLICADO` o `FALLIDO` se registran recién al terminar.
 
 ### Uso desde el servidor (ALIGN-020)
 
@@ -185,6 +203,7 @@ Los roles de servidor son propios y no `service_role` para que una filtración d
    - Un `VALIDADO` o `CONFIRMADO` más nuevo significa una carga en curso, y un `FALLIDO` que reemplaza a uno de ellos pudo dejar escrituras parciales (ALIGN-026). En ambos casos no hay corte vigente y responde `CUTOFF_NOT_AVAILABLE`.
    - `RECIBIDO`, `DESCARTADO`, `REQUIERE_NUEVO_PREVIEW` y un `FALLIDO` sin antecedente no tocaron la cartera: sigue el publicado anterior.
    - ALIGN-032 debe revisar esta regla si un lote `VALIDADO` por la web puede quedar a la espera sin escribir: hoy eso bloquearía las decisiones de ese municipio.
+   - El corte se lee antes que la cartera. Si una importación empieza después, la función de escritura rechaza la inserción (ver la sección anterior).
 5. Si la pantalla vio otros insumos, otra versión u otro corte, no se confirma en silencio: responde `SUGGESTION_OUTDATED`, con qué cambió y lo vigente. Lo mismo vale para `APRUEBA` frente a lo guardado en la propuesta. `OBJETA` sigue disponible, porque frena la propuesta y no confirma nada.
 6. La clave de idempotencia la deriva el servidor del antecedente: `(tenant, objeto, supersedes)` para una decisión y `(tenant, revisión, supersedes)` para una aprobación. Para cada decisión vigente cabe una sola sucesora, y la función compara bajo su bloqueo: el mismo contenido devuelve la fila existente (`created = false`) y otro contenido da `IDEMPOTENCY_KEY_CONFLICT`, que la acción traduce a `REVIEW_CONFLICT` o `APPROVAL_CONFLICT`. Así, dos envíos distintos y simultáneos tampoco abren dos cadenas sobre un objeto. Esta garantía es de la acción: las funciones aceptan otras claves, y `http-check` las usa para ejercitarlas.
 7. Escribe con un cliente aparte, que no reutiliza el de sesión:
@@ -243,6 +262,7 @@ npx --yes supabase@2.108.0 db reset
 | `privilegios_escritura_clientes` (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN`, cinco roles) / `secuencias_nuevas_privilegios_clientes` | 0 / 0 |
 | `reason_text_legible_por_clientes` / `columnas_case_review_legibles_authenticated` | 0 / 19 |
 | `funciones_security_definer` / `funciones_sin_search_path_vacio` / `funciones_definer_dueno_definidor` | 4 / 0 / 4 |
+| `funciones_cubiertas_por_la_verificacion` (incluye las auxiliares de ALIGN-020) / `firmas_de_escritura_de_revision` / `corte_parametro_obligatorio` | 8 / 2 / 2 |
 | `funciones_ejecutables_public` / `funciones_ejecutables_anon_authenticated_service` | 0 / 0 |
 | `funciones_servidor_revision` / `funciones_servidor_importacion` | 3 / 1 |
 | `politicas_23_md5` / `grants_23_md5` / `acl_23_md5` | Iguales antes y después de la migración |
@@ -259,14 +279,16 @@ npx --yes supabase@2.108.0 db reset
 
 **Ejecución verificada (31/10/2026, CLI 2.108.0, tras corregir los hallazgos de la revisión independiente).** La evidencia depurada está en `execution/evidence/ALIGN-018/` del paquete del plan, fuera de git. Dos `db reset` dieron verificaciones idénticas. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de la migración, también aplicada sobre una base con e06. e06 cargó y su limpieza dejó 0 filas y 0 cuentas. Con e06 y con el ETL cargados, las semillas y las 306 pruebas por rol pasaron; el ETL completó 159 deudas con el lote sintético sin `Bien_Tipo_Id 9` (el mismo límite de ALIGN-017). Sobre una base recién sembrada: 306 pruebas por rol y 140 casos HTTP con Auth y Data API reales, 0 fallas; 8 envíos simultáneos con la misma clave crearon una sola fila. La autorreferencia y el antecedente futuro se rechazan en las tres funciones y en las tres tablas; sobre ciclos de 1, 2 y 3 eslabones, un antecedente posterior y una cola que entra en un ciclo, inyectados dentro de la transacción de prueba, la aprobación termina y responde `SUPERSEDES_CHAIN_INVALID`. Un `supervisor` sin membresía `importador` recibe `ROLE_NOT_ALLOWED` también por HTTP. El ejemplo de `supabase-js` de esta sección se ejecutó tal cual contra la API local. La inversa se extrajo de este documento y se ejecutó sobre una base con filas.
 
+**Ejecución verificada de ALIGN-020, ciclo 1 (02/11/2026, CLI 2.108.0).** La evidencia depurada está en `execution/evidence/ALIGN-020/` del paquete del plan, fuera de git. `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` coinciden antes y después de `20261102120000`; los únicos cambios de `case-review-verify.sql` son la versión aplicada y los dos conteos de esta migración. Sobre una base recién sembrada: 359 pruebas por rol y 159 casos HTTP, 0 fallas. La inversa de abajo se extrajo de este documento y se ejecutó sobre una base con filas.
+
 ### Reversión
 
-Solo en la base local. La reversión exacta es `npx --yes supabase@2.108.0 db reset --version 20261030090000`, y después `db reset` para volver al estado completo. Para conservar las filas de las demás tablas, esta inversa se ejecuta como `supabase_admin` (las funciones son de otro dueño) y descarta las revisiones y los lotes:
+Solo en la base local. Para quitar únicamente `20261102120000` y volver a las funciones de ALIGN-018, la reversión exacta es `npx --yes supabase@2.108.0 db reset --version 20261030100000`. La de todo ALIGN-018 es `npx --yes supabase@2.108.0 db reset --version 20261030090000`, y después `db reset` para volver al estado completo. Para conservar las filas de las demás tablas, esta inversa se ejecuta como `supabase_admin` (las funciones son de otro dueño) y descarta las revisiones y los lotes:
 
 ```sql
 begin;
 drop table public.case_review_approval, public.case_review, public.import_batch;
-drop function public.record_case_review, public.record_case_review_approval, public.read_case_review_reason_text, public.record_import_batch, public.equitas_member_role, public.equitas_append_only;
+drop function public.record_case_review, public.record_case_review_approval, public.read_case_review_reason_text, public.record_import_batch, public.equitas_verify_cutoff, public.equitas_current_cutoff, public.equitas_member_role, public.equitas_append_only;
 drop domain public.case_review_checklist;
 alter table public.debtor drop constraint debtor_tenant_id_key;
 revoke select (id, status) on public."user" from equitas_write_definer;
@@ -275,7 +297,7 @@ revoke select (id, name) on public.role from equitas_write_definer;
 revoke select (id, status) on public.tenant from equitas_write_definer;
 revoke select (id, tenant) on public.debtor from equitas_write_definer;
 drop role equitas_write_definer, equitas_review_server, equitas_import_server;
-delete from supabase_migrations.schema_migrations where version = '20261030100000';
+delete from supabase_migrations.schema_migrations where version in ('20261030100000', '20261102120000');
 commit;
 notify pgrst, 'reload schema';
 ```

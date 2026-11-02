@@ -39,6 +39,8 @@ export type BatchEvent = { id: unknown; as_of: unknown; source_updated_at: unkno
 // VALIDADO o CONFIRMADO pueden estar escribiendo, y FALLIDO tras uno de ellos pudo dejar
 // escrituras parciales (ETL, ALIGN-026): la cartera ya no corresponde al corte anterior.
 // Un FALLIDO sin antecedente, RECIBIDO y los descartes no tocaron la cartera.
+// Es la misma regla de `equitas_current_cutoff`, que en la base es la autoridad: esta lectura
+// solo elige con qué calcular, y la función verifica ese corte al insertar.
 export function selectCurrentCutoff(events: readonly BatchEvent[]): BatchEvent | null {
   const replaced = new Set(events.map(event => databaseId(event.supersedes)))
   const heads = events
@@ -67,11 +69,14 @@ function explanationOf(decision: Decision): Record<string, unknown> {
 }
 
 export type ComputedSnapshot = Omit<CaseReviewSnapshot, 'currentReviewId'>
-type SnapshotResult = { ok: true; value: ComputedSnapshot } | { ok: false; code: CaseReviewErrorCode }
+// `cutoffBatchId` queda aparte de lo que ve el navegador: solo viaja a la función de escritura.
+type SnapshotResult = { ok: true; value: ComputedSnapshot; cutoffBatchId: string } | { ok: false; code: CaseReviewErrorCode }
 
 // Recalcula con la sesión del usuario y por objeto: las mismas reglas, el mismo adaptador
 // y los mismos alcances de RLS que la pantalla. Cualquier lectura fallida detiene el
 // cálculo: no hay decisión registrable sobre datos parciales.
+// El corte se lee ANTES que la cartera: si una importación empieza después de esta lectura,
+// `cutoffBatchId` deja de estar vigente y la función de escritura rechaza la inserción.
 export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenantId: string, debtorId: string): Promise<SnapshotResult> {
   const read = (table: DebtorScopedTable) => loadAllTableRows(table, supabase, debtorReadScope(table, tenantId, debtorId))
   const debtors = await read('debtor')
@@ -83,7 +88,8 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
   })
   if (batches.warning) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
   const cutoff = selectCurrentCutoff(batches.rows as unknown as BatchEvent[])
-  if (!cutoff) return { ok: false, code: 'CUTOFF_NOT_AVAILABLE' }
+  const cutoffBatchId = databaseId(cutoff?.id)
+  if (!cutoff || !cutoffBatchId) return { ok: false, code: 'CUTOFF_NOT_AVAILABLE' }
 
   const [debts, debtorPeople, people, debtorContacts] = await Promise.all([
     read('debt'), read('debtor_person'), read('person'), read('debtor_contact'),
@@ -108,6 +114,7 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
   if (!item?.decision || !item.decisionInput || !asOf) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
   return {
     ok: true,
+    cutoffBatchId,
     value: {
       debtorId,
       asOf,

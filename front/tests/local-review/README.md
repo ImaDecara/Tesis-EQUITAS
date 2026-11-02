@@ -7,6 +7,8 @@ Las pruebas con cliente simulado están en `tests/integration/case-review-action
 | `fixture.sql` | Cartera sintética sobre las semillas de ALIGN-018: importes, personas compartidas, una relación inactiva, una cuenta `tp_operator` y una con dos membresías |
 | `case-review-actions.local.ts` | Llama a las acciones con sesiones reales. Solo simula `next/headers` y `next/cache`. Verifica las filas con `psql` |
 | `case-review-http.http.ts` | POST reales a `next start`: proxy, CSRF de Next, cookies y concurrencia |
+| `case-review-intercalaciones.http.ts` | Importación entre el recálculo y la inserción, por HTTP. Una sesión SQL retiene el bloqueo del objeto o el de lotes hasta que la RPC está esperando en `pg_stat_activity`: determinista, sin pausas |
+| `http-support.ts` | Sesiones, POST, eventos de lote y bloqueos compartidos por las dos suites HTTP |
 | `probe/` | Página temporal que importa las acciones. **No se commitea en `app/`**: sin una página que las importe, Next no las compila y buscar en `.next/static` no probaría nada |
 | `scan-client-bundle.mjs` | Busca la credencial en `.next/static` y publica solo conteos. Con `--expect-actions` exige los controles positivos |
 
@@ -45,9 +47,13 @@ Con `PATH` en npm 11.21.1 y el stack de `docs/tesis/entorno-aislado.md` levantad
 
 5. Detener `next start`, borrar `app/align020-probe/`, compilar de nuevo, `db reset --local` si corresponde y `rmdir /tmp/equitas-local-db/lock`. Borrar `/tmp/align020`.
 
-## Ejecución verificada (02/11/2026)
+## Ejecución verificada (02/11/2026, ALIGN-020 ciclo 1)
 
-Sobre la base local, con `fixture.sql` y un lote registrado como `VALIDADO` y luego `PUBLICADO`: 44 de 44 casos con sesiones reales y 10 de 10 por HTTP contra `next start`. Un origen ajeno con sesión válida se rechaza en el CSRF de Next. Búsqueda en `.next/static` con las acciones compiladas: 0 hallazgos y 4 controles positivos. Con el JWT filtrado a propósito en un componente cliente, la búsqueda lo encuentra. Con una clave de idempotencia aleatoria, los casos de doble envío fallan. Evidencia depurada: `execution/evidence/ALIGN-020/` del paquete del plan, fuera de git.
+Sobre la base local, con `fixture.sql` y lotes registrados como `VALIDADO` y luego `PUBLICADO`: 46 de 46 casos con sesiones reales y 18 de 18 por HTTP contra `next start`, 8 de ellos de intercalación. Un origen ajeno con sesión válida se rechaza en el CSRF de Next. Búsqueda en `.next/static` con las acciones compiladas: 0 hallazgos y 4 controles positivos.
+
+Defectos reinyectados que las pruebas detectan: JWT filtrado en un componente cliente (lo encuentra la búsqueda); clave de idempotencia aleatoria (fallan los casos de doble envío); y, en la migración, quitar la verificación del corte de cada función, quitar el bloqueo compartido o ignorar los `VALIDADO` (fallan las intercalaciones). Las intercalaciones fallaron también contra el código anterior a la migración.
+
+Evidencia depurada: `execution/evidence/ALIGN-020/` del paquete del plan, fuera de git.
 
 ## Para ALIGN-022
 

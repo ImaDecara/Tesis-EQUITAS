@@ -105,12 +105,31 @@ describe('precondiciones reales', () => {
     const forged = { tenant: 920001, debtor: 920001, rules_version: '9.9.9', as_of: '2026-01-01', inputs_hash: 'f'.repeat(64), suggested_intervention: 'FORJADA', suggested_intensity: 0, explanation: {}, decision: 'ACEPTA', decided_intervention: 'FORJADA', decided_intensity: 0, reviewer: Number(OPERADOR), reviewer_role: 'operador', idempotency_key: '00000000-0000-4000-8000-00000000f0f0' }
     for (const [name, path, body] of [
       ['insert', '/rest/v1/case_review', forged],
-      ['rpc', '/rest/v1/rpc/record_case_review', { p_reviewer_user: Number(OPERADOR), p_tenant: 920001, p_debtor: 920001, p_rules_version: '9.9.9', p_as_of: '2026-01-01', p_inputs_hash: 'f'.repeat(64), p_suggested_intervention: 'FORJADA', p_suggested_intensity: 0, p_explanation: {}, p_decision: 'ACEPTA', p_idempotency_key: '00000000-0000-4000-8000-00000000f0f1' }],
+      ['rpc', '/rest/v1/rpc/record_case_review', { p_reviewer_user: Number(OPERADOR), p_tenant: 920001, p_debtor: 920001, p_cutoff_batch: 1, p_rules_version: '9.9.9', p_as_of: '2026-01-01', p_inputs_hash: 'f'.repeat(64), p_suggested_intervention: 'FORJADA', p_suggested_intensity: 0, p_explanation: {}, p_decision: 'ACEPTA', p_idempotency_key: '00000000-0000-4000-8000-00000000f0f1' }],
     ] as const) {
       const reply = await restCall(path, token, body)
       expect(reply.status, name).toBeGreaterThanOrEqual(401)
       expect(reply.body?.code, name).toBe('42501')
     }
+    expect(count('case_review', 'true')).toBe(0)
+  })
+})
+
+describe('corte obligatorio en las funciones', () => {
+  const body = { p_reviewer_user: Number(OPERADOR), p_tenant: Number(TENANT_A), p_debtor: 920001, p_rules_version: '1.0.0', p_as_of: '2026-10-30', p_inputs_hash: 'a'.repeat(64), p_suggested_intervention: 'SEGUIMIENTO', p_suggested_intensity: 0, p_explanation: {}, p_decision: 'ACEPTA', p_idempotency_key: '00000000-0000-4000-8000-00000000c0c0', p_decided_intervention: 'SEGUIMIENTO', p_decided_intensity: 0 }
+
+  it('no hay forma de llamarlas sin el parametro: ni omitiendolo ni con la firma anterior', async () => {
+    const review = await restCall('/rest/v1/rpc/record_case_review', config.reviewJwt, body)
+    expect(review.body?.code, 'registro sin el parametro').toBe('PGRST202')
+    const approval = await restCall('/rest/v1/rpc/record_case_review_approval', config.reviewJwt, { p_approver_user: Number(SUPERVISOR), p_tenant: Number(TENANT_A), p_case_review: 1, p_decision: 'APRUEBA', p_idempotency_key: '00000000-0000-4000-8000-00000000c0c1' })
+    expect(approval.body?.code, 'aprobacion sin el parametro').toBe('PGRST202')
+    expect(sql(`select count(*) from pg_proc where proname in ('record_case_review', 'record_case_review_approval') and pronamespace = 'public'::regnamespace`)).toBe('2')
+    expect(count('case_review', 'true')).toBe(0)
+  })
+
+  it('un corte nulo tambien se rechaza', async () => {
+    const reply = await restCall('/rest/v1/rpc/record_case_review', config.reviewJwt, { ...body, p_cutoff_batch: null })
+    expect(reply.body?.message).toBe('CUTOFF_CHANGED')
     expect(count('case_review', 'true')).toBe(0)
   })
 })
