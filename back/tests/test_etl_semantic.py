@@ -870,6 +870,58 @@ def test_corregir_una_obligacion_solo_toca_esa_fila_y_el_perfil_de_su_objeto(dat
     assert database.batches[-1]['p_counts']['escrituras']['debt']['actualizadas'] == 1
 
 
+def test_corregir_solo_el_capital_no_recalcula_el_perfil(database, tmp_path):
+    key = object_by_case('base-valido')['clave_agrupacion']
+    execute(derive_lot(tmp_path / 'primero'))
+    profiles = json.dumps(database.tables['debtor_profile'], sort_keys=True)
+    execute(derive_lot(tmp_path / 'capital', cabecera_cells={(key, None, 'Deuda_Capital'): '38.807,98'},
+                       detalle_cells={(key, '700001', 'NOTD_capital'): '11.611,38'}))
+    assert database.updates == 1
+    assert database.batches[-1]['p_counts']['escrituras']['debt']['actualizadas'] == 1
+    assert json.dumps(database.tables['debtor_profile'], sort_keys=True) == profiles
+
+
+def test_persona_con_datos_distintos_en_dos_objetos_se_escribe_una_vez_y_mandan_los_ultimos(database, tmp_path):
+    objects = ('3-10012', '6-10013', '1-10014')
+    cells = {(objects[0], None, 'Destinatario'): 'Nombre Sintetico Primero', (objects[0], None, 'Destinatario_Calle'): 'Calle Primera',
+             (objects[2], None, 'Destinatario'): 'Nombre Sintetico Ultimo', (objects[2], None, 'Destinatario_Calle'): 'Calle Ultima',
+             (objects[1], None, 'Destinatario_Localidad'): 'Localidad Intermedia'}
+    lot = derive_lot(tmp_path / 'persona', cabecera_cells=cells)
+    execute(lot)
+    person = next(row for row in database.tables['person'] if row['external_id'] == 90015)
+    address = next(row for row in database.tables['address'] if row['person'] == person['id'])
+    assert person['full_name'] == 'Nombre Sintetico Ultimo'
+    assert address['street'] == 'Calle Ultima'
+    assert database.updates == 0, 'Una sola escritura por persona y dirección'
+    execute(lot)
+    counts = database.batches[-1]['p_counts']
+    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (0, 0, 0)
+
+
+def test_la_ultima_fila_sin_domicilio_no_borra_el_de_una_fila_anterior(database, tmp_path):
+    columns = ('Destinatario_Calle', 'Destinatario_Numeracion', 'Destinatario_Piso', 'Destinatario_Depto')
+    lot = derive_lot(tmp_path / 'sin-domicilio', cabecera_cells={('1-10014', None, column): '' for column in columns})
+    execute(lot)
+    person = next(row for row in database.tables['person'] if row['external_id'] == 90015)
+    assert next(row for row in database.tables['address'] if row['person'] == person['id'])['street'] == 'Calle Sintética 97'
+
+
+@pytest.mark.parametrize('position', [0, -1])
+def test_localidad_sin_codigo_postal_no_borra_el_de_otra_ni_mueve_direcciones(database, tmp_path, position):
+    target = accepted_objects()[position]['clave_agrupacion']
+    lot = derive_lot(tmp_path / 'sin-cp', cabecera_cells={(target, None, 'Destinatario_Localidad'): 'Localidad Sintética 1',
+                                                          (target, None, 'Destinatario_CP'): ''})
+    execute(lot)
+    # Si la localidad ya existe se reutiliza con su código postal; si esta fila es la primera, nace sin él.
+    postal_codes = [row['postal_code'] for row in database.tables['city'] if row['name'] == 'Localidad Sintética 1']
+    assert '0000' in postal_codes and postal_codes.count(None) == (1 if position == 0 else 0)
+    before = _portfolio(database)
+    execute(lot)
+    counts = database.batches[-1]['p_counts']
+    assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (0, 0)
+    assert _portfolio(database) == before
+
+
 def _drop_lines(path, *cells):
     lines = path.read_text(encoding='utf-8').splitlines()
     kept = [line for line in lines if not set(cells) <= set(line.split('\t'))]

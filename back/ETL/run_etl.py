@@ -53,6 +53,7 @@ from ETL.transform import (
     build_province_payload,
     build_transform_summary,
     coverage_gaps,
+    parse_int,
     prepare_batch,
     required_catalog_keys,
     source_contract,
@@ -294,18 +295,51 @@ def _load_location(row: dict[str, Any], person_id: int, loaded: Counter[str]) ->
         loaded["direcciones_publicadas"] += 1
 
 
+def _has_location(row: dict[str, Any]) -> bool:
+    return bool(
+        build_province_payload(row)
+        and build_city_payload(row=row, province_id=0)
+        and build_address_payload(row=row, person_id=0, city_id=0)
+    )
+
+
+# Una persona puede venir en varios objetos con datos distintos. Mandan los últimos, como siempre, pero se escriben una
+# sola vez: ir y volver entre dos valores reescribiría sus filas en cada recarga del mismo lote.
+def _load_people(
+    batch: PreparedBatch,
+    catalogs: Mapping[str, Mapping[str, int]],
+    loaded: Counter[str],
+) -> dict[int, int]:
+    headers_by_person: dict[int, list[SourceRowContext]] = {}
+
+    for item in batch.objects:
+        for header in item.headers:
+            headers_by_person.setdefault(parse_int(header.values.get("Destinatario_Id")), []).append(header)
+
+    person_ids: dict[int, int] = {}
+
+    for external_id, headers in headers_by_person.items():
+        last = headers[-1]
+        set_log_context(last.line, ("persona", external_id))
+        person_payload = with_catalog_ids("person", build_person_payload(last.values), catalogs)
+        person_ids[external_id] = int(load_person(person_payload)["id"])
+        located = next((header for header in reversed(headers) if _has_location(header.values)), last)
+        _load_location(located.values, person_ids[external_id], loaded)
+
+    return person_ids
+
+
 def _load_header(
     header: SourceRowContext,
     debtor_id: int,
+    id_by_person: Mapping[int, int],
     catalogs: Mapping[str, Mapping[str, int]],
     loaded: Counter[str],
 ) -> tuple[int, set[tuple[str, str]]]:
     row = header.values
-    person_payload = with_catalog_ids("person", build_person_payload(row), catalogs)
-    person_id = int(load_person(person_payload)["id"])
+    person_id = id_by_person[parse_int(row.get("Destinatario_Id"))]
     load_debtor_person(build_debtor_person_payload(row=row, debtor_id=debtor_id, person_id=person_id))
     loaded["relaciones_publicadas"] += 1
-    _load_location(row, person_id, loaded)
 
     usable: set[tuple[str, str]] = set()
     contacts = build_debtor_contact_payloads(row=row, person_id=person_id, findings=header.contact_findings)
@@ -322,6 +356,7 @@ def _load_header(
 def _load_object(
     item: PreparedObject,
     batch: PreparedBatch,
+    id_by_person: Mapping[int, int],
     catalogs: Mapping[str, Mapping[str, int]],
     loaded: Counter[str],
 ) -> tuple[int, set[int], int, list[dict[str, Any]]]:
@@ -336,7 +371,7 @@ def _load_object(
 
     for header in item.headers:
         set_log_context(header.line, ("cabecera", item.reference))
-        person_id, usable = _load_header(header, debtor_id, catalogs, loaded)
+        person_id, usable = _load_header(header, debtor_id, id_by_person, catalogs, loaded)
         person_ids.add(person_id)
         usable_contacts += len(usable)
 
@@ -361,9 +396,10 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
     loaded: Counter[str] = Counter()
     profile_inputs = []
     all_debts: list[dict[str, Any]] = []
+    id_by_person = _load_people(batch, catalogs, loaded)
 
     for index, item in enumerate(batch.objects, start=1):
-        debtor_id, person_ids, usable_contacts, debts = _load_object(item, batch, catalogs, loaded)
+        debtor_id, person_ids, usable_contacts, debts = _load_object(item, batch, id_by_person, catalogs, loaded)
         all_debts.extend(debts)
         profile_inputs.append((debtor_id, debts, person_ids, usable_contacts))
 

@@ -550,6 +550,27 @@ def test_volver_al_lote_original_solo_toca_esas_mismas_dos_filas(campaign, publi
     assert persisted_mismatches(tenant_tables(after), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
+def test_una_persona_con_datos_distintos_en_varios_objetos_no_se_reescribe_al_recargar(campaign, published):
+    """90015 viene en tres objetos. Con datos distintos, escribirla por fila iría y volvería en cada recarga."""
+    objects = ("3-10012", "6-10013", "1-10014")
+    lot = derive_lot(campaign.work / "persona-varios-objetos", (QUARANTINED_CASE,), cabecera_cells={
+        (objects[0], None, "Destinatario_Calle"): "Calle Primera", (objects[1], None, "Destinatario_Localidad"): "Localidad Intermedia",
+        (objects[1], None, "Destinatario_CP"): "", (objects[2], None, "Destinatario_Calle"): "Calle Ultima",
+        (objects[2], None, "Destinatario"): "Nombre Sintetico Ultimo",
+    })
+    assert campaign.etl(lot).returncode == 0
+    rows = snapshot()
+    person = next(row for row in rows["person"].values() if row["external_id"] == 90015)
+    assert person["full_name"] == "Nombre Sintetico Ultimo"
+    assert next(row for row in rows["address"].values() if row["person"] == person["id"])["street"] == "Calle Ultima"
+    result = campaign.etl(lot)
+    assert result.returncode == 0
+    assert changes(rows, snapshot()) == {}
+    assert (line_value(result, "Filas insertadas"), line_value(result, "Filas actualizadas")) == ("0", "0")
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
+
+
 def _rejected_fixture(campaign, _name):
     return FIXTURE, "BATCH_BLOCKED", False
 

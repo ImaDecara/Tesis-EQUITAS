@@ -709,10 +709,12 @@ def load_city(payload: dict[str, Any]) -> dict[str, Any]:
     if postal_code:
         lookup_filters["postal_code"] = postal_code
 
+    # Sin código postal se reutiliza la localidad que exista: borrarle el suyo obligaría a crearla de nuevo en cada recarga.
     return insert_or_update_by_filters(
         table_name=CITY_TABLE,
         payload=payload,
         lookup_filters=lookup_filters,
+        ignored_columns=() if postal_code else ("postal_code",),
     )
 
 # Inserta o actualiza una dirección.
