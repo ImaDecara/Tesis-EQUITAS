@@ -35,11 +35,12 @@ export default async function RecommendedActionsPage() {
   const { debtors, warnings } = await getDebtorsData()
   const summary = buildRecommendationSummary(debtors, warnings)
   const reconciliation = buildQueueReconciliation(debtors, warnings)
+  const queueMissing = missingSummary({ totalDebtAssociated: reconciliation.queueTotal })
   const totalMissing = missingSummary({ totalDebt: reconciliation.dashboardTotal })
   const outsideDetail = reconciliation.outsideObjects === null ? null
     : `${countLabel(reconciliation.outsideObjects, 'objeto', 'objetos')} · ${countLabel(reconciliation.outsideObligations!, 'obligación', 'obligaciones')}`
   const reconciliationRows: { label: string; value: string; detail?: string | null }[] = [
-    { label: 'Suma de las colas', value: formatCurrency(reconciliation.queueTotal.value) },
+    { label: 'Suma de las colas', value: formatCurrency(reconciliation.queueTotal.value), detail: queueMissing && `Faltantes: ${queueMissing}` },
     { label: 'Deuda total del tablero', value: formatCurrency(reconciliation.dashboardTotal.value), detail: totalMissing && `Faltantes: ${totalMissing}` },
     { label: 'Diferencia con el tablero', value: formatCurrency(reconciliation.difference.value) },
     { label: 'Importe sin vencimiento evaluable', value: formatCurrency(reconciliation.outsideAmount.value), detail: outsideDetail },

@@ -177,8 +177,10 @@ function differenceData(left: NumericData, right: NumericData) {
 // KPI-V1-07 a 09. No recalcula colas ni tablero: explica por qué sus sumas no coinciden.
 export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
+  // Una cola vacía no observa ningún importe: su 0 no reemplaza al monto que falta en otra.
   const queueTotal = aggregateData(buildRecommendationSummary(debtors, warnings)
-    .filter(group => group.interventionCode !== null).map(group => group.metrics.totalDebt), 'sum', queuesUnknown)
+    .filter(group => group.interventionCode !== null && group.count !== 0)
+    .map(group => group.metrics.totalDebt), 'sum', queuesUnknown)
   const dashboardTotal = buildDebtAgingSummary(debtors, warnings).metrics.totalDebt
   const outsideByObject = queuesUnknown ? [] : debtors
     .map(debtor => (debtor.decisionInput?.obligaciones ?? []).filter(item => dueDateNotEvaluable(item.due_date)))

@@ -425,6 +425,38 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(text).toMatch(/Resto de la diferencia\s+\$\s*0/)
   })
 
+  it('sin ningún monto evaluable, la suma de las colas y sus restas quedan No disponible', async () => {
+    const raw = handmadeRaw()
+    raw.debtors = raw.debtors.slice(0, 1)
+    raw.debts = [{ id: 12, debtor: 1, current_amount: 1250, status: 910001, due_date: null }]
+    const mapped = configureLists(raw)
+    const reconciliation = buildQueueReconciliation(mapped.debtors, [])
+    // Las colas vacías no son observaciones: su cero no reemplaza al monto que falta (contrato §4.1, regla 4).
+    expect(reconciliation.queueTotal.value).toBeNull()
+    expect(reconciliation.dashboardTotal.value).toBe(1250)
+    expect(reconciliation.difference.value).toBeNull()
+    expect(reconciliation.outsideAmount.value).toBe(1250)
+    expect(reconciliation.otherDifference.value).toBeNull()
+    const text = textOf(await RecommendedActionsPage())
+    expect(text).toMatch(/Suma de las colas\s+No disponible/)
+    expect(text).toMatch(/Diferencia con el tablero\s+No disponible/)
+    expect(text).toMatch(/Importe sin vencimiento evaluable\s+\$\s*1\.250/)
+    expect(text).toMatch(/Resto de la diferencia\s+No disponible/)
+  })
+
+  it('la cartera vacía y el importe 0 observado siguen sumando 0', () => {
+    const empty = handmadeRaw()
+    empty.debtors = []
+    empty.debts = []
+    expect(buildQueueReconciliation(configureLists(empty).debtors, []).queueTotal)
+      .toMatchObject({ value: 0, presence: 'OBSERVADO' })
+    const zero = handmadeRaw()
+    zero.debtors = zero.debtors.slice(0, 1)
+    zero.debts = [{ id: 12, debtor: 1, current_amount: 0, status: 910001, due_date: '2026-06-01' }]
+    expect(buildQueueReconciliation(configureLists(zero).debtors, []).queueTotal)
+      .toMatchObject({ value: 0, presence: 'OBSERVADO' })
+  })
+
   it('si las obligaciones fuera no traen importe, lo dice y no muestra $0', async () => {
     const raw = handmadeRaw()
     raw.debts = [{ id: 41, debtor: 4, current_amount: null, status: 910001, due_date: null }, { id: 11, debtor: 1, current_amount: 1000, status: 910001, due_date: '2026-01-01' }]
