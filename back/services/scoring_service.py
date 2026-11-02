@@ -1,14 +1,20 @@
 """Servicio interno v1: cartera completa, corte explícito y colas por intervención.
 
 La fórmula v0 (PY01–PY03) está archivada en el contrato y en git. No hay
-fallback a sus agregados. Solo uso local sintético hasta ALIGN-052 (ADR-001).
+fallback a sus agregados.
+
+Cada función recibe el cliente de la solicitud, con el token del usuario, y el municipio
+resuelto en el servidor (ALIGN-052). No existe un cliente global ni respaldo en la clave de
+servicio general: sin sesión, no hay lectura. RLS acota a las membresías activas y el
+filtro por `tenant` acota a una sola, porque un usuario puede tener más de una.
 """
 
 import argparse
+import os
+import sys
 from collections import defaultdict
 from typing import Any
 
-from ETL.config import supabase
 from services.decision_input import build_decision_input
 from services.decision_rules_v1 import (
     RULES,
@@ -28,12 +34,14 @@ GROUP_DEFINITIONS = RULES["intervenciones"]
 DEBTOR_COLUMNS = "id,tenant,external_id,type,identifier,description,status"
 
 
-def _read(table: str, columns: str) -> list[dict[str, Any]]:
-    return read_all_by_id(table, lambda: supabase.table(table).select(columns))
-
-
 def _read_for_ids(
-    table: str, columns: str, column: str, ids: list[int], *, active: bool = False
+    client: Any,
+    table: str,
+    columns: str,
+    column: str,
+    ids: list[int],
+    *,
+    active: bool = False,
 ) -> list[dict[str, Any]]:
     rows = []
     identifiers = sorted({row_id(identifier) for identifier in ids})
@@ -41,34 +49,32 @@ def _read_for_ids(
         chunk = identifiers[start : start + ID_CHUNK_SIZE]
 
         def query(chunk=chunk):
-            result = supabase.table(table).select(columns).in_(column, chunk)
+            result = client.table(table).select(columns).in_(column, chunk)
             return result.eq("active", True) if active else result
 
         rows.extend(read_all_by_id(table, query))
     return rows
 
 
-def fetch_debtor_profiles() -> list[dict[str, Any]]:
+def fetch_debtor_profiles(client: Any, debtor_ids: list[int]) -> list[dict[str, Any]]:
     """Metadatos únicamente: los valores persistidos v0 nunca alimentan v1."""
-    return read_all_by_id(
-        "debtor_profile",
-        lambda: (
-            supabase.table("debtor_profile")
-            .select("id,debtor,active")
-            .eq("active", True)
-        ),
+    return _read_for_ids(
+        client, "debtor_profile", "id,debtor,active", "debtor", debtor_ids, active=True
     )
 
 
-def fetch_debtors_by_ids(
-    debtor_ids: list[int] | None = None,
-) -> dict[int, dict[str, Any]]:
-    """None lee toda la cartera; [] es un conjunto vacío y no hace consultas."""
-    rows = (
-        _read("debtor", DEBTOR_COLUMNS)
-        if debtor_ids is None
-        else _read_for_ids("debtor", DEBTOR_COLUMNS, "id", debtor_ids)
+def fetch_debtors(client: Any, tenant: int) -> dict[int, dict[str, Any]]:
+    """Toda la cartera del municipio. Una fila de otro invalida la lectura completa."""
+    rows = read_all_by_id(
+        "debtor",
+        lambda: client.table("debtor").select(DEBTOR_COLUMNS).eq("tenant", tenant),
     )
+    try:
+        foreign = any(row_id(row["tenant"]) != tenant for row in rows)
+    except (KeyError, TypeError, ValueError):
+        raise DataReadError("debtor") from None
+    if foreign:
+        raise DataReadError("debtor")
     return {row_id(row["id"]): row for row in rows}
 
 
@@ -112,22 +118,23 @@ def _by_parent(
     return grouped
 
 
-def build_all_case_groups(*, as_of: str) -> list[dict[str, Any]]:
+def build_all_case_groups(client: Any, *, tenant: int, as_of: str) -> list[dict[str, Any]]:
     """Evalúa todos los objetos, también los que no tienen perfil persistido.
 
     Una lectura fallida aborta con READ_INCOMPLETE: jamás se convierte en cero
     obligaciones/contactos. Las consultas por id requieren un lote estable.
     """
     parse_date(as_of)
-    profiles = fetch_debtor_profiles()
-    debtors = fetch_debtors_by_ids()
+    debtors = fetch_debtors(client, tenant)
     if not debtors:
         return []
     debtor_ids = list(debtors)
+    profiles = fetch_debtor_profiles(client, debtor_ids)
     obligations = _read_for_ids(
-        "debt", "id,debtor,current_amount,due_date", "debtor", debtor_ids
+        client, "debt", "id,debtor,current_amount,due_date", "debtor", debtor_ids
     )
     relations = _read_for_ids(
+        client,
         "debtor_person",
         "id,debtor,person,priority,active",
         "debtor",
@@ -140,9 +147,10 @@ def build_all_case_groups(*, as_of: str) -> list[dict[str, Any]]:
     person_ids = list(relations_by_person)
     people = {
         row_id(row["id"]): row
-        for row in _read_for_ids("person", "id,type", "id", person_ids)
+        for row in _read_for_ids(client, "person", "id,type", "id", person_ids)
     }
     contacts = _read_for_ids(
+        client,
         "debtor_contact",
         "id,person,type,value,active",
         "person",
@@ -151,7 +159,12 @@ def build_all_case_groups(*, as_of: str) -> list[dict[str, Any]]:
     )
     contacts_by_person = _by_parent(contacts, "person", "debtor_contact")
     person_types = (
-        {row_id(row["id"]): row for row in _read("person_type", "id,key")}
+        {
+            row_id(row["id"]): row
+            for row in read_all_by_id(
+                "person_type", lambda: client.table("person_type").select("id,key")
+            )
+        }
         if person_ids
         else {}
     )
@@ -224,7 +237,9 @@ def filter_case_groups(
 
 
 def get_case_groups(
+    client: Any,
     *,
+    tenant: int,
     as_of: str,
     group_key: str | None = None,
     severity_band: str | None = None,
@@ -236,7 +251,11 @@ def get_case_groups(
     if limit < 1 or offset < 0:
         raise ValueError("Paginación inválida")
     cases = filter_case_groups(
-        build_all_case_groups(as_of=as_of), group_key, severity_band, tag, search
+        build_all_case_groups(client, tenant=tenant, as_of=as_of),
+        group_key,
+        severity_band,
+        tag,
+        search,
     )
     return {
         "version_reglas": RULES_VERSION,
@@ -248,8 +267,8 @@ def get_case_groups(
     }
 
 
-def get_case_groups_summary(*, as_of: str) -> dict[str, Any]:
-    cases = build_all_case_groups(as_of=as_of)
+def get_case_groups_summary(client: Any, *, tenant: int, as_of: str) -> dict[str, Any]:
+    cases = build_all_case_groups(client, tenant=tenant, as_of=as_of)
     counts = {key: 0 for key in GROUP_DEFINITIONS}
     bands = {band["codigo"]: 0 for band in RULES["severidad"]["bandas"]}
     bands[RULES["severidad"]["banda_sin_valor"]] = 0
@@ -286,8 +305,21 @@ def print_case_groups_preview(cases: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
+    # Importación tardía: `api` depende de este módulo, y usarlo como CLI es lo infrecuente.
+    from fastapi import HTTPException
+
+    from api.auth import (
+        READ_ROLES,
+        data_client,
+        resolve_tenant_context,
+        session_for_token,
+    )
+
     parser = argparse.ArgumentParser(
-        description="Scoring v1 interno; solo local sintético (ADR-001)."
+        description=(
+            "Scoring v1 interno con la sesión de EQUITAS_SESSION_TOKEN; "
+            "solo local sintético (ADR-001)."
+        )
     )
     parser.add_argument(
         "--as-of",
@@ -296,7 +328,17 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, default=50)
     args = parser.parse_args()
-    print_case_groups_preview(build_all_case_groups(as_of=args.as_of)[: args.limit])
+    try:
+        session = session_for_token(os.environ.get("EQUITAS_SESSION_TOKEN", ""))
+        client = data_client(session.config, session.token)
+        context = resolve_tenant_context(client, session)
+        if context.role not in READ_ROLES:
+            raise HTTPException(403, "ROLE_FORBIDDEN")
+    except HTTPException as error:
+        print(error.detail, file=sys.stderr)
+        raise SystemExit(2) from None
+    cases = build_all_case_groups(client, tenant=context.tenant_id, as_of=args.as_of)
+    print_case_groups_preview(cases[: args.limit])
 
 
 if __name__ == "__main__":

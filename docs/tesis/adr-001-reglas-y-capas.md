@@ -140,6 +140,23 @@ flowchart LR
 | FastAPI interna | Scoring alineado a v1 e importación (ALIGN-052), solo servidor a servidor | Servir reglas a la web ni exponerse sin autenticación |
 | Python por lotes | Simulación con las mismas reglas | Modificar prioridades de la web |
 
+### 5.1 FastAPI como servicio interno de importación (ALIGN-052)
+
+Esta sección amplía §4.6, como ese punto anticipaba. Con ALIGN-052 integrado, FastAPI es el **servicio interno de importación** y cumple las condiciones de §4.6 para `localhost`; sigue sin ser fuente de reglas para la web (§4.5).
+
+- **Camino.** El navegador llama al Route Handler `front/app/api/imports/*`, que reenvía de servidor a servidor con el token de la sesión. La URL interna no llega al navegador, no hay CORS y FastAPI solo admite `Host` de loopback.
+- **Autenticación.** Todas las rutas verifican el token con la clave pública del emisor (`ES256`, emisor, audiencia, expiración) y la sesión contra Auth. No se comparte ningún secreto de firma.
+- **Contexto.** Membresía activa y rol se resuelven en cada solicitud con el token del usuario. Lo que envía el cliente se ignora. Un usuario con dos membresías recibe `409`: selección pendiente de decisión ([`importacion-web.md`](importacion-web.md)).
+- **Datos.** `back/services/scoring_service.py` deja de tener un cliente global: recibe el de la solicitud y filtra por el municipio resuelto. No hay respaldo en la clave de servicio general. La CLI del ETL (`run_etl --execute`) sigue siendo el único uso de esa clave, solo contra loopback (ALIGN-025).
+- **Escritura.** `record_import_batch` con la credencial dedicada `equitas_import_server`.
+- **Next y el proxy.** La ruta queda fuera del matcher de `proxy.ts`, porque el proxy corta los cuerpos en 10 MB sin avisar. Su autoridad es FastAPI: el Route Handler no consulta la DAL de ALIGN-019, y solo extrae el token.
+- **Límites.** Rutas de lote solo para `importador`; un lote ajeno da `404`, igual que uno inexistente. Mapeo, preview y confirmación los agregan sus tickets.
+- **Temporal privado.** Una fila no anuncia una copia que no existe: se reintenta con la misma clave y se restaura mientras el lote siga abierto. Las 24 h rigen sin depender de otras solicitudes: la API purga al arrancar y periódicamente, y no entrega lo vencido.
+- **Concurrencia.** Instalar, retirar y cerrar un lote ocurren bajo una exclusión por lote, entre hilos y procesos; nada se borra por el nombre del lote, sino por la generación movida a un nombre privado.
+- **Registros.** Lo que uvicorn imprime de una solicitud se filtra por lista cerrada, con o sin sesión, y ninguna consulta de esta API lleva un valor del cliente en su URL: ni siquiera uno numérico llega a los registros del proceso ni a los de Kong.
+
+Contrato, códigos y temporal privado: [`importacion-web.md`](importacion-web.md). Ejecución y permisos de lectura: [`back/api/README.md`](../../back/api/README.md).
+
 ## 6. Consecuencias y obligaciones
 
 | Ticket | Obligación que deriva de este ADR |

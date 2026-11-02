@@ -85,10 +85,18 @@ class FakeSupabase:
         return FakeQuery(self, table_name)
 
 
-def install_client(monkeypatch, **kwargs):
+TENANT = 7
+
+
+def install_client(_monkeypatch, **kwargs):
     client = FakeSupabase(**kwargs)
-    monkeypatch.setattr(scoring, "supabase", client)
+    for row in client.tables.get("debtor", []):
+        row.setdefault("tenant", TENANT)
     return client
+
+
+def build_cases(client, as_of=CUTOFF):
+    return scoring.build_all_case_groups(client, tenant=TENANT, as_of=as_of)
 
 
 @pytest.mark.parametrize("cap", [1000, 37])
@@ -104,15 +112,18 @@ def test_reads_all_2933_profiles_and_debtors_under_server_cap(monkeypatch, cap):
     client = install_client(
         monkeypatch, tables={"debtor_profile": profiles, "debtor": debtors}, cap=cap
     )
-    assert [row["id"] for row in scoring.fetch_debtor_profiles()] == ids
-    assert list(scoring.fetch_debtors_by_ids(ids + ids[:2])) == ids
-    assert list(scoring.fetch_debtors_by_ids()) == ids
+    assert list(scoring.fetch_debtors(client, TENANT)) == ids
+    debtor_queries = [query for query in client.queries if query.table_name == "debtor"]
+    assert len(debtor_queries) == (2933 + cap - 1) // cap + 1
+    assert all(("eq", "tenant", TENANT) in query.predicates for query in debtor_queries)
+    assert ("gt", "id", ids[-1]) in debtor_queries[-1].predicates
+    assert sorted(
+        row["id"] for row in scoring.fetch_debtor_profiles(client, ids + ids[:2])
+    ) == ids
     profile_queries = [
         query for query in client.queries if query.table_name == "debtor_profile"
     ]
-    assert len(profile_queries) == (2933 + cap - 1) // cap + 1
     assert all(("eq", "active", True) in query.predicates for query in profile_queries)
-    assert ("gt", "id", ids[-1]) in profile_queries[-1].predicates
     chunks = [
         value
         for query in client.queries
@@ -121,7 +132,7 @@ def test_reads_all_2933_profiles_and_debtors_under_server_cap(monkeypatch, cap):
     ]
     assert max(map(len, chunks)) == 200
     count = len(client.queries)
-    assert scoring.fetch_debtors_by_ids([]) == {}
+    assert scoring.fetch_debtor_profiles(client, []) == []
     assert len(client.queries) == count
 
 
@@ -130,13 +141,10 @@ def test_reads_through_empty_page_for_exact_multiples(monkeypatch, count):
     client = install_client(
         monkeypatch,
         tables={
-            "debtor_profile": [
-                {"id": index + 1, "debtor": index + 1, "active": True}
-                for index in range(count)
-            ]
+            "debtor": [{"id": index + 1} for index in range(count)],
         },
     )
-    assert len(scoring.fetch_debtor_profiles()) == count
+    assert len(scoring.fetch_debtors(client, TENANT)) == count
     assert len(client.queries) == (count + 999) // 1000 + 1
 
 
@@ -242,8 +250,8 @@ def test_service_evaluates_raw_debt_not_legacy_profiles_and_includes_objects_wit
     monkeypatch,
 ):
     tables = synthetic_tables()
-    install_client(monkeypatch, tables=tables, cap=2)
-    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    client = install_client(monkeypatch, tables=tables, cap=2)
+    cases = build_cases(client)
     by_id = {case["debtor_id"]: case for case in cases}
     assert set(by_id) == {1, 2, 3, 4}
     assert by_id[1]["priority_score"] == by_id[2]["priority_score"] == 75
@@ -262,7 +270,7 @@ def test_service_evaluates_raw_debt_not_legacy_profiles_and_includes_objects_wit
     tables["debtor_profile"][0].update(
         socioeconomic_risk_level=0, total_debt_amount=None
     )
-    assert scoring.build_all_case_groups(as_of=CUTOFF) == cases
+    assert build_cases(client) == cases
 
 
 def test_paginated_obligations_do_not_stop_at_1000_for_one_object(monkeypatch):
@@ -271,10 +279,10 @@ def test_paginated_obligations_do_not_stop_at_1000_for_one_object(monkeypatch):
         {"id": index, "debtor": 2, "current_amount": 1000, "due_date": "2026-09-01"}
         for index in range(1, 2934)
     ]
-    install_client(monkeypatch, tables=tables)
+    client = install_client(monkeypatch, tables=tables)
     case = next(
         case
-        for case in scoring.build_all_case_groups(as_of=CUTOFF)
+        for case in build_cases(client)
         if case["debtor_id"] == 2
     )
     assert case["decision"]["severidad"]["cantidad_vencidas"] == 2933
@@ -289,8 +297,8 @@ def test_2933_case_portfolio_is_complete_end_to_end(monkeypatch):
             {"id": index, "debtor": index, "active": True} for index in range(1, 2934)
         ],
     }
-    install_client(monkeypatch, tables=tables)
-    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    client = install_client(monkeypatch, tables=tables)
+    cases = build_cases(client)
     assert len(cases) == 2933
     assert [case["debtor_id"] for case in cases] == sorted(range(1, 2934), key=str)
     assert all(case["priority_score"] == 0 for case in cases)
@@ -309,22 +317,22 @@ def test_2933_case_portfolio_is_complete_end_to_end(monkeypatch):
     ],
 )
 def test_failed_table_cannot_become_zero_debt_or_zero_contacts(monkeypatch, table):
-    install_client(monkeypatch, tables=synthetic_tables(), fail_tables=(table,))
+    client = install_client(monkeypatch, tables=synthetic_tables(), fail_tables=(table,))
     with pytest.raises(DataReadError, match=f"^READ_INCOMPLETE:{table}$"):
-        scoring.build_all_case_groups(as_of=CUTOFF)
+        build_cases(client)
 
 
 def test_invalid_parent_id_cannot_silently_drop_obligation(monkeypatch):
     tables = synthetic_tables()
     tables["debtor_person"][0]["person"] = None
-    install_client(monkeypatch, tables=tables)
+    client = install_client(monkeypatch, tables=tables)
     with pytest.raises(DataReadError, match="debtor_person"):
-        scoring.build_all_case_groups(as_of=CUTOFF)
+        build_cases(client)
 
 
 def test_filters_pagination_summary_and_console_use_v1(monkeypatch, capsys):
-    install_client(monkeypatch, tables=synthetic_tables())
-    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    client = install_client(monkeypatch, tables=synthetic_tables())
+    cases = build_cases(client)
     filtered = scoring.filter_case_groups(
         cases,
         group_key="MEJORAR_DATOS",
@@ -337,10 +345,10 @@ def test_filters_pagination_summary_and_console_use_v1(monkeypatch, capsys):
     assert scoring.filter_case_groups(cases, severity_band="missing") == []
     assert scoring.filter_case_groups(cases, tag="missing") == []
     assert scoring.filter_case_groups(cases, search="missing") == []
-    page = scoring.get_case_groups(as_of=CUTOFF, limit=1, offset=1)
+    page = scoring.get_case_groups(client, tenant=TENANT, as_of=CUTOFF, limit=1, offset=1)
     assert page["total"] == 4
     assert page["items"] == cases[1:2]
-    summary = scoring.get_case_groups_summary(as_of=CUTOFF)
+    summary = scoring.get_case_groups_summary(client, tenant=TENANT, as_of=CUTOFF)
     assert summary["total_cases"] == 4
     assert summary["severity_bands"] == {
         "BAJA": 1,
@@ -365,39 +373,55 @@ def test_unavailable_severity_is_counted_separately_and_sorted_last(monkeypatch)
     tables["debt"].append(
         {"id": 100, "debtor": 4, "current_amount": None, "due_date": None}
     )
-    install_client(monkeypatch, tables=tables)
-    cases = scoring.build_all_case_groups(as_of=CUTOFF)
+    client = install_client(monkeypatch, tables=tables)
+    cases = build_cases(client)
     queue = [case for case in cases if case["group_key"] == "MEJORAR_DATOS"]
     assert [case["debtor_id"] for case in queue] == [1, 4]
     assert queue[-1]["priority_score"] is None
     assert (
-        scoring.get_case_groups_summary(as_of=CUTOFF)["severity_bands"]["NO_DISPONIBLE"]
+        scoring.get_case_groups_summary(client, tenant=TENANT, as_of=CUTOFF)[
+            "severity_bands"
+        ]["NO_DISPONIBLE"]
         == 1
     )
 
 
 def test_empty_portfolio_and_cutoff_and_pagination_validation(monkeypatch):
     client = install_client(monkeypatch)
-    assert scoring.build_all_case_groups(as_of=CUTOFF) == []
-    assert scoring.get_case_groups_summary(as_of=CUTOFF)["total_cases"] == 0
+    assert build_cases(client) == []
+    assert (
+        scoring.get_case_groups_summary(client, tenant=TENANT, as_of=CUTOFF)["total_cases"]
+        == 0
+    )
     count = len(client.queries)
     with pytest.raises(ValueError):
-        scoring.build_all_case_groups(as_of="invalid")
+        build_cases(client, as_of="invalid")
     with pytest.raises(ValueError):
-        scoring.get_case_groups(as_of=CUTOFF, limit=0)
+        scoring.get_case_groups(client, tenant=TENANT, as_of=CUTOFF, limit=0)
     with pytest.raises(ValueError):
-        scoring.get_case_groups(as_of=CUTOFF, offset=-1)
+        scoring.get_case_groups(client, tenant=TENANT, as_of=CUTOFF, offset=-1)
     assert len(client.queries) == count
 
 
-def test_cli_requires_cutoff_and_prints_only_counts(monkeypatch, capsys):
-    install_client(monkeypatch, tables=synthetic_tables())
-    monkeypatch.setattr(
-        "sys.argv", ["scoring_service", "--as-of", CUTOFF, "--limit", "2"]
-    )
-    scoring.main()
+def test_foreign_or_unidentified_tenant_row_invalidates_the_portfolio(monkeypatch):
+    for tenant in (TENANT + 1, None):
+        tables = synthetic_tables()
+        client = install_client(monkeypatch, tables=tables)
+        tables["debtor"][0]["tenant"] = tenant
+
+        class IgnoresTenantFilter:
+            """Simula una política o un filtro roto: el servicio no confía en la consulta."""
+
+            def table(self, name):
+                query = client.table(name)
+                query.eq = lambda _column, _value: query
+                return query
+
+        with pytest.raises(DataReadError, match="debtor"):
+            scoring.build_all_case_groups(IgnoresTenantFilter(), tenant=TENANT, as_of=CUTOFF)
+
+
+def test_console_preview_prints_only_counts(monkeypatch, capsys):
+    client = install_client(monkeypatch, tables=synthetic_tables())
+    scoring.print_case_groups_preview(build_cases(client)[:2])
     assert "Casos procesados: 2" in capsys.readouterr().out
-    monkeypatch.setattr("sys.argv", ["scoring_service"])
-    with pytest.raises(SystemExit) as error:
-        scoring.main()
-    assert error.value.code == 2

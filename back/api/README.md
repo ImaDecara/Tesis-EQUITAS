@@ -1,10 +1,100 @@
-# FastAPI interna — reglas v1 (ALIGN-015)
+# FastAPI interna — importación y reglas v1 (ALIGN-015, ALIGN-052)
 
-Este servicio **no se despliega sin autenticación** y la web no lo consume.
-Hasta integrar ALIGN-052, su único uso admitido es local con datos sintéticos,
-escucha en `127.0.0.1` y el destino local permitido por la guardia de ALIGN-025.
-CORS no sustituye autenticación, autorización ni aislamiento por municipio.
-La API todavía carece de esas garantías: véase [ADR-001](../../docs/tesis/adr-001-reglas-y-capas.md).
+Servicio **interno**: escucha en `127.0.0.1` y el navegador nunca lo llama. La web
+entra por el Route Handler de Next `front/app/api/imports/*`, que reenvía de servidor
+a servidor con el token de la sesión. El despliegue público es otro ticket (ALIGN-050)
+y pasa por la campaña de ALIGN-059. El contrato de lotes y la decisión de arquitectura
+están en [`importacion-web.md`](../../docs/tesis/importacion-web.md) y en
+[ADR-001](../../docs/tesis/adr-001-reglas-y-capas.md) §5.1.
+
+## Autenticación y permisos
+
+**Todas las rutas** exigen `Authorization: Bearer <token de sesión>`, también `/health`.
+No se publica `/docs` ni `/openapi.json`, no hay CORS y solo se aceptan encabezados
+`Host` de loopback. Dos comprobaciones por solicitud, sin secretos de firma compartidos:
+
+1. Firma y claims contra la clave pública del emisor (`/auth/v1/.well-known/jwks.json`):
+   algoritmo permitido `ES256`, emisor `<SUPABASE_URL>/auth/v1`, audiencia y rol
+   `authenticated`, expiración y sujeto UUID. HS256 se rechaza aunque PostgREST lo acepte.
+2. Sesión viva en Auth (`/auth/v1/user`): al cerrar sesión el token deja de valer aunque
+   no haya vencido. Si Auth no responde es `503 AUTH_UNAVAILABLE`, no un cierre de sesión.
+
+Membresía y rol se leen en cada solicitud con el token del usuario, bajo RLS: una
+revocación rige en la solicitud siguiente. **Cualquier municipio que mande el cliente se
+ignora**, en cuerpo, consulta, encabezado o cookie.
+
+| Ruta | Roles | Sin permiso |
+|---|---|---|
+| `GET /health` | Cualquier sesión válida; no lee datos | 401 |
+| `GET /case-groups`, `/summary`, `/definitions` | `consulta`, `operador`, `supervisor` | 403 |
+| `POST /imports`, `GET /imports/{id}`, `POST /imports/{id}/discard` | `importador` | 403; lote ajeno o inexistente, 404 |
+
+| Código | Significado |
+|---|---|
+| `401 AUTH_REQUIRED` | Token ausente, vencido, de otro emisor o algoritmo, o sesión cerrada. Mismo cuerpo siempre |
+| `403 MEMBERSHIP_REQUIRED` | Sin membresía activa, usuario o municipio inactivos |
+| `403 ROLE_FORBIDDEN` | El rol no permite la operación |
+| `409 TENANT_SELECTION_REQUIRED` | Dos membresías activas: esta versión no recibe selección (ver `importacion-web.md`) |
+| `503 AUTH_UNAVAILABLE`, `CONTEXT_UNAVAILABLE`, `API_NOT_CONFIGURED` | Falla cerrada; sin datos |
+
+`importador_sistema` es una credencial de máquina sin sesión de Auth: entra por ALIGN-060,
+no por esta verificación. `importador` no lee la cartera, igual que `portfolio:read` de la
+DAL de ALIGN-019. La compatibilidad `tp_operator` de E06 no existe en esta API.
+
+## Lecturas y credenciales
+
+No hay cliente global ni respaldo en la clave de servicio general: el módulo no la lee, y
+`SUPABASE_PUBLISHABLE_KEY` se rechaza si es una clave secreta o de `service_role`.
+
+| Lectura | Credencial | Permiso |
+|---|---|---|
+| `user`, `tenant_user`, `tenant`, `role` (contexto) | Token del usuario | RLS de `20261021221030_active_membership_rls.sql` |
+| `debtor` filtrado por `tenant`; `debt`, `debtor_profile`, `debtor_person`, `person`, `debtor_contact` por ids de esos objetos; `person_type` | Token del usuario | RLS más el filtro: con dos membresías RLS muestra ambos municipios |
+| `import_batch` filtrado por `tenant`, todo el municipio y paginado | Token del usuario | `member_read_import_batch` más el filtro. El lote pedido se busca en memoria: su número no viaja en la URL |
+| `record_import_batch` | JWT dedicado `equitas_import_server` (`EQUITAS_IMPORT_SERVER_JWT`) | Solo `EXECUTE` de esa función; no lee ni escribe tablas. Otro `role` se rechaza |
+
+## Ejecución local
+
+```sh
+python3 -I database/testing/case_review_local.py mint-jwt --role equitas_import_server --hours 12
+cd back
+EQUITAS_TARGET_ENV=local SUPABASE_URL=http://127.0.0.1:54321 \
+SUPABASE_PUBLISHABLE_KEY=<clave publicable local> \
+EQUITAS_IMPORT_SERVER_JWT="$(cat /tmp/equitas-local-db/equitas_import_server.jwt)" \
+EQUITAS_IMPORT_TMP_DIR=<directorio privado, fuera del repositorio> \
+.venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port <puerto alto>
+```
+
+`SUPABASE_URL` debe coincidir con el emisor de los tokens. `validate_execution_target`
+(ALIGN-025) corre en cada solicitud y solo admite loopback. Next necesita, sin prefijo
+`NEXT_PUBLIC_`, `EQUITAS_IMPORT_API_URL=http://127.0.0.1:<puerto>`.
+
+`EQUITAS_IMPORT_PURGE_SECONDS` fija cada cuánto se purga el temporal: de 1 a 3600, 900 por
+defecto. Un valor inválido no alarga la retención: rige el valor por defecto.
+
+**Los registros no llevan datos del cliente, con o sin sesión** (`api/log_guard.py`). Uvicorn
+imprime lo que recibe antes de que la API decida nada, así que se filtra por lista cerrada:
+
+| Fuente | Qué queda |
+|---|---|
+| Acceso (`uvicorn.access`) | Forma de la ruta: los segmentos fijos, y `<x>` en lugar de cualquier otro, también los numéricos. Sin consulta. Método solo si es uno conocido. La dirección es `-`, porque uvicorn la toma de `X-Forwarded-For` cuando la conexión viene de loopback |
+| Servidor (`uvicorn.error`) | Ciclo de vida. Un error deja solo la clase de la excepción. Handshakes WebSocket y líneas de depuración se descartan |
+| Nivel `trace` (`uvicorn.asgi`) | Nada: imprimiría el scope de cada solicitud |
+| Aplicación (`equitas.api`) | Códigos y números del servidor: `IMPORT_RECIBIDO lote=…`, `AUTH_RECHAZADO motivo=…`, `PURGA_FALLIDA clase=…` |
+
+Un identificador interno que haga falta registrar sale del evento autorizado, nunca de la ruta
+recibida. Una ruta nueva debe sumar sus segmentos fijos a `LOGGABLE_SEGMENTS`; si no, se ve
+como `<x>`.
+
+**Registros de la infraestructura.** Kong registra la URL de cada consulta que emite esta API.
+Por eso **ningún valor del cliente viaja en una URL**: el `{id}` de un lote se busca en memoria
+sobre lo leído del municipio; `search`, `group_key`, `severity_band` y `tag` se aplican en Python
+sobre la cartera leída; lo demás va en el cuerpo de `record_import_batch`, que Kong no registra.
+`tests_real` lo comprueba capturando Kong, PostgREST, Auth y Postgres, con un control positivo.
+En esas URL sí quedan valores **resueltos en el servidor**: `tenant=eq.<municipio>`,
+`auth_user=eq.<sujeto verificado del token>`, `user=eq.<id>`, `id=in.(…)` con ids de la cartera y
+el cursor de paginación. Ninguno lo escribe el cliente. Fuera de esta API, las lecturas de la web
+por la DAL de ALIGN-019 son otro recorrido: ver `importacion-web.md`.
 
 ## Reglas y corte
 
@@ -39,7 +129,7 @@ en su propia banda y conserva prioridad null, nunca cero.
 
 ## Lectura y adaptación del esquema
 
-- Se leen todos los objetos `debtor`, incluso sin perfil persistido. Los perfiles
+- Se leen todos los objetos `debtor` del municipio, incluso sin perfil persistido. Los perfiles
   activos solo aportan su id de referencia; si hay varios, se referencia el id
   mayor. Sus totales, riesgo, antigüedad y contactos v0 no intervienen en v1.
 - Todas las lecturas usan orden ascendente por `id`, `id > cursor` y límite
@@ -95,6 +185,19 @@ Desde `back/`, con las dependencias fijadas:
 
 Los golden, contrafactuales, ordenamientos y pruebas de paginación son sintéticos.
 Las pruebas inyectan clientes falsos: no necesitan credenciales ni bases remotas.
-La CLI requiere un corte explícito (`python -m services.scoring_service
---as-of YYYY-MM-DD`) y muestra solo conteos; su ejecución con cliente real sigue
-sujeta a las restricciones locales de este documento y de ALIGN-025.
+La CLI requiere un corte explícito y una sesión (`EQUITAS_SESSION_TOKEN=<token> python -m
+services.scoring_service --as-of YYYY-MM-DD`): resuelve el municipio igual que la API, exige
+un rol de lectura y muestra solo conteos. Sin sesión termina con el código, sin leer nada.
+
+## Verificación contra el stack local
+
+Con el turno de la base y después de `db reset --local`, desde `back/`:
+
+```sh
+.venv/bin/python -m pytest tests_real -q
+```
+
+`tests_real/` queda fuera de `testpaths`. Tiene su propio `conftest.py`: solo acepta
+loopback, exige el lock, siembra las fixtures, levanta `uvicorn` con un entorno armado desde
+cero, sin clave general, y `next build` + `next start`. Deja filas: al terminar corresponde
+otro `db reset`. ALIGN-027 parte de este `conftest.py`.
