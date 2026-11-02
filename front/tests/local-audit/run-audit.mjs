@@ -69,6 +69,16 @@ const app = (root, path, label, extra = {}) => {
   const cookie = [session?.cookie, tenant ? `equitas_tenant_id=${tenant}` : ''].filter(Boolean).join('; ')
   return fetch(new URL(path, root), { redirect: 'manual', headers: { ...(cookie ? { cookie } : {}), ...headers } })
 }
+// Next 16 valida el hash de `_rsc`: la primera respuesta es un 307 a la misma ruta con el correcto.
+// Sin seguirlo no se renderiza nada, y un "sin registro" no probaria nada.
+const rscApp = async (root, path, label, extra = {}) => {
+  const first = await app(root, path, label, extra)
+  if (first.status !== 307) return first
+  const location = new URL(first.headers.get('location'), root)
+  if (location.pathname !== path || !location.searchParams.has('_rsc')) return first
+  await first.text()
+  return app(root, `${location.pathname}${location.search}`, label, extra)
+}
 const rest = (path, bearer, init = {}) => fetch(`${REST}${path}`, {
   ...init,
   headers: { apikey: env.PUBLISHABLE_KEY, ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}), 'Content-Type': 'application/json', ...(init.headers ?? {}) },
@@ -91,16 +101,16 @@ for (const [label, actor] of Object.entries({ consulta: USERS.consulta, operador
   check(`ficha HTML ${label}: fila correcta`, row.tenant === TENANT_A && row.actor === actor && row.role === label && row.action === 'CASE_OPEN' && row.target === OWN, JSON.stringify(row))
 }
 {
-  const { added, status } = await delta(() => app(base, `/debtors/${OWN}`, 'operador', { RSC: '1' }))
-  check('ficha por navegacion RSC: un registro', status === 200 && added === 1, `status=${status} agregados=${added}`)
+  const { added, status, body } = await delta(() => rscApp(base, `/debtors/${OWN}`, 'operador', { RSC: '1' }))
+  check('ficha por navegacion RSC: un registro', status === 200 && added === 1 && body.includes(SECRET_MARK), `status=${status} agregados=${added}`)
 }
 {
-  const { added, body } = await delta(() => app(base, `/debtors/${OWN}`, 'operador', { RSC: '1', 'Next-Router-Prefetch': '1' }))
-  check('prefetch de la ficha: sin registro y sin datos', added === 0 && !body.includes(SECRET_MARK), `agregados=${added}`)
+  const { added, status, body } = await delta(() => rscApp(base, `/debtors/${OWN}`, 'operador', { RSC: '1', 'Next-Router-Prefetch': '1' }))
+  check('prefetch de la ficha: sin registro y sin datos', status === 200 && added === 0 && !body.includes(SECRET_MARK), `status=${status} agregados=${added}`)
 }
 {
-  const { added, body } = await delta(() => app(base, `/debtors/${OWN}`, 'operador', { RSC: '1', 'Next-Router-Prefetch': '1', 'Next-Router-Segment-Prefetch': '/_tree' }))
-  check('prefetch por segmento: sin registro y sin datos', added === 0 && !body.includes(SECRET_MARK), `agregados=${added}`)
+  const { added, status, body } = await delta(() => rscApp(base, `/debtors/${OWN}`, 'operador', { RSC: '1', 'Next-Router-Prefetch': '1', 'Next-Router-Segment-Prefetch': '/_tree' }))
+  check('prefetch por segmento: sin registro y sin datos', status === 200 && added === 0 && !body.includes(SECRET_MARK), `status=${status} agregados=${added}`)
 }
 {
   const { added, status } = await delta(() => app(base, '/debtors', 'operador'))
@@ -156,7 +166,8 @@ for (const [route, code] of Object.entries(REPORTS)) {
   check(`exportar ${route}: fila correcta`, row.action === 'REPORT_EXPORT' && row.target === code && row.actor === USERS.supervisor && row.role === 'supervisor' && row.tenant === TENANT_A, JSON.stringify(row))
 }
 for (const [name, route, label, expected] of [
-  ['anonimo', 'queue', null, 401],
+  // El proxy redirige al anonimo antes de llegar al handler (ADR-001, seccion 9).
+  ['anonimo', 'queue', null, 307],
   ['consulta en supervision', 'supervision', 'consulta', 403],
   ['operador en accesos', 'access', 'operador', 403],
   ['consulta en accesos', 'access', 'consulta', 403],
@@ -316,7 +327,7 @@ await rejected('sin clave de idempotencia', reviewJwt, goodArgs({ p_idempotency_
 {
   const open = await delta(() => app(baseWithoutCredential, `/debtors/${OWN}`, 'operador'))
   check('sin credencial, ficha: sin datos y sin registro', open.added === 0 && !open.body.includes(SECRET_MARK), `status=${open.status} agregados=${open.added}`)
-  const opened = await delta(() => app(baseWithoutCredential, `/debtors/${OWN}`, 'operador', { RSC: '1' }))
+  const opened = await delta(() => rscApp(baseWithoutCredential, `/debtors/${OWN}`, 'operador', { RSC: '1' }))
   check('sin credencial, ficha por RSC: sin datos y sin registro', opened.added === 0 && !opened.body.includes(SECRET_MARK), `status=${opened.status} agregados=${opened.added}`)
   const exported = await delta(() => app(baseWithoutCredential, '/api/reports/supervision', 'supervisor'))
   check('sin credencial, reporte: 503 sin archivo', exported.status === 503 && exported.body.includes('AUDITORIA_NO_DISPONIBLE') && exported.added === 0, `status=${exported.status}`)
