@@ -116,15 +116,28 @@ Cada archivo se midió en un proceso propio; el crecimiento de memoria es `ru_ma
 
 | Caso | Presupuesto de la prueba | Medido |
 |---|---|---|
-| Cada uno de los 118 archivos hostiles, salvo los 7 de abajo | 15 s y 192 MiB | Máximo 3,7 s y 107 MiB |
-| Cadenas compartidas al límite: 3 999 000 distintas | 60 s y 1 GiB | 13 s y 219 MiB |
-| Una cadena más que el límite: 4 000 001 vacías | 60 s y 1 GiB | 11 s y 34 MiB |
-| Estilos al límite, la única parte no interrumpible con costo apreciable | 60 s y 1 GiB | 5 s y 93 MiB |
+| Cada uno de los 118 archivos hostiles, salvo los 7 de abajo | 15 s y 192 MiB | Máximo 3,1 s y 106 MiB |
+| Cadenas compartidas al límite: 3 999 000 distintas | 60 s y 1 GiB | 10 s y 217 MiB |
+| Una cadena más que el límite: 4 000 001 vacías | 60 s y 1 GiB | 8 s y 36 MiB |
+| Estilos al límite, la única parte no interrumpible con costo apreciable | 60 s y 1 GiB | 4 s y 92 MiB |
 | Un solo texto de 190 MB en una celda | 60 s y 1 GiB | 1 s y 427 MiB |
-| Un solo comentario o atributo de 190 MB en la hoja | 60 s y 1 GiB | 1 s y 741 MiB |
-| Mayor CSV aceptado: 300 000 filas × 60 columnas | 60 s y 1 GiB | 4 s y 526 MiB |
+| Un solo comentario o atributo de 190 MB en la hoja | 60 s y 1 GiB | 1 s y 740 MiB |
+| Mayor CSV aceptado: 300 000 filas × 60 columnas | 60 s y 1 GiB | 3 s y 525 MiB |
 
-Se midió aparte, sin incluirlo en la suite porque tarda: un XLSX de 180 MB descomprimidos con 200 000 filas × 60 columnas numéricas se lee en 78 s con 864 MiB. La cartera `escala` (2990 cabeceras y 56 289 detalles) da el mismo reporte y los mismos payloads en TSV, CSV y XLSX.
+Se midió aparte, sin incluirlo en la suite porque tarda: un XLSX de 180 MB descomprimidos con 200 000 filas × 60 columnas numéricas se lee en 72 s con 842 MiB. La cartera `escala` (2990 cabeceras y 56 289 detalles) da el mismo reporte y los mismos payloads en TSV, CSV y XLSX. Un libro guardado por LibreOffice 26.2 de verdad, con descriptores de datos, da el mismo reporte que el TSV. Excel real no se probó.
+
+Con `read_source_batch_supervised` (§8), con memoria residente total del hijo, base incluida:
+
+| Caso | Resultado | Tiempo | Memoria del hijo |
+|---|---|---:|---:|
+| Estilos al límite, plazo de 1,5 s | `TIEMPO_LECTURA_EXCEDIDO`. Dentro del proceso, esta fase demora el rechazo a unos 3,5 s | 1,51 s | 175 MiB |
+| Texto de 190 MB, tope de 250 MiB | `MEMORIA_LECTURA_EXCEDIDA`. El hijo llegó a pasarlo antes del corte | 0,75 s | 292 MiB |
+| Dos CSV de 300 000 filas × 60 columnas, lote entero | Aceptado. El padre, que recibe las filas, crece 846 MiB | 9,3 s | 1136 MiB |
+| Mayor XLSX | Rechazo por columnas, tras leerlo entero | 72 s | 949 MiB |
+| Dos XLSX al máximo (cerca de 192 000 filas × 60 cada uno), plazo por defecto | `TIEMPO_LECTURA_EXCEDIDO`: no entran en 120 s | 120 s | 1356 MiB |
+| Los mismos, con un plazo de 400 s | Aceptado. El padre llega a 870 MiB | 155 s | 1827 MiB |
+
+Por eso el tope por defecto es de 2 GiB: alcanza para lo más grande que los límites dejan pasar, sin holgura de sobra. Otra máquina o asignador pueden necesitar otro valor, y es configurable.
 
 **Qué no cubren estos límites.** Dentro del proceso no se puede interrumpir el armado de los estilos, unos 5 s: por eso, un archivo subido se lee con `read_source_batch_supervised` (§8).
 
