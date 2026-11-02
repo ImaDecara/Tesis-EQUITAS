@@ -11,7 +11,8 @@ import { parseArgs } from 'node:util'
 const { values } = parseArgs({ options: {
   'base-url': { type: 'string' },
   output: { type: 'string' },
-  'importador-role': { type: 'string', default: 'tp_operator' },
+  // Con la cuenta `importador` en su rol aprobado, no en el `tp_operator` que le da fixture.sql.
+  'solo-importador': { type: 'boolean', default: false },
 } })
 const expect = baseExpect.configure({ timeout: 20_000 })
 const WIDTHS = [360, 768, 1440]
@@ -68,11 +69,11 @@ async function registerBatch(config, status, asOf, supersedes = null) {
   return (await response.json()).batch_id
 }
 
-async function tabTo(page, locator, max = 150) {
+async function tabTo(page, locator, key = 'Tab', max = 150) {
   await locator.waitFor({ state: 'visible' })
   for (let presses = 0; presses < max; presses += 1) {
     if (await locator.evaluate(element => element === document.activeElement)) return presses
-    await page.keyboard.press('Tab')
+    await page.keyboard.press(key)
   }
   throw Error('El control no se alcanza con Tab.')
 }
@@ -105,7 +106,7 @@ const actionPosts = page => {
   return posts
 }
 
-async function newSession(browser, base, config, label) {
+async function newSession(browser, base, config, label, landing = 'Casos prioritarios') {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'es-AR' })
   context.setDefaultTimeout(20_000)
   const page = await context.newPage()
@@ -118,7 +119,7 @@ async function newSession(browser, base, config, label) {
   await page.keyboard.press('Tab')
   await page.keyboard.type(config.accounts[label].password)
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('heading', { name: 'Casos prioritarios', exact: true })).toBeVisible({ timeout: 45_000 })
+  await expect(page.getByRole('heading', { name: landing, exact: true })).toBeVisible({ timeout: 45_000 })
   return { context, page, posts: actionPosts(page) }
 }
 
@@ -220,7 +221,8 @@ async function proposeIntense(page, base, debtor) {
 }
 
 let browser
-try {
+
+async function run() {
   const base = new URL(values['base-url'] ?? '').origin
   if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw Error('Solo se admite un destino local.')
   if (!values.output) throw Error('Falta --output con un directorio nuevo.')
@@ -233,10 +235,21 @@ try {
   const approveId = actionId(manifest, 'approveCaseDecision')
 
   const validated = await registerBatch(config, 'VALIDADO', CUTOFFS.first)
-  const published = await registerBatch(config, 'PUBLICADO', CUTOFFS.first, validated)
+  await registerBatch(config, 'PUBLICADO', CUTOFFS.first, validated)
   pass('lote_validado_y_publicado', { as_of: CUTOFFS.first, eventos: 2 })
 
   browser = await chromium.launch()
+  if (values['solo-importador']) {
+    const importador = await newSession(browser, base, config, 'importador', 'Datos no disponibles')
+    await importador.page.goto(reviewUrl(base, CASE.intense))
+    await expect(importador.page.getByRole('heading', { name: 'Datos no disponibles', exact: true })).toBeVisible()
+    await expect(importador.page.locator('form')).toHaveCount(0)
+    await assertActionRejected(importador, base, CASE.intense, recordId, approveId)
+    pass('importador_sin_ficha_y_accion_rechazada', 'La ficha no abre: el rol no lee cartera. La acción devuelve ROLE_FORBIDDEN.')
+    report.console_errors.length = 0
+    report.passed = true
+    return
+  }
   const operador = await newSession(browser, base, config, 'operador')
   const { page } = operador
   pass('login_con_teclado', 'Correo, contraseña y Enter.')
@@ -244,7 +257,7 @@ try {
   // Colas: filtro y cola con teclado, sin perder el filtro.
   const queues = page.getByRole('navigation', { name: 'Colas por intervención' })
   await expect(queues.getByRole('link')).toHaveCount(5)
-  await assertNames(page.locator('main, body').first(), 'colas')
+  await assertNames(page.locator('main'), 'colas')
   await tabTo(page, page.getByLabel('Buscar por objeto o persona'))
   await page.keyboard.type(CASE.intense.identifier)
   await page.keyboard.press('Enter')
@@ -300,7 +313,11 @@ try {
   await assertLayout(page, output, '[role="tabpanel"]', 'revision-con-errores')
   pass('errores_asociados_y_sin_superposiciones', { controles_con_nombre: expandedNames })
 
-  // Enlace del resumen: lleva al campo. Motivo con lista cerrada y detalle.
+  // El primer enlace del resumen lleva al campo. Motivo con lista cerrada y detalle.
+  await page.keyboard.press('Tab')
+  await expect(panel.locator('#rv-summary a').first()).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(reason).toBeFocused()
   await chooseOption(page, reason, 'Datos')
   await expect(reason).not.toHaveAttribute('aria-invalid', 'true')
   await page.keyboard.press('Tab')
@@ -322,7 +339,7 @@ try {
   await page.keyboard.press('Enter')
   await expect(panel.locator('#rv-notice')).toContainText('Requiere aprobación de un supervisor.')
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('rv-feedback')
-  await expect(panel.getByText('Vigente')).toBeVisible()
+  await expect(panel.getByText('Vigente', { exact: true })).toBeVisible()
   await expect(panel.getByRole('listitem').filter({ hasText: 'Modificar la acción' }).first()).toContainText('Requiere aprobación de un supervisor')
   if (operador.posts.length !== 1) throw Error(`Se esperaba una acción: ${operador.posts.length}`)
   await page.reload()
@@ -349,7 +366,7 @@ try {
   await page.keyboard.press('Enter')
   await expect(rejectPanel.getByLabel('Motivo', { exact: true })).toHaveAccessibleDescription(/Indica un motivo/)
   if (operador.posts.length !== postsBefore) throw Error('Salió una acción sin motivo.')
-  await chooseOption(page, rejectPanel.getByLabel('Motivo', { exact: true }), 'Ya hay')
+  await chooseOption(page, rejectPanel.getByLabel('Motivo', { exact: true }), 'Ya')
   await tabTo(page, rejectPanel.getByRole('button', { name: 'Registrar decisión' }))
   await page.keyboard.press('Enter')
   await expect(rejectPanel.locator('#rv-notice')).toContainText('Decisión registrada.')
@@ -366,6 +383,21 @@ try {
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { name: 'Resumen' })).toBeFocused()
   pass('pestanas_con_flechas', 'Fin y flecha, con el foco en la pestaña activa.')
+
+  // Mirar otra pestaña no borra lo que se estaba escribiendo.
+  await page.keyboard.press('End')
+  const kept = panelOf(page)
+  await chooseRadio(page, kept.getByRole('radio', { name: 'Aceptar la sugerencia' }), kept.getByRole('radio', { name: 'Rechazar la sugerencia' }), 2)
+  await tabTo(page, kept.getByLabel('Detalle del motivo (opcional)'))
+  await page.keyboard.type(REASON_DETAIL)
+  await tabTo(page, page.getByRole('tab', { name: 'Revisión' }), 'Shift+Tab')
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.getByRole('tab', { name: 'Recomendacion' })).toHaveAttribute('aria-selected', 'true')
+  await expect(kept).toHaveCount(0)
+  await page.keyboard.press('ArrowRight')
+  await expect(kept.getByRole('radio', { name: 'Rechazar la sugerencia' })).toBeChecked()
+  await expect(kept.getByLabel('Detalle del motivo (opcional)')).toHaveValue(REASON_DETAIL)
+  pass('otra_pestana_conserva_lo_escrito', 'Decisión y detalle siguen ahí al volver.')
 
   // Supervisor: responde con teclado; aprobar sin lista no sale.
   const supervisor = await newSession(browser, base, config, 'supervisor')
@@ -399,16 +431,15 @@ try {
   await assertActionRejected(consulta, base, CASE.intense, recordId, approveId)
   pass('consulta_sin_formulario_y_accion_rechazada', 'Sin formulario, sin detalle en la página y la acción devuelve ROLE_FORBIDDEN.')
 
-  const importador = await newSession(browser, base, config, 'importador').catch(() => null)
-  if (values['importador-role'] === 'tp_operator') {
-    await importador.page.goto(reviewUrl(base, CASE.intense))
-    const restricted = panelOf(importador.page)
-    await expect(restricted.getByText('Tu rol permite leer la cartera, pero no las revisiones de este caso.')).toBeVisible()
-    await expect(restricted.locator('form')).toHaveCount(0)
-    await expect(restricted.getByText('Hechos del caso')).toHaveCount(0)
-    await assertActionRejected(importador, base, CASE.intense, recordId, approveId)
-    pass('tp_operator_sin_revision_y_accion_rechazada', 'Solo el aviso de rol; la acción devuelve ROLE_FORBIDDEN.')
-  }
+  // fixture.sql deja a la cuenta `importador` con el rol de compatibilidad `tp_operator`.
+  const compat = await newSession(browser, base, config, 'importador')
+  await compat.page.goto(reviewUrl(base, CASE.intense))
+  const restricted = panelOf(compat.page)
+  await expect(restricted.getByText('Tu rol permite leer la cartera, pero no las revisiones de este caso.')).toBeVisible()
+  await expect(restricted.locator('form')).toHaveCount(0)
+  await expect(restricted.getByText('Hechos del caso')).toHaveCount(0)
+  await assertActionRejected(compat, base, CASE.intense, recordId, approveId)
+  pass('tp_operator_sin_revision_y_accion_rechazada', 'Solo el aviso de rol; la acción devuelve ROLE_FORBIDDEN.')
 
   // Carga en curso: al confirmar es un aviso, no un error del usuario, y objetar sigue disponible.
   await proposeIntense(page, base, CASE.objected)
@@ -416,7 +447,7 @@ try {
   const midLoad = panelOf(page)
   await chooseRadio(page, midLoad.getByRole('radio', { name: 'Aceptar la sugerencia' }), midLoad.getByRole('radio', { name: 'Aceptar la sugerencia' }), 0)
   await supervisor.page.goto(reviewUrl(base, CASE.objected))
-  const inProgress = await registerBatch(config, 'VALIDADO', CUTOFFS.second)
+  const inProgress = await registerBatch(config, 'VALIDADO', CUTOFFS.first)
   await tabTo(page, midLoad.getByRole('button', { name: 'Registrar decisión' }))
   await page.keyboard.press('Enter')
   const midLoadNotice = midLoad.locator('#rv-notice')
@@ -435,14 +466,13 @@ try {
   const objection = panelOf(supervisor.page)
   await expect(objection.getByRole('radio', { name: 'Aprobar la propuesta' })).toBeDisabled()
   await chooseRadio(supervisor.page, objection.getByRole('radio', { name: 'Objetar la propuesta' }), objection.getByRole('radio', { name: 'Objetar la propuesta' }), 0)
-  await chooseOption(supervisor.page, objection.getByLabel('Motivo de la objeción', { exact: true }), 'La lista')
+  await chooseOption(supervisor.page, objection.getByLabel('Motivo de la objeción', { exact: true }), 'La')
   await tabTo(supervisor.page, objection.getByRole('button', { name: 'Registrar respuesta' }))
   await supervisor.page.keyboard.press('Enter')
   await expect(objection.locator('#ap-notice')).toContainText('Objetada por un supervisor.')
   pass('objetar_disponible_con_carga_en_curso', 'Aprobar deshabilitado; objeción registrada.')
 
   // Termina la carga con otro corte: una página abierta antes no confirma en silencio.
-  await registerBatch(config, 'PUBLICADO', CUTOFFS.first, published).catch(() => null)
   await registerBatch(config, 'PUBLICADO', CUTOFFS.first, inProgress)
   await page.goto(reviewUrl(base, CASE.outdated))
   const stale = panelOf(page)
@@ -468,6 +498,10 @@ try {
   if (report.console_errors.length) throw Error(`Errores de consola: ${report.console_errors.slice(0, 5).join(' | ')}`)
   pass('sin_errores_de_consola', 0)
   report.passed = true
+}
+
+try {
+  await run()
 } catch (error) {
   report.errors.push(clean(error.message).slice(0, 2000))
 } finally {

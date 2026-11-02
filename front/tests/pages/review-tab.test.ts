@@ -16,7 +16,7 @@ import { caseReviewFailure, type CaseReviewSnapshot } from '@/lib/domain/case-re
 import type { CaseReviewHistoryEntry, CaseReviewScreen } from '@/lib/domain/case-review-history'
 import { buildDebtorDetail } from '@/tests/helpers/equitas-fixtures'
 
-type NodeProps = { children?: ReactNode; value?: string; defaultValue?: string }
+type NodeProps = { children?: ReactNode; value?: string; defaultValue?: string; keepMounted?: boolean }
 function nodesOfType(node: ReactNode, type: unknown): React.ReactElement<NodeProps>[] {
   if (Array.isArray(node)) return node.flatMap(child => nodesOfType(child, type))
   if (!isValidElement<NodeProps>(node)) return []
@@ -400,5 +400,19 @@ describe('pestañas', () => {
     expect(panel).toContain(`aria-labelledby="${tabId}"`)
     expect(markup).toContain('panel b')
     expect(markup).not.toContain('panel a')
+  })
+
+  it('un panel que conserva su estado queda oculto, no se desmonta', () => {
+    const markup = markupOf(createElement(Tabs, { defaultValue: 'b' } as ComponentProps<typeof Tabs>,
+      createElement(TabsContent, { value: 'a', keepMounted: true }, 'panel a'),
+      createElement(TabsContent, { value: 'b', keepMounted: true }, 'panel b'),
+    ))
+    expect(markup).toMatch(/<div[^>]*hidden=""[^>]*>panel a/)
+    expect(markup).toMatch(/<div(?![^>]*hidden)[^>]*>panel b/)
+  })
+
+  it('la pestaña Revisión conserva lo escrito al mirar otra', async () => {
+    const { page } = await open(screen())
+    expect(nodesOfType(page, TabsContent).find(node => node.props.value === 'review')?.props).toMatchObject({ keepMounted: true })
   })
 })

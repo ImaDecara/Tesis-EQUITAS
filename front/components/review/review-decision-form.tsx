@@ -42,6 +42,9 @@ export function ReviewDecisionForm({ snapshot }: { snapshot: CaseReviewSnapshot 
         outdatedHint="Nada quedó confirmado. Revisa los datos y vuelve a elegir tu decisión."
         onReload={form.reload}
       />
+      {(current ?? snapshot).currentReviewId !== null && (
+        <p className="text-sm text-slate-700">Ya hay una decisión vigente: registrar otra la reemplaza, y la anterior queda en el historial.</p>
+      )}
       <RadioGroupField
         id="rv-decision"
         legend="Decisión"

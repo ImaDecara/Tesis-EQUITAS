@@ -126,13 +126,16 @@ function TabsTrigger({ className, value, children, ...props }: TabsTriggerProps)
 
 type TabsContentProps = React.ComponentProps<'div'> & {
   value: string
+  // Conserva lo que el panel tiene escrito al mirar otra pestaña.
+  keepMounted?: boolean
 }
 
-function TabsContent({ className, value, ...props }: TabsContentProps) {
+function TabsContent({ className, value, keepMounted = false, ...props }: TabsContentProps) {
   const context = useTabsContext()
+  const isActive = context.value === value
 
-  // Mantiene simple la interfaz: solo renderiza el contenido activo.
-  if (context.value !== value) {
+  // Mantiene simple la interfaz: salvo pedido expreso, solo renderiza el contenido activo.
+  if (!isActive && !keepMounted) {
     return null
   }
 
@@ -141,6 +144,7 @@ function TabsContent({ className, value, ...props }: TabsContentProps) {
       role="tabpanel"
       id={`${context.baseId}-panel-${value}`}
       aria-labelledby={`${context.baseId}-tab-${value}`}
+      hidden={!isActive}
       className={cn('mt-4', className)}
       {...props}
     />

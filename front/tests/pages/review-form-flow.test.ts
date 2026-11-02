@@ -113,6 +113,22 @@ describe('formulario de decisión', () => {
     expect(form.byId('rv-notice').props.role).toBe('status')
   })
 
+  it('cada enlace del resumen lleva a un campo que existe', async () => {
+    const form = decisionForm()
+    form.choose('MODIFICA')
+    form.select('rv-action', INTIMACION.key)
+    await form.submit()
+    const targets = form.hosts().filter(element => element.type === 'a').map(element => String(element.props.href).slice(1))
+    expect(targets).toEqual(['rv-reason', 'rv-situacion_hogar', 'rv-estado_juridico_verificado', 'rv-canal_valido', 'rv-alternativa_asistida_ofrecida'])
+    for (const target of targets) expect(form.has(target), target).toBe(true)
+  })
+
+  it('con una decisión vigente avisa que la reemplaza; sin ella, no', () => {
+    expect(decisionForm().text()).toContain('registrar otra la reemplaza')
+    hookRuntime.reset()
+    expect(decisionForm({ ...SNAPSHOT, currentReviewId: null }).text()).not.toContain('registrar otra la reemplaza')
+  })
+
   it('el botón y la advertencia dicen que ≥3 es una propuesta', () => {
     const form = decisionForm()
     form.choose('MODIFICA')
@@ -130,6 +146,9 @@ describe('formulario de decisión', () => {
     expect(form.byId('rv-reason').props['aria-invalid']).toBe(true)
     expect(String(form.byId('rv-reason').props['aria-describedby'])).toContain('rv-reason-error')
     expect(form.byId('rv-summary').props.role).toBe('alert')
+    const links = form.hosts().filter(element => element.type === 'a').map(element => String(element.props.href))
+    expect(links).toEqual(['#rv-reason'])
+    expect(form.has('rv-reason')).toBe(true)
   })
 
   it('el foco va al aviso cuando aparece uno', async () => {

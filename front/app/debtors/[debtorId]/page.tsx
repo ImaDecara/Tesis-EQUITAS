@@ -414,7 +414,7 @@ export default async function DebtorDetailPage({
             </Card>
           </TabsContent>
 
-          <TabsContent value="review">
+          <TabsContent value="review" keepMounted>
             <ReviewPanel screen={reviewScreen} detail={detail} warnings={warnings} />
           </TabsContent>
         </Tabs>
