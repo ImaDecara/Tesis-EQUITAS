@@ -35,6 +35,8 @@ vi.mock('@/lib/equitas-data', () => ({
 vi.mock('next/navigation', () => ({
   notFound: notFoundMock,
 }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 
 import DebtAgingPage from '@/app/debt-aging/page'
 import DebtorDetailPage from '@/app/debtors/[debtorId]/page'

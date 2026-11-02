@@ -32,6 +32,8 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('notFound') },
 }))
 vi.mock('next/image', () => ({ default: () => null }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
 vi.mock('@/components/auth/login-form', () => ({ LoginForm: () => null }))
 

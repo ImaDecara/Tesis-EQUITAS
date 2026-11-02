@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getDebtorDetailData } from '@/lib/equitas-data'
+import { auditCaseOpen } from '@/lib/server/audit'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
@@ -41,6 +42,7 @@ export default async function DebtorDetailPage({
   }
 
   const { debtor, debts, people, contacts, profile } = detail
+  await auditCaseOpen(debtor.id)
   const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
   const personCatalogReadFailed = readingFailed(warnings, 'person')
   const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
