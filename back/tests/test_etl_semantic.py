@@ -1362,6 +1362,20 @@ def test_una_respuesta_invalida_del_recalculo_termina_fallido(database, tmp_path
     assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
 
 
+def test_el_recalculo_por_tandas_cubre_todos_los_objetos_y_lee_todos_sus_perfiles(database, tmp_path, monkeypatch):
+    monkeypatch.setattr(load, 'PROFILE_RECOMPUTE_OBJECTS_PER_CALL', 2)
+    monkeypatch.setattr(load, 'READ_IDS_PER_REQUEST', 3)
+    database.max_rows = 2
+    execute(derive_lot(tmp_path / 'lote'))
+    assert all(len(ids) <= 2 for ids in database.recomputed)
+    assert sum(len(ids) for ids in database.recomputed) == len(accepted_objects())
+    assert len(database.tables['debtor_profile']) == len(accepted_objects())
+    event = database.batches[-1]
+    assert event['p_status'] == 'PUBLICADO'
+    assert event['p_counts']['escrituras']['debtor_profile']['insertadas'] == len(accepted_objects())
+    assert persisted_mismatches(database.tables, accepted_objects(), CATALOGS, tmp_path / 'lote') == []
+
+
 def _debt_payloads(total):
     return [{'debtor': 1 + index % 2, 'external_id': 500_000 + index, 'type': 'T', 'description': None, 'original_amount': '10.00',
              'current_amount': '12.50', 'currency': 401, 'issue_date': None, 'due_date': '2026-01-15', 'last_collection_date': None,
