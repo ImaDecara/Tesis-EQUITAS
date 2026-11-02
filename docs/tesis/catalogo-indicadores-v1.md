@@ -967,7 +967,7 @@ no se confunden con el contrato de `buildRecommendationSummary` de esta adenda.
 
 ## <a id="reportes-csv"></a>Reportes CSV de servidor (ALIGN-028)
 
-Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
+Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
 
 | Reporte | Ruta | Archivo | Roles (permiso en `front/lib/server/dal.ts`) |
 |---|---|---|---|
@@ -984,12 +984,23 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 - Cada fila lleva `fecha_corte`, `version_reglas`, `filtros`, `generado_en`, `definiciones` y `tipo_fila`, también en un archivo sin filas de detalle: la fila `TOTAL` o `AGREGADO` nunca falta.
 - `generado_en` es el único valor tomado del reloj (fecha-hora UTC de la generación). `fecha_corte` sale del dato: el `as_of` del manifiesto en la cartera y `case_review.as_of` en las decisiones. Mientras la lectura de cartera no aporte manifiesto (`RawDebtorDataBundle.batch`), vale `NO_INTEGRADO` ([contrato §5][c51]). Una fila que resume varios cortes declara el intervalo (`2026-09-30/2026-10-15`) y las versiones (`1.0.0|1.1.0`); sin filas, `NO_APLICA`.
 - `definiciones` es la ruta de esta sección en el repositorio. No hay un sitio público de documentación; el día que exista, se cambia en `definitionsLink`.
-- `filtros` describe lo aplicado: `SIN_FILTROS` o `clave=valor` separados por `|`, en orden alfabético. El texto de búsqueda `q` no se copia y figura `q=TEXTO_OMITIDO`, porque puede ser el nombre de una persona.
+- `filtros` describe lo aplicado: `SIN_FILTROS` o `clave=valor` separados por `|`, en orden alfabético. El texto de búsqueda `q` no se copia y figura `q=TEXTO_OMITIDO`, porque puede ser el nombre de una persona. `type` se copia solo si es una etiqueta del catálogo leído; si no, filtra igual y figura `type=VALOR_NO_CATALOGADO`.
 - **Ausencias:** una celda nunca queda vacía ni en 0 por falta de dato. Lleva el estado de presencia (`NO_INTEGRADO`, `NO_INFORMADO_EN_ORIGEN`, `INVALIDO`, `NO_APLICA`) según el [contrato §4][c41].
 - **Lectura fallida:** si una tabla no se puede leer, no hay archivo. La respuesta es `503` con `{"error":"LECTURA_FALLIDA","tablas":[…]}`. Un filtro inválido o desconocido responde `400` (`FILTRO_INVALIDO`): un filtro mal escrito no exporta todo ni parece una selección vacía.
 - **Sin autorización:** `401`, `403` o `409` con el código de la DAL y sin datos. Un anónimo que llega por el navegador recibe antes el 307 de `front/proxy.ts` a `/login`.
 
 **Inyección de fórmulas (`neutralizeCsvText`).** Los caracteres de control y separadores de línea de un texto se reemplazan por un espacio: una celda es siempre una línea. Si el primer carácter visible es `=`, `+`, `-`, `@`, sus anchos completos o el signo menos `−`, se antepone un apóstrofo. Los blancos, tabulaciones y caracteres invisibles iniciales no protegen, porque una planilla puede recortarlos: `  =1+1` sale `'  =1+1`. **Números negativos:** un valor de tipo número (importes y conteos) sale sin apóstrofo, `-50`, porque el generador solo puede producir `-?dígitos(,dd)?`, que no es una fórmula, y con apóstrofo dejaría de sumarse. Un *texto* que parece un negativo (`-50` como identificador) sí lleva apóstrofo. El apóstrofo queda visible al abrir el archivo: es la marca de que la celda no se evalúa.
+
+**<a id="codigos-editables"></a>Códigos editables.** La base y las acciones de servidor solo exigen el formato `^[A-Z][A-Z0-9_]{0,63}$`, que también cumple un nombre con su documento. Por eso `reason_code`, `decided_intervention`, `suggested_intervention`, `reviewer_role` y `decision` se exportan solo si están en una lista cerrada (`front/lib/reports/report-codes.ts`). Cualquier otro valor sale como `CODIGO_NO_CATALOGADO`, sin copiarlo, y su fila se sigue contando. Se aplica al leer, así que cubre los eventos ya registrados.
+
+| Campo | Lista cerrada |
+|---|---|
+| Motivos | Once códigos, iguales a la lista **provisional** de ALIGN-021. Esta lista no es el catálogo de motivos ni lo aprueba: solo indica qué cadenas no llevan datos de una persona. Si se aprueba otra, un motivo nuevo sale como `CODIGO_NO_CATALOGADO` hasta agregarlo |
+| Intervenciones | Las de `contracts/decision-rules.v1.json` y `contracts/action-costs.v1.json`, que incluye las de intensidad 3 y 4 |
+| Roles | Los de `WEB_ROLES` |
+| Decisiones | Las cinco de la base |
+
+`rules_version` se exige con su formato numérico; si no lo cumple, `INVALIDO`. Los demás textos de los reportes salen de contratos o de constantes, salvo `tipo` (catálogo `debtor_type`, que no se edita desde la aplicación) y `identificador` (dato de origen).
 
 ### <a id="reporte-cola"></a>Cola de trabajo
 
@@ -1002,7 +1013,7 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | Columna | Significado | Unidad | Definición | Fila `TOTAL` |
 |---|---|---|---|---|
 | `posicion` | Lugar en el orden de `getPriorityCases` | orden | [KPI-31](#kpi-31) | `NO_APLICA` |
-| `objeto_id`, `identificador`, `tipo` | Clave interna, identificador de origen y tipo. Sin identificador o sin tipo, `NO_INFORMADO_EN_ORIGEN`, aunque la pantalla muestre `OBJ-<id>` o «Sin tipo» | texto | [OB01, OB04, OB03][c72] | `NO_APLICA` |
+| `objeto_id`, `identificador`, `tipo` | Clave interna, identificador de origen y tipo. Sin identificador o sin tipo, `NO_INFORMADO_EN_ORIGEN`, aunque la pantalla muestre `OBJ-<id>` o «Sin tipo». `Identificador` es texto libre del archivo municipal: solo lo reciben `operador` y `supervisor`; `consulta` y `tp_operator` reciben `OMITIDO_POR_ROL` y ubican el caso por `objeto_id` | texto | [OB01, OB04, OB03][c72] | `NO_APLICA` |
 | `intervencion_codigo`, `intervencion`, `intensidad` | Sugerencia de reglas v1 | código, etiqueta, 0–4 | [KPI-V1-03](#kpi-v1-intervencion) | `NO_APLICA` |
 | `revision_requerida` | La pantalla pide evaluar con supervisor: `SI`/`NO` | booleano | `isUrgentRecommendation` | `NO_APLICA` |
 | `severidad_puntos`, `severidad_banda`, `severidad_estado` | Severidad v1 | puntos 0–100, **no %** | [KPI-V1-01](#kpi-v1-severidad) | `NO_APLICA` |
@@ -1030,11 +1041,11 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 |---|---|---|
 | `decision_id`, `objeto_id` | Claves internas del evento y del objeto | — |
 | `fecha` | `created_at`, en UTC | Ilegible: `INVALIDO` |
-| `rol` | `reviewer_role`, rol en ese momento. Sin identidad de la persona | — |
-| `decision` | `ACEPTA`, `MODIFICA`, `RECHAZA`, `POSPONE` o `DERIVA` | — |
-| `codigo_motivo` | `reason_code`. Nunca el texto libre | `NO_APLICA` si no hay código (solo `ACEPTA` puede no tenerlo) |
-| `intervencion_sugerida`, `intensidad_sugerida` | Sugerencia de reglas | — |
-| `intervencion_decidida`, `intensidad_decidida` | Lo decidido | `NO_APLICA`: sin intervención decidida, **nunca intensidad 0** |
+| `rol` | `reviewer_role`, rol en ese momento. Sin identidad de la persona | Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `decision` | `ACEPTA`, `MODIFICA`, `RECHAZA`, `POSPONE` o `DERIVA` | Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `codigo_motivo` | `reason_code`. Nunca el texto libre | `NO_APLICA` si no hay código (solo `ACEPTA` puede no tenerlo). Fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `intervencion_sugerida`, `intensidad_sugerida` | Sugerencia de reglas | Intervención fuera de lista: `CODIGO_NO_CATALOGADO` |
+| `intervencion_decidida`, `intensidad_decidida` | Lo decidido | `NO_APLICA`: sin intervención decidida, **nunca intensidad 0**. Intervención fuera de lista: `CODIGO_NO_CATALOGADO`, y la intensidad se conserva |
 | `reemplaza_a` | `supersedes`: evento anterior | `NO_APLICA` |
 | `vigente` | `SI` si ningún evento lo reemplaza, sobre todo lo leído, antes de filtrar | — |
 | `aprobacion` | `NO_REQUERIDA` (intensidad < 3 o sin decidir), `PENDIENTE`, `APRUEBA`, `OBJETA` (aprobación vigente) o `REEMPLAZADA` (intensa, reemplazada sin aprobación) | — |
@@ -1052,13 +1063,13 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 |---|---|---|---|
 | `decisiones_vigentes` | `TOTAL` | Eventos que ningún otro reemplaza | decisiones |
 | `eventos_reemplazados` | `TOTAL` | Eventos seleccionados − vigentes | eventos |
-| `decisiones_por_tipo` | Cada decisión; las cinco siempre aparecen | Conteo sobre vigentes | decisiones |
+| `decisiones_por_tipo` | Cada decisión; las cinco siempre aparecen, y `CODIGO_NO_CATALOGADO` solo si hay alguna | Conteo sobre vigentes | decisiones |
 | `porcentaje_discrepancia` | `TOTAL` | 100 · vigentes con `decision` distinta de `ACEPTA` / vigentes, dos decimales. Incluye `POSPONE` y `DERIVA`, porque no aceptan la sugerencia y la base les exige motivo (`case_review_decision_requires_reason`); el desglose permite recalcularlo. Sin vigentes: `NO_APLICA`, **no 0** | % |
-| `motivos_decision` | Cada `reason_code`, o `SIN_CODIGO` | Conteo sobre vigentes | decisiones |
+| `motivos_decision` | Cada `reason_code` de la lista cerrada, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo sobre vigentes; las categorías suman `decisiones_vigentes` | decisiones |
 | `aprobacion_requerida` | `TOTAL` | Vigentes con intensidad decidida ≥ 3 | decisiones |
 | `pendientes_aprobacion` | `TOTAL` | De las anteriores, sin aprobación vigente | decisiones |
 | `aprobaciones_vigentes` | `APRUEBA`, `OBJETA` | De las anteriores, por aprobación vigente | decisiones |
-| `motivos_objecion` | Cada `reason_code` de una objeción vigente, o `SIN_CODIGO` | Conteo | decisiones |
+| `motivos_objecion` | Cada `reason_code` de la lista cerrada de una objeción vigente, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo | decisiones |
 
 ### <a id="reporte-calidad"></a>Calidad de datos
 

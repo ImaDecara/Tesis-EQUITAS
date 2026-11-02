@@ -289,6 +289,7 @@ describe('ALIGN-028: formato y metadatos', () => {
     expect(file.rows[0].filtros).toBe('contact=with|minAmount=10|q=TEXTO_OMITIDO|risk=ALTO')
     expect(text).not.toContain('Persona Sintetica')
     expect((await download('queue')).file.rows[0].filtros).toBe('SIN_FILTROS')
+    expect((await download('queue', '?type=AGUA')).file.rows[0].filtros).toBe('type=AGUA')
     expect((await download('decisions', '?decision=ACEPTA&corte=2026-09-30')).file.rows[0].filtros).toBe('corte=2026-09-30|decision=ACEPTA')
   })
 
@@ -389,9 +390,9 @@ describe('ALIGN-028: celdas peligrosas', () => {
   it('un codigo con formula tampoco se ejecuta, en decisiones ni en supervision', async () => {
     client()
     const decisions = await download('decisions')
-    expect(details(decisions.file.rows).find(row => row.decision_id === '6')?.codigo_motivo).toBe("'=FORMULA_EN_CODIGO")
+    expect(details(decisions.file.rows).find(row => row.decision_id === '6')?.codigo_motivo).toBe('CODIGO_NO_CATALOGADO')
     const supervision = await download('supervision')
-    expect(aggregated(supervision.file.rows, 'motivos_decision', "'=FORMULA_EN_CODIGO").valor).toBe('1')
+    expect(aggregated(supervision.file.rows, 'motivos_decision', 'CODIGO_NO_CATALOGADO').valor).toBe('1')
   })
 
   it.each(REPORTS)('%s: ninguna celda de texto arranca con un caracter de formula', async name => {
@@ -419,6 +420,89 @@ describe('ALIGN-028: celdas peligrosas', () => {
     const negative = details(file.rows).find(row => row.objeto_id === '109')!
     expect(negative.deuda_total_ars).toBe('-50')
     expect(csvCents(negative.deuda_total_ars)).toBe(-5000)
+  })
+})
+
+// B1 de la revision: la base solo exige formato, asi que un codigo editable puede ser un nombre o un documento.
+describe('ALIGN-028 B1: un campo editable nunca llega crudo al CSV', () => {
+  const HOSTILE = {
+    reason: 'ANA_PEREZ_DNI_12345678', objection: 'LUIS_GOMEZ_DNI_87654321', decided: 'ALICIA_ROJAS_DNI_12345678',
+    suggested: 'MARTA_DIAZ_DNI_11222333', role: 'SILVIA_PAZ', old: 'PEDRO_SOSA_DNI_44555666',
+  }
+  function hostileTables() {
+    const tables = reviewTables()
+    const reviews = tables.case_review
+    Object.assign(reviews[3], { reason_code: HOSTILE.reason, decided_intervention: HOSTILE.decided, suggested_intervention: HOSTILE.suggested, reviewer_role: HOSTILE.role })
+    // Un evento historico, ya reemplazado, tambien se exporta en decisiones.
+    Object.assign(reviews[1], { reason_code: HOSTILE.old, decided_intervention: HOSTILE.old })
+    tables.case_review_approval[2].reason_code = HOSTILE.objection
+    return tables
+  }
+  const NOT_CATALOGUED = 'CODIGO_NO_CATALOGADO'
+
+  it.each(['consulta', 'operador', 'supervisor'])('decisiones para %s: ni motivo, ni intervencion, ni rol crudos, tampoco historicos', async role => {
+    client(hostileTables(), {}, role)
+    const { text, file } = await download('decisions')
+    for (const marker of Object.values(HOSTILE)) expect(text, marker).not.toContain(marker)
+    expect(text).not.toMatch(/DNI_\d/)
+    const row = (id: string) => details(file.rows).find(item => item.decision_id === id)!
+    expect(row('4')).toMatchObject({
+      codigo_motivo: NOT_CATALOGUED, intervencion_decidida: NOT_CATALOGUED, intervencion_sugerida: NOT_CATALOGUED, rol: NOT_CATALOGUED, intensidad_decidida: '3',
+    })
+    expect(row('2')).toMatchObject({ codigo_motivo: NOT_CATALOGUED, intervencion_decidida: NOT_CATALOGUED, vigente: 'NO' })
+    expect(totalRow(file.rows)).toMatchObject({ decisiones: '8', vigentes: '7' })
+  })
+
+  it('supervision: sin los valores y con los conteos intactos', async () => {
+    client(hostileTables())
+    const { text, file } = await download('supervision')
+    for (const marker of Object.values(HOSTILE)) expect(text, marker).not.toContain(marker)
+    expect(text).not.toMatch(/DNI_\d/)
+    expect(aggregated(file.rows, 'decisiones_vigentes').valor).toBe('7')
+    const motives = file.rows.filter(row => row.indicador === 'motivos_decision')
+    expect(motives.reduce((sum, row) => sum + csvNumber(row.valor)!, 0)).toBe(7)
+    expect(aggregated(file.rows, 'motivos_decision', NOT_CATALOGUED).valor).toBe('2')
+    expect(aggregated(file.rows, 'motivos_objecion', NOT_CATALOGUED)).toMatchObject({ valor: '1', denominador: '1' })
+    expect(aggregated(file.rows, 'aprobaciones_vigentes', 'OBJETA').valor).toBe('1')
+  })
+
+  it('los codigos de la lista exportable se conservan', async () => {
+    client()
+    const { file } = await download('supervision')
+    expect(aggregated(file.rows, 'motivos_decision', 'CRITERIO_DEL_SERVICIO').valor).toBe('2')
+    expect(aggregated(file.rows, 'motivos_objecion', 'ALTERNATIVA_NO_OFRECIDA').valor).toBe('1')
+    const decisions = await download('decisions')
+    expect(details(decisions.file.rows).find(row => row.decision_id === '5')).toMatchObject({
+      codigo_motivo: 'CRITERIO_DEL_SERVICIO', intervencion_decidida: 'INTIMACION_ADMINISTRATIVA', rol: 'operador',
+    })
+    expect(details(decisions.file.rows).find(row => row.decision_id === '6')?.intervencion_decidida).toBe('DERIVACION_PROCURACION')
+  })
+
+  it('un filtro de tipo fuera del catalogo leido filtra, pero no queda en el archivo', async () => {
+    client()
+    const { text, file } = await download('queue', `?type=${HOSTILE.reason}`)
+    expect(text).not.toContain(HOSTILE.reason)
+    expect(totalRow(file.rows)).toMatchObject({ objetos: '0', filtros: 'type=VALOR_NO_CATALOGADO' })
+  })
+
+  it('el texto libre de una obligacion o una relacion no llega a la cola ni a calidad', async () => {
+    const tables = portfolioTables()
+    Object.assign(tables.debt[0], { current_amount: HOSTILE.reason, estado_origen: HOSTILE.old, periodo_fiscal: HOSTILE.old, due_date: HOSTILE.old })
+    Object.assign(tables.debtor_person[0], { priority: HOSTILE.reason, role: HOSTILE.old })
+    client(tables)
+    for (const name of ['queue', 'data-quality']) {
+      const { text } = await download(name)
+      for (const marker of Object.values(HOSTILE)) expect(text, `${name} ${marker}`).not.toContain(marker)
+      expect(text).not.toMatch(/DNI_\d/)
+    }
+  })
+
+  it.each([['consulta', false], ['tp_operator', false], ['operador', true], ['supervisor', true]])('el identificador de origen es texto libre: %s lo recibe=%s', async (role, shown) => {
+    client({}, {}, role as string)
+    const { file } = await download('queue')
+    const row = details(file.rows).find(item => item.objeto_id === '101')!
+    expect(row.identificador).toBe(shown ? 'OBJ-CONTACTO' : 'OMITIDO_POR_ROL')
+    expect(details(file.rows)).toHaveLength(10)
   })
 })
 
@@ -460,7 +544,7 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     client()
     const { file } = await download('queue', '?type=TIPO-QUE-NO-EXISTE')
     expect(details(file.rows)).toEqual([])
-    expect(totalRow(file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', filtros: 'type=TIPO-QUE-NO-EXISTE', generado_en: NOW })
+    expect(totalRow(file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', filtros: 'type=VALOR_NO_CATALOGADO', generado_en: NOW })
   })
 
   it('cola sin filtros: suma de filas = total del CSV = tarjetas de /debt-aging', async () => {
@@ -566,10 +650,10 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     }
     const discrepancy = aggregated(file.rows, 'porcentaje_discrepancia')
     expect(discrepancy).toMatchObject({ numerador: '6', denominador: '7', valor: '85,71', unidad: '%', estado: 'OBSERVADO' })
-    expect(value('motivos_decision', 'REINCIDENCIA')).toBe(2)
+    expect(value('motivos_decision', 'CRITERIO_DEL_SERVICIO')).toBe(2)
     expect(value('motivos_decision', 'SIN_CODIGO')).toBe(1)
-    expect(file.rows.some(row => row.categoria === 'DATO_DESACTUALIZADO')).toBe(false)
-    expect(value('motivos_objecion', 'FALTA_ALTERNATIVA')).toBe(1)
+    expect(file.rows.some(row => row.categoria === 'DATOS_INCOMPLETOS')).toBe(false)
+    expect(value('motivos_objecion', 'ALTERNATIVA_NO_OFRECIDA')).toBe(1)
     expect(value('aprobacion_requerida')).toBe(3)
     expect(value('pendientes_aprobacion')).toBe(1)
     expect(value('aprobaciones_vigentes', 'APRUEBA')).toBe(1)
@@ -614,7 +698,7 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     const { file } = await download('decisions')
     const row = (id: string) => details(file.rows).find(item => item.decision_id === id)!
     expect(row('1')).toMatchObject({ decision: 'ACEPTA', codigo_motivo: 'NO_APLICA', rol: 'operador', fecha: '2026-10-02T15:30:00.000Z', aprobacion: 'NO_REQUERIDA', vigente: 'SI' })
-    expect(row('2')).toMatchObject({ vigente: 'NO', aprobacion: 'NO_REQUERIDA', codigo_motivo: 'DATO_DESACTUALIZADO' })
+    expect(row('2')).toMatchObject({ vigente: 'NO', aprobacion: 'NO_REQUERIDA', codigo_motivo: 'DATOS_INCOMPLETOS' })
     expect(row('3')).toMatchObject({ reemplaza_a: '2', intensidad_decidida: 'NO_APLICA', intervencion_decidida: 'NO_APLICA' })
     expect(row('4').aprobacion).toBe('PENDIENTE')
     expect(row('5').aprobacion).toBe('APRUEBA')

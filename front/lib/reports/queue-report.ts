@@ -7,6 +7,7 @@ import type { DataPresence, DebtorListItem, NumericData } from '@/types/equitas-
 
 // ALIGN-028. Cola de trabajo: las mismas filas, el mismo orden y los mismos filtros de
 // /priority-cases, completas. Sin personas, contactos ni descripcion, para ningun rol.
+// El identificador de origen es texto libre: solo lo reciben quienes gestionan (permiso en la DAL).
 const COLUMNS = [
   ...META_COLUMNS,
   'posicion', 'objeto_id', 'identificador', 'tipo', 'intervencion_codigo', 'intervencion', 'intensidad', 'revision_requerida',
@@ -21,6 +22,10 @@ const CONTACTS = ['with', 'without'] as const
 const MAX_FILTER_LENGTH = 200
 const NOT_APPLICABLE = 'NO_APLICA'
 const MISSING_IN_SOURCE = 'NO_INFORMADO_EN_ORIGEN'
+const OMITTED_BY_ROLE = 'OMITIDO_POR_ROL'
+const VALUE_NOT_CATALOGUED = 'VALOR_NO_CATALOGADO'
+
+export type QueueAccess = { showIdentifier: boolean }
 
 export type QueueFilters = { q?: string; risk?: string; contact?: string; type?: string; minAmount?: string }
 
@@ -47,9 +52,14 @@ export function filterQueueCases(debtors: DebtorListItem[], filters: QueueFilter
     matchesDebtorSearch(debtor, filters.q ?? ''))
 }
 
-// Lo que escribio la persona puede ser un nombre: filtra, pero no queda en el archivo.
-function filtersLabel({ q, ...exact }: QueueFilters) {
-  return describeFilters({ ...exact, q: q ? 'TEXTO_OMITIDO' : undefined })
+// Lo que escribio la persona puede ser un nombre: filtra, pero no queda en el archivo. Un tipo
+// solo se copia si es una etiqueta del catalogo leido; `risk` y `contact` ya son listas cerradas.
+function filtersLabel({ q, type, ...exact }: QueueFilters, universe: readonly DebtorListItem[]) {
+  return describeFilters({
+    ...exact,
+    q: q ? 'TEXTO_OMITIDO' : undefined,
+    type: type && (universe.some(debtor => debtor.type === type) ? type : VALUE_NOT_CATALOGUED),
+  })
 }
 
 // Igual que el monto de cola de `buildRecommendationSummary` (KPI-V1-05).
@@ -66,7 +76,12 @@ function missingLabel(entries: Readonly<Record<string, NumericData>>) {
   return parts.length ? parts.join('|') : 'NINGUNO'
 }
 
-function rowValues(debtor: DebtorListItem, position: number) {
+function identifierCell(debtor: DebtorListItem, access: QueueAccess) {
+  if (!access.showIdentifier) return OMITTED_BY_ROLE
+  return debtor.identifier === `OBJ-${debtor.id}` ? MISSING_IN_SOURCE : debtor.identifier
+}
+
+function rowValues(debtor: DebtorListItem, position: number, access: QueueAccess) {
   const decision = debtor.decision
   const state = absentState(metric(debtor, 'priorityScore').presence)
   const amounts = { deuda_total_ars: metric(debtor, 'totalDebt'), deuda_vencida_ars: metric(debtor, 'overdueDebt'), monto_evaluable_ars: evaluableAmount(debtor) }
@@ -75,7 +90,7 @@ function rowValues(debtor: DebtorListItem, position: number) {
     posicion: position,
     objeto_id: debtor.id,
     // Contrato OB03 y OB04: el mapeador conserva rotulos de respaldo; el archivo declara la ausencia.
-    identificador: debtor.identifier === `OBJ-${debtor.id}` ? MISSING_IN_SOURCE : debtor.identifier,
+    identificador: identifierCell(debtor, access),
     tipo: debtor.type === 'Sin tipo' ? MISSING_IN_SOURCE : debtor.type,
     intervencion_codigo: decision?.intervencion.codigo ?? state,
     intervencion: decision ? debtor.recommendationType : state,
@@ -98,13 +113,14 @@ function rowValues(debtor: DebtorListItem, position: number) {
   } satisfies Partial<Record<Column, CsvValue>>
 }
 
-export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilters, generatedAt: string) {
+// Sin indicar el acceso, el identificador no sale.
+export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilters, generatedAt: string, access: QueueAccess = { showIdentifier: false }) {
   const cases = filterQueueCases(universe, filters)
   const { fechaCorte, fechaCalculoUsada } = portfolioCutoff(universe)
   const meta = {
     fecha_corte: fechaCorte,
     version_reglas: RULES_VERSION,
-    filtros: filtersLabel(filters),
+    filtros: filtersLabel(filters, universe),
     generado_en: generatedAt,
     definiciones: definitionsLink('reporte-cola'),
     fecha_calculo_usada: fechaCalculoUsada,
@@ -128,5 +144,5 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
     objetos: cases.length,
     faltantes: missingLabel({ deuda_total_ars: metrics.totalDebt, deuda_vencida_ars: metrics.overdueDebt, monto_evaluable_ars: evaluable }),
   }
-  return serializeCsv(COLUMNS, [...cases.map((debtor, index) => ({ ...meta, ...rowValues(debtor, index + 1) })), total])
+  return serializeCsv(COLUMNS, [...cases.map((debtor, index) => ({ ...meta, ...rowValues(debtor, index + 1, access) })), total])
 }

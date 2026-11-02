@@ -74,15 +74,27 @@ select id, tenant, debtor, version, cutoff, repeat('b', 64), 'SEGUIMIENTO', 1, '
   reviewer, 'operador', created, supersedes, gen_random_uuid()
 from (values
   (928401::bigint, 920001::bigint, 928101::bigint, '1.0.0', '2026-09-30'::date, 'ACEPTA', 'SEGUIMIENTO', 1, null::text, null::text, 920002::bigint, '2026-10-02T15:30:00Z'::timestamptz, null::bigint),
-  (928402, 920001, 928102, '1.0.0', '2026-09-30', 'MODIFICA', 'RECORDATORIO_INFORMATIVO', 2, 'DATO_DESACTUALIZADO', 'TP-A028-TEXTO-LIBRE', 920002, '2026-10-03T15:30:00Z', null),
-  (928403, 920001, 928102, '1.0.0', '2026-09-30', 'RECHAZA', null, null, 'CASO_YA_GESTIONADO', 'TP-A028-TEXTO-LIBRE', 920002, '2026-10-04T15:30:00Z', 928402),
-  (928404, 920001, 928103, '1.0.0', '2026-09-30', 'MODIFICA', 'INTIMACION', 3, 'REINCIDENCIA', null, 920002, '2026-10-05T15:30:00Z', null),
-  (928405, 920001, 928104, '1.0.0', '2026-09-30', 'MODIFICA', 'INTIMACION', 3, 'REINCIDENCIA', null, 920002, '2026-10-06T15:30:00Z', null),
-  (928406, 920001, 928105, '1.0.0', '2026-09-30', 'MODIFICA', 'PROCURACION', 4, 'FORMULA_NO', null, 920002, '2026-10-07T15:30:00Z', null),
-  (928407, 920001, 928106, '1.1.0', '2026-10-15', 'POSPONE', null, null, 'ESPERA_DATOS', null, 920002, '2026-10-16T15:30:00Z', null),
-  (928408, 920001, 928107, '1.0.0', '2026-09-30', 'DERIVA', null, null, 'OTRA_AREA', null, 920002, '2026-10-25T02:00:00Z', null),
+  (928402, 920001, 928102, '1.0.0', '2026-09-30', 'MODIFICA', 'RECORDATORIO_INFORMATIVO', 2, 'DATOS_INCOMPLETOS', 'TP-A028-TEXTO-LIBRE', 920002, '2026-10-03T15:30:00Z', null),
+  (928403, 920001, 928102, '1.0.0', '2026-09-30', 'RECHAZA', null, null, 'GESTION_EN_CURSO', 'TP-A028-TEXTO-LIBRE', 920002, '2026-10-04T15:30:00Z', 928402),
+  (928404, 920001, 928103, '1.0.0', '2026-09-30', 'MODIFICA', 'INTIMACION_ADMINISTRATIVA', 3, 'CRITERIO_DEL_SERVICIO', null, 920002, '2026-10-05T15:30:00Z', null),
+  (928405, 920001, 928104, '1.0.0', '2026-09-30', 'MODIFICA', 'INTIMACION_ADMINISTRATIVA', 3, 'CRITERIO_DEL_SERVICIO', null, 920002, '2026-10-06T15:30:00Z', null),
+  (928406, 920001, 928105, '1.0.0', '2026-09-30', 'MODIFICA', 'DERIVACION_PROCURACION', 4, 'VERIFICACION_JURIDICA', null, 920002, '2026-10-07T15:30:00Z', null),
+  (928407, 920001, 928106, '1.1.0', '2026-10-15', 'POSPONE', null, null, 'ESPERA_DE_INFORMACION', null, 920002, '2026-10-16T15:30:00Z', null),
+  (928408, 920001, 928107, '1.0.0', '2026-09-30', 'DERIVA', null, null, 'CORRESPONDE_A_OTRA_AREA', null, 920002, '2026-10-25T02:00:00Z', null),
   (928499, 920002, 928201, '1.0.0', '2026-09-30', 'RECHAZA', null, null, 'TP_A028_AJENO_B', 'TP-A028-AJENO-B', 920007, '2026-10-08T15:30:00Z', null)
 ) as rows(id, tenant, debtor, version, cutoff, decision, intervention, intensity, code, free_text, reviewer, created, supersedes);
+
+-- B1 de la revision: codigos que cumplen el formato de la base y llevan un nombre y un documento, todos sinteticos.
+-- La fila se inserta directo porque el rol tambien se prueba hostil: las funciones de servidor lo fijan solas.
+insert into public.case_review(id, tenant, debtor, rules_version, as_of, inputs_hash, suggested_intervention, suggested_intensity, explanation,
+  decision, decided_intervention, decided_intensity, reason_code, checklist, reviewer, reviewer_role, created_at, idempotency_key)
+overriding system value values
+  (928409, 920001, 920001, '1.0.0', '2026-09-30', repeat('b', 64), 'MARTA_DIAZ_DNI_11222333', 1, '{}'::jsonb,
+   'MODIFICA', 'ALICIA_ROJAS_DNI_12345678', 2, 'ANA_PEREZ_DNI_12345678', '{}'::jsonb, 920002, 'SILVIA_PAZ', '2026-10-09T15:30:00Z', gen_random_uuid()),
+  (928410, 920001, 920001, '1.0.0', '2026-09-30', repeat('b', 64), 'SEGUIMIENTO', 1, '{}'::jsonb,
+   'MODIFICA', 'INTIMACION_ADMINISTRATIVA', 3, 'PEDRO_SOSA_DNI_44555666',
+   '{"situacion_hogar":"NO_DISPONIBLE","estado_juridico_verificado":true,"canal_valido":true,"alternativa_asistida_ofrecida":true}'::jsonb,
+   920002, 'operador', '2026-10-10T15:30:00Z', gen_random_uuid());
 
 insert into public.case_review_approval(id, tenant, case_review, decision, reason_code, checklist, approver, approver_role, created_at, supersedes, idempotency_key)
 overriding system value
@@ -92,6 +104,7 @@ select id, 920001, review, decision, code,
 from (values
   (928501::bigint, 928405::bigint, 'APRUEBA', null::text, null::bigint),
   (928502, 928406, 'APRUEBA', null, null),
-  (928503, 928406, 'OBJETA', 'FALTA_ALTERNATIVA', 928502)
+  (928503, 928406, 'OBJETA', 'ALTERNATIVA_NO_OFRECIDA', 928502),
+  (928504, 928410, 'OBJETA', 'LUIS_GOMEZ_DNI_87654321', null)
 ) as rows(id, review, decision, code, supersedes);
 commit;

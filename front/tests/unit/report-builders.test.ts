@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { buildDataQualityReport } from '@/lib/reports/data-quality-report'
 import { buildDecisionsReport } from '@/lib/reports/decisions-report'
 import { buildQueueReport } from '@/lib/reports/queue-report'
+import { EXPORTABLE_INTERVENTIONS, EXPORTABLE_REASON_CODES, NOT_CATALOGUED } from '@/lib/reports/report-codes'
 import { assertReadsComplete, describeFilters, isCalendarDate, readParams, ReportFilterError, ReportReadError } from '@/lib/reports/report-format'
 import { buildReviewLedger, cutoffSpan, parseReviewFilters, versionSet } from '@/lib/reports/review-ledger'
 import { buildSupervisionReport } from '@/lib/reports/supervision-report'
@@ -93,12 +94,46 @@ describe('ALIGN-028: libro de revisiones', () => {
     expect(rows.find(row => row.indicador === 'motivos_objecion')).toMatchObject({ categoria: 'SIN_CODIGO', valor: '1', denominador: '1' })
   })
 
+  it('una decision o una version fuera de formato no salen crudas, y el desglose sigue sumando', () => {
+    const ledger = buildReviewLedger([review(1), review(2, { decision: 'ANA_PEREZ_DNI_1', rules_version: 'ANA_PEREZ' })], [])
+    expect(ledger[1]).toMatchObject({ decision: NOT_CATALOGUED, rulesVersion: 'INVALIDO' })
+    const { rows } = parse(buildSupervisionReport(ledger, {}, NOW))
+    const types = rows.filter(row => row.indicador === 'decisiones_por_tipo')
+    expect(types.reduce((sum, row) => sum + Number(row.valor), 0)).toBe(2)
+    expect(types.find(row => row.categoria === NOT_CATALOGUED)?.valor).toBe('1')
+    expect(JSON.stringify(rows)).not.toContain('ANA_PEREZ')
+  })
+
+  it('un motivo vacio o de otro tipo no es una ausencia: se cuenta como no catalogado', () => {
+    const [empty, number, absent] = buildReviewLedger([review(1, { reason_code: '' }), review(2, { reason_code: 12345678 }), review(3, { reason_code: null })], [])
+    expect(empty.reasonCode).toBe(NOT_CATALOGUED)
+    expect(number.reasonCode).toBe(NOT_CATALOGUED)
+    expect(absent.reasonCode).toBeNull()
+  })
+
   it('un corte unico no se presenta como intervalo', () => {
     const ledger = buildReviewLedger([review(1), review(2)], [])
     expect(cutoffSpan(ledger)).toBe('2026-09-30')
     expect(versionSet(ledger)).toBe('1.0.0')
     expect(cutoffSpan([])).toBe('NO_APLICA')
     expect(versionSet([])).toBe('NO_APLICA')
+  })
+})
+
+describe('ALIGN-028: listas de codigos exportables', () => {
+  it.each([['motivos', EXPORTABLE_REASON_CODES], ['intervenciones', EXPORTABLE_INTERVENTIONS]] as const)('%s: solo palabras en mayusculas, sin digitos que puedan ser un documento', (_name, codes) => {
+    expect(codes.size).toBeGreaterThan(0)
+    for (const code of codes) expect(code).toMatch(/^[A-Z]+(?:_[A-Z]+)*$/)
+  })
+
+  it('las intervenciones son las de los contratos, tambien las de intensidad 3 y 4', () => {
+    for (const code of ['MEJORAR_DATOS', 'SEGUIMIENTO', 'INTIMACION_ADMINISTRATIVA', 'DERIVACION_PROCURACION']) expect(EXPORTABLE_INTERVENTIONS.has(code)).toBe(true)
+  })
+
+  it('sin indicar el acceso la cola no entrega el identificador', () => {
+    const debtors = debtorsOf(validatedRaw())
+    expect(parse(buildQueueReport(debtors, {}, NOW)).rows[0].identificador).toBe('OMITIDO_POR_ROL')
+    expect(parse(buildQueueReport(debtors, {}, NOW, { showIdentifier: true })).rows[0].identificador).toBe('SINTETICO-OBJ-901')
   })
 })
 

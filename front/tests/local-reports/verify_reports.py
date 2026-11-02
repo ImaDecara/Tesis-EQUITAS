@@ -89,7 +89,7 @@ ALLOWED = {
     "tp-e06-none": set(),
     "tp-e06-inactive": set(),
 }
-SECRETS = [b"TP-A028-PERSONA", b"TP-A028-DOC", b"tp-a028-uno@", b"DESCRIPCION-SECRETA", b"EXPLICACION-SECRETA", b"TP-A028-TEXTO-LIBRE", b"Persona sintetica", b"persona-a@"]
+SECRETS = [b"DNI_", b"ANA_PEREZ", b"LUIS_GOMEZ", b"ALICIA_ROJAS", b"MARTA_DIAZ", b"PEDRO_SOSA", b"SILVIA_PAZ", b"TP-A028-PERSONA", b"TP-A028-DOC", b"tp-a028-uno@", b"DESCRIPCION-SECRETA", b"EXPLICACION-SECRETA", b"TP-A028-TEXTO-LIBRE", b"Persona sintetica", b"persona-a@"]
 
 # 1. Autorizacion real: rol por reporte, sin archivo cuando se deniega.
 for name in REPORTS:
@@ -134,7 +134,7 @@ for row in results:
         check(f"sin municipio B en {row['file']}", b"AJENO-B" not in raw and b"AJENO_B" not in raw)
     in_b = row["account"] == "otro-operador" or row["tenant"] == "920002"
     if in_b:
-        check(f"sin municipio A en {row['file']}", b"TP-A028-CONTACTO" not in raw and b"REINCIDENCIA" not in raw)
+        check(f"sin municipio A en {row['file']}", b"TP-A028-CONTACTO" not in raw and b"GESTION_EN_CURSO" not in raw)
 
 # 4. Cola = SQL y = pantalla, con los mismos filtros.
 queue = read_csv(result("operador", PATHS["queue"]))
@@ -158,7 +158,8 @@ check("arroba neutralizada", by_id["928105"]["identificador"] == "'@SUM(A1)")
 check("importe negativo numerico", by_id["928106"]["deuda_total_ars"] == "-50")
 check("sin vencimiento declara severidad", by_id["928107"]["severidad_estado"] == "NO_DISPONIBLE")
 check("sin obligaciones suma 0 derivado", by_id["920001"]["deuda_total_ars"] == "0")
-for query in ["", "?contact=without", "?contact=with", "?risk=ALTO", "?minAmount=100000", "?q=TP-A028-PERSONA-DOS", "?type=NO-EXISTE"]:
+check("filtro de tipo fuera de catalogo", total(read_csv(result("operador", f"{PATHS['queue']}?type=ANA_PEREZ_DNI_12345678")))["filtros"] == "type=VALOR_NO_CATALOGADO")
+for query in ["", "?contact=without", "?contact=with", "?risk=ALTO", "?minAmount=100000", "?q=TP-A028-PERSONA-DOS", "?type=NO-EXISTE", "?type=ANA_PEREZ_DNI_12345678"]:
     report = read_csv(result("operador", f"{PATHS['queue']}{query}"))
     count = counter(page_flight(result("operador", f"/priority-cases{query}")))
     check(f"pantalla con contador {query}", count is not None)
@@ -192,6 +193,14 @@ check("decisiones corte de la fila", {r["fecha_corte"] for r in details(decision
 check("decisiones total intervalo", total(decisions)["fecha_corte"] == "2026-09-30/2026-10-15")
 check("decisiones versiones", total(decisions)["version_reglas"] == "1.0.0|1.1.0")
 check("decisiones sin intensidad 0 inventada", {r["intensidad_decidida"] for r in details(decisions) if r["decision"] in ("RECHAZA", "POSPONE")} == {"NO_APLICA"})
+hostile = {r["decision_id"]: r for r in details(decisions)}
+check("motivo editable no catalogado", hostile["928409"]["codigo_motivo"] == "CODIGO_NO_CATALOGADO")
+check("intervencion decidida no catalogada", hostile["928409"]["intervencion_decidida"] == "CODIGO_NO_CATALOGADO")
+check("intervencion sugerida no catalogada", hostile["928409"]["intervencion_sugerida"] == "CODIGO_NO_CATALOGADO")
+check("rol no catalogado", hostile["928409"]["rol"] == "CODIGO_NO_CATALOGADO")
+check("codigo de la lista se conserva", hostile["928404"]["codigo_motivo"] == "CRITERIO_DEL_SERVICIO" and hostile["928404"]["intervencion_decidida"] == "INTIMACION_ADMINISTRATIVA")
+consulta_decisions = details(read_csv(result("consulta", PATHS["decisions"])))
+check("consulta recibe las mismas decisiones, sin valores crudos", len(consulta_decisions) == expected["eventos"])
 check("decisiones sin identidades", not {"reviewer", "approver", "reason_text"} & set(decisions[0]))
 check("supervision vigentes = SQL", number(aggregated(supervision, "decisiones_vigentes")["valor"]) == expected["vigentes"])
 for decision, count in expected["por_tipo"].items():
@@ -202,6 +211,10 @@ check("discrepancia denominador", number(discrepancy["denominador"]) == expected
 check("discrepancia valor", abs(number(discrepancy["valor"]) - Decimal(100 * expected["no_acepta"]) / expected["vigentes"]) < Decimal("0.01"))
 for code, count in expected["motivos"].items():
     check(f"motivo {code} = SQL", number(aggregated(supervision, "motivos_decision", code)["valor"]) == count)
+for code, count in expected["objeciones"].items():
+    check(f"objecion {code} = SQL", number(aggregated(supervision, "motivos_objecion", code)["valor"]) == count)
+motives = [r for r in supervision if r["indicador"] == "motivos_decision"]
+check("motivos suman las vigentes", sum(number(r["valor"]) for r in motives) == expected["vigentes"])
 check("requerida = SQL", number(aggregated(supervision, "aprobacion_requerida")["valor"]) == expected["requerida"])
 check("pendientes = SQL", number(aggregated(supervision, "pendientes_aprobacion")["valor"]) == expected["pendientes"])
 check("aprueba = SQL", number(aggregated(supervision, "aprobaciones_vigentes", "APRUEBA")["valor"]) == expected["aprueba"])
@@ -222,7 +235,11 @@ for query in ["?risk=XYZ", "?tenant=920002", "?nada=1"]:
 
 # 8. tp_operator real: lee la cartera E06 y solo la suya.
 tp = read_csv(result("tp-e06-a", PATHS["queue"]))
-check("tp_operator solo su municipio", {r["identificador"] for r in details(tp)} == {"TP-A"})
+check("tp_operator solo su municipio", {r["objeto_id"] for r in details(tp)} == {"910001"})
+check("tp_operator sin identificador", {r["identificador"] for r in details(tp)} == {"OMITIDO_POR_ROL"})
+consulta_queue = details(read_csv(result("consulta", PATHS["queue"])))
+check("consulta sin identificador", {r["identificador"] for r in consulta_queue} == {"OMITIDO_POR_ROL"} and len(consulta_queue) == expected["objetos"])
+check("operador con identificador", "TP-A028-CONTACTO" in {r["identificador"] for r in rows})
 
 print(f"comprobaciones={checks} fallas={len(failures)} solicitudes={len(results)}")
 for failure in failures:

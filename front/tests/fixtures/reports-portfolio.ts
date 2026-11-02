@@ -107,19 +107,19 @@ export function reviewTables(): Record<string, RawRow[]> {
   return {
     case_review: [
       review(1),
-      review(2, { debtor: 102, decision: 'MODIFICA', decided_intervention: 'RECORDATORIO_INFORMATIVO', decided_intensity: 1, reason_code: 'DATO_DESACTUALIZADO' }),
-      review(3, { debtor: 102, decision: 'RECHAZA', decided_intervention: null, decided_intensity: null, reason_code: 'CASO_YA_GESTIONADO', supersedes: 2 }),
-      review(4, { debtor: 103, decision: 'MODIFICA', decided_intervention: 'INTIMACION', decided_intensity: 3, reason_code: 'REINCIDENCIA' }),
-      review(5, { debtor: 104, decision: 'MODIFICA', decided_intervention: 'INTIMACION', decided_intensity: 3, reason_code: 'REINCIDENCIA' }),
-      review(6, { debtor: 105, decision: 'MODIFICA', decided_intervention: 'PROCURACION', decided_intensity: 4, reason_code: '=FORMULA_EN_CODIGO' }),
-      review(7, { debtor: 106, decision: 'POSPONE', decided_intervention: null, decided_intensity: null, reason_code: 'ESPERA_DATOS', as_of: OTHER_CUTOFF, rules_version: '1.1.0' }),
-      review(8, { debtor: 107, decision: 'DERIVA', decided_intervention: null, decided_intensity: null, reason_code: 'OTRA_AREA', created_at: '2026-10-25T02:00:00+00:00' }),
+      review(2, { debtor: 102, decision: 'MODIFICA', decided_intervention: 'RECORDATORIO_INFORMATIVO', decided_intensity: 1, reason_code: 'DATOS_INCOMPLETOS' }),
+      review(3, { debtor: 102, decision: 'RECHAZA', decided_intervention: null, decided_intensity: null, reason_code: 'GESTION_EN_CURSO', supersedes: 2 }),
+      review(4, { debtor: 103, decision: 'MODIFICA', decided_intervention: 'INTIMACION_ADMINISTRATIVA', decided_intensity: 3, reason_code: 'CRITERIO_DEL_SERVICIO' }),
+      review(5, { debtor: 104, decision: 'MODIFICA', decided_intervention: 'INTIMACION_ADMINISTRATIVA', decided_intensity: 3, reason_code: 'CRITERIO_DEL_SERVICIO' }),
+      review(6, { debtor: 105, decision: 'MODIFICA', decided_intervention: 'DERIVACION_PROCURACION', decided_intensity: 4, reason_code: '=FORMULA_EN_CODIGO' }),
+      review(7, { debtor: 106, decision: 'POSPONE', decided_intervention: null, decided_intensity: null, reason_code: 'ESPERA_DE_INFORMACION', as_of: OTHER_CUTOFF, rules_version: '1.1.0' }),
+      review(8, { debtor: 107, decision: 'DERIVA', decided_intervention: null, decided_intensity: null, reason_code: 'CORRESPONDE_A_OTRA_AREA', created_at: '2026-10-25T02:00:00+00:00' }),
       review(9, { tenant: 8, debtor: 801, reviewer_role: FOREIGN_MARKER, reason_code: FOREIGN_MARKER }),
     ],
     case_review_approval: [
       approval(1, 5),
       approval(2, 6, { decision: 'APRUEBA' }),
-      approval(3, 6, { decision: 'OBJETA', reason_code: 'FALTA_ALTERNATIVA', supersedes: 2 }),
+      approval(3, 6, { decision: 'OBJETA', reason_code: 'ALTERNATIVA_NO_OFRECIDA', supersedes: 2 }),
       approval(9, 9, { tenant: 8, reason_code: FOREIGN_MARKER }),
     ],
   }

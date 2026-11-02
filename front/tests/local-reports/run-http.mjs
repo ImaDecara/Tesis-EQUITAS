@@ -76,7 +76,7 @@ for (const name of REPORTS) {
 for (const name of REPORTS) await record('supervisor', reportPath(name), cookies.supervisor, '920002')
 
 // Conciliacion: el mismo pedido al reporte y a la pantalla, con la misma sesion.
-for (const query of ['', '?contact=without', '?contact=with', '?risk=ALTO', '?minAmount=100000', '?q=TP-A028-PERSONA-DOS', '?type=NO-EXISTE']) {
+for (const query of ['', '?contact=without', '?contact=with', '?risk=ALTO', '?minAmount=100000', '?q=TP-A028-PERSONA-DOS', '?type=NO-EXISTE', '?type=ANA_PEREZ_DNI_12345678']) {
   await record('operador', `${reportPath('queue')}${query}`, cookies.operador)
   await record('operador', `/priority-cases${query}`, cookies.operador)
 }

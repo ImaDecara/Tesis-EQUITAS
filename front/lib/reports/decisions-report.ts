@@ -3,7 +3,8 @@ import { definitionsLink, describeFilters, META_COLUMNS } from '@/lib/reports/re
 import { cutoffSpan, filterReviewEvents, parseReviewFilters, versionSet, type ReviewEvent, type ReviewFilters } from '@/lib/reports/review-ledger'
 
 // ALIGN-028. Rendicion de lo decidido: fecha, rol, decision y codigo de motivo.
-// El texto libre y la identidad de quien decidio no se leen (ver `review-report-reader`).
+// El texto libre y la identidad de quien decidio no se leen (ver `review-report-reader`), y
+// los codigos editables llegan ya controlados desde `buildReviewLedger`.
 const COLUMNS = [
   ...META_COLUMNS,
   'decision_id', 'objeto_id', 'fecha', 'rol', 'decision', 'codigo_motivo',

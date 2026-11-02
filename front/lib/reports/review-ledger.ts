@@ -1,4 +1,5 @@
 import { databaseId } from '@/lib/auth/tenant-access'
+import { controlledCode, exportableIntervention, exportableReason, exportableRole } from '@/lib/reports/report-codes'
 import { isCalendarDate, readParams, ReportFilterError } from '@/lib/reports/report-format'
 import type { RawRow } from '@/types/equitas-domain'
 
@@ -7,6 +8,7 @@ export const REVIEW_DECISIONS = ['ACEPTA', 'MODIFICA', 'RECHAZA', 'POSPONE', 'DE
 export const APPROVAL_DECISIONS = ['APRUEBA', 'OBJETA'] as const
 // ALIGN-003: desde intensidad 3 la decision necesita aprobacion de supervisor.
 const INTENSE_FROM = 3
+const RULES_VERSION_FORMAT = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/
 
 export type ApprovalState = 'NO_REQUERIDA' | 'PENDIENTE' | 'REEMPLAZADA' | (typeof APPROVAL_DECISIONS)[number]
 
@@ -31,10 +33,6 @@ export type ReviewEvent = {
 }
 
 export type ReviewFilters = { desde?: string; hasta?: string; corte?: string; decision?: string; vigente?: string }
-
-function text(value: unknown) {
-  return typeof value === 'string' && value ? value : null
-}
 
 function integer(value: unknown) {
   return typeof value === 'number' && Number.isInteger(value) ? value : null
@@ -67,20 +65,20 @@ export function buildReviewLedger(reviews: readonly RawRow[], approvals: readonl
       id,
       objectId: databaseId(row.debtor) ?? 'NO_INTEGRADO',
       decidedAt: utcInstant(row.created_at),
-      role: text(row.reviewer_role) ?? 'NO_INTEGRADO',
-      decision: text(row.decision) ?? 'NO_INTEGRADO',
-      reasonCode: text(row.reason_code),
-      suggestedIntervention: text(row.suggested_intervention) ?? 'NO_INTEGRADO',
+      role: exportableRole(row.reviewer_role) ?? 'NO_INTEGRADO',
+      decision: controlledCode(row.decision, new Set(REVIEW_DECISIONS)),
+      reasonCode: exportableReason(row.reason_code),
+      suggestedIntervention: exportableIntervention(row.suggested_intervention) ?? 'NO_INTEGRADO',
       suggestedIntensity: integer(row.suggested_intensity),
-      decidedIntervention: text(row.decided_intervention),
+      decidedIntervention: exportableIntervention(row.decided_intervention),
       decidedIntensity,
       supersedes: databaseId(row.supersedes),
-      rulesVersion: text(row.rules_version) ?? 'NO_INTEGRADO',
+      rulesVersion: typeof row.rules_version === 'string' && RULES_VERSION_FORMAT.test(row.rules_version) ? row.rules_version : 'INVALIDO',
       cutoff: isCalendarDate(row.as_of) ? row.as_of : 'INVALIDO',
       current,
       requiresApproval,
       approval: state,
-      objectionCode: approvalDecision === 'OBJETA' ? text(approval?.reason_code) : null,
+      objectionCode: approvalDecision === 'OBJETA' ? exportableReason(approval?.reason_code) : null,
     }
   })
 }

@@ -220,7 +220,9 @@ sesión **solo dentro del servidor**. Lectura de cartera: `consulta`, `operador`
 de ALIGN-018: quien sea supervisor e importe necesita además una membresía
 `importador`. `importador_sistema` no tiene acceso web. Estos permisos no
 implementan escrituras. ALIGN-028 agrega `decision:read` (`consulta`, `operador`,
-`supervisor`) para leer decisiones sin texto libre ni identidades.
+`supervisor`) para leer decisiones sin texto libre ni identidades, y
+`report:object-identifier` (`operador`, `supervisor`), que no abre ninguna lectura: decide
+quién recibe en la cola el identificador de origen, que es texto libre.
 
 Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
 `validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en
@@ -313,7 +315,9 @@ proxy:** se conservó porque un enlace de descarga abierto desde el navegador vu
 después de ingresar. Un cliente que siga la redirección recibe HTML, no un CSV. El 401 del handler
 cubre la sesión que vence entre el proxy y la DAL. Con cualquier `DataWarning` el reporte
 responde 503 sin archivo: el CSV viaja fuera de la aplicación, donde el aviso de lectura no se ve.
-Formato y columnas: [catálogo, reportes CSV](catalogo-indicadores-v1.md#reportes-csv).
+Un código editable (`reason_code`, intervenciones, rol) solo se exporta si está en una lista
+cerrada (`front/lib/reports/report-codes.ts`): la base exige formato, no significado, y un formato
+válido puede llevar un nombre. Formato y columnas: [catálogo, reportes CSV](catalogo-indicadores-v1.md#reportes-csv).
 
 Validación del 30/10: pruebas negativas y positivas con Auth/REST simulados y ocho
 pruebas directas HTML/RSC sobre Supabase local con `USING(true)`, tanto con Next dev

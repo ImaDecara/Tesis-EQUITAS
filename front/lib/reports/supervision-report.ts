@@ -1,8 +1,9 @@
 import { serializeCsv, type CsvValue } from '@/lib/reports/csv'
+import { NOT_CATALOGUED } from '@/lib/reports/report-codes'
 import { AGGREGATE_COLUMNS, definitionsLink, describeFilters, shareRow, tally, totalRow, type AggregateColumn, type ReportMeta } from '@/lib/reports/report-format'
 import { APPROVAL_DECISIONS, cutoffSpan, filterReviewEvents, parseReviewFilters, REVIEW_DECISIONS, versionSet, type ReviewEvent, type ReviewFilters } from '@/lib/reports/review-ledger'
 
-// ALIGN-028. Solo conteos por codigo: sin objetos, personas ni identidad de quien decidio.
+// ALIGN-028. Solo conteos por codigo de lista cerrada: sin objetos, personas ni identidad de quien decidio.
 export const parseSupervisionFilters = (params: URLSearchParams) => parseReviewFilters(params, ['desde', 'hasta', 'corte'])
 
 const NO_CODE = 'SIN_CODIGO'
@@ -21,6 +22,7 @@ export function buildSupervisionReport(ledger: readonly ReviewEvent[], filters: 
   const current = events.filter(event => event.current)
   const required = current.filter(event => event.requiresApproval)
   const objected = current.filter(event => event.approval === 'OBJETA')
+  const uncatalogued = current.filter(event => event.decision === NOT_CATALOGUED).length
   const meta: ReportMeta = {
     fecha_corte: cutoffSpan(events),
     version_reglas: versionSet(events),
@@ -33,6 +35,8 @@ export function buildSupervisionReport(ledger: readonly ReviewEvent[], filters: 
     totalRow(meta, 'eventos_reemplazados', events.length - current.length, 'eventos'),
     ...REVIEW_DECISIONS.map(decision =>
       shareRow(meta, 'decisiones_por_tipo', decision, current.filter(event => event.decision === decision).length, current.length, 'decisiones')),
+    // La base no lo admite hoy. Si aparece se cuenta, para que el desglose siga sumando el total.
+    ...(uncatalogued ? [shareRow(meta, 'decisiones_por_tipo', NOT_CATALOGUED, uncatalogued, current.length, 'decisiones')] : []),
     discrepancyRow(meta, current.filter(event => event.decision !== 'ACEPTA').length, current.length),
     ...tally(current.map(event => [event.reasonCode ?? NO_CODE, 1])).map(([code, count]) =>
       shareRow(meta, 'motivos_decision', code, count, current.length, 'decisiones')),
