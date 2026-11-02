@@ -166,7 +166,7 @@ describe('registro por la funcion, con la credencial de servidor', () => {
   it('REV-FN-12: la base no acepta una sugerencia de intensidad 3 o una decision intensa sin lista de control', async () => {
     await withoutWrites(async () => {
       for (const intensity of [3, 4]) {
-        expectRejected(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_suggested_intensity: intensity, p_decided_intensity: intensity })), 'INVALID_CASE_REVIEW:case_review_suggested_intensity_range', `sugerencia ${intensity}`)
+        expectRejected(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_suggested_intensity: intensity, p_decided_intensity: intensity, p_checklist: READY_CHECKLIST })), 'INVALID_CASE_REVIEW:case_review_suggested_intensity_range', `sugerencia ${intensity}`)
       }
       expectRejected(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_checklist: {} })), 'INVALID_CASE_REVIEW:case_review_intense_requires_checklist', 'sin lista')
     })
