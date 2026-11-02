@@ -561,6 +561,5 @@ Recargar el mismo lote no inserta ni actualiza ninguna fila. Si la base rechaza 
 antecedente; con resultado incierto no se registra nada más (`PUBLISH_OUTCOME_UNKNOWN`, ALIGN-032). Procedimiento en
 [`entorno-aislado.md` §8](entorno-aislado.md#8-carga-v1-verificada-align-027).
 
-Queda fuera de esta versión: la política de bajas y delta, incluidos contactos y direcciones que dejan de venir, y la
-paginación de la lectura de deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote
-(ALIGN-032), y el municipio obtenido del contexto autorizado (ALIGN-052/054): la CLI usa el tenant 1 fijo.
+Queda fuera de esta versión: la baja de obligaciones y de direcciones que dejan de venir, que se conservan, transacción,
+recuperación y clave de idempotencia por lote (ALIGN-032), y el municipio obtenido del contexto autorizado (ALIGN-052/054): la CLI usa el tenant 1 fijo.
