@@ -1,11 +1,13 @@
 """Guardias del ETL: destinos ficticios, sin conexiones ni datos personales reales."""
 
+import configparser
 import os
 import re
 import subprocess
 import sys
 import traceback
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -418,3 +420,10 @@ def test_hash_y_contexto_no_conservan_fila_de_otra_ejecucion():
     finally:
         load.reset_log_context(token)
     assert load.etl_message("PRUEBA") == original
+
+
+def test_la_campana_contra_la_base_queda_fuera_de_la_suite_aislada():
+    ajustes = configparser.ConfigParser()
+    ajustes.read(Path(__file__).parents[1] / "pytest.ini", encoding="utf-8")
+    assert ajustes["pytest"]["testpaths"].split() == ["tests"]
+    assert (Path(__file__).parents[1] / "tests_real" / "test_etl_v1_load.py").is_file()

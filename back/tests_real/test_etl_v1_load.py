@@ -231,10 +231,15 @@ class Campaign:
     steps: list[dict] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list, repr=False)
 
-    def _run(self, *arguments: str) -> subprocess.CompletedProcess:
+    def _run(self, environment: dict[str, str], *arguments: str) -> subprocess.CompletedProcess:
         """Proceso nuevo con un entorno armado desde cero. Las claves viajan por su entorno, nunca por argumentos."""
+        result = subprocess.run([sys.executable, "-m", *arguments], cwd=BACK, env={"PATH": os.environ["PATH"], **environment},
+                                capture_output=True, text=True, check=False)
+        self.outputs.append(result.stdout + result.stderr)
+        return result
+
+    def etl(self, folder: Path, *extra: str, cut_off: str = AS_OF) -> subprocess.CompletedProcess:
         environment = {
-            "PATH": os.environ["PATH"],
             "EQUITAS_TARGET_ENV": "local",
             "SUPABASE_URL": self.env["API_URL"],
             "SUPABASE_SERVICE_ROLE_KEY": self.env["SERVICE_ROLE_KEY"],
@@ -242,16 +247,11 @@ class Campaign:
             "EQUITAS_IMPORT_SERVER_JWT": self.jwt,
             "EQUITAS_IMPORT_ACTOR_USER": self.actor,
         }
-        result = subprocess.run([sys.executable, "-m", *arguments], cwd=BACK, env=environment,
-                                capture_output=True, text=True, check=False)
-        self.outputs.append(result.stdout + result.stderr)
-        return result
-
-    def etl(self, folder: Path, *extra: str, cut_off: str = AS_OF) -> subprocess.CompletedProcess:
-        return self._run("ETL.run_etl", "--folder", str(folder), "--execute", "--cut-off", cut_off, *extra)
+        return self._run(environment, "ETL.run_etl", "--folder", str(folder), "--execute", "--cut-off", cut_off, *extra)
 
     def validate(self, folder: Path, output: Path) -> subprocess.CompletedProcess:
-        return self._run("ETL.validate_source", "--folder", str(folder), "--contract", str(CONTRACT),
+        """Sin ninguna clave ni URL: si necesitara la base, fallaría."""
+        return self._run({}, "ETL.validate_source", "--folder", str(folder), "--contract", str(CONTRACT),
                          "--cut-off", AS_OF, "--output", str(output))
 
     def record(self, step: str, **data) -> None:
