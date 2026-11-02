@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import mmap
+import re
 import subprocess
 import sys
 import threading
@@ -22,15 +23,17 @@ from dataclasses import asdict
 from pathlib import Path
 
 from ETL.extract import KINDS, SourceBatch, read_source_batch
-from ETL.readers.limits import FileLimits, source_error
+from ETL.readers.limits import XLS_MESSAGE, FileLimits, source_error
 from ETL.validate_source import SourceRow, SourceTable, ValidationError, load_contract
 
 BACK = Path(__file__).resolve().parents[2]
 WATCH_SECONDS = 0.1
 _STATM = '/proc/{pid}/statm'
 _PAGE_BYTES = mmap.PAGESIZE
-# Una línea es una fila: cada celda puede quedar hasta 6 veces más larga al escaparla en JSON.
-_JSON_CELL_FACTOR = 6
+# Una línea es una fila: un carácter fuera del plano básico son 12 bytes al escaparlo en JSON.
+_JSON_CELL_FACTOR = 12
+# Lo único que un error puede decir: un hijo comprometido no debe poder sacar valores por ahí.
+_SAFE_ERROR = re.compile(r'[A-Z0-9_]+(?:: archivo=\w+, linea=[0-9]+, campo=[\w*]+)?|FORMATO_XLS_NO_SOPORTADO: ' + re.escape(XLS_MESSAGE))
 
 
 def _worker_command():
@@ -79,6 +82,10 @@ def _message(process, limit):
     return json.loads(line)
 
 
+def _all_text(values):
+    return isinstance(values, list) and all(type(value) is str for value in values)
+
+
 def _receive(process, limits):
     """Lee la respuesta del hijo; sin la marca final no hay lote: nunca se entrega un prefijo."""
     limit = 1024 + limits.columns * (_JSON_CELL_FACTOR * limits.cell + 3)
@@ -88,14 +95,20 @@ def _receive(process, limits):
         message = _message(process, limit)
         if isinstance(message, list):
             line, values = message
-            if table is None or len(table.rows) >= limits.rows or len(values) != len(table.columns):
+            if table is None or len(table.rows) >= limits.rows or type(line) is not int or not _all_text(values):
                 raise ValueError
             table.rows.append(SourceRow(line, dict(zip(table.columns, values, strict=True))))
         elif 'error' in message:
-            raise ValidationError(str(message['error']))
+            if not _SAFE_ERROR.fullmatch(message['error']):
+                raise ValueError
+            raise ValidationError(message['error'])
         elif 'tabla' in message:
+            if message['tabla'] not in KINDS or not _all_text(message['columnas']):
+                raise ValueError
             table = tables[message['tabla']] = SourceTable(message['columnas'], [])
         else:
+            if set(tables) != set(KINDS) or not _all_text(message['hojas_ignoradas']):
+                raise ValueError
             return SourceBatch(tables, message['hojas_ignoradas'])
 
 
@@ -119,8 +132,11 @@ def read_source_batch_supervised(files, mapping, *, contract=None, limits=None):
     limits = FileLimits.from_contract(contract) if limits is None else limits
     request = json.dumps({'files': {kind: str(path) for kind, path in files.items()}, 'mapping': mapping,
                           'contract': contract, 'limits': asdict(limits)}).encode()
-    process = subprocess.Popen(_worker_command(), cwd=BACK, env=_worker_environment(), stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        process = subprocess.Popen(_worker_command(), cwd=BACK, env=_worker_environment(), stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        source_error('LECTURA_INTERRUMPIDA', KINDS[0])
     finished, verdict = threading.Event(), []
     watcher = threading.Thread(target=_watch, args=(process, limits, finished, verdict), daemon=True)
     started = time.monotonic()
@@ -132,7 +148,7 @@ def read_source_batch_supervised(files, mapping, *, contract=None, limits=None):
         batch = _receive(process, limits)
     except ValidationError:
         raise
-    except (OSError, EOFError, KeyError, TypeError, ValueError):
+    except (OSError, EOFError, KeyError, TypeError, ValueError, RecursionError):
         pass  # El hijo murió o contestó algo que no corresponde: se decide abajo, sin citar nada de lo recibido.
     finally:
         finished.set()

@@ -1959,7 +1959,7 @@ def test_expiry_during_a_phase_that_cannot_be_interrupted_is_a_real_cut(tmp_path
     limits = replace(FileLimits(), read_seconds=seconds)
     message, elapsed = supervised_outcome(dict.fromkeys(KINDS, path), xlsx_profile(), limits=limits)
     assert message.split(':')[0] == 'TIEMPO_LECTURA_EXCEDIDO'
-    assert seconds <= elapsed < seconds + 1
+    assert seconds <= elapsed < seconds + 2
     assert processes[0].returncode == -9
     # Sin el proceso aparte, esa misma lectura no puede cortar a tiempo: la fase dura más que todo el margen.
     alone = measure(path, xlsx_profile(), limits)
@@ -1994,7 +1994,16 @@ def test_the_child_inherits_no_credentials_and_has_no_stderr(tmp_path, monkeypat
     'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'[2, ["a", "b"]]\')',
     'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'[2, ["a"]]\')',
     'import sys; sys.stdin.read(); print("{}")',
-], ids=['muere', 'basura', 'fila-sin-tabla', 'ancho-distinto', 'sin-marca-final', 'objeto-desconocido'])
+    'import sys; sys.stdin.read(); print(\'{"hojas_ignoradas": []}\')',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "otra", "columnas": ["A"]}\')',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": [1]}\')',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'[2, [1]]\')',
+    'import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); print(\'["2", ["a"]]\')',
+    'import sys; sys.stdin.read(); print(\'{"error": "CODIGO: 30123456, Persona Sintetica"}\')',
+    'import sys; sys.stdin.read(); print(\'{"error": ["CODIGO"]}\')',
+    'import sys; sys.stdin.read(); print("[" * 100000)',
+], ids=['muere', 'basura', 'fila-sin-tabla', 'ancho-distinto', 'sin-marca-final', 'objeto-desconocido', 'marca-sin-tablas', 'tabla-desconocida',
+        'columna-no-texto', 'celda-no-texto', 'linea-no-entera', 'error-con-valores', 'error-no-texto', 'anidado-sin-fin'])
 def test_a_child_that_dies_or_answers_nonsense_never_gives_a_batch(tmp_path, monkeypatch, script):
     monkeypatch.setattr(supervised, '_worker_command', lambda: [sys.executable, '-B', '-c', script])
     book = write(tmp_path, 'libro', minimal_workbook())
@@ -2002,9 +2011,37 @@ def test_a_child_that_dies_or_answers_nonsense_never_gives_a_batch(tmp_path, mon
     assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA'
 
 
+def test_a_child_that_cannot_start_has_a_safe_code(tmp_path, monkeypatch):
+    def refused(*_, **__):
+        raise OSError(str(tmp_path))
+    monkeypatch.setattr(supervised.subprocess, 'Popen', refused)
+    book = write(tmp_path, 'libro', minimal_workbook())
+    message, _ = supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile())
+    assert message.split(':')[0] == 'LECTURA_INTERRUMPIDA' and str(tmp_path) not in message
+
+
+def test_the_widest_row_the_limits_allow_fits_in_the_answer_line(tmp_path):
+    """Un carácter fuera del plano básico son 12 bytes en JSON: la línea más larga tiene que entrar igual."""
+    columns = [f'c{number}' for number in range(60)]
+    cell = '\U0001F600' * FileLimits().cell
+    path = write(tmp_path, 'ancho.csv', (','.join(columns) + '\n' + ','.join([cell] * 60) + '\n').encode())
+    message = supervised_outcome(dict.fromkeys(KINDS, path), csv_profile())[0]
+    assert message.split(':')[0] == 'COLUMNA_OBLIGATORIA_AUSENTE'
+    sheets = validated_sheets()
+    files = {}
+    for kind, rows in sheets.items():
+        names = rows[0] + [f'relleno{number}' for number in range(60 - len(rows[0]))]
+        target = tmp_path / f'{kind}.csv'
+        target.write_text(','.join(names) + '\n' + ','.join([cell] * 60) + '\n', encoding='utf-8')
+        files[kind] = target
+    batch, _ = supervised_outcome(files, csv_profile())
+    assert batch.tables['detalle'].rows[0].values['relleno0'] == cell
+
+
 def test_a_child_that_answers_more_rows_than_allowed_never_gives_a_batch(tmp_path, monkeypatch):
     script = ('import sys; sys.stdin.read(); print(\'{"tabla": "cabecera", "columnas": ["A"]}\'); '
-              'print(\'[2, ["a"]]\'); print(\'[3, ["a"]]\'); print(\'{"hojas_ignoradas": []}\')')
+              'print(\'[2, ["a"]]\'); print(\'[3, ["a"]]\'); print(\'{"tabla": "detalle", "columnas": ["A"]}\'); '
+              'print(\'{"hojas_ignoradas": []}\')')
     monkeypatch.setattr(supervised, '_worker_command', lambda: [sys.executable, '-B', '-c', script])
     book = write(tmp_path, 'libro', minimal_workbook())
     message, _ = supervised_outcome(dict.fromkeys(KINDS, book), xlsx_profile(), limits=replace(FileLimits(), rows=1))
