@@ -334,7 +334,8 @@ configuración nombra un proyecto remoto o si falta el turno.
 | Recargar el mismo lote | 0 insertados, 0 actualizados, y ninguna fila reescrita en la base (`xmin` igual), conteos y montos sin cambio |
 | Reimportar el lote completo con una obligación modificada | Cambian exactamente esa fila de `debt` y el perfil de su objeto, también su `profile_generated_at`. Nada más |
 | Archivo rechazado: bloqueado, sin una columna, ilegible, o parcial | Salida 1, ninguna fila reescrita, un evento `FALLIDO` sin antecedente |
-| Falla durante la carga | `VALIDADO` → `FALLIDO` con antecedente. Ningún lote queda sin cerrar |
+| Falla durante la carga, o rechazo de `PUBLICADO` después de escribir | `VALIDADO` → `FALLIDO` con antecedente y el código original. Ningún lote queda sin cerrar |
+| Corrección de un centavo en un importe de 100 billones o más | Se actualiza: exactamente la obligación y el perfil. La recarga da 0 y 0 |
 
 **El mismo archivo validado.** `sintetico-v1` completo nunca publica, por diseño: trae más cuarentena que el umbral del
 contrato y detalle sin cabecera. El lote que se carga es su derivado `VALIDADO` más grande que admite el umbral: los 31
@@ -363,8 +364,15 @@ R05, R13 y R28 quedan **parciales**, no cerrados:
 - **ALIGN-031:** política de bajas y delta. También la de contactos y direcciones que dejan de venir: hoy un contacto
   ausente queda en `debtor_contact` como estaba, sin desactivarse, y no bloquea el lote. Paginación de
   `fetch_existing_debts_by_key` y `recompute_debtor_profiles`.
-- **ALIGN-032:** transacción, respuesta perdida, recuperación, concurrencia, falla al registrar `PUBLICADO` y clave de
-  idempotencia por lote. Hoy una falla a mitad de carga no revierte lo ya escrito, y cada ejecución agrega su propia cadena
-  de eventos, también una recarga sin cambios.
+- **ALIGN-032:** transacción, recuperación, concurrencia y clave de idempotencia por lote. Hoy una falla a mitad de carga
+  no revierte lo ya escrito, y cada ejecución agrega su propia cadena de eventos, también una recarga sin cambios. Si
+  `PUBLICADO` tiene resultado incierto (respuesta perdida, 5xx, 200 ilegible), la CLI imprime `PUBLISH_OUTCOME_UNKNOWN`, sale
+  con 1 y `VALIDADO` queda sin desenlace. Lo mismo si la base rechaza también el `FALLIDO`, por ejemplo con el actor revocado
+  durante la carga (`IMPORT_BATCH_FAILURE_NOT_RECORDED`). Un proceso muerto sin aviso tampoco cierra el lote.
+- **Exactitud de importes:** la carga compara los importes de `debt` y del perfil como texto, así que es exacta en todo el
+  rango que admite el validador (hasta 9.999.999.999.999.999,99; más allá, `IMPORTE_FUERA_DE_RANGO`). Quien lea esas columnas
+  como número no lo es: los mapeadores del frontend y la Data API sin `::text` pierden centavos desde unos 100 billones. No es
+  un importe municipal plausible y no se certifica ese rango en pantalla; queda como límite conocido de la lectura, sin
+  ticket asignado.
 - `person.external_id` es único global: el municipio B exige `--mapping` y una base recién reconstruida, y la CLI usa el
   tenant 1 fijo. Un primer lote sobre una base vacía no tiene contra qué compararse: su completitud no se puede comprobar.

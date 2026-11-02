@@ -82,7 +82,8 @@ class FakeQuery:
     def __init__(self, database, table):
         self.database, self.table, self.filters, self.action, self.page = database, table, [], ('select', None), None
 
-    def select(self, _columns):
+    def select(self, columns):
+        self.columns = columns
         return self
 
     def order(self, column):
@@ -129,7 +130,13 @@ class FakeQuery:
         if self.page:
             # Como la Data API: corta en su máximo de filas aunque la página pedida sea mayor.
             matches = sorted(matches, key=lambda row: row[self.sort_column])[self.page[0]:self.page[1] + 1][:self.database.max_rows]
-        return SimpleNamespace(data=[dict(row) for row in matches])
+        return SimpleNamespace(data=[self.as_data_api(row) for row in matches])
+
+    def as_data_api(self, row):
+        """Un numeric llega como número JSON y Python lo vuelve float, salvo que se pida con ::text."""
+        exact = re.findall(r'(\w+)::text', getattr(self, 'columns', ''))
+        return {column: float(value) if column in NUMERIC.get(self.table, ()) and column not in exact and value is not None else value
+                for column, value in row.items()}
 
 
 class FakeDatabase:
@@ -142,6 +149,7 @@ class FakeDatabase:
         self.batches = []
         self.rpc_headers = []
         self.fail_on = None
+        self.rpc_outcomes = {}
         self.max_rows = 1000
         self.writes = 0
         self.updates = 0
@@ -186,8 +194,21 @@ class FakeDatabase:
         check_counts(body['p_counts'])
         assert re.fullmatch(r'[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}', body['p_rules_version'])
         assert re.fullmatch(r'[A-Z][A-Z0-9_]{0,63}', body['p_source'])
-        self.next_id += 1
-        self.batches.append({**body, 'id': self.next_id})
+        outcome = self.rpc_outcomes.get(body['p_status'])
+        if isinstance(outcome, int):
+            return httpx.Response(outcome, json={'message': 'detalle del proveedor NOMBRE_SINTETICO_A026'}, request=httpx.Request('POST', url))
+        if isinstance(outcome, str):
+            return httpx.Response(400, json={'message': outcome}, request=httpx.Request('POST', url))
+        if outcome is not None and not isinstance(outcome, tuple):
+            raise outcome
+        # Como record_import_batch: un reintento con la misma clave no agrega otro evento.
+        if not any(event['p_idempotency_key'] == body['p_idempotency_key'] for event in self.batches):
+            self.next_id += 1
+            self.batches.append({**body, 'id': self.next_id})
+        if isinstance(outcome, tuple):  # El evento quedó, pero la respuesta no se entiende o se pierde.
+            if outcome[0] == 'perdida':
+                raise outcome[1]
+            return httpx.Response(200, text='no es json', request=httpx.Request('POST', url))
         return httpx.Response(200, json={'batch_id': self.next_id, 'created': True},
                               request=httpx.Request('POST', url))
 
@@ -920,6 +941,143 @@ def test_localidad_sin_codigo_postal_no_borra_el_de_otra_ni_mueve_direcciones(da
     counts = database.batches[-1]['p_counts']
     assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (0, 0)
     assert _portfolio(database) == before
+
+
+def _corrected_lot(tmp_path, name):
+    key = object_by_case('base-valido')['clave_agrupacion']
+    return derive_lot(tmp_path / name, cabecera_cells={(key, None, 'Deuda_Actualizada'): '46.279,61'},
+                      detalle_cells={(key, '700001', 'NOTD_totalActualizado'): '13.817,54'})
+
+
+@pytest.mark.parametrize(('outcome', 'code'), [
+    (400, 'IMPORT_BATCH_REJECTED'), (401, 'IMPORT_BATCH_REJECTED'), (403, 'IMPORT_BATCH_REJECTED'), (409, 'IMPORT_BATCH_REJECTED'),
+    ('ACTOR_NOT_ACTIVE_MEMBER', 'ACTOR_NOT_ACTIVE_MEMBER'), ('INVALID_IMPORT_BATCH:import_batch_counts_format', 'INVALID_IMPORT_BATCH:import_batch_counts_format'),
+])
+def test_rechazo_confirmado_de_publicado_cierra_con_fallido_y_conserva_el_error(database, tmp_path, capsys, outcome, code):
+    execute(derive_lot(tmp_path / 'primero'))
+    database.rpc_outcomes['PUBLICADO'] = outcome
+    previous = len(database.batches)
+    capsys.readouterr()
+    with pytest.raises(ETLError) as error:
+        execute(_corrected_lot(tmp_path, 'corregido'))
+    assert error.value.code == code
+    events = database.batches[previous:]
+    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
+    assert events[1]['p_supersedes'] == events[0]['id']
+    assert events[1]['p_file_hashes'] == events[0]['p_file_hashes']
+    # Son los conteos que ya aceptó VALIDADO: si el rechazo fue por los conteos de PUBLICADO, FALLIDO igual puede quedar.
+    assert events[1]['p_counts'] == events[0]['p_counts']
+    salida = capsys.readouterr()
+    assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
+    assert 'PUBLISH_OUTCOME_UNKNOWN' not in salida.out
+
+
+def test_si_tampoco_se_puede_registrar_fallido_se_informa_la_causa_original(database, tmp_path, capsys):
+    execute(derive_lot(tmp_path / 'primero'))
+    database.rpc_outcomes.update({'PUBLICADO': 'ACTOR_NOT_ACTIVE_MEMBER', 'FALLIDO': 'ROLE_NOT_ALLOWED'})
+    previous = len(database.batches)
+    capsys.readouterr()
+    with pytest.raises(ETLError) as error:
+        execute(_corrected_lot(tmp_path, 'corregido'))
+    assert error.value.code == 'ACTOR_NOT_ACTIVE_MEMBER'
+    assert [event['p_status'] for event in database.batches[previous:]] == ['VALIDADO']
+    assert 'IMPORT_BATCH_FAILURE_NOT_RECORDED' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(('outcome', 'recorded'), [
+    (500, False), (502, False), (503, False), (504, False),
+    (httpx.ReadTimeout('sin respuesta'), False), (httpx.RemoteProtocolError('cortada'), False), (httpx.ReadError('reiniciada'), False),
+    (('perdida', httpx.ReadTimeout('sin respuesta')), True), (('ilegible', None), True),
+], ids=['500', '502', '503', '504', 'timeout', 'protocolo', 'lectura', 'perdida-con-evento', '200-ilegible'])
+def test_publicado_con_resultado_incierto_no_registra_un_fallido_que_podria_ser_falso(database, tmp_path, capsys, monkeypatch, outcome, recorded):
+    monkeypatch.setattr(load.time, 'sleep', lambda _seconds: None)
+    execute(derive_lot(tmp_path / 'primero'))
+    database.rpc_outcomes['PUBLICADO'] = outcome
+    previous = len(database.batches)
+    capsys.readouterr()
+    with pytest.raises(ETLError):
+        execute(_corrected_lot(tmp_path, 'corregido'))
+    assert [event['p_status'] for event in database.batches[previous:]] == (['VALIDADO', 'PUBLICADO'] if recorded else ['VALIDADO'])
+    salida = capsys.readouterr()
+    assert 'codigo=PUBLISH_OUTCOME_UNKNOWN' in salida.out
+    assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
+
+
+def test_una_interrupcion_durante_la_carga_termina_fallido_con_antecedente(database, tmp_path, monkeypatch):
+    monkeypatch.setattr(run_etl, 'load_person', Mock(side_effect=KeyboardInterrupt))
+    with pytest.raises(KeyboardInterrupt):
+        execute(derive_lot(tmp_path / 'interrumpido'))
+    events = database.batches
+    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
+    assert events[1]['p_supersedes'] == events[0]['id']
+
+
+def test_una_falla_entre_validado_y_la_primera_escritura_tambien_cierra_el_lote(database, tmp_path, monkeypatch):
+    def broken_stdout(*values, **_kwargs):
+        if values and str(values[0]).startswith('INICIANDO'):
+            raise BrokenPipeError
+    monkeypatch.setattr(run_etl, 'print', broken_stdout, raising=False)
+    with pytest.raises(ETLError):
+        execute(derive_lot(tmp_path / 'sin-salida'))
+    events = database.batches
+    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
+    assert events[1]['p_supersedes'] == events[0]['id']
+    assert database.cartera_rows() == 0
+
+
+def _es_ar(value):
+    entero, decimales = format(value, '.2f').split('.')
+    return f"{int(entero):,}".replace(',', '.') + ',' + decimales
+
+
+@pytest.mark.parametrize('base', ['10000000000000', '100000000000000', '1000000000000000', '9999999999900000'])
+def test_un_centavo_en_un_importe_extremo_se_actualiza_y_la_recarga_no_cambia_nada(database, tmp_path, base):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+    others = Decimal(target['importe_actualizado']['valor']) - Decimal('13817.53')
+
+    def lot(cents):
+        amount = Decimal(f'{base}.{cents}')
+        return derive_lot(tmp_path / f'importe-{cents}', cabecera_cells={(key, None, 'Deuda_Actualizada'): _es_ar(amount + others)},
+                          detalle_cells={(key, '700001', 'NOTD_totalActualizado'): _es_ar(amount)}), amount + others
+
+    first, _ = lot('01')
+    second, total = lot('02')
+    execute(first)
+    execute(second)
+    counts = database.batches[-1]['p_counts']
+    assert (counts['deudas_actualizadas'], counts['filas_actualizadas']) == (1, 2)
+    debtor, debts = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    assert next(row for row in debts if row['external_id'] == 700001)['current_amount'] == f'{base}.02'
+    assert profile_of(database, debtor)['total_debt_amount'] == format(total, 'f')
+    updates = database.updates
+    execute(second)
+    counts = database.batches[-1]['p_counts']
+    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (0, 0, updates)
+
+
+def test_un_centavo_en_el_capital_extremo_tambien_se_detecta(database, tmp_path):
+    target = object_by_case('base-valido')
+    key = target['clave_agrupacion']
+
+    def lot(name, cents):
+        capital = Decimal(f'100000000000000.{cents}')
+        control = capital + Decimal(target['importe_capital']['valor']) - Decimal('11611.37')
+        return derive_lot(tmp_path / name, cabecera_cells={(key, None, 'Deuda_Capital'): _es_ar(control)},
+                          detalle_cells={(key, '700001', 'NOTD_capital'): _es_ar(capital)})
+
+    execute(lot('primero', '01'))
+    execute(lot('segundo', '02'))
+    assert database.batches[-1]['p_counts']['escrituras']['debt']['actualizadas'] == 1
+    _, debts = debts_of(database, target['bien_tipo_id'], target['cuenta'])
+    assert next(row for row in debts if row['external_id'] == 700001)['original_amount'] == '100000000000000.02'
+
+
+def test_una_misma_cifra_con_otra_escala_no_cuenta_como_cambio():
+    assert load._same_value('33.30', '33.3', numeric=True) is True
+    assert load._same_value('33.30', '33.31', numeric=True) is False
+    assert load._same_value('33.30', '33.3') is False
+    assert load._same_value('no-numero', '33.3', numeric=True) is False
 
 
 def _drop_lines(path, *cells):

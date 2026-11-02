@@ -709,6 +709,74 @@ def test_una_falla_durante_la_carga_termina_fallido_con_antecedente(campaign, pu
                     eventos=[event["status"] for event in events])
 
 
+def test_un_rechazo_de_publicado_termina_fallido_con_antecedente(campaign, published):
+    """Después de escrituras efectivas la base rechaza el cierre, y sigue disponible: el lote no puede quedar abierto."""
+    psql("create function public.a027_rechaza_publicado() returns trigger language plpgsql as "
+         "$$ begin if new.status = 'PUBLICADO' then raise exception 'rechazo inyectado ALIGN-027'; end if; return new; end $$; "
+         "create trigger a027_rechaza_publicado before insert on public.import_batch "
+         "for each row execute function public.a027_rechaza_publicado();")
+    try:
+        before = snapshot()
+        previous = len(batches())
+        result = campaign.etl(_modified_lot(campaign, "publicado-rechazado"))
+    finally:
+        psql("drop trigger a027_rechaza_publicado on public.import_batch; drop function public.a027_rechaza_publicado();")
+    assert (result.returncode, error_code(result)) == (1, "IMPORT_BATCH_REJECTED")
+    assert "rechazo inyectado" not in result.stdout + result.stderr, "El mensaje del proveedor no se propaga"
+    events = batches()[previous:]
+    assert [(event["status"], event["supersedes"]) for event in events] == [("VALIDADO", None), ("FALLIDO", events[0]["id"])]
+    assert events[1]["file_hashes"] == events[0]["file_hashes"]
+    # Sin transacción, lo escrito queda (ALIGN-032). Por eso importa cerrar: FALLIDO con antecedente declara cartera tocada.
+    assert set(changes(before, snapshot())) == {"debt", "debtor_profile"}
+    campaign.record("rechazo de PUBLICADO", salida=result.returncode, codigo=error_code(result),
+                    eventos=[event["status"] for event in events], tablas_cambiadas=["debt", "debtor_profile"])
+    assert campaign.etl(published.validated.lot).returncode == 0, "Una recarga posterior recupera el lote"
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
+
+
+@pytest.mark.parametrize("base", ["100000000000000", "1000000000000000"])
+def test_un_centavo_en_un_importe_extremo_se_actualiza_y_la_recarga_no_cambia_nada(campaign, published, base):
+    target = object_by_case(MODIFIED_CASE)
+    key = target["clave_agrupacion"]
+    others = Decimal(target["importe_actualizado"]["valor"]) - Decimal("13817.53")
+
+    def amount_text(value: Decimal) -> str:
+        whole, cents = format(value, ".2f").split(".")
+        return f"{int(whole):,}".replace(",", ".") + "," + cents
+
+    def lot(cents: str) -> Path:
+        amount = Decimal(f"{base}.{cents}")
+        return derive_lot(campaign.work / f"extremo-{base}-{cents}", (QUARANTINED_CASE,),
+                          cabecera_cells={(key, None, "Deuda_Actualizada"): amount_text(amount + others)},
+                          detalle_cells={(key, MODIFIED_DEBT, "NOTD_totalActualizado"): amount_text(amount)})
+
+    assert campaign.etl(lot("01")).returncode == 0
+    before = snapshot()
+    ids = catalogs()
+    tables = tenant_tables(before)
+    debtor = debtor_of(tables, ids["debtor_type"], MODIFIED_CASE)
+    debt = next(row for row in tables["debt"] if row["debtor"] == debtor["id"] and str(row["external_id"]) == MODIFIED_DEBT)
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor["id"])
+    corrected = lot("02")
+    result = campaign.etl(corrected)
+    after = snapshot()
+    assert result.returncode == 0, result.stderr
+    assert line_value(result, "Deudas actualizadas") == "1", "Un centavo es un cambio, también en un importe extremo"
+    assert changes(before, after) == {
+        "debt": {"insertadas": [], "actualizadas": [debt["id"]], "borradas": []},
+        "debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []},
+    }
+    assert after["debt"][debt["id"]]["current_amount"] == Decimal(f"{base}.02")
+    assert after["debtor_profile"][profile["id"]]["total_debt_amount"] == Decimal(f"{base}.02") + others
+    reload = campaign.etl(corrected)
+    assert changes(after, snapshot()) == {}, "La recarga de un importe extremo reescribió filas"
+    assert (line_value(reload, "Filas insertadas"), line_value(reload, "Filas actualizadas")) == ("0", "0")
+    campaign.record(f"centavo en importe extremo {base}", salida=result.returncode, filas_actualizadas=2,
+                    recarga_filas_actualizadas=int(line_value(reload, "Filas actualizadas")))
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
+
+
 def test_ningun_lote_queda_sin_cerrar(campaign, published):
     events = batches()
     closed = {event["supersedes"] for event in events}

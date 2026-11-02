@@ -96,6 +96,14 @@ DEBT_COMPARE_COLUMNS = (
 DEBT_NUMERIC_COLUMNS = {"original_amount", "current_amount"}
 DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
 
+# Importes. Por la Data API llegan como número JSON y Python los vuelve float, que pierde centavos desde unos 100 billones:
+# una corrección de un centavo pasaría por igual. Para comparar se leen como texto. El porcentaje no hace falta: el validador
+# lo acota a 100 con dos decimales, y un float lo representa sin pérdida al volver a texto.
+EXACT_NUMERIC_COLUMNS = {
+    DEBT_TABLE: frozenset(DEBT_NUMERIC_COLUMNS),
+    DEBTOR_PROFILE_TABLE: frozenset({"total_debt_amount", "overdue_debt_amount"}),
+}
+
 IMPORT_BATCH_RPC_PATH = "/rest/v1/rpc/record_import_batch"
 IMPORT_BATCH_TIMEOUT_SECONDS = 15
 # Códigos estables de record_import_batch (SUPABASE_TESTING_CALIDAD.md). Cualquier otro texto no se propaga.
@@ -105,6 +113,10 @@ IMPORT_BATCH_STABLE_ERROR = re.compile(
 )
 
 T = TypeVar("T")
+
+
+class ImportBatchRejected(ETLError):
+    """La base respondió que no registró el evento. A diferencia de una respuesta perdida o un 5xx, se sabe que no quedó."""
 
 
 def start_write_tally() -> dict[str, Counter[str]]:
@@ -338,6 +350,11 @@ def debt_payload_matches_existing(
     )
 
 
+def _exact_select(table_name: str, columns: Iterable[str]) -> str:
+    exact = EXACT_NUMERIC_COLUMNS.get(table_name, frozenset())
+    return ",".join(f"{column}::text" if column in exact else column for column in columns)
+
+
 def fetch_existing_debts_by_key(
     payloads: list[dict[str, Any]],
 ) -> dict[tuple[int, int], dict[str, Any]]:
@@ -347,7 +364,7 @@ def fetch_existing_debts_by_key(
     expected_keys = {normalize_debt_key(payload) for payload in payloads}
     debtor_ids = sorted({debtor_id for debtor_id, _ in expected_keys})
     external_ids = sorted({external_id for _, external_id in expected_keys})
-    select_columns = ",".join(("id", *DEBT_COMPARE_COLUMNS))
+    select_columns = _exact_select(DEBT_TABLE, ("id", *DEBT_COMPARE_COLUMNS))
 
     def select_existing_debts() -> Any:
         return (
@@ -384,17 +401,17 @@ def fetch_existing_debts_by_key(
     return rows_by_key
 
 
-def _same_value(current: Any, wanted: Any) -> bool:
+def _same_value(current: Any, wanted: Any, *, numeric: bool = False) -> bool:
     if current is None or wanted is None:
         return current is None and wanted is None
 
     if isinstance(current, bool) or isinstance(wanted, bool):
         return isinstance(current, bool) and isinstance(wanted, bool) and current == wanted
 
-    if isinstance(current, str) and isinstance(wanted, str):
+    if not numeric and isinstance(current, str) and isinstance(wanted, str):
         return current == wanted
 
-    # Un número contra otro, o contra el texto exacto con que viajan los importes. Sin float: un centavo es un cambio.
+    # Un número contra otro, o el texto exacto de una columna numérica, que puede tener otra escala. Un centavo es un cambio.
     try:
         return Decimal(str(current)) == Decimal(str(wanted))
     except InvalidOperation:
@@ -402,13 +419,15 @@ def _same_value(current: Any, wanted: Any) -> bool:
 
 
 def _row_already_has(
+    table_name: str,
     existing_row: Mapping[str, Any],
     payload: Mapping[str, Any],
     ignored_columns: Iterable[str],
 ) -> bool:
     ignored = set(ignored_columns)
+    exact = EXACT_NUMERIC_COLUMNS.get(table_name, frozenset())
     return all(
-        _same_value(existing_row.get(column), value)
+        _same_value(existing_row.get(column), value, numeric=column in exact)
         for column, value in payload.items()
         if column not in ignored
     )
@@ -429,6 +448,7 @@ def insert_or_update_by_filters(
         existing_row = fetch_one(
             table_name=table_name,
             filters=lookup_filters,
+            columns=_exact_select(table_name, ("id", *payload)),
             retry_http=False,
         )
 
@@ -438,7 +458,7 @@ def insert_or_update_by_filters(
             if row_id is None:
                 raise ETLError("ROW_ID_MISSING", etl_message("ROW_ID_MISSING"))
 
-            if _row_already_has(existing_row, payload, ignored_columns):
+            if _row_already_has(table_name, existing_row, payload, ignored_columns):
                 return existing_row, WRITE_UNCHANGED
 
             updated_row = update_row(
@@ -926,10 +946,13 @@ def _import_batch_error(response: httpx.Response) -> ETLError:
     except (ValueError, AttributeError):
         message = None
 
-    if isinstance(message, str) and IMPORT_BATCH_STABLE_ERROR.fullmatch(message):
-        return ETLError(message, etl_message(message))
+    code = message if isinstance(message, str) and IMPORT_BATCH_STABLE_ERROR.fullmatch(message) else "IMPORT_BATCH_REJECTED"
 
-    return ETLError("IMPORT_BATCH_REJECTED", etl_message("IMPORT_BATCH_REJECTED"))
+    # Un 5xx puede venir de la puerta de enlace con la transacción ya confirmada: no prueba que el evento no haya quedado.
+    if 400 <= response.status_code < 500:
+        return ImportBatchRejected(code, etl_message(code))
+
+    return ETLError(code, etl_message(code))
 
 
 # Agrega un evento a import_batch por la función de servidor (ALIGN-018): credencial propia del servicio de

@@ -59,9 +59,16 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
    que cambió: recargar el mismo lote deja todas las filas intactas, y `PUBLICADO` guarda `filas_insertadas`,
    `filas_actualizadas`, `filas_sin_cambios` y `escrituras` por tabla. `profile_generated_at` solo cambia si cambia el perfil.
    Una persona que viene en varios objetos se escribe una vez, con los datos de su última fila.
-5. **Falla durante la carga:** registra `FALLIDO`. Las escrituras por la Data API no son una transacción: lo ya escrito
-   no se revierte. La publicación atómica, la recuperación y la clave de idempotencia por lote son de ALIGN-032;
-   hoy cada ejecución agrega su propia cadena de eventos.
+5. **Falla durante la carga, interrupción o rechazo de `PUBLICADO`:** registra `FALLIDO` con antecedente y conserva el
+   código original. Las escrituras por la Data API no son una transacción: lo ya escrito no se revierte. La publicación
+   atómica, la recuperación y la clave de idempotencia por lote son de ALIGN-032; hoy cada ejecución agrega su propia
+   cadena de eventos.
+6. **`PUBLICADO` con resultado incierto** (respuesta perdida, 5xx o respuesta 200 ilegible): imprime
+   `PUBLISH_OUTCOME_UNKNOWN`, sale con 1 y no registra `FALLIDO`, que podría ser falso. `VALIDADO` queda sin desenlace hasta
+   ALIGN-032. Es rechazo confirmado solo si la base respondió 4xx.
+
+Los importes de `debt` y del perfil se comparan contra lo persistido leyéndolos como texto (`::text`). Por la Data API
+llegarían como `float`, que pierde el centavo desde unos 100 billones.
 
 En el perfil, una ausencia queda nula y no en cero: sin vencidas observadas y con estados faltantes no hay importe
 vencido, y `debt_state_not_observed_count` declara cuántas obligaciones no tienen estado. Ver el
@@ -113,7 +120,7 @@ de anonimización de archivos de origen.
 Códigos principales: `TARGET_ORIGINAL_FORBIDDEN`, `TARGET_ENV_INVALID`,
 `TARGET_URL_INVALID`, `TARGET_HOST_FORBIDDEN`, `SUPABASE_KEY_MISSING`,
 `CUT_OFF_REQUIRED`, `PARTIAL_LOAD_REJECTED`, `IMPORT_CREDENTIAL_MISSING`, `IMPORT_ACTOR_INVALID`,
-`BATCH_BLOCKED`, `SOURCE_CHANGED_DURING_READ`, `CATALOG_KEY_MISSING`, `IMPORT_BATCH_REJECTED`,
+`BATCH_BLOCKED`, `SOURCE_CHANGED_DURING_READ`, `CATALOG_KEY_MISSING`, `IMPORT_BATCH_REJECTED`, `PUBLISH_OUTCOME_UNKNOWN`,
 `SUPABASE_RETRY`, `SUPABASE_RETRY_EXHAUSTED`, `SUPABASE_OPERATION_FAILED` y `ETL_FAILED`, además de los códigos
 del contrato de origen (`CORTE_INVALIDO`, `MAPEO_REQUERIDO`, `COLUMNA_OBLIGATORIA_AUSENTE`…) y los estables de
 `record_import_batch` (`ROLE_NOT_ALLOWED`, `ACTOR_NOT_ACTIVE_MEMBER`, `INVALID_IMPORT_BATCH:<restricción>`…).

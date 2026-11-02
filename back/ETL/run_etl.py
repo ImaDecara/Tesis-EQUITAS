@@ -13,6 +13,7 @@ from ETL.extract import (
     source_folder,
 )
 from ETL.load import (
+    ImportBatchRejected,
     etl_message,
     fetch_published_objects,
     load_address,
@@ -236,6 +237,7 @@ def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_pa
 # Registra el lote, publica sus objetos aceptados y cierra la cadena de eventos en import_batch.
 # V1: las escrituras por la Data API no son una transacción. Una falla deja el lote en FALLIDO y lo ya escrito
 # no se revierte; la publicación atómica es de ALIGN-032.
+# Desde que VALIDADO quedó registrado, todo camino en el que se sabe que PUBLICADO no quedó termina en FALLIDO con antecedente.
 def _publish_validated_batch(batch: PreparedBatch) -> None:
     cut_off = batch.report["fecha_corte"]
     catalogs = resolve_catalogs(required_catalog_keys(batch), CATALOG_KEY_COLUMNS)
@@ -251,17 +253,27 @@ def _publish_validated_batch(batch: PreparedBatch) -> None:
     validated_id = _register_batch(batch.file_hashes, cut_off, STATUS_VALIDATED, counts,
                                    source_updated_at=batch.source_updated_at)
 
-    print("INICIANDO CARGA REAL EN SUPABASE")
-    print("-" * 80)
-
     try:
+        print("INICIANDO CARGA REAL EN SUPABASE")
+        print("-" * 80)
         loaded = _load_objects(batch, catalogs)
-    except Exception:
+    # También ante una interrupción: se sabe que la carga no terminó.
+    except BaseException:
         _register_failure(batch, counts, validated_id)
         raise
 
-    _register_batch(batch.file_hashes, cut_off, STATUS_PUBLISHED, {**counts, **loaded},
-                    source_updated_at=batch.source_updated_at, supersedes=validated_id)
+    try:
+        _register_batch(batch.file_hashes, cut_off, STATUS_PUBLISHED, {**counts, **loaded},
+                        source_updated_at=batch.source_updated_at, supersedes=validated_id)
+    # La base respondió que no: no quedó, y hay escrituras sin lote que las declare. Los conteos son los que ya aceptó VALIDADO.
+    except ImportBatchRejected:
+        _register_failure(batch, counts, validated_id)
+        raise
+    # Respuesta perdida, 5xx o interrupción: PUBLICADO pudo quedar, y un FALLIDO podría ser falso. Lo resuelve ALIGN-032.
+    except BaseException:
+        print(etl_message("PUBLISH_OUTCOME_UNKNOWN"))
+        raise
+
     _print_load_summary(loaded)
 
 
