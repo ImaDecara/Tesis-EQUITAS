@@ -274,7 +274,7 @@ class CaseSourceTests(unittest.TestCase):
                 self.assertEqual(len(re.findall(r'\bfetch\(', source)), len(re.findall(r"redirect: 'manual'", source)), 'fetch sin redirect manual')
                 self.assertEqual(len(re.findall(r'\bcreateServerClient\(', source)), len(re.findall(r'global: \{ fetch: withoutRedirects \}', source)), 'SDK sin el fetch de la campana')
                 # cookieFor y registerBatch, de local-review, siguen redirecciones con credenciales.
-                self.assertIsNone(re.search(r'\b(cookieFor|registerBatch)\b', source))
+                self.assertIsNone(re.search(r'\b(cookieFor|registerBatch)\(|^import[^\n]*\b(cookieFor|registerBatch)\b', source, re.M))
 
     def test_every_it_is_a_case_of_the_inventory(self):
         self.assertEqual(len(re.findall(r'\bit(?:\.\w+)?\(', self.source)), len(CAMPAIGN.required_cases))

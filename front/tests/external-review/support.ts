@@ -1,8 +1,9 @@
 import { createHmac, randomUUID } from 'node:crypto'
+import { createServerClient } from '@supabase/ssr'
 import { expect } from 'vitest'
 
 import type { ReviewAccount } from '../local-review/config'
-import { config, READY_CHECKLIST, sql } from '../local-review/http-support'
+import { BASE, config, READY_CHECKLIST, sql } from '../local-review/http-support'
 
 // ALIGN-022. Lo que usa la campaña sobre las herramientas de ALIGN-020. Nunca imprime claves ni contraseñas.
 export type Account = ReviewAccount | 'importador-real'
@@ -27,6 +28,35 @@ export const INTENSE = {
 
 export type Reply = { status: number; body: unknown; code: unknown; message: unknown; details: unknown }
 
+// Ninguna solicitud de la campana sigue una redireccion: el destino se valida una vez y un Location no lo cambia.
+// Con esto, una respuesta 30x llega a la prueba como lo que es y la hace fallar, sin un segundo destino.
+export const withoutRedirects: typeof fetch = (input, init) => fetch(input, { ...init, redirect: 'manual' })
+
+const syntheticAccounts = () => config.accounts as unknown as Record<Account, { email: string; password: string }>
+
+// Sesion real, como cookieFor de local-review, pero sin seguir redirecciones con la contrasena. Se mira `error` entero: uno sin `code` tambien es un fallo.
+export async function sessionCookie(label: Account, tenant?: string) {
+  const cookies = new Map<string, string>()
+  const client = createServerClient(config.supabaseUrl, config.publishableKey, {
+    global: { fetch: withoutRedirects },
+    cookies: {
+      getAll: () => [...cookies].map(([name, value]) => ({ name, value })),
+      setAll: values => { for (const { name, value } of values) cookies.set(name, value) },
+    },
+  })
+  const { error } = await client.auth.signInWithPassword(syntheticAccounts()[label])
+  expect(error?.message ?? null, `login ${label}`).toBeNull()
+  expect(cookies.size, `sesion ${label}`).toBeGreaterThan(0)
+  if (tenant) cookies.set('equitas_tenant_id', tenant)
+  return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ')
+}
+
+export async function readBuildInfo() {
+  const response = await fetch(`${BASE}/api/build-info`, { redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+  expect(response.status, 'identificacion del servidor, sin redirecciones').toBe(200)
+  return await response.json() as { supabaseProjectRef: unknown }
+}
+
 export async function api(method: string, path: string, options: { token?: string; body?: unknown; prefer?: string } = {}): Promise<Reply> {
   const response = await fetch(`${config.supabaseUrl}${path}`, {
     method,
@@ -48,8 +78,7 @@ export async function api(method: string, path: string, options: { token?: strin
 }
 
 export async function signIn(label: Account) {
-  const accounts = config.accounts as unknown as Record<Account, { email: string; password: string }>
-  const reply = await api('POST', '/auth/v1/token?grant_type=password', { body: accounts[label] })
+  const reply = await api('POST', '/auth/v1/token?grant_type=password', { body: syntheticAccounts()[label] })
   expect(reply.status, `login ${label}`).toBe(200)
   return (reply.body as { access_token: string }).access_token
 }

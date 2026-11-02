@@ -59,6 +59,7 @@ Para volver a validar un reporte sin ejecutar nada: `back/.venv/bin/python datab
 - Cualquier `supabase.co`, cualquier `project_ref` declarado y cualquier destino que no sea `http` en `localhost`, `127.0.0.1` o `::1`, con puerto, sin usuario, ruta ni consulta.
 - Una clave administrativa, un JWT de otro rol o una cuenta que no sea `@example.test`.
 - Un servidor de otro commit o que apunte a un proyecto remoto, según `/api/build-info`.
+- Una redirección. Ninguna solicitud del runner ni de la campaña sigue un `Location`: el destino se valida una vez, y una respuesta 30x es un fallo, sin tocar un segundo destino. Vale para `/api/build-info`, la Data API, las acciones y el inicio de sesión del SDK. Por eso la campaña no usa `cookieFor` ni `registerBatch` de `local-review`, que sí las siguen. Una prueba de código exige `redirect: 'manual'` en cada `fetch`.
 
 **Al terminar.** Aprueba solo si se cumple todo esto, y si no informa todo lo que falló:
 
@@ -66,7 +67,7 @@ Para volver a validar un reporte sin ejecutar nada: `back/.venv/bin/python datab
 - Cada caso `passed`, con conteos de N aprobadas, 0 fallidas y 0 omitidas. Vitest sale con 0 cuando un caso falta o se omite: por eso el validador no confía en su código de salida.
 - SHA completo, árbol limpio, servidor del mismo commit y el hash del archivo de pruebas.
 
-**Salida.** `review.json` y `review.xml` (JUnit, con el SHA y el entorno en `properties`; un caso faltante aparece como fallido), `summary.md`, y los `tests.json`, `tests.xml` y `tests.log` de Vitest. Todas pasan por una limpieza de claves y referencias prohibidas, porque un fallo de Vitest puede citar lo que comparó.
+**Salida.** `review.json` y `review.xml` (JUnit, con el SHA y el entorno en `properties`; un caso faltante aparece como fallido, y todo rechazo del runner agrega el caso fallido `VALIDADOR: rechazo del runner`, aunque cada resultado individual diga `passed`), `summary.md`, y los `tests.json`, `tests.xml` y `tests.log` de Vitest. Todas pasan por una limpieza de claves y referencias prohibidas, porque un fallo de Vitest puede citar lo que comparó.
 
 ## Casos
 
@@ -106,8 +107,10 @@ Sobre la base local recién sembrada y `next start` del mismo commit: 75 de 75 a
 Defectos reinyectados, ninguno aceptado:
 
 - **Campaña y destino, 9 rechazados:** falta un caso, un caso omitido, un caso `todo`, URL del original y de testing, `project_ref` del original y de testing, referencia en una variable auxiliar y `http-base` remota. En los tres primeros Vitest sale con 0 y es el validador el que rechaza. En los seis de destino Vitest no llega a lanzarse.
-- **Autorización en la base, 14 detectados:** inserción directa, update y delete de clientes, sin trigger append-only, operador que aprueba, supervisor que importa, `tp_operator` que registra, definidor asumible, RLS de lectura abierta, función con la sesión, motivo legible, corte sin verificar, autorreferencia sin verificar, membresía inactiva válida y `service_role` que escribe.
-- **Aplicación, 2 detectados:** `tp_operator` con `decision:record` en la DAL y acción que acepta campos extra.
+- **Autorización en la base, 37 detectados,** de a uno sobre base recién sembrada. Por ejemplo: inserción directa, update y delete de clientes, sin trigger append-only, operador que aprueba, supervisor que importa, `tp_operator` que registra, definidor asumible, RLS de lectura abierta, motivo legible, corte sin verificar y autorreferencia sin verificar.
+- **Aplicación, 4 detectados:** `tp_operator`, `consulta` e `importador` con `decision:record` en la DAL, y acción que acepta campos extra.
+
+65 de los 75 casos se pusieron en rojo con al menos un mutante, algunos solo en cascada. Los otros 10 son firmas de PostgREST, caminos positivos de los que depende el `beforeAll` y comprobaciones del estado de la base: el detalle está en la evidencia.
 
 ## Para reutilizar el runner
 

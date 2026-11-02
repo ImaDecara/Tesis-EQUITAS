@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { ReviewAccount } from '../local-review/config'
-import { actionIds, approvals, BASE, config, cookieFor, post, READY_CHECKLIST, reviews, sql } from '../local-review/http-support'
+import { actionIds, approvals, config, post, READY_CHECKLIST, reviews, sql } from '../local-review/http-support'
 import {
   ACCOUNTS, api, approvalBody, AS_OF, batchBody, createdId, DECISION_TABLES, expectCode, expectRejected, INTENSE, INTERVENTION, MISSING_ID, OBJECT, proposalBody,
-  publishCutoff, readReason, recordApproval, recordBatch, recordReview, reviewBody, rowCounts, signIn, signJwt, sqlError, tamperRole, TENANT, TP_OPERATOR, USER,
+  publishCutoff, readBuildInfo, readReason, recordApproval, recordBatch, recordReview, reviewBody, rowCounts, sessionCookie as cookie, signIn, signJwt, sqlError, tamperRole, TENANT, TP_OPERATOR, USER,
   withoutWrites, type Account,
 } from './support'
 
@@ -63,8 +62,6 @@ async function serverShown(debtor: number, cookie: string) {
   return { current, expected: { asOf: current.asOf, rulesVersion: current.rulesVersion, inputsHash: current.inputsHash } }
 }
 
-const cookie = (label: Account, tenant?: string) => cookieFor(label as ReviewAccount, tenant)
-
 beforeAll(async () => {
   initialCounts = rowCounts()
   ids = actionIds()
@@ -89,8 +86,7 @@ describe('precondiciones', () => {
     expect(sql(`select count(*) from supabase_migrations.schema_migrations where version in ('20261030100000', '20261102120000')`)).toBe('2')
     expect(sql(`select count(*) from auth.users where email not like '%@example.test'`), 'solo cuentas sinteticas').toBe('0')
     expect(sql(`select count(*) from public.tenant where id in (${TENANT.A}, ${TENANT.B}, ${TENANT.INACTIVE})`)).toBe('3')
-    const build = await (await fetch(`${BASE}/api/build-info`)).json() as { supabaseProjectRef: unknown }
-    expect(build.supabaseProjectRef, 'el servidor probado no apunta a un proyecto remoto').toBeNull()
+    expect((await readBuildInfo()).supabaseProjectRef, 'el servidor probado no apunta a un proyecto remoto').toBeNull()
   })
 })
 

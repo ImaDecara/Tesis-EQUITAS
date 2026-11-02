@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -33,7 +34,17 @@ FIXTURE = json.loads((ROOT / 'quality/supabase-testing.json').read_text(encoding
 PROHIBITED_REFS = (FIXTURE['original_project_ref'], FIXTURE['project_ref'])
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '::1')
 VITEST_TIMEOUT_SECONDS = 600
-OPEN_URL = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+JUNIT_REJECTION_CASE = 'VALIDADOR: rechazo del runner'
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """El destino se valida una vez: un Location no puede cambiarlo."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPEN_URL = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open
 
 CASE_ID = re.compile(r'^([A-Z]+(?:-[A-Z]+)*-\d{2}): \S')
 SHA_FORMAT = re.compile(r'^[0-9a-f]{40}$')
@@ -253,6 +264,11 @@ def read_build_info(http_base):
     try:
         with OPEN_URL(f'{http_base}/api/build-info', timeout=15) as response:
             return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        error.close()
+        if 300 <= error.code < 400:
+            raise ValueError('El servidor local redirigio /api/build-info; no se siguen redirecciones.') from error
+        raise ValueError('El servidor local no responde en /api/build-info.') from error
     except (OSError, ValueError) as error:
         raise ValueError('El servidor local no responde en /api/build-info.') from error
 
@@ -298,10 +314,12 @@ def junit_document(report, campaign):
     known = {CASE_ID.match(case['name']).group(1) for case in cases if CASE_ID.match(case['name'])}
     # Un rechazo antes de ejecutar no queda como 0 fallas: todo lo que no tiene resultado es un fallo.
     missing = sorted(campaign.required_cases - known)
-    failed = sum(case['status'] == 'failed' for case in cases) + len(missing)
+    # Un rechazo global (duplicado, conteos, procedencia) no se ve caso por caso: sin esto, el XML quedaria en verde.
+    rejected = not report['passed']
+    failed = sum(case['status'] == 'failed' for case in cases) + len(missing) + rejected
     skipped = sum(case['status'] not in ('passed', 'failed') for case in cases)
     root = ET.Element('testsuites', name=f'{campaign.ticket} {campaign.name}')
-    suite = ET.SubElement(root, 'testsuite', name=campaign.name, tests=str(len(cases) + len(missing)), failures=str(failed),
+    suite = ET.SubElement(root, 'testsuite', name=campaign.name, tests=str(len(cases) + len(missing) + rejected), failures=str(failed),
                           skipped=str(skipped), errors='0', timestamp=report['started_at_utc'])
     properties = ET.SubElement(suite, 'properties')
     environment = report['environment']
@@ -319,6 +337,9 @@ def junit_document(report, campaign):
     for identifier in missing:
         element = ET.SubElement(suite, 'testcase', classname=campaign.name, name=f'{identifier}: faltante')
         ET.SubElement(element, 'failure', message='Caso del inventario sin resultado')
+    if rejected:
+        element = ET.SubElement(suite, 'testcase', classname=campaign.name, name=JUNIT_REJECTION_CASE)
+        ET.SubElement(element, 'failure', message=' '.join(report['report_errors']) or 'La campana no aprobo.')
     return ET.tostring(root, encoding='unicode')
 
 
