@@ -69,13 +69,19 @@ def derive_lot(destination: Path, extra_cases: tuple[str, ...] = (), *, cabecera
     return destination
 
 
-def municipio_b_mapping(destination: Path) -> Path:
-    """El municipio B exige perfil explícito (contrato de origen §2); catálogos iguales a los del manifiesto."""
+def synthetic_profile(destination: Path, **updates) -> Path:
+    """Perfil explícito de la fixture, con su vigencia de contactos, para probar lo que un perfil puede declarar."""
     base = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
-    base['municipio'] = 'municipio-sintetico-b'
-    path = destination / 'perfil-b.json'
+    base['vigencia_contactos'] = json.loads((FIXTURE / 'contactos-vigencia.json').read_text(encoding='utf-8'))['contactos']
+    base.update(updates)
+    path = destination / 'perfil.json'
     path.write_text(json.dumps(base, ensure_ascii=False), encoding='utf-8')
     return path
+
+
+def municipio_b_mapping(destination: Path) -> Path:
+    """El municipio B exige perfil explícito (contrato de origen §2); catálogos iguales a los del manifiesto."""
+    return synthetic_profile(destination, municipio='municipio-sintetico-b', vigencia_contactos=[])
 
 
 def _amount(text: str) -> Decimal:

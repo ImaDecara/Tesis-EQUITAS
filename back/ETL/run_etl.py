@@ -1,11 +1,9 @@
 import argparse
 import sys
 from collections import Counter
-from collections.abc import Hashable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-
-import pandas as pd
 
 from ETL.config import ETLError, get_import_credentials, get_settings, settings
 from ETL.extract import (
@@ -63,18 +61,6 @@ IMPORT_SOURCE = "ETL_CLI"
 STATUS_VALIDATED = "VALIDADO"
 STATUS_PUBLISHED = "PUBLICADO"
 STATUS_FAILED = "FALLIDO"
-
-
-# Convierte una fila de pandas a dict[str, Any], asegurando que las claves sean strings.
-def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
-    return {str(key): value for key, value in row.items()}
-
-
-# Convierte un DataFrame a lista de diccionarios con claves string.
-# Esto es útil para evitar problemas de tipo de clave si el DataFrame tiene columnas con nombres que no son strings.
-def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
-    raw_records = dataframe.to_dict(orient="records")
-    return [row_to_str_dict(row) for row in raw_records]
 
 
 # Función principal del ETL.

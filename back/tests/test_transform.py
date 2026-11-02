@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pandas as pd
 import pytest
+from oracle_lots import AS_OF, FIXTURE
 
 from ETL.transform import (
     SemanticRejection,
@@ -37,7 +38,7 @@ from ETL.transform import (
     resolve_origin_state,
     with_catalog_ids,
 )
-from ETL.validate_source import ValidationError, load_contract, validate_contract
+from ETL.validate_source import SourceTable, ValidationError, load_contract, load_mapping, validate_batch
 
 CUT_OFF = date(2026, 9, 30)
 STATES = {'NOTD_ESTA_id': {'10': 'PENDIENTE', '20': 'PAGADA', '30': 'ANULADA', '40': 'SUSPENDIDA', '99': 'UNKNOWN'},
@@ -250,8 +251,9 @@ def test_tipo_de_tributo_no_acepta_id_no_canonico():
 def test_contrato_sin_el_mapa_de_estados_completo_se_rechaza(mutation):
     contract = load_contract()
     mutation(contract['catalogos'])
-    with pytest.raises(ValidationError, match='CONFIGURACION_INVALIDA'):
-        validate_contract(contract)
+    empty = dict.fromkeys(('cabecera', 'detalle'), SourceTable([], []))
+    with pytest.raises(ValidationError, match='^CONFIGURACION_INVALIDA$'):
+        validate_batch(empty, load_mapping(FIXTURE), contract, AS_OF)
 
 
 def test_claves_de_catalogo_se_cambian_por_id_y_faltante_falla():

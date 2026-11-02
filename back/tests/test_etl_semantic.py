@@ -29,6 +29,7 @@ from oracle_lots import (
     object_by_case,
     oracle,
     persisted_mismatches,
+    synthetic_profile,
 )
 
 from ETL import config, load, run_etl, transform
@@ -185,12 +186,16 @@ def check_counts(value):
     assert len(json.dumps(value)) <= 16384
 
 
-@pytest.fixture
-def database(monkeypatch, tmp_path):
+def entorno_vacio(monkeypatch, tmp_path):
     for name in tuple(os.environ):
         if name.startswith(('SUPABASE_', 'EQUITAS_')):
             monkeypatch.delenv(name)
     monkeypatch.setattr(config, 'ENV_PATH', tmp_path / 'sin-credenciales.env')
+
+
+@pytest.fixture
+def database(monkeypatch, tmp_path):
+    entorno_vacio(monkeypatch, tmp_path)
     for name, value in (('EQUITAS_TARGET_ENV', 'local'), ('SUPABASE_URL', 'http://127.0.0.1:54321'),
                         ('SUPABASE_SERVICE_ROLE_KEY', SERVICE_KEY), ('SUPABASE_ANON_KEY', PUBLIC_KEY),
                         ('EQUITAS_IMPORT_SERVER_JWT', IMPORT_JWT), ('EQUITAS_IMPORT_ACTOR_USER', str(ACTOR))):
@@ -359,13 +364,7 @@ def test_estado_suspendido_y_demas_estados_de_origen_no_se_vuelven_vencida(datab
 def test_edades_y_vencida_dependen_del_corte_declarado_y_no_del_reloj(database, tmp_path, monkeypatch):
     expected = object_by_case('vencimiento-posterior-al-corte')
     lot = derive_lot(tmp_path / 'corte')
-    mapping = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
-    vigencia = json.loads((FIXTURE / 'contactos-vigencia.json').read_text(encoding='utf-8'))['contactos']
-    mapping['vigencia_contactos'] = vigencia
-    mapping['fecha_corte'] = '2031-01-01'
-    profile_path = tmp_path / 'perfil-2031.json'
-    profile_path.write_text(json.dumps(mapping, ensure_ascii=False), encoding='utf-8')
-    execute(lot, cut_off='2031-01-01', mapping=profile_path)
+    execute(lot, cut_off='2031-01-01', mapping=synthetic_profile(tmp_path, fecha_corte='2031-01-01'))
     debtor, debts = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
     names = {identifier: key for key, identifier in CATALOGS['debt_status'].items()}
     assert [names[row['status']] for row in debts] == ['OVERDUE']
@@ -408,11 +407,9 @@ def test_objeto_sin_obligaciones_no_inventa_antiguedad(database, tmp_path):
 
 def test_tipo_de_objeto_sale_del_mapa_declarado_y_no_del_codigo(database, tmp_path):
     lot = derive_lot(tmp_path / 'mapa')
-    mapping = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
-    mapping['catalogos']['Bien_Tipo_Id'] = {'1': 'AGUA', '3': 'INMUEBLE', '6': 'RODADO'}
-    path = tmp_path / 'perfil.json'
-    path.write_text(json.dumps(mapping, ensure_ascii=False), encoding='utf-8')
-    execute(lot, mapping=path)
+    catalogos = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['catalogos']
+    catalogos['Bien_Tipo_Id'] = {'1': 'AGUA', '3': 'INMUEBLE', '6': 'RODADO'}
+    execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
     expected = object_by_case('base-valido')
     types = {row['type'] for row in database.tables['debtor'] if row['external_id'] == int(expected['cuenta'])}
     assert CATALOGS['debtor_type']['INMUEBLE'] in types
@@ -437,12 +434,7 @@ def test_detalle_sin_columnas_opcionales_se_enlaza_por_clave_de_agrupacion(datab
 
 def test_alias_de_columnas_del_perfil_llegan_a_la_carga(database, tmp_path):
     lot = derive_lot(tmp_path / 'alias', detail_renames={'NOTD_totalActualizado': 'importe_exportado'})
-    mapping = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
-    mapping['columnas'] = {'detalle': {'NOTD_totalActualizado': 'importe_exportado'}}
-    mapping['vigencia_contactos'] = json.loads((FIXTURE / 'contactos-vigencia.json').read_text(encoding='utf-8'))['contactos']
-    path = tmp_path / 'perfil.json'
-    path.write_text(json.dumps(mapping, ensure_ascii=False), encoding='utf-8')
-    execute(lot, mapping=path)
+    execute(lot, mapping=synthetic_profile(tmp_path, columnas={'detalle': {'NOTD_totalActualizado': 'importe_exportado'}}))
     expected = accepted_objects()
     (lot / 'detalle.tsv').write_text((lot / 'detalle.tsv').read_text(encoding='utf-8').replace('importe_exportado', 'NOTD_totalActualizado'), encoding='utf-8')
     assert persisted_mismatches(database.tables, expected, CATALOGS, lot) == []
@@ -454,12 +446,8 @@ def test_lote_csv_con_perfil_explicito_se_publica_igual(database, tmp_path):
         rows = list(csv.reader((lot / f'{name}.tsv').read_text(encoding='utf-8').splitlines(), delimiter='\t'))
         with (lot / f'{name}.csv').open('w', encoding='utf-8', newline='') as stream:
             csv.writer(stream, delimiter=';').writerows(rows)
-    mapping = json.loads((FIXTURE.parents[2].parent / 'contracts/source-mapping.sintetico-v1.json').read_text(encoding='utf-8'))
-    mapping['formato'] = {**mapping['formato'], 'tipo': 'csv', 'separador': ';'}
-    mapping['vigencia_contactos'] = json.loads((FIXTURE / 'contactos-vigencia.json').read_text(encoding='utf-8'))['contactos']
-    path = tmp_path / 'perfil-csv.json'
-    path.write_text(json.dumps(mapping, ensure_ascii=False), encoding='utf-8')
-    execute(lot, mapping=path)
+    formato = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['formato']
+    execute(lot, mapping=synthetic_profile(tmp_path, formato={**formato, 'tipo': 'csv', 'separador': ';'}))
     assert persisted_mismatches(database.tables, accepted_objects(), CATALOGS, lot) == []
     assert database.batches[0]['p_file_hashes']['detalle'] == hashlib.sha256((lot / 'detalle.csv').read_bytes()).hexdigest()
 
@@ -605,39 +593,22 @@ def test_error_de_estructura_registra_fallido_con_hashes(database, tmp_path):
     assert database.batches[-1]['p_file_hashes']['detalle']
 
 
-def test_rechazo_del_registro_de_lote_detiene_la_carga_con_codigo_estable(database, tmp_path, monkeypatch):
-    def rechazar(url, *, headers, json, timeout, **_):  # noqa: A002, ARG001
-        return httpx.Response(400, json={'message': 'ROLE_NOT_ALLOWED', 'details': 'NOMBRE_SINTETICO_A026'},
-                              request=httpx.Request('POST', url))
+@pytest.mark.parametrize(('status', 'body', 'code'), [
+    (400, {'message': 'ROLE_NOT_ALLOWED', 'details': 'NOMBRE_SINTETICO_A026'}, 'ROLE_NOT_ALLOWED'),
+    (400, {'message': 'INVALID_IMPORT_BATCH:import_batch_counts_format'}, 'INVALID_IMPORT_BATCH:import_batch_counts_format'),
+    (500, {'message': 'NOMBRE_SINTETICO_A026'}, 'IMPORT_BATCH_REJECTED'),
+    (403, None, 'IMPORT_BATCH_REJECTED'),
+])
+def test_rechazo_del_registro_detiene_la_carga_con_codigo_estable(database, tmp_path, monkeypatch, status, body, code):
+    def rechazar(url, **_):
+        return httpx.Response(status, json=body, request=httpx.Request('POST', url))
 
     monkeypatch.setattr(load.httpx, 'post', rechazar)
     with pytest.raises(ETLError) as error:
         execute(derive_lot(tmp_path / 'rechazo'))
-    assert error.value.code == 'ROLE_NOT_ALLOWED'
+    assert error.value.code == code
     assert 'NOMBRE_SINTETICO_A026' not in str(error.value)
     assert database.cartera_rows() == 0
-
-
-def test_mensaje_desconocido_del_registro_no_se_propaga(database, tmp_path, monkeypatch):
-    def rechazar(url, *, headers, json, timeout, **_):  # noqa: A002, ARG001
-        return httpx.Response(500, json={'message': 'NOMBRE_SINTETICO_A026'}, request=httpx.Request('POST', url))
-
-    monkeypatch.setattr(load.httpx, 'post', rechazar)
-    with pytest.raises(ETLError) as error:
-        execute(derive_lot(tmp_path / 'rechazo'))
-    assert error.value.code == 'IMPORT_BATCH_REJECTED'
-    assert 'NOMBRE_SINTETICO_A026' not in str(error.value)
-
-
-def test_el_error_de_lote_mal_formado_conserva_el_nombre_de_la_restriccion(database, tmp_path, monkeypatch):
-    def rechazar(url, *, headers, json, timeout, **_):  # noqa: A002, ARG001
-        return httpx.Response(400, json={'message': 'INVALID_IMPORT_BATCH:import_batch_counts_format'},
-                              request=httpx.Request('POST', url))
-
-    monkeypatch.setattr(load.httpx, 'post', rechazar)
-    with pytest.raises(ETLError) as error:
-        execute(derive_lot(tmp_path / 'rechazo'))
-    assert error.value.code == 'INVALID_IMPORT_BATCH:import_batch_counts_format'
 
 
 # ---------------------------------------------------------------- guardias de la CLI
@@ -724,10 +695,7 @@ def test_archivo_que_cambia_durante_la_lectura_se_rechaza(database, tmp_path, mo
 
 
 def test_dry_run_con_corte_valida_sin_escribir_ni_exigir_credenciales(monkeypatch, tmp_path, capsys):
-    for name in tuple(os.environ):
-        if name.startswith(('SUPABASE_', 'EQUITAS_')):
-            monkeypatch.delenv(name)
-    monkeypatch.setattr(config, 'ENV_PATH', tmp_path / 'sin-credenciales.env')
+    entorno_vacio(monkeypatch, tmp_path)
     lot = derive_lot(tmp_path / 'seco')
     run_etl.run_etl(str(lot), cut_off=AS_OF)
     salida = capsys.readouterr()
@@ -737,10 +705,7 @@ def test_dry_run_con_corte_valida_sin_escribir_ni_exigir_credenciales(monkeypatc
 
 
 def test_dry_run_de_un_lote_bloqueado_termina_con_codigo(monkeypatch, tmp_path, capsys):
-    for name in tuple(os.environ):
-        if name.startswith(('SUPABASE_', 'EQUITAS_')):
-            monkeypatch.delenv(name)
-    monkeypatch.setattr(config, 'ENV_PATH', tmp_path / 'sin-credenciales.env')
+    entorno_vacio(monkeypatch, tmp_path)
     monkeypatch.setattr(sys, 'argv', ['etl', '--folder', str(FIXTURE), '--cut-off', AS_OF])
     with pytest.raises(SystemExit) as exit_info:
         run_etl.main()
