@@ -128,8 +128,9 @@ class FakeQuery:
                 row.update(json.loads(json.dumps(payload)))
             return SimpleNamespace(data=[dict(row) for row in matches])
         if self.page:
-            # Como la Data API: corta en su máximo de filas aunque la página pedida sea mayor.
-            matches = sorted(matches, key=lambda row: row[self.sort_column])[self.page[0]:self.page[1] + 1][:self.database.max_rows]
+            matches = sorted(matches, key=lambda row: row[self.sort_column])[self.page[0]:self.page[1] + 1]
+        # Como la Data API: pida lo que pida, corta en su máximo de filas sin avisar.
+        matches = matches[:self.database.max_rows]
         return SimpleNamespace(data=[self.as_data_api(row) for row in matches])
 
     def as_data_api(self, row):
@@ -151,6 +152,8 @@ class FakeDatabase:
         self.fail_on = None
         self.rpc_outcomes = {}
         self.max_rows = 1000
+        self.recomputed = []
+        self.recompute_response = None
         self.writes = 0
         self.updates = 0
         self.next_id = 1000
@@ -185,7 +188,7 @@ class FakeDatabase:
         self.tables.setdefault(table, []).append(row)
         return dict(row)
 
-    def rpc(self, url, *, headers, json, timeout, **_):  # noqa: A002
+    def post_rpc(self, url, *, headers, json, timeout, **_):  # noqa: A002
         assert url == 'http://127.0.0.1:54321/rest/v1/rpc/record_import_batch'
         self.rpc_headers.append(headers)
         body = json
@@ -211,6 +214,48 @@ class FakeDatabase:
             return httpx.Response(200, text='no es json', request=httpx.Request('POST', url))
         return httpx.Response(200, json={'batch_id': self.next_id, 'created': True},
                               request=httpx.Request('POST', url))
+
+    # Como PostgREST: un objeto JSON, no filas. La paridad con la función SQL real se exige en tests_real/test_etl_v1_load.py.
+    def rpc(self, name, params):
+        assert name == 'recompute_debtor_profiles'
+        return SimpleNamespace(execute=lambda: SimpleNamespace(data=self.recompute(params)))
+
+    def recompute(self, params):
+        self.recomputed.append(sorted(params['p_object_ids']))
+        if self.fail_on == 'debtor_profile':
+            raise FakeError('fallo inyectado NOMBRE_SINTETICO_A026')
+        if self.recompute_response is not None:
+            return self.recompute_response
+        status_keys = {value: key for key, value in self.catalogs['debt_status'].items()}
+        cut_off = date.fromisoformat(params['p_as_of'])
+        outcome = Counter({'insertadas': 0, 'actualizadas': 0, 'sin_cambios': 0, 'detalles_actualizados': 0})
+        for debtor in sorted(set(params['p_object_ids'])):
+            debts = [{**row, 'status': status_keys[row['status']]} for row in self.tables['debt'] if row['debtor'] == debtor]
+            relations = [row for row in self.tables['debtor_person'] if row['debtor'] == debtor]
+            people = {row['person'] for row in relations if row['active']}
+            contacts = {(row['person'], row['type'], row['value']) for row in self.tables['debtor_contact']
+                        if row['person'] in people and row['active']}
+            wanted = transform.build_debtor_profile_payload(debtor, debts, len(people),
+                                                            len(contacts) if params['p_contact_columns_integrated'] else None, cut_off)
+            profile = next((row for row in self.tables['debtor_profile'] if row['debtor'] == debtor), None)
+            if profile is None:
+                profile = self.insert('debtor_profile', wanted)
+                outcome['insertadas'] += 1
+            elif all(load._same_value(profile.get(column), value, numeric=column in NUMERIC['debtor_profile'])
+                     for column, value in wanted.items() if column != 'profile_generated_at'):
+                outcome['sin_cambios'] += 1
+            else:
+                self.check('debtor_profile', wanted)
+                profile.update(json.loads(json.dumps(wanted)))
+                self.updates += 1
+                outcome['actualizadas'] += 1
+            for detail in self.tables['debtor_profile_detail']:
+                relation = next((row for row in relations if row['person'] == detail['person']), None)
+                if detail['debtor_profile'] == profile['id'] and relation and detail['active'] != relation['active']:
+                    detail['active'] = relation['active']
+                    self.updates += 1
+                    outcome['detalles_actualizados'] += 1
+        return dict(outcome)
 
     def cartera_rows(self):
         return sum(len(self.tables[name]) for name in CARTERA)
@@ -243,12 +288,13 @@ def database(monkeypatch, tmp_path):
         monkeypatch.setenv(name, value)
     fake = FakeDatabase()
     monkeypatch.setattr(load, 'supabase', fake)
-    monkeypatch.setattr(load.httpx, 'post', fake.rpc)
+    monkeypatch.setattr(load.httpx, 'post', fake.post_rpc)
     return fake
 
 
-def execute(folder, cut_off=AS_OF, mapping=None):
-    run_etl.run_etl(str(folder), execute=True, cut_off=cut_off, mapping_path=None if mapping is None else str(mapping))
+def execute(folder, cut_off=AS_OF, mapping=None, absent_policy=run_etl.ABSENT_REJECT):
+    run_etl.run_etl(str(folder), execute=True, cut_off=cut_off, mapping_path=None if mapping is None else str(mapping),
+                    absent_policy=absent_policy)
 
 
 def debts_of(database, bien_tipo, cuenta):
@@ -705,7 +751,7 @@ def test_clave_de_catalogo_faltante_falla_antes_de_escribir(database, tmp_path, 
     without = {**CATALOGS, 'debt_status': {k: v for k, v in CATALOGS['debt_status'].items() if k != 'SUSPENDED'}}
     fake = FakeDatabase(without)
     monkeypatch.setattr(load, 'supabase', fake)
-    monkeypatch.setattr(load.httpx, 'post', fake.rpc)
+    monkeypatch.setattr(load.httpx, 'post', fake.post_rpc)
     with pytest.raises(ETLError, match='CATALOG_KEY_MISSING'):
         execute(derive_lot(tmp_path / 'catalogo'))
     assert fake.writes == 0 and fake.batches == []
@@ -1142,6 +1188,221 @@ def test_archivo_parcial_o_con_bajas_se_rechaza_sin_escribir(database, tmp_path,
     assert (event['p_status'], event['p_supersedes']) == ('FALLIDO', None)
     assert event['p_counts']['faltantes'] == missing
     assert event['p_file_hashes']['detalle'] == hashlib.sha256((lot / 'detalle.tsv').read_bytes()).hexdigest()
+
+
+CONTACT_COLUMN_BY_TYPE = {CATALOGS['contact_type']['PHONE']: 'Destinatario_Telefono', CATALOGS['contact_type']['MOBILE']: 'Destinatario_Celular',
+                          CATALOGS['contact_type']['EMAIL']: 'Destinatario_Email'}
+
+
+def _contact_row(database, person_external_id, contact_type='PHONE'):
+    person = next(row for row in database.tables['person'] if row['external_id'] == person_external_id)
+    return next(row for row in database.tables['debtor_contact']
+                if row['person'] == person['id'] and row['type'] == CATALOGS['contact_type'][contact_type])
+
+
+def _profile_of(database, target):
+    return profile_of(database, debts_of(database, target['bien_tipo_id'], target['cuenta'])[0])
+
+
+def _object_with_phone():
+    return next(item for item in accepted_objects() if item['contactos_utilizables'] >= 1 and len(item['personas']) == 1)
+
+
+def _phone_cell(item):
+    return {(item['clave_agrupacion'], None, 'Destinatario_Telefono'): ''}
+
+
+def _persons_in_lot(database):
+    return {row['id']: row['external_id'] for row in database.tables['person']}
+
+
+def test_una_politica_desconocida_se_rechaza_antes_de_leer(database, tmp_path):
+    with pytest.raises(ETLError) as error:
+        execute(tmp_path / 'no-existe', absent_policy='borrar')
+    assert error.value.code == 'ABSENT_POLICY_INVALID'
+    assert database.batches == []
+
+
+@pytest.mark.parametrize('partial', [_sin_objeto, _sin_obligacion, _sin_relacion, _cuenta_con_ceros])
+def test_conservar_publica_el_delta_sin_desactivar_e_informa_lo_ausente(database, tmp_path, partial):
+    execute(derive_lot(tmp_path / 'completo'))
+    relations = json.dumps(database.tables['debtor_person'])
+    debts = len(database.tables['debt'])
+    lot, missing = partial(tmp_path)
+    execute(lot, absent_policy=run_etl.ABSENT_KEEP)
+    validated, published = database.batches[-2:]
+    assert (validated['p_status'], published['p_status']) == ('VALIDADO', 'PUBLICADO')
+    assert validated['p_counts']['ausentes'] == published['p_counts']['ausentes'] == missing
+    assert 'bajas_relaciones' not in published['p_counts']
+    assert json.dumps(database.tables['debtor_person']).count('"active": false') == relations.count('"active": false')
+    assert len(database.tables['debt']) >= debts
+
+
+def test_una_obligacion_conservada_sigue_contando_en_el_perfil_desde_lo_persistido(database, tmp_path):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'completo'))
+    before = _profile_of(database, target)
+    wanted = {column: before[column] for column in ('total_debt_amount', 'debt_count', 'overdue_debt_amount')}
+    lot, _missing = _sin_obligacion(tmp_path)
+    execute(lot, absent_policy=run_etl.ABSENT_KEEP)
+    after = _profile_of(database, target)
+    assert {column: after[column] for column in wanted} == wanted
+
+
+def test_carga_parcial_no_altera_perfiles_ajenos(database, tmp_path):
+    target = object_by_case('base-valido')
+    execute(derive_lot(tmp_path / 'completo'))
+    target_debtor = debts_of(database, target['bien_tipo_id'], target['cuenta'])[0]['id']
+    others = json.dumps(sorted((row for row in database.tables['debtor_profile'] if row['debtor'] != target_debtor),
+                               key=lambda row: row['debtor']))
+    other_ids = {row['debtor'] for row in database.tables['debtor_profile'] if row['debtor'] != target_debtor}
+    lot, _missing = _sin_objeto(tmp_path)
+    database.recomputed.clear()
+    updates = database.updates
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert database.batches[-1]['p_status'] == 'PUBLICADO'
+    assert target_debtor not in database.recomputed[-1]
+    assert set(database.recomputed[-1]) <= other_ids
+    assert database.updates == updates
+    assert _profile_of(database, target)['active'] is True
+    assert json.dumps(sorted((row for row in database.tables['debtor_profile'] if row['debtor'] != target_debtor),
+                             key=lambda row: row['debtor'])) == others
+    assert database.batches[-1]['p_counts']['ausentes'] == {'objetos': 1}
+    assert 'bajas_relaciones' not in database.batches[-1]['p_counts']
+
+
+def test_dar_de_baja_una_relacion_es_explicita_informada_y_reversible(database, tmp_path):
+    item = object_by_case('dos-personas-un-objeto')
+    full = derive_lot(tmp_path / 'completo')
+    execute(full)
+    profile = _profile_of(database, item)
+    assert profile['active_person_count'] == 2
+    lot, _missing = _sin_relacion(tmp_path)
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    published = database.batches[-1]
+    assert published['p_status'] == 'PUBLICADO'
+    assert published['p_counts']['ausentes'] == {'relaciones': 1}
+    assert published['p_counts']['bajas_relaciones'] == 1
+    assert _profile_of(database, item)['active_person_count'] == 1
+    gone = [row for row in database.tables['debtor_person'] if row['active'] is False]
+    assert len(gone) == 1
+    details = [row for row in database.tables['debtor_profile_detail'] if row['person'] == gone[0]['person'] and row['debtor_profile'] == profile['id']]
+    assert [row['active'] for row in details] == [False]
+    # Lo ya dado de baja no vuelve a contar como ausente, ni con la política por defecto.
+    execute(lot)
+    assert database.batches[-1]['p_status'] == 'PUBLICADO'
+    assert 'ausentes' not in database.batches[-1]['p_counts']
+    assert [row['active'] for row in database.tables['debtor_profile_detail'] if row['id'] == details[0]['id']] == [False]
+    # Si vuelve a venir, se reactiva.
+    execute(full)
+    assert all(row['active'] for row in database.tables['debtor_person'])
+    assert _profile_of(database, item)['active_person_count'] == 2
+    assert all(row['active'] for row in database.tables['debtor_profile_detail'])
+
+
+def test_un_contacto_que_deja_de_venir_no_rechaza_y_se_informa(database, tmp_path):
+    item = _object_with_phone()
+    execute(derive_lot(tmp_path / 'completo'))
+    count = _profile_of(database, item)['available_contact_count']
+    lot = derive_lot(tmp_path / 'sin-telefono', cabecera_cells=_phone_cell(item))
+    execute(lot)
+    published = database.batches[-1]
+    assert published['p_status'] == 'PUBLICADO'
+    assert published['p_counts']['ausentes'] == {'contactos': 1}
+    assert _contact_row(database, item['personas'][0])['active'] is True
+    assert _profile_of(database, item)['available_contact_count'] == count
+    execute(lot, absent_policy=run_etl.ABSENT_KEEP)
+    assert _contact_row(database, item['personas'][0])['active'] is True
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert database.batches[-1]['p_counts']['bajas_contactos'] == 1
+    assert _contact_row(database, item['personas'][0])['active'] is False
+    assert _profile_of(database, item)['available_contact_count'] == count - 1
+    execute(lot)
+    assert 'ausentes' not in database.batches[-1]['p_counts']
+
+
+def test_un_contacto_no_se_da_de_baja_si_la_persona_lo_trae_en_otro_objeto(database, tmp_path, capsys):
+    shared = [item for item in accepted_objects() if 90015 in item['personas']]
+    assert len(shared) >= 2
+    execute(derive_lot(tmp_path / 'completo'))
+    contact = next(row for row in database.tables['debtor_contact']
+                   if _persons_in_lot(database)[row['person']] == 90015)
+    lot = derive_lot(tmp_path / 'un-objeto-sin', cabecera_cells={(shared[0]['clave_agrupacion'], None, CONTACT_COLUMN_BY_TYPE[contact['type']]): ''})
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert next(row for row in database.tables['debtor_contact'] if row['id'] == contact['id'])['active'] is True
+    assert 'contactos' not in database.batches[-1]['p_counts'].get('ausentes', {})
+    assert contact['value'] not in capsys.readouterr().out
+
+
+def test_sin_observacion_no_hay_contacto_ausente(database, tmp_path):
+    item = _object_with_phone()
+    execute(derive_lot(tmp_path / 'completo'))
+    # Sin la columna en el archivo no se observó nada, y una fila no aceptada tampoco se leyó.
+    lot = derive_lot(tmp_path / 'sin-columna', drop_header_columns=('Destinatario_Telefono',))
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert 'contactos' not in database.batches[-1]['p_counts'].get('ausentes', {})
+    assert _contact_row(database, item['personas'][0])['active'] is True
+    assert _profile_of(database, item)['available_contact_count'] >= 1
+    lot = derive_lot(tmp_path / 'sin-contactos', drop_header_columns=('Destinatario_Telefono', 'Destinatario_Celular', 'Destinatario_Email'))
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert _profile_of(database, item)['available_contact_count'] is None
+    assert _contact_row(database, item['personas'][0])['active'] is True
+
+
+def test_una_persona_con_fila_no_aceptada_no_pierde_contactos(database, tmp_path):
+    shared = [item for item in accepted_objects() if 90015 in item['personas']]
+    execute(derive_lot(tmp_path / 'completo'))
+    contact = next(row for row in database.tables['debtor_contact'] if _persons_in_lot(database)[row['person']] == 90015)
+    cells = {(item['clave_agrupacion'], None, CONTACT_COLUMN_BY_TYPE[contact['type']]): '' for item in shared}
+    lot = derive_lot(tmp_path / 'cuarentena', cabecera_cells=cells,
+                     detalle_cells={(shared[0]['clave_agrupacion'], None, 'NOTD_capital'): 'sin-monto'})
+    execute(lot, absent_policy=run_etl.ABSENT_DEACTIVATE)
+    assert database.batches[-1]['p_status'] == 'PUBLICADO'
+    assert next(row for row in database.tables['debtor_contact'] if row['id'] == contact['id'])['active'] is True
+
+
+def test_una_respuesta_invalida_del_recalculo_termina_fallido(database, tmp_path, capsys):
+    database.recompute_response = {'insertadas': 'NOMBRE_SINTETICO_A026'}
+    with pytest.raises(ETLError) as error:
+        execute(derive_lot(tmp_path / 'lote'))
+    assert error.value.code == 'PROFILE_RECOMPUTE_RESPONSE_INVALID'
+    assert [event['p_status'] for event in database.batches] == ['VALIDADO', 'FALLIDO']
+    salida = capsys.readouterr()
+    assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
+
+
+def _debt_payloads(total):
+    return [{'debtor': 1 + index % 2, 'external_id': 500_000 + index, 'type': 'T', 'description': None, 'original_amount': '10.00',
+             'current_amount': '12.50', 'currency': 401, 'issue_date': None, 'due_date': '2026-01-15', 'last_collection_date': None,
+             'period': None, 'status': 202} for index in range(total)]
+
+
+def test_mas_de_1000_deudas_existentes_en_un_lote_se_leen_todas(database):
+    payloads = _debt_payloads(1203)
+    assert load.load_debts_bulk(payloads, batch_size=2000)['inserted'] == 1203
+    assert database.max_rows == 1000
+    existing = load.fetch_existing_debts_by_key(payloads)
+    assert len(existing) == 1203
+    assert isinstance(existing[(payloads[-1]['debtor'], payloads[-1]['external_id'])]['current_amount'], str), 'Importes como texto exacto'
+    writes, updates = database.writes, database.updates
+    summary = load.load_debts_bulk(payloads, batch_size=2000)
+    assert (summary['inserted'], summary['updated'], summary['unchanged']) == (0, 0, 1203)
+    assert (database.writes, database.updates) == (writes, updates)
+    # El último de todos, más allá del máximo de la Data API: un centavo se detecta y se escribe solo esa fila.
+    changed = [dict(row) for row in payloads]
+    changed[-1]['current_amount'] = '12.51'
+    summary = load.load_debts_bulk(changed, batch_size=2000)
+    assert (summary['inserted'], summary['updated'], summary['unchanged']) == (0, 1, 1202)
+    assert sum(row['current_amount'] == '12.51' for row in database.tables['debt']) == 1
+
+
+def test_la_lectura_de_deudas_existentes_es_paginada_con_el_lote_por_defecto(database, monkeypatch):
+    payloads = _debt_payloads(1203)
+    assert load.load_debts_bulk(payloads)['inserted'] == 1203
+    database.max_rows = 7
+    monkeypatch.setattr(load, 'READ_IDS_PER_REQUEST', 1)
+    summary = load.load_debts_bulk(payloads)
+    assert (summary['inserted'], summary['unchanged']) == (0, 1203)
 
 
 def test_un_objeto_publicado_en_cuarentena_no_es_una_baja(database, tmp_path):

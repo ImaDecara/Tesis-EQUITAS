@@ -57,9 +57,9 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     def load_debtor_contact(payload: dict[str, Any]) -> None:
         state['contacts'].append(payload)
 
-    def load_debtor_profile(payload: dict[str, Any]) -> dict[str, int]:
-        state['profiles'].append(payload)
-        return {'id': 1_000 + int(payload['debtor'])}
+    def recompute_debtor_profiles(debtor_ids: Any, _as_of: Any, **_: Any) -> dict[int, int]:
+        state['profiles'].extend(debtor_ids)
+        return {debtor: 1_000 + int(debtor) for debtor in debtor_ids}
 
     def load_debtor_profile_detail(payload: dict[str, Any]) -> None:
         state['profile_details'].append(payload)
@@ -106,7 +106,7 @@ def install_fake_loaders(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(run_etl, 'load_city', load_city)
     monkeypatch.setattr(run_etl, 'load_address', load_address)
     monkeypatch.setattr(run_etl, 'load_debtor_contact', load_debtor_contact)
-    monkeypatch.setattr(run_etl, 'load_debtor_profile', load_debtor_profile)
+    monkeypatch.setattr(run_etl, 'recompute_debtor_profiles', recompute_debtor_profiles)
     monkeypatch.setattr(run_etl, 'load_debtor_profile_detail', load_debtor_profile_detail)
     monkeypatch.setattr(run_etl, 'load_debts_bulk', load_debts_bulk)
     monkeypatch.setattr(run_etl, 'resolve_catalogs', resolve_catalogs)
