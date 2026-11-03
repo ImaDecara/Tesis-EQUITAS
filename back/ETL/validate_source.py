@@ -17,6 +17,7 @@ from decimal import Decimal
 from pathlib import Path
 
 DEFAULT_CONTRACT = Path(__file__).resolve().parents[2] / 'contracts/source-contract.v1.json'
+MAPPING_SCHEMA = DEFAULT_CONTRACT.with_name('source-mapping.schema.json')
 MISSING = 'NO_INFORMADO_EN_ORIGEN'
 INVALID = 'INVALIDO'
 OBSERVED = 'OBSERVADO'
@@ -80,7 +81,7 @@ def validate_contract(contract):
     formats = c['formatos']
     require(formats['fechas'] and all((k, v) in (('dd/mm/aaaa', '%d/%m/%Y'), ('aaaa-mm-dd', '%Y-%m-%d'))
                                     for k, v in formats['fechas'].items()))
-    for key, supported in (('codificaciones', {'utf-8', 'utf-8-sig', 'cp1252'}),
+    for key, supported in (('codificaciones', {'utf-8', 'utf-8-sig', 'cp1252', 'latin-1'}),
                            ('separadores_decimales', {',', '.'}), ('separadores_miles', {'', ',', '.'}),
                            ('separadores_adaptadores', {'\\t', ',', ';', None})):
         require(isinstance(formats[key], list) and formats[key] and set(formats[key]) <= supported)
@@ -180,20 +181,83 @@ def load_contract(path=DEFAULT_CONTRACT) -> dict:
     return _read_json(path)
 
 
-def _read_json(path) -> dict:
+def _read_json(path, object_pairs_hook=None) -> dict:
     try:
-        result = json.loads(Path(path).read_text(encoding='utf-8'))
+        result = json.loads(Path(path).read_text(encoding='utf-8'), object_pairs_hook=object_pairs_hook)
         if not isinstance(result, dict):
             raise TypeError
         return result
-    except (OSError, UnicodeError, ValueError, TypeError):
+    except ValidationError:
+        raise
+    except (OSError, UnicodeError, ValueError, TypeError, RecursionError):
         raise ValidationError('JSON_NO_LEIBLE') from None
+
+
+def profile_require(condition):
+    if not condition:
+        raise ValidationError('PERFIL_INVALIDO')
+
+
+def _unique_keys(pairs):
+    # Gana el último valor en JSON estándar; ningún esquema puede ver esta ambigüedad.
+    result = dict(pairs)
+    profile_require(len(result) == len(pairs))
+    return result
+
+
+def read_profile(path) -> dict:
+    """Lee un perfil JSON rechazando claves duplicadas; no lo valida contra el esquema."""
+    return _read_json(path, _unique_keys)
+
+
+def check_schema(value, spec, schema):
+    """Evalúa el subconjunto de JSON Schema usado por el esquema versionado local.
+
+    Sin dependencias, resolución remota ni coerciones. No es un validador de
+    esquemas arbitrarios: el esquema es código confiable del repositorio.
+    """
+    if '$ref' in spec:
+        return check_schema(value, schema['definitions'][spec['$ref'].split('/')[-1]], schema)
+    if 'oneOf' in spec:
+        matches = 0
+        for alternative in spec['oneOf']:
+            try:
+                check_schema(value, alternative, schema)
+                matches += 1
+            except ValidationError:
+                pass
+        profile_require(matches == 1)
+    if 'const' in spec:
+        profile_require(value == spec['const'])
+    if 'enum' in spec:
+        profile_require(value in spec['enum'])
+    if 'type' in spec:
+        profile_require(type(value) is {'object': dict, 'array': list, 'string': str}[spec['type']])
+    if isinstance(value, dict):
+        profile_require(set(spec.get('required', [])) <= set(value))
+        profile_require(len(value) >= spec.get('minProperties', 0))
+        for key, item in value.items():
+            profile_require(isinstance(key, str))
+            child = spec.get('properties', {}).get(key, spec.get('additionalProperties', True))
+            profile_require(child is not False)
+            if isinstance(child, dict):
+                check_schema(item, child, schema)
+    elif isinstance(value, list) and 'items' in spec:
+        for item in value:
+            check_schema(item, spec['items'], schema)
+    elif isinstance(value, str):
+        profile_require(len(value) >= spec.get('minLength', 0))
+        if 'pattern' in spec:
+            profile_require(re.search(spec['pattern'], value) is not None)
 
 
 def load_mapping(folder, path=None) -> dict:
     """Solo autoconfigura la fixture declarada; los otros lotes exigen mapping JSON."""
     if path is not None:
-        return _read_json(path)
+        mapping = read_profile(path)
+        schema = load_contract(MAPPING_SCHEMA)
+        check_schema(mapping, schema, schema)
+        return mapping
     folder = Path(folder)
     manifest = _read_json(folder / 'manifest.json')
     if (manifest.get('version') != 'sintetico-v1'
@@ -351,6 +415,9 @@ class _Validator:
             return source
         if self.mapping['formato']['separador'] not in ('\t', '\\t'):
             raise ValidationError('LECTOR_TSV_REQUIERE_TABULADOR')
+        if self.mapping.get('transformaciones'):
+            # Por rutas se validaría otro dato que el que después se carga.
+            raise ValidationError('LECTOR_TSV_SIN_TRANSFORMACIONES')
         rows, columns = [], []
         code = None
         try:
@@ -492,7 +559,8 @@ class _Validator:
             active = self.validity.get(key, self.mapping.get('vigencia_por_defecto', 'NO_INTEGRADO'))
             if raw.upper() in self.contract['contactos']['marcadores']:
                 contact = Cell(None, INVALID, 'CONTACTO_PLACEHOLDER')
-            elif not (re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', raw) if name == 'Destinatario_Email'
+            # Tope del RFC 5321 antes de la expresión regular, cuadrática en una celda de 32 767.
+            elif not (len(raw) <= 254 and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', raw) if name == 'Destinatario_Email'
                       else re.fullmatch(r'[+0-9() .-]+', raw) and len(re.sub(r'\D', '', raw)) >= 6):
                 contact = Cell(None, INVALID, 'CONTACTO_FORMATO_INVALIDO')
             elif active == 'INACTIVO':
@@ -732,7 +800,7 @@ class _Validator:
             presence[f'filas_{kind}'] = OBSERVED if complete else 'NO_INTEGRADO'
         amount_presence = 'NO_INTEGRADO' if structural else OBSERVED
         missing_pct_presence = 'NO_INTEGRADO' if structural else 'NO_APLICA'
-        unknown_amounts = set(missing) | {a['presencia'] for a in amounts.values() if a['valor'] is None}
+        unknown_amounts = set(missing) | ({c.presence for cells in categories.values() for c in cells} - {OBSERVED})
         missing_amount_pct_presence = ('NO_INTEGRADO' if structural else
                                       next((p for p in PRESENCE_ORDER if p in unknown_amounts), 'NO_APLICA'))
         unlinked_amount = aggregate(unlinked, 'sum')

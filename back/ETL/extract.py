@@ -1,80 +1,50 @@
-"""Lectores TSV/CSV por perfil; validación dry-run y compatibilidad con el ETL."""
+"""Lectores TSV/CSV/XLSX por perfil; validación dry-run y compatibilidad con el ETL."""
 
 import argparse
 import csv
-import re
-from dataclasses import dataclass
+import io
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
 
 from ETL.config import settings
+from ETL.readers.limits import (
+    Deadline,
+    FileLimits,
+    check_cells,
+    check_header,
+    open_source,
+    source_error,
+)
+from ETL.readers.xlsx import read_workbook
 from ETL.validate_source import (
     DEFAULT_CONTRACT,
+    MAPPING_SCHEMA,
     SourceRow,
     SourceTable,
     ValidationError,
+    check_schema,
     load_contract,
     parse_amount,
     parse_date,
+    profile_require,
+    read_profile,
     render_markdown,
     validate_batch,
 )
 
-MAPPING_SCHEMA = DEFAULT_CONTRACT.with_name('source-mapping.schema.json')
-
-
-def _profile_require(condition):
-    if not condition:
-        raise ValidationError('PERFIL_INVALIDO')
-
-
-def _check_schema(value, spec, schema):
-    """Evalúa el subconjunto de JSON Schema usado por el esquema versionado local.
-
-    Sin dependencias, resolución remota ni coerciones. No es un validador de
-    esquemas arbitrarios: el esquema es código confiable del repositorio.
-    """
-    if '$ref' in spec:
-        return _check_schema(value, schema['definitions'][spec['$ref'].split('/')[-1]], schema)
-    if 'oneOf' in spec:
-        matches = 0
-        for alternative in spec['oneOf']:
-            try:
-                _check_schema(value, alternative, schema)
-                matches += 1
-            except ValidationError:
-                pass
-        _profile_require(matches == 1)
-    if 'const' in spec:
-        _profile_require(value == spec['const'])
-    if 'enum' in spec:
-        _profile_require(value in spec['enum'])
-    if 'type' in spec:
-        _profile_require(type(value) is {'object': dict, 'array': list, 'string': str}[spec['type']])
-    if isinstance(value, dict):
-        _profile_require(set(spec.get('required', [])) <= set(value))
-        _profile_require(len(value) >= spec.get('minProperties', 0))
-        for key, item in value.items():
-            _profile_require(isinstance(key, str))
-            child = spec.get('properties', {}).get(key, spec.get('additionalProperties', True))
-            _profile_require(child is not False)
-            if isinstance(child, dict):
-                _check_schema(item, child, schema)
-    elif isinstance(value, list) and 'items' in spec:
-        for item in value:
-            _check_schema(item, spec['items'], schema)
-    elif isinstance(value, str):
-        _profile_require(len(value) >= spec.get('minLength', 0))
-        if 'pattern' in spec:
-            _profile_require(re.search(spec['pattern'], value) is not None)
+KINDS = ('cabecera', 'detalle')
 
 
 def _source_format(mapping):
-    separator = mapping['formato']['separador']
+    fmt = mapping['formato']
+    if fmt.get('tipo') == 'xlsx':
+        return 'xlsx', None
+    separator = fmt['separador']
     inferred = 'tsv' if separator in ('\t', '\\t') else 'csv'
-    kind = mapping['formato'].get('tipo', inferred)
-    _profile_require(kind == inferred)
+    kind = fmt.get('tipo', inferred)
+    profile_require(kind == inferred)
     return kind, '\t' if kind == 'tsv' else separator
 
 
@@ -82,60 +52,48 @@ def validate_source_profile(mapping, contract=None):
     """Esquema compartido con ALIGN-056 y restricciones cruzadas del motor v1."""
     contract = load_contract() if contract is None else contract
     if (isinstance(mapping, dict) and isinstance(mapping.get('formato'), dict)
-            and mapping['formato'].get('tipo', 'tsv') not in ('tsv', 'csv')):
+            and mapping['formato'].get('tipo', 'tsv') not in ('tsv', 'csv', 'xlsx')):
         raise ValidationError('FORMATO_NO_SOPORTADO')
     schema = load_contract(MAPPING_SCHEMA)
-    _check_schema(mapping, schema, schema)
+    check_schema(mapping, schema, schema)
     _source_format(mapping)
     # El motor valida el contrato, corte, alias, separadores y catálogos antes
     # de leer. Tablas vacías permiten usar esa API pública sin copiar sus reglas.
-    validate_batch(dict.fromkeys(('cabecera', 'detalle'), SourceTable([], [])),
+    validate_batch(dict.fromkeys(KINDS, SourceTable([], [])),
                    mapping, contract, mapping['fecha_corte'])
-    for kind in ('cabecera', 'detalle'):
+    for kind in KINDS:
         known = contract['archivos'][kind]['columnas']
         transformations = mapping.get('transformaciones', {}).get(kind, {})
-        _profile_require(set(transformations) <= set(known))
+        profile_require(set(transformations) <= set(known))
         for operations in transformations.values():
             for operation in operations:
                 for code in operation.get('valores', {}):
-                    _check_schema(code, schema['definitions']['texto'], schema)
+                    check_schema(code, schema['definitions']['texto'], schema)
         for catalog in mapping['catalogos'].values():
             for code in catalog:
-                _check_schema(code, schema['definitions']['texto'], schema)
+                check_schema(code, schema['definitions']['texto'], schema)
 
 
 def load_source_profile(path, contract=None):
     """Lee y valida un perfil explícito; nunca busca credenciales ni layouts."""
-    mapping = load_contract(path)
+    mapping = read_profile(path)
     validate_source_profile(mapping, contract)
     return mapping
-
-
-def _source_error(code, kind, line=0, field='*'):
-    # kind/field son nombres del contrato, nunca rutas o valores municipales.
-    raise ValidationError(f'{code}: archivo={kind}, linea={line}, campo={field}')
-
-
-def _check_cells(values, kind, line, limits):
-    if any('\x00' in value or '\n' in value or '\r' in value for value in values):
-        _source_error('ESTRUCTURA_INVALIDA', kind, line)
-    if any(len(value) > limits['celda'] for value in values):
-        _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
 
 
 def apply_source_transformations(table, kind, mapping, contract=None):
     """Copia una SourceTable, preservando encabezados físicos y líneas.
 
     El perfil debe validarse antes. No agrega columnas ni rellena faltantes.
-    ALIGN-053 puede reutilizarlo después de leer su propio formato.
     """
     contract = load_contract() if contract is None else contract
+    limits = FileLimits.from_contract(contract)
     operations = mapping.get('transformaciones', {}).get(kind, {})
     aliases = mapping.get('columnas', {}).get(kind, {})
     rows = []
     for name in operations:
         if aliases.get(name, name) not in table.columns:
-            _source_error('COLUMNA_MAPEADA_AUSENTE', kind, 1, name)
+            source_error('COLUMNA_MAPEADA_AUSENTE', kind, 1, name)
     for row in table.rows:
         values = row.values.copy()
         for name, sequence in operations.items():
@@ -151,74 +109,155 @@ def apply_source_transformations(table, kind, mapping, contract=None):
                     value = value.lower()
                 elif value.strip():
                     if value not in operation['valores']:
-                        _source_error('CODIGO_NO_MAPEADO', kind, row.line, name)
+                        source_error('CODIGO_NO_MAPEADO', kind, row.line, name)
                     value = operation['valores'][value]
             values[column] = value
-        _check_cells(values.values(), kind, row.line, contract['limites'])
+        check_cells(values.values(), kind, row.line, limits)
         rows.append(SourceRow(row.line, values))
     return SourceTable(table.columns.copy(), rows)
 
 
-def _read_delimited(path, kind, mapping, contract):
-    source_type, separator = _source_format(mapping)
-    limits = contract['limites']
-    rows = []
-    try:
-        path = Path(path)
-        if path.suffix.lower() != '.' + source_type:
-            _source_error('FORMATO_NO_SOPORTADO', kind)
-        if not path.is_file():
-            _source_error('ARCHIVO_NO_LEIBLE', kind)
-        if path.stat().st_size > limits['bytes']:
-            _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind)
-        encoding = mapping['formato']['codificacion']
-        with path.open(encoding='utf-8-sig' if encoding == 'utf-8' else encoding, newline='') as stream:
-            reader = csv.reader(stream, delimiter=separator, strict=True)
-            raw_columns = next(reader, [])
-            _check_cells(raw_columns, kind, 1, limits)
-            columns = [name.strip() for name in raw_columns]
-            if not columns or any(not name for name in columns) or len(set(columns)) != len(columns):
-                _source_error('ESTRUCTURA_INVALIDA', kind, 1)
-            if len(columns) > limits['columnas']:
-                _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, 1)
-            for values in reader:
-                _check_cells(values, kind, reader.line_num, limits)
-                if not values or (len(values) == 1 and not values[0].strip()):
-                    continue
-                line = reader.line_num
-                if len(rows) >= limits['filas']:
-                    _source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
-                if len(values) != len(columns):
-                    _source_error('ESTRUCTURA_INVALIDA', kind, line)
-                rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
-    except ValidationError:
-        raise
-    except (OSError, UnicodeError, csv.Error, TypeError, ValueError):
-        _source_error('ARCHIVO_NO_LEIBLE', kind)
+def _finish_table(table, kind, mapping, contract):
     aliases = mapping.get('columnas', {}).get(kind, {})
     for name, spec in contract['archivos'][kind]['columnas'].items():
-        if spec['requerida'] and aliases.get(name, name) not in columns:
-            _source_error('COLUMNA_OBLIGATORIA_AUSENTE', kind, 1, name)
-    return apply_source_transformations(SourceTable(columns, rows), kind, mapping, contract)
+        if spec['requerida'] and aliases.get(name, name) not in table.columns:
+            source_error('COLUMNA_OBLIGATORIA_AUSENTE', kind, 1, name)
+    # Sin operaciones, copiar las filas duplicaría el pico de memoria sin cambiar nada.
+    if not mapping.get('transformaciones', {}).get(kind):
+        return table
+    return apply_source_transformations(table, kind, mapping, contract)
 
 
-def read_source_tables(files, mapping, *, contract=None):
-    """Lee TSV/CSV según el perfil y devuelve tablas para validate_batch.
+class _BoundedLines:
+    """Líneas para csv.reader, con tope por registro: csv arma la fila entera antes de entregarla.
 
-    Ante una lectura corrupta no entrega prefijos parciales. Los errores son
-    códigos seguros con ubicación; no contienen valores ni nombres externos.
+    Con 25 MB en una sola línea, o miles de celdas multilínea, serían millones de celdas en memoria.
+    """
+
+    def __init__(self, text, kind, limit):
+        self.text = text
+        self.kind = kind
+        self.limit = limit
+        self.line = self.pending = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        chunk = self.text.readline(self.limit + 1)
+        if not chunk:
+            raise StopIteration
+        self.line += 1
+        self.pending += len(chunk)
+        if self.pending > self.limit:
+            source_error('LIMITE_ARCHIVO_EXCEDIDO', self.kind, self.line)
+        return chunk
+
+
+def _read_delimited(path, kind, mapping, contract, limits, deadline):
+    source_type, separator = _source_format(mapping)
+    encoding = mapping['formato']['codificacion']
+    rows = []
+    with open_source(path, kind, source_type, limits, encoding) as stream:
+        try:
+            text = io.TextIOWrapper(stream, encoding='utf-8-sig' if encoding == 'utf-8' else encoding, newline='')
+            # Cada celda puede llevar comillas duplicadas, entre comillas y con su separador. Con
+            # límites chicos, el piso deja que la fila llegue a su control y dé su código propio.
+            lines = _BoundedLines(text, kind, max(1 << 20, limits.columns * (2 * limits.cell + 3)))
+            reader = csv.reader(lines, delimiter=separator, strict=True)
+            raw_columns = next(reader, [])
+            check_cells(raw_columns, kind, 1, limits)
+            columns = check_header(raw_columns, kind, limits)
+            for values in reader:
+                lines.pending = 0
+                line = reader.line_num
+                deadline.check(kind, line)
+                # Las líneas en blanco no son filas, pero recorrerlas también cuesta.
+                if line > 2 * limits.rows + 1:
+                    source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
+                check_cells(values, kind, line, limits)
+                if not values or (len(values) == 1 and not values[0].strip()):
+                    continue
+                if len(rows) >= limits.rows:
+                    source_error('LIMITE_ARCHIVO_EXCEDIDO', kind, line)
+                if len(values) != len(columns):
+                    source_error('ESTRUCTURA_INVALIDA', kind, line)
+                rows.append(SourceRow(line, dict(zip(columns, values, strict=True))))
+        except ValidationError:
+            raise
+        except csv.Error as error:
+            # csv corta antes de nuestro límite de celda si el campo supera su propio tope global.
+            source_error('CELDA_EXCEDE_LIMITE' if 'field larger' in str(error) else 'ARCHIVO_NO_LEIBLE', kind, lines.line)
+        except (OSError, UnicodeError, TypeError, ValueError):
+            source_error('ARCHIVO_NO_LEIBLE', kind)
+    return _finish_table(SourceTable(columns, rows), kind, mapping, contract)
+
+
+def _physical_types(kind, mapping, contract):
+    aliases = mapping.get('columnas', {}).get(kind, {})
+    return {aliases.get(name, name): spec['tipo'] for name, spec in contract['archivos'][kind]['columnas'].items()}
+
+
+def _read_xlsx(files, mapping, contract, limits, deadline):
+    """Un libro con las dos hojas (misma ruta) o un libro por archivo lógico."""
+    fmt = mapping['formato']
+    groups = {}
+    for kind in KINDS:
+        groups.setdefault(str(files[kind]), []).append(kind)
+    tables, ignored = {}, []
+    for kinds in groups.values():
+        # Dos libros pueden traer la misma hoja, «Hoja1»; un solo libro, no.
+        profile_require(len({fmt['hojas'][kind] for kind in kinds}) == len(kinds))
+        with open_source(files[kinds[0]], kinds[0], 'xlsx', limits) as stream:
+            result = read_workbook(stream, {kind: fmt['hojas'][kind] for kind in kinds}, fmt,
+                                   {kind: _physical_types(kind, mapping, contract) for kind in kinds},
+                                   limits, deadline)
+        ignored += result.ignored_sheets
+        for kind, table in result.tables.items():
+            tables[kind] = _finish_table(table, kind, mapping, contract)
+    return tables, ignored
+
+
+@dataclass
+class SourceBatch:
+    tables: dict[str, SourceTable]
+    # Para el preview autorizado; el reporte del motor no las incluye.
+    ignored_sheets: list[str] = field(default_factory=list)
+
+
+def read_source_batch(files, mapping, *, contract=None, limits=None):
+    """Lee TSV/CSV/XLSX según el perfil y devuelve tablas y hojas ignoradas.
+
+    El tipo sale del contenido del archivo, no del nombre ni del MIME del cliente. Ante
+    una lectura corrupta no entrega prefijos parciales. Los errores son códigos seguros
+    con ubicación; no contienen valores ni nombres externos.
+
+    El plazo se comprueba entre operaciones y al terminar: un lote vencido nunca se entrega.
+    Para un archivo subido, el corte real es ``ETL.readers.supervised.read_source_batch_supervised``.
     """
     contract = load_contract() if contract is None else contract
     validate_source_profile(mapping, contract)
-    if not isinstance(files, dict) or set(files) != {'cabecera', 'detalle'}:
+    if not isinstance(files, dict) or set(files) != set(KINDS):
         raise ValidationError('ARCHIVOS_REQUERIDOS')
-    return {kind: _read_delimited(files[kind], kind, mapping, contract) for kind in ('cabecera', 'detalle')}
+    limits = FileLimits.from_contract(contract) if limits is None else limits
+    deadline = Deadline(limits.read_seconds)
+    if _source_format(mapping)[0] == 'xlsx':
+        batch = SourceBatch(*_read_xlsx(files, mapping, contract, limits, deadline))
+    else:
+        batch = SourceBatch({kind: _read_delimited(files[kind], kind, mapping, contract, limits, deadline) for kind in KINDS})
+    deadline.check(KINDS[-1])
+    return batch
 
 
-def validate_source_files(files, mapping, *, contract=None, cut_off):
+def read_source_tables(files, mapping, *, contract=None, limits=None):
+    """Las tablas de ``read_source_batch``, listas para validate_batch."""
+    return read_source_batch(files, mapping, contract=contract, limits=limits).tables
+
+
+def validate_source_files(files, mapping, *, contract=None, cut_off, limits=None):
     """Dry-run: el reporte del motor, sin archivos de salida ni publicación."""
     contract = load_contract() if contract is None else contract
-    tables = read_source_tables(files, mapping, contract=contract)
+    tables = read_source_tables(files, mapping, contract=contract, limits=limits)
     return validate_batch(tables, mapping, contract, cut_off)
 
 
@@ -540,7 +579,7 @@ def print_extraction_summary(source_data: ExtractedSourceData) -> None:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Lectura TSV/CSV y validación dry-run; no escribe ni publica.')
+    parser = argparse.ArgumentParser(description='Lectura TSV/CSV/XLSX y validación dry-run; no escribe ni publica.')
     parser.add_argument('--cabecera', type=Path, required=True)
     parser.add_argument('--detalle', type=Path, required=True)
     parser.add_argument('--mapping', type=Path, required=True)
