@@ -77,21 +77,12 @@ export function parseCsv(text) {
   })
 }
 
-export function assertCsv(rows, load) {
+export function assertCsvTotals(rows, load) {
   assert.equal(rows.length, 3, 'Se requieren dos detalles y un total')
   const details = rows.filter(row => row.tipo_fila === 'DETALLE')
   const totals = rows.filter(row => row.tipo_fila === 'TOTAL')
   assert.equal(details.length, 2)
   assert.equal(totals.length, 1)
-  for (const row of rows) {
-    assert.equal(row.fecha_corte, load.cutoff)
-    assert.equal(row.version_reglas, load.rules_version)
-    assert.equal(row.filtros, 'SIN_FILTROS')
-    assert.equal(row.fecha_calculo_usada, 'NO_APLICA')
-    assert.equal(row.definiciones, 'docs/tesis/catalogo-indicadores-v1.md#reporte-cola')
-    assert(Number.isFinite(Date.parse(row.generado_en)))
-    assert(Object.values(row).every(value => value.trim().length > 0))
-  }
   assert.deepEqual(details.map(row => row.identificador).sort(), ['FLOW029-A', 'FLOW029-B'])
   for (const row of details) {
     assert.equal(row.intervencion_codigo, 'CONTACTO_PERSONAL_Y_PLAN')
@@ -107,5 +98,18 @@ export function assertCsv(rows, load) {
   for (const name of ['deuda_total_ars', 'deuda_vencida_ars', 'monto_evaluable_ars']) {
     assert.equal(Number(total[name]), load.totals.amount)
     assert.equal(Number(total[name]), details.reduce((sum, row) => sum + Number(row[name]), 0))
+  }
+}
+
+export function assertCsv(rows, load) {
+  assertCsvTotals(rows, load)
+  for (const row of rows) {
+    assert.equal(row.fecha_corte, load.cutoff, 'CSV: fecha de corte no coincide con la carga')
+    assert.equal(row.version_reglas, load.rules_version)
+    assert.equal(row.filtros, 'SIN_FILTROS')
+    assert.equal(row.fecha_calculo_usada, 'NO_APLICA')
+    assert.equal(row.definiciones, 'docs/tesis/catalogo-indicadores-v1.md#reporte-cola')
+    assert(Number.isFinite(Date.parse(row.generado_en)))
+    assert(Object.values(row).every(value => value.trim().length > 0))
   }
 }

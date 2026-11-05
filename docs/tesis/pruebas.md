@@ -25,6 +25,8 @@ Requiere Node/npm fijados en `front/package.json`, dependencias por worktree (`n
    ```
 
    Exige árbol limpio y antecedentes del mismo SHA. Produce `thesis-flow.json`, JUnit `thesis-flow.xml`, CSV y capturas posteriores al login, sin credenciales. No sobrescribe salidas anteriores. Cada uno de los 15 controles debe pasar; los no alcanzados son fallidos, nunca omitidos. Límite interno del navegador: 600 s; envolver cada comando y sus descendientes con un máximo de 1800 s.
+
+   Un fallo del CSV se conserva como fallido y mantiene exit 1, pero permite ejecutar logout y vencimiento, que son independientes. El archivo recibido se guarda antes de validarlo, junto con sus metadatos y totales observados, para reproducir discrepancias sin fabricar un CSV corregido.
 6. En `finally`, detener exclusivamente el PGID propio, esperar su salida y liberar solo el `owner.json`/directorio cuyo nonce, contenido e inode coincidan. No borrar locks ajenos ni detener contenedores. El siguiente usuario de la base debe resetearla: quedan únicamente los datos sintéticos declarados. Eliminar la configuración y logs privados cuando se haya conservado evidencia depurada.
 
 ## Comprobaciones

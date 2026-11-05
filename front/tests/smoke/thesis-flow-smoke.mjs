@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { chromium, expect as baseExpect } from '@playwright/test'
-import { assertCsv, CHECKS, loadEvidence, localOrigin, parseCsv, sha256 } from './thesis-flow/contracts.mjs'
+import { assertCsv, assertCsvTotals, CHECKS, loadEvidence, localOrigin, parseCsv, sha256 } from './thesis-flow/contracts.mjs'
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const { values } = parseArgs({ options: { 'base-url': { type: 'string' }, output: { type: 'string' },
@@ -34,11 +34,18 @@ const panelOf = page => page.getByRole('tabpanel', { name: 'Revisión' })
 const DETAIL = 'Ajuste sintético ALIGN-029 para verificar persistencia'
 let browser, output, timer, outputCreated = false
 let activeCheck = 'environment'
-const check = async (id, action) => {
+const check = async (id, action, continueIndependent = false) => {
   activeCheck = id
-  const observed = await action()
-  report.checks.push({ id, passed: true, observed, ended_at_utc: new Date().toISOString() })
-  console.log(`ok ${id}`)
+  try {
+    const observed = await action()
+    report.checks.push({ id, passed: true, observed, ended_at_utc: new Date().toISOString() })
+    console.log(`ok ${id}`)
+  } catch (error) {
+    if (!continueIndependent) throw error
+    report.checks.push({ id, passed: false, observed: clean(error.message), ended_at_utc: new Date().toISOString() })
+    console.error(`FAIL ${id}: ${clean(error.message)}`)
+    process.exitCode = 1
+  }
 }
 
 async function readConfig() {
@@ -263,13 +270,19 @@ async function run() {
     assert.equal(response.status(), 200)
     assert.match(response.headers()['content-type'], /text\/csv/)
     const csv = await response.text()
-    assertCsv(parseCsv(csv), load)
     await writeFile(resolve(output, 'cola.csv'), csv)
+    const rows = parseCsv(csv)
+    report.csv_observed = { sha256: sha256(csv), metadata: rows.map(row => ({ fecha_corte: row.fecha_corte,
+      fecha_calculo_usada: row.fecha_calculo_usada, version_reglas: row.version_reglas, filtros: row.filtros })),
+    totals: rows.filter(row => row.tipo_fila === 'TOTAL') }
     // Filtro desconocido: debe rechazarse, nunca exportar todo silenciosamente.
     const invalid = await operator.context.request.get(`${base}/api/reports/queue?filtro_inexistente=1`, { maxRedirects: 0 })
     assert.equal(invalid.status(), 400)
+    assertCsvTotals(rows, load)
+    report.csv_observed.totals_match_load = true
+    assertCsv(rows, load)
     return { objects: 2, obligations: 6, amount_ars: 1800000, sha256: sha256(csv), invalid_filter_status: 400 }
-  })
+  }, true) // Logout y vencimiento son independientes del resultado de la exportación.
   await check('logout_direct_denied', async () => {
     for (const actor of [operator, supervisor]) {
       await actor.page.getByRole('button', { name: 'Cerrar sesion', exact: true }).click()
@@ -327,7 +340,7 @@ async function run() {
     return { console_errors: 0, page_errors: 0 }
   })
   assert.deepEqual(report.checks.map(item => item.id), CHECKS)
-  report.passed = true
+  report.passed = report.checks.every(item => item.passed)
 }
 
 try { await run() }
