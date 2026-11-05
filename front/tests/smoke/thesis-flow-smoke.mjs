@@ -173,7 +173,7 @@ async function run() {
     }
     assert(positions.every((position, index) => index === 0 || position > positions[index - 1]))
     await expect(panel.getByText('Vulnerabilidad: no informada', { exact: true })).toBeVisible()
-    await expect(panel.getByText('Corte: 30/09/2026', { exact: true }).first()).toBeVisible()
+    await expect(panel.getByText('Corte: 30/9/2026', { exact: true }).first()).toBeVisible()
     await expect(panel.getByText('Reglas v1.0.0', { exact: true })).toBeVisible()
     await expect(panel.getByText(/Se sugiere contacto personal con ofrecimiento de plan o asistencia/)).toContainText('severidad (80) alcanza el umbral de 70')
     await expect(panel.getByText('80 puntos de 0 a 100', { exact: true })).toBeVisible()
