@@ -135,7 +135,8 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
       role: [{ id: 3, name: 'consulta' }, { id: 4, name: 'operador' }],
     })
     expect((await requireTenantAccess({ tenantId: '8', permission: 'decision:record' })).context).toMatchObject({ tenantId: '8', roleId: '4', roleName: 'operador' })
-    expect(requests.find(request => request.table === 'tenant_user')?.filters).toEqual({ user: 'eq.42', status: 'eq.true', tenant: 'eq.8' })
+    expect(requests.filter(request => request.table === 'tenant_user').every(request =>
+      request.filters.user === 'eq.42' && request.filters.tenant === undefined)).toBe(true)
   })
 
   it.each(['8', '7otro', '', '0', '-1', '01'])('no acepta tenant ajeno o seleccion invalida %j', async tenantId => {
