@@ -80,14 +80,14 @@ describe('ALIGN-020: frontera del codigo', () => {
     expect(readFileSync(join(FRONT, 'next.config.ts'), 'utf8')).not.toContain('EQUITAS_REVIEW')
   })
 
-  it.each(['lib/server/case-review-writer.ts', 'lib/server/case-review-service.ts', 'lib/server/case-review-snapshot.ts'])('%s exige servidor', path => {
+  it.each(['lib/server/case-review-writer.ts', 'lib/server/case-review-service.ts', 'lib/server/case-review-snapshot.ts', 'lib/server/case-review-screen.ts'])('%s exige servidor', path => {
     expect(runtimeFiles.find(file => file.path === path)?.source.startsWith("import 'server-only'")).toBe(true)
   })
 
-  it('ningun componente cliente importa el escritor, el servicio ni la instantanea', () => {
+  it('ningun componente cliente importa el escritor, el servicio, la instantanea ni la lectura de la pantalla', () => {
     const clients = runtimeFiles.filter(file => /^\s*['"]use client['"]/m.test(file.source))
     expect(clients.length).toBeGreaterThan(0)
-    expect(clients.filter(file => /case-review-(?:writer|service|snapshot)/.test(file.source))).toEqual([])
+    expect(clients.filter(file => /case-review-(?:writer|service|snapshot|screen)/.test(file.source))).toEqual([])
   })
 
   it('el archivo de acciones es de servidor, delega y no conoce la credencial ni las funciones de la base', () => {
@@ -101,7 +101,14 @@ describe('ALIGN-020: frontera del codigo', () => {
     const service = runtimeFiles.filter(file => file.path.startsWith('lib/server/case-review')).map(file => file.source).join('\n')
       .replaceAll(/createHash\('sha256'\)\.update\(/g, 'hash(')
     expect(service).not.toMatch(/\.(?:insert|update|upsert|delete)\(/)
-    expect([...service.matchAll(/\.rpc\('([a-z_]+)'/g)].map(match => match[1]).sort()).toEqual(['record_case_review', 'record_case_review_approval'])
+    // La tercera es de lectura (ALIGN-021): el unico camino al texto libre del motivo.
+    expect([...service.matchAll(/\.rpc\('([a-z_]+)'/g)].map(match => match[1]).sort()).toEqual(['read_case_review_reason_text', 'record_case_review', 'record_case_review_approval'])
+  })
+
+  it('ninguna lectura de tablas pide el texto libre del motivo', () => {
+    for (const file of runtimeFiles.filter(item => item.path.startsWith('lib/server/case-review'))) {
+      expect(file.source.replaceAll('read_case_review_reason_text', ''), file.path).not.toMatch(/select[^\n]*reason_text|COLUMNS = '[^']*reason_text/)
+    }
   })
 
   it('el servicio no devuelve el mensaje crudo de la base ni usa service_role', () => {

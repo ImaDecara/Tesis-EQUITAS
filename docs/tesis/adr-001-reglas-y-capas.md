@@ -240,6 +240,10 @@ implementan escrituras. ALIGN-028 agrega `decision:read` (`consulta`, `operador`
 `supervisor`) para leer decisiones sin texto libre ni identidades, y
 `report:object-identifier` (`operador`, `supervisor`), que no abre ninguna lectura: decide
 quién recibe en la cola el identificador de origen, que es texto libre.
+ALIGN-021 agrega `review:read`, lectura de decisiones para
+`consulta`, `operador` y `supervisor`: la compatibilidad E06 no lo tiene. La pestaña
+"Revisión" deriva de esta misma tabla qué formulario ofrece (`roleHasPermission`), y
+la acción lo vuelve a comprobar.
 
 Las capacidades se deciden por el nombre del rol, solo en la DAL. El resultado de
 `validateAuthUserTenantAccess`, que usan el navegador y `SUP-AUTH-01`, lleva en

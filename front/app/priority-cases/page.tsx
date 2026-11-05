@@ -1,6 +1,6 @@
 import { formatWithUnit, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
-import { Eye, Filter, Search, SlidersHorizontal } from 'lucide-react'
+import { Filter, ListChecks, Search, SlidersHorizontal } from 'lucide-react'
 
 import { ContactAvailabilityBadge } from '@/components/debtors/contact-availability-badge'
 import { DataWarnings } from '@/components/equitas/data-warnings'
@@ -20,9 +20,12 @@ import {
 } from '@/components/ui/table'
 import { getDebtorsData } from '@/lib/equitas-data'
 import {
+  buildRecommendationSummary,
   getPriorityCases,
   matchesDebtorSearch,
+  queueParam,
   RECOMMENDATION_BADGE_VARIANT,
+  selectQueueGroup,
 } from '@/lib/equitas-view-selectors'
 import { paginateItems } from '@/lib/pagination'
 import { formatCurrency } from '@/lib/utils'
@@ -33,11 +36,14 @@ type PrioritySearchParams = {
   contact?: string
   type?: string
   minAmount?: string
+  queue?: string
   page?: string
   pageSize?: string
 }
 
-function buildPriorityHref(filters: Required<Omit<PrioritySearchParams, 'page' | 'pageSize'>>, page: number, pageSize: number) {
+const EMPTY_FILTERS = { q: '', risk: '', contact: '', type: '', minAmount: '' }
+
+function buildPriorityHref(filters: Omit<Required<Omit<PrioritySearchParams, 'page' | 'pageSize'>>, 'queue'>, queue: string, page: number, pageSize: number) {
   const params = new URLSearchParams()
 
   if (filters.q) params.set('q', filters.q)
@@ -45,6 +51,7 @@ function buildPriorityHref(filters: Required<Omit<PrioritySearchParams, 'page' |
   if (filters.contact) params.set('contact', filters.contact)
   if (filters.type) params.set('type', filters.type)
   if (filters.minAmount) params.set('minAmount', filters.minAmount)
+  if (queue) params.set('queue', queue)
   if (page > 1) params.set('page', String(page))
   if (pageSize !== 10) params.set('pageSize', String(pageSize))
 
@@ -69,7 +76,7 @@ export default async function PriorityCasesPage({
   }
   const minAmount = Number(filters.minAmount)
   const typeOptions = [...new Set(debtors.map((debtor) => debtor.type))].sort()
-  const filteredCases = getPriorityCases(debtors).filter((debtor) => {
+  const matchesFilters = (debtor: (typeof debtors)[number]) => {
     const matchesRisk = !filters.risk || debtor.risk === filters.risk
     const matchesContact =
       !filters.contact ||
@@ -86,9 +93,21 @@ export default async function PriorityCasesPage({
       matchesType &&
       matchesAmount
     )
+  }
+  const filteredCases = getPriorityCases(debtors).filter(matchesFilters)
+  // Cada cola es una intervención y se ordena por su prioridad: entre colas no se compara.
+  // La pertenencia se calcula sobre toda la cartera, no sobre lo que dejó el filtro.
+  const queues = buildRecommendationSummary(debtors, warnings).map(group => {
+    const cases = group.cases.filter(matchesFilters)
+    return { ...group, cases, count: group.count === null ? null : cases.length }
   })
+  const selectedQueue = selectQueueGroup(queues, resolvedSearchParams.queue)
+  const selectedQueueParam = queueParam(selectedQueue)
+  // Solo una cola elegida a propósito acompaña a los filtros. La de la primera carga no:
+  // si no, buscar un caso de otra cola no lo encontraría.
+  const chosenQueue = selectedQueueParam === resolvedSearchParams.queue ? selectedQueueParam : ''
   const pagination = paginateItems(
-    filteredCases,
+    selectedQueue.cases,
     resolvedSearchParams.page,
     resolvedSearchParams.pageSize
   )
@@ -101,7 +120,7 @@ export default async function PriorityCasesPage({
             Casos prioritarios
           </h1>
           <p className="text-sm text-slate-600">
-            Ranking operativo completo para decidir que gestionar primero.
+            Colas por intervención: cada una se ordena por su propia prioridad.
           </p>
         </div>
         <Badge variant="info" className="w-fit">
@@ -123,6 +142,7 @@ export default async function PriorityCasesPage({
           </CardHeader>
           <CardContent>
             <form method="get" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+              {chosenQueue && <input type="hidden" name="queue" value={chosenQueue} />}
               <div className="xl:col-span-2">
                 <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
                   Buscar por objeto o persona
@@ -139,8 +159,9 @@ export default async function PriorityCasesPage({
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Riesgo</label>
+                <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Riesgo</label>
                 <select
+                  id="risk"
                   name="risk"
                   defaultValue={filters.risk}
                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -152,8 +173,9 @@ export default async function PriorityCasesPage({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
+                <label htmlFor="contact" className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
                 <select
+                  id="contact"
                   name="contact"
                   defaultValue={filters.contact}
                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -164,8 +186,9 @@ export default async function PriorityCasesPage({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
+                <label htmlFor="type" className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
                 <select
+                  id="type"
                   name="type"
                   defaultValue={filters.type}
                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -191,11 +214,11 @@ export default async function PriorityCasesPage({
                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
                 />
               </div>
-              <div className="flex items-end gap-2 xl:col-span-6">
+              <div className="flex flex-wrap items-end gap-2 md:col-span-2 xl:col-span-6">
                 <button type="submit" className={buttonVariants({ variant: 'default' })}>
                   Aplicar filtros
                 </button>
-                <Link href="/priority-cases" className={buttonVariants({ variant: 'outline' })}>
+                <Link href={buildPriorityHref(EMPTY_FILTERS, chosenQueue, 1, 10)} className={buttonVariants({ variant: 'outline' })}>
                   Limpiar
                 </Link>
               </div>
@@ -203,18 +226,40 @@ export default async function PriorityCasesPage({
           </CardContent>
         </Card>
 
+        <nav aria-label="Colas por intervención">
+          <ul className="flex flex-wrap gap-2">
+            {queues.filter(group => group.interventionCode !== null ? true : group.cases.length > 0).map(group => (
+              <li key={queueParam(group)}>
+                <Link
+                  href={buildPriorityHref(filters, queueParam(group), 1, pagination.pageSize)}
+                  data-queue={queueParam(group)}
+                  aria-current={group === selectedQueue ? 'page' : undefined}
+                  className={buttonVariants({ variant: group === selectedQueue ? 'default' : 'outline', size: 'sm' })}
+                >
+                  <ListChecks className="size-3.5" />
+                  {group.recommendation}
+                  <span className="font-normal">{formatWithUnit(group.count, 'casos')}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
         <Card className="border-[#d2dceb]">
           <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
             <div>
-              <CardTitle>Ranking operativo</CardTitle>
-              <PaginationSummary
-                currentStart={pagination.currentStart}
-                currentEnd={pagination.currentEnd}
-                totalItems={filteredCases.length}
-                itemLabel="casos"
-                pageSize={pagination.pageSize}
-                buildHref={(page, pageSize) => buildPriorityHref(filters, page, pageSize)}
-              />
+              <CardTitle>Cola: {selectedQueue.recommendation}</CardTitle>
+              <p className="text-xs text-slate-600">Orden dentro de esta cola. Las prioridades de colas distintas no se comparan.</p>
+              {selectedQueue.count !== null && (
+                <PaginationSummary
+                  currentStart={pagination.currentStart}
+                  currentEnd={pagination.currentEnd}
+                  totalItems={selectedQueue.cases.length}
+                  itemLabel="casos"
+                  pageSize={pagination.pageSize}
+                  buildHref={(page, pageSize) => buildPriorityHref(filters, selectedQueueParam, page, pageSize)}
+                />
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -236,7 +281,9 @@ export default async function PriorityCasesPage({
                 {pagination.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-slate-500">
-                      No hay casos que coincidan con los filtros.
+                      {selectedQueue.count === null
+                        ? 'No disponible: no se pudo determinar qué casos hay en esta cola.'
+                        : 'No hay casos que coincidan con los filtros.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -245,7 +292,7 @@ export default async function PriorityCasesPage({
                     <TableCell>
                       <div className="font-medium text-slate-900">{debtor.identifier}</div>
                       {debtor.peopleNames.length > 0 && (
-                        <p className="max-w-[220px] truncate text-xs text-slate-500">
+                        <p className="max-w-[220px] truncate text-xs text-slate-600">
                           {debtor.peopleNames.join(', ')}
                         </p>
                       )}
@@ -271,27 +318,29 @@ export default async function PriorityCasesPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <Link
-                        href={`/debtors/${encodeURIComponent(debtor.id)}`}
+                        href={`/debtors/${encodeURIComponent(debtor.id)}?tab=revision`}
+                        aria-label={`Abrir revisión ${debtor.identifier}`}
                         className={buttonVariants({ variant: 'default', size: 'sm' })}
                       >
-                        <Eye className="size-3.5" />
-                        Detalle
+                        Abrir revisión
                       </Link>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            <PaginationControls
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              pageSize={pagination.pageSize}
-              currentStart={pagination.currentStart}
-              currentEnd={pagination.currentEnd}
-              totalItems={filteredCases.length}
-              itemLabel="casos"
-              buildHref={(page, pageSize) => buildPriorityHref(filters, page, pageSize)}
-            />
+            {selectedQueue.count !== null && (
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                pageSize={pagination.pageSize}
+                currentStart={pagination.currentStart}
+                currentEnd={pagination.currentEnd}
+                totalItems={selectedQueue.cases.length}
+                itemLabel="casos"
+                buildHref={(page, pageSize) => buildPriorityHref(filters, selectedQueueParam, page, pageSize)}
+              />
+            )}
           </CardContent>
         </Card>
       </div>

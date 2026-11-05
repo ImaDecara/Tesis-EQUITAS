@@ -55,6 +55,22 @@ Defectos reinyectados que las pruebas detectan: JWT filtrado en un componente cl
 
 Evidencia depurada: `execution/evidence/ALIGN-020/` del paquete del plan, fuera de git.
 
+## ALIGN-021: recorrido de la pantalla con teclado
+
+`tests/smoke/review-a11y.mjs` recorre la pestaña "Revisión" y las colas en Chromium, solo con teclado, contra `next start` y esta misma cartera. Comprueba nombre accesible de cada control, errores asociados, ausencia de superposiciones a 360, 768 y 1440 px, foco visible bajo la barra fija y que intensidad 3 no salga sin lista de control. Registra sus propios lotes por la función real. **Cada corrida completa exige una base recién sembrada:** una segunda corrida encuentra las filas de la primera y falla por eso, no por la pantalla.
+
+Con la base del paso 2, y compilado como en el paso 4 pero **sin** la sonda: ahora `/debtors/[debtorId]` importa las acciones, así que la búsqueda en el bundle ya no la necesita.
+
+```sh
+EQUITAS_REVIEW_LOCAL_CONFIG=/tmp/...json node tests/local-review/scan-client-bundle.mjs --expect-actions
+EQUITAS_REVIEW_SERVER_JWT=... npx next start --hostname 127.0.0.1 --port 31021 &
+EQUITAS_REVIEW_LOCAL_CONFIG=/tmp/...json node tests/smoke/review-a11y.mjs --base-url http://127.0.0.1:31021 --output /tmp/<dir-nuevo>
+```
+
+`--solo-importador` comprueba la cuenta `importador` con su rol aprobado. Antes hay que devolvérselo, porque `fixture.sql` le asigna `tp_operator`: `update public.tenant_user set role = 920004 where id = 920004`.
+
+Las suites HTTP de ALIGN-020 siguen usando la sonda: hacen POST a `/align020-probe`.
+
 ## Para ALIGN-022
 
 La campaña separada reutiliza `fixture.sql` y este recorrido para el caso "recorrido autorizado por la acción de servidor". El nombre de cada acción y su ID están en `.next/server/server-reference-manifest.json` (`exportedName`). El cuerpo del POST es `JSON.stringify([entrada])`, con `Next-Action: <id>` y `Accept: text/x-component`, y el resultado es la fila `1:` de la respuesta Flight.

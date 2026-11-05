@@ -209,7 +209,7 @@ function parseDecided(intervention: unknown, intensity: unknown): DecidedAction 
   return { intervention, intensity }
 }
 
-function reasonTextFailure(value: unknown): CaseReviewErrorCode | null {
+export function reasonTextFailure(value: unknown): CaseReviewErrorCode | null {
   if (typeof value !== 'string' || UNSTORABLE.test(value)) return 'REASON_TEXT_INVALID'
   // Como char_length de PostgreSQL: puntos de código, no unidades UTF-16.
   if ([...value].length > REASON_TEXT_MAX_CHARS) return 'REASON_TEXT_TOO_LONG'

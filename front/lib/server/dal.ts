@@ -10,10 +10,12 @@ import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-s
 // ALIGN-003 y funciones de ALIGN-018: `operador` registra, `supervisor` aprueba y
 // no importa. `importador_sistema` es de maquina y no entra por la web. La lectura
 // tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
+// ALIGN-021: la misma tabla gobierna la pantalla y la autorización de las acciones.
 const PERMISSIONS = {
   'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
   // ALIGN-028: leer decisiones sin texto libre ni identidades. La compatibilidad E06 no entra:
   // solo lee cartera. La politica de `case_review` admite a todo miembro activo.
+  'review:read': ['consulta', 'operador', 'supervisor'],
   'decision:read': ['consulta', 'operador', 'supervisor'],
   // ALIGN-028: el identificador de origen es texto libre; solo lo exporta quien gestiona casos.
   'report:object-identifier': ['operador', 'supervisor'],

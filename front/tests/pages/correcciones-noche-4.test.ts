@@ -15,6 +15,8 @@ const { loadRawDebtorData, loadContactTypeCatalog, getDebtorDetailData, getDebto
 }))
 vi.mock('@/lib/data/raw-debtor-loader', () => ({ loadRawDebtorData }))
 vi.mock('@/lib/server/contact-type-catalog', () => ({ loadContactTypeCatalog }))
+// La pestaña Revisión tiene sus propias pruebas (review-tab.test.ts).
+vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen: async () => ({ kind: 'restricted', message: 'Revisión fuera de esta prueba.' }) }))
 vi.mock('@/lib/equitas-data', () => ({ getDebtorDetailData, getDebtorsData, getPeopleData, getDashboardData }))
 // Se renderizan los componentes reales. Solo se reemplaza lo que exige navegador o sesión.
 vi.mock('next/navigation', () => ({

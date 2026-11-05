@@ -65,7 +65,7 @@ const decisionChain = (supabase: SupabaseClient, context: DalContext, debtorId: 
 
 // Vigente = la que ninguna otra reemplaza. Por esta vía la cadena es lineal; si otra
 // carga dejó dos, manda la más nueva. Las filas llegan ordenadas por id.
-function currentOf(chain: readonly ChainRow[]): string | null {
+export function currentOf(chain: readonly Pick<ChainRow, 'id' | 'supersedes'>[]): string | null {
   const replaced = new Set(chain.map(row => row.supersedes))
   return chain.filter(row => !replaced.has(row.id)).at(-1)?.id ?? null
 }

@@ -41,3 +41,14 @@ export function formatDate(value: string | null | undefined) {
 
   return `${day}/${month}/${match[1]}`
 }
+
+// Un instante, no una fecha de calendario: se muestra en la hora del municipio, igual en
+// cualquier servidor. Lo que no se pueda interpretar se muestra tal como llegó.
+const CORDOBA_DATE_TIME = new Intl.DateTimeFormat('es-AR', {
+  timeZone: 'America/Argentina/Cordoba', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+})
+
+export function formatDateTime(value: string) {
+  const instant = new Date(value)
+  return Number.isNaN(instant.getTime()) ? value : CORDOBA_DATE_TIME.format(instant)
+}

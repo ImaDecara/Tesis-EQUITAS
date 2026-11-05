@@ -25,6 +25,8 @@ const {
   }),
 }))
 
+// La pestaña Revisión tiene sus propias pruebas (review-tab.test.ts).
+vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen: async () => ({ kind: 'restricted', message: 'Revisión fuera de esta prueba.' }) }))
 vi.mock('@/lib/equitas-data', () => ({
   getDashboardData: getDashboardDataMock,
   getDebtorsData: getDebtorsDataMock,
