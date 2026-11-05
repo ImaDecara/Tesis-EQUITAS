@@ -11,6 +11,7 @@ import { AppShell } from '@/components/layout/app-shell'
 import { reviewDifferenceNotice, ReviewPanel } from '@/components/review/review-panel'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { auditCaseOpen } from '@/lib/server/audit'
 import {
   Table,
   TableBody,
@@ -60,6 +61,9 @@ export default async function DebtorDetailPage({
   // Misma tolerancia que las reglas v1, con margen de representación de Number.
   const percentagesMismatch = percentageTotal !== null &&
     Math.abs(percentageTotal - 100) > decisionRules.banderas.tolerancia_porcentajes + Number.EPSILON * 100
+
+  // ALIGN-069: cada entrega de la ficha deja un registro. Si no se puede registrar, no se entrega.
+  await auditCaseOpen(debtor.id)
 
   return (
     <AppShell>

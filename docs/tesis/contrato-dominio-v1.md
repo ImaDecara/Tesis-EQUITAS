@@ -451,6 +451,7 @@ agregados. La actualización de VP10 y KPI-38 queda en ALIGN-014.
 | v1 (adenda ALIGN-026, corrección 1) | 02/11/2026 | Revisión independiente de ALIGN-026: sin estados observados no hay cero de deuda vencida; `debt_state_not_observed_count`; `debt.status` sale del estado que resolvió el validador; documento y persona se clasifican sobre el valor tal como llegó; gestiones y contactos sin insumos quedan nulos |
 | v1 (adenda ALIGN-020) | 02/11/2026 | §13: de dónde sale el corte de una decisión, cómo se calcula `inputs_hash` y cómo se verifica el corte al insertar |
 | v1 (adenda ALIGN-027) | 02/11/2026 | §14: `computed_at` de un perfil es el momento del cálculo que produjo sus valores; una recarga sin cambios lo conserva (L04). `import_batch.counts` agrega `filas_*`, `escrituras` y `faltantes` |
+| v1 (adenda ALIGN-069) | 02/11/2026 | §15: auditoría de acciones de la aplicación en `access_audit`, solo base local, y su límite con las lecturas directas |
 
 ## 13. Decisión humana, aprobación y lote (ALIGN-018)
 
@@ -514,3 +515,35 @@ Vale para lo que carga `python -m ETL.run_etl --execute`, **solo en la base loca
 El mapeador de objetos (FO02) ya no lee PR02 como total cuando alguna obligación del objeto no tiene estado observado: recalcula desde las obligaciones para conservar el subtotal y su desglose (`front/lib/mappers/debtor-object-mapper.ts`). Con todos los estados observados sigue usando el valor persistido. FO04 y FO05 ya se comportaban así.
 
 `import_batch` (§13) recibe los eventos de cada carga: `VALIDADO` → `PUBLICADO`, o `FALLIDO` si el lote se bloquea o la carga falla, con hashes de archivo, mapeo y contrato, conteos, corte y versión de reglas. `counts.estados_al_corte` concilia con las filas de `debt` de los objetos publicados; los objetos en cuarentena se cuentan aparte, en `counts.estados_al_corte_en_cuarentena`. Quien lo escribe es `equitas_import_server`, con un actor `importador_sistema`. **Pendiente de otros tickets:** los adaptadores de decisión (`back/services/decision_input.py`, `front/lib/mappers/debtor-object-mapper.ts`) siguen declarando `estado_origen`, `periodo_fiscal` y `source_updated_at` como `NO_INTEGRADO`, aunque el estado y la actualización ya tienen destino; conectarlos no pertenece a este carril. La semántica real de período y estado sigue siendo **P** hasta la homologación (ALIGN-046).
+
+## 15. Auditoría de acciones de la aplicación (ALIGN-069)
+
+Tabla append-only `access_audit`, **solo en la base local** (`supabase/migrations/20261102170000_access_audit.sql`). Registra quién hizo qué acción de la aplicación. No guarda valores personales ni texto libre: `reason_text`, nombres, documentos, contactos y filtros de un reporte no entran.
+
+| Variable | Significado | Quién la fija | Faltantes y límites |
+|---|---|---|---|
+| `access_audit.tenant` | Municipio de la acción | Servidor, desde la DAL | Obligatorio. La función exige membresía activa del actor en ese municipio |
+| `access_audit.actor`, `access_audit.actor_role` | `user.id` de quien actuó y su rol en ese momento | Base de datos, a partir de la membresía activa: el llamador no elige el rol | Obligatorios. Rol limitado a `consulta`, `operador`, `supervisor`, `importador`, `importador_sistema` y `tp_operator` (compatibilidad E06: lee cartera, así que también deja rastro) |
+| `access_audit.action` | `CASE_OPEN`, `REPORT_EXPORT`, `IMPORT_CONFIRM` (ALIGN-057), `ANALYTICS_VIEW` (ALIGN-064) o `CHANNEL_LINK` (ALIGN-066) | Servidor | Lista cerrada |
+| `access_audit.target` | `debtor.id` en `CASE_OPEN` y `CHANNEL_LINK`; `import_batch.id` en `IMPORT_CONFIRM`; un código de minúsculas, dígitos y guiones en `REPORT_EXPORT` y `ANALYTICS_VIEW` (`cola-de-trabajo`, por ejemplo) | Servidor | Formato restringido. La función verifica que el objeto o el lote sean de ese municipio |
+| `access_audit.created_at` | Hora de la base | Base de datos | Obligatoria |
+| `access_audit.idempotency_key` | UUID único por municipio. La misma clave con el mismo contenido devuelve la fila existente; con otro contenido, `IDEMPOTENCY_KEY_CONFLICT` | Servidor | Sin clave explícita, cada llamada es una acción nueva. Quien pueda reintentar la misma acción (importación) pasa la suya |
+
+**Escritura.** Solo por `record_access_audit`, que es `SECURITY DEFINER` con `search_path` vacío. La ejecutan `equitas_review_server` (web, con `EQUITAS_REVIEW_SERVER_JWT`) y `equitas_import_server` (importación). `front/lib/server/audit.ts` es la función común: `recordAccessAudit(context, evento)`, con el actor tomado del contexto de la DAL. Nadie escribe la tabla de otra forma: `anon`, `authenticated`, `service_role` y los roles de servidor reciben 42501, y un disparador rechaza `UPDATE`, `DELETE` y `TRUNCATE` también al dueño.
+
+**Lectura.** Solo `supervisor` de ese municipio, con la política `supervisor_read_access_audit`. La política compara `auth.uid()` y no depende de que las tablas de identidad tengan RLS estricta. `anon` y `service_role` no tienen `SELECT`. Es el [reporte de accesos](catalogo-indicadores-v1.md#reporte-accesos).
+
+**Qué se audita hoy.**
+
+- **Apertura de la ficha** (`front/app/debtors/[debtorId]/page.tsx`): un registro cada vez que la ficha se entrega al navegador, después de `notFound()` y antes de responder. Incluye la recarga y el refresco tras registrar una decisión, porque los datos vuelven a salir. ALIGN-021 lee `reason_text` dentro de esa misma apertura: queda cubierto por ese registro, sin el contenido. El listado y el prefetch no cuentan, porque no entregan la ficha. HEAD a `/debtors/[debtorId]` se rechaza en el proxy antes del render con 405 y `Allow: GET`; si falta sesión, conserva el 307 a login. Este rechazo uniforme no consulta el caso ni confirma su existencia o los permisos de cartera, y no registra una apertura.
+- **Exportaciones CSV** (`csvReportResponse`, `front/lib/server/report-response.ts`): un registro por archivo entregado mediante GET, después de autorizar y de construir, antes de responder. Incluye el propio reporte de accesos. HEAD conserva la autorización y responde solo con metadatos constantes del archivo, sin construir el CSV, consultar sus filas o registrar una exportación. No evalúa filtros ni disponibilidad de datos o auditoría: esas comprobaciones corresponden a GET.
+
+Una acción denegada, un objeto ajeno o inexistente, un filtro inválido y una lectura fallida no dejan registro: la acción no ocurrió. Los intentos denegados no se auditan en esta versión.
+
+**Si no se puede registrar, la acción falla cerrada.** La ficha cae en `app/error.tsx` sin datos y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`, sin archivo. Una acción sin rastro es peor que una acción demorada, y una auditoría que falla en silencio no permite afirmar nada sobre quién accedió. El costo es de disponibilidad: sin `EQUITAS_REVIEW_SERVER_JWT` o sin la migración, **ninguna ficha ni reporte se entrega**. Es una precondición de despliegue. El registro del error lleva solo la acción y un código, sin el mensaje de la base ni el destino.
+
+**Límite declarado: las lecturas directas por la Data API (PostgREST) no quedan auditadas.** RLS limita qué filas se ven, pero no obliga a pasar por la DAL: una persona autorizada puede leer `debtor` o `case_review` directamente con su sesión y no queda registro. `front/tests/local-audit/run-audit.mjs` lo confirma con una prueba. Forzar un camino de lectura auditado queda como evolución. Tampoco se auditan las pantallas de listas ni los accesos a la base con otras credenciales.
+
+**Retención propuesta: 24 meses, pendiente de aprobación humana.** El volumen crece con cada apertura, por eso hay índices por `(tenant, id)` y `(tenant, created_at)`. **La purga no está automatizada ni autorizada por esta propuesta:** no hay programador en este ticket y el disparador rechaza `DELETE`, de modo que purgar requiere una decisión y una tarea de operación ([SUPABASE_TESTING_CALIDAD.md](../../SUPABASE_TESTING_CALIDAD.md)). El reporte recorre todos los registros del municipio y filtra en el servidor de la aplicación.
+
+**Sin claves foráneas, a propósito.** El rastro debe sobrevivir a la baja de un objeto, un usuario o un municipio, y una FK haría fallar la limpieza de fixtures. La función verifica actor y objeto al escribir, pero una fila puede quedar apuntando a algo que ya no existe.

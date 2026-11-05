@@ -7,7 +7,7 @@ import { csvReportResponse } from '@/lib/server/report-response'
 export const dynamic = 'force-dynamic'
 
 export function GET(request: Request) {
-  return csvReportResponse('cola-de-trabajo', 'portfolio:read', async ({ context }) => {
+  return csvReportResponse(request, 'cola-de-trabajo', 'portfolio:read', async ({ context }) => {
     const filters = parseQueueFilters(new URL(request.url).searchParams)
     const { debtors, warnings } = await getDebtorsData()
     assertReadsComplete(warnings)
@@ -15,3 +15,5 @@ export function GET(request: Request) {
     return buildQueueReport(debtors, filters, new Date().toISOString(), { showIdentifier })
   })
 }
+
+export const HEAD = GET

@@ -20,7 +20,7 @@ function reviewServerToken(): string | null {
 }
 
 // Cliente aparte del de sesión, por llamada y sin estado. Solo sirve para las funciones
-// de ALIGN-018: el rol no lee ni escribe tablas. El actor lo resolvió antes la DAL.
+// de ALIGN-018 y record_access_audit (ALIGN-069): el rol no lee ni escribe tablas. El actor lo resolvió antes la DAL.
 export function createCaseReviewWriter(): SupabaseClient | null {
   const token = reviewServerToken()
   if (!token || !hasSupabaseCredentials) return null

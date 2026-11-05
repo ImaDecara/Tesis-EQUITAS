@@ -223,6 +223,7 @@ Notas:
 - ALIGN-043 declara "R01–R28" porque aplica a `requirements.md` los cambios aprobados para todos los requisitos; no se repite en cada fila. Está **bloqueado** hasta que el usuario apruebe `PROPOSED-REQUIREMENTS-CHANGES.md`.
 - **R30 y R34 (propuestos) no aparecen en el frontmatter de ningún ticket.** `TRACEABILITY.md` §1 los asigna a ALIGN-007, 008 y 042 (R30, dimensión social con salvaguarda) y a ALIGN-004, 042 y 046 (R34, gobernanza de datos reales). Es una inconsistencia del paquete del plan, que es de solo lectura: se registra para ALIGN-043.
 - "DONE / total" cuenta tickets, no cierra requisitos: el cierre exige el criterio común de `requirements.md` §9.
+- **R22, R26 y R38, ALIGN-069.** La apertura de casos y las exportaciones CSV dejan un registro en `access_audit`, y `recordAccessAudit` queda lista para importación, analítica y canal (057, 064, 066). Solo en la base local. Las lecturas directas por la Data API **no** quedan auditadas: es una limitación declarada, no un requisito cumplido (`contrato-dominio-v1.md` §15).
 
 ### 5.3 Por ticket
 

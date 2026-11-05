@@ -148,8 +148,8 @@ Las tres son append-only: una corrección o un cambio de estado es una fila nuev
 
 | Rol | Atributos | Puede |
 | --- | --- | --- |
-| `equitas_review_server` | `NOLOGIN`, sin `BYPASSRLS`; `authenticator` lo asume con un JWT server-only | `EXECUTE` de `record_case_review`, `record_case_review_approval` y `read_case_review_reason_text`. No lee ni escribe tablas |
-| `equitas_import_server` | Igual | `EXECUTE` de `record_import_batch`. No lee ni escribe tablas |
+| `equitas_review_server` | `NOLOGIN`, sin `BYPASSRLS`; `authenticator` lo asume con un JWT server-only | `EXECUTE` de `record_case_review`, `record_case_review_approval`, `read_case_review_reason_text` y `record_access_audit` (ALIGN-069). No lee ni escribe tablas |
+| `equitas_import_server` | Igual | `EXECUTE` de `record_import_batch` y `record_access_audit` (ALIGN-069). No lee ni escribe tablas |
 | `equitas_write_definer` | `NOLOGIN`, `BYPASSRLS`, ningún JWT lo asume | Dueño de las funciones `SECURITY DEFINER` y de las auxiliares `equitas_member_role`, `equitas_current_cutoff` y `equitas_verify_cutoff`, que ningún otro rol ejecuta. `SELECT` e `INSERT` en las tres tablas y `SELECT` de 12 columnas de `user`, `tenant_user`, `role`, `tenant` y `debtor`. `BYPASSRLS` es necesario porque no se agregan políticas a tablas existentes |
 
 Los roles de servidor son propios y no `service_role` para que una filtración del servidor web no entregue la cartera ni la escritura general. Las funciones tienen `search_path` vacío y nombres calificados. Las columnas `reviewer_role`, `approver_role`, `created_by_role` y las fechas las fija la base: no son parámetros.
@@ -323,6 +323,35 @@ Demuestra que el registro de decisiones no se puede falsear ni leer entre munici
 **Qué demuestra.** Un operador legítimo no puede insertar directo por la Data API con sugerencia, hash o versión falsificados: el rechazo es `42501`, falta de privilegio, no una regla de datos. Las pruebas no piden `return=representation`: `RETURNING` exige leer `reason_text`, y daría `42501` aunque el `INSERT` estuviera permitido. El mismo error enmascararía un privilegio mal otorgado en `UPDATE`.
 
 **Límites.** No reproduce las intercalaciones de importación, que siguen en `front/tests/local-review/`. No demuestra nada sobre el original ni sobre el proyecto testing. Quien tenga el secreto JWT del proyecto puede firmar cualquier rol que `authenticator` pueda asumir: la campaña prueba qué puede hacer cada credencial, no protege el secreto.
+
+## Auditoría de acciones (ALIGN-069, solo base local)
+
+`supabase/migrations/20261102170000_access_audit.sql` agrega `access_audit` y `record_access_audit`. No toca políticas ni grants de las 23 tablas: `politicas_23_md5`, `grants_23_md5` y `acl_23_md5` no cambian. Contrato: `docs/tesis/contrato-dominio-v1.md` §15. Prueba real: `front/tests/local-audit/README.md`.
+
+`case-review-verify.sql` no enumera esta tabla ni esta función: sus listas son fijas y sus valores no cambian. Los metadatos de la auditoría (dueño, `search_path`, privilegios, política) los comprueba `front/tests/local-audit/run-audit.mjs`.
+
+**Precondición de despliegue:** la aplicación falla cerrada. Sin esta migración o sin `EQUITAS_REVIEW_SERVER_JWT` no entrega ninguna ficha ni reporte mediante GET: la ficha cae en la pantalla de error y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`. HEAD no comprueba esta precondición: en los reportes solo autoriza y devuelve metadatos; en la ficha se rechaza antes del render (405, `Allow: GET`), conservando la redirección a login cuando falta sesión.
+
+**Retención propuesta: 24 meses, pendiente de aprobación humana y sin purga automática.** El ejemplo siguiente no autoriza su ejecución. Purgar requiere una decisión explícita y una tarea de operación, solo en la base local, porque el disparador rechaza `DELETE` también al dueño de la tabla:
+
+```sql
+begin;
+alter table public.access_audit disable trigger access_audit_append_only;
+delete from public.access_audit where created_at < now() - interval '24 months';
+alter table public.access_audit enable trigger access_audit_append_only;
+commit;
+```
+
+**Reversión.** Solo en la base local: `npx --yes supabase@2.108.0 db reset --version 20261102120000`, y después `db reset` para volver al estado completo. Inversa que conserva las demás tablas, como `supabase_admin` (la función es de otro dueño). Descarta los registros de auditoría:
+
+```sql
+begin;
+drop table public.access_audit;
+drop function public.record_access_audit;
+delete from supabase_migrations.schema_migrations where version = '20261102170000';
+commit;
+notify pgrst, 'reload schema';
+```
 
 ## Semántica de la carga ETL (ALIGN-026, solo base local)
 

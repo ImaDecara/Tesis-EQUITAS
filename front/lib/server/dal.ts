@@ -22,6 +22,8 @@ const PERMISSIONS = {
   'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
+  // ALIGN-069: reporte de accesos. La politica de `access_audit` exige lo mismo.
+  'audit:read': ['supervisor'],
   'import:write': ['importador'],
 } as const satisfies Record<string, readonly ResolvedRoleName[]>
 export type DalPermission = keyof typeof PERMISSIONS

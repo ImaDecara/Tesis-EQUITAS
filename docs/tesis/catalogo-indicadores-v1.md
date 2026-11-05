@@ -1025,7 +1025,7 @@ Los datos del original conservan la semántica descrita arriba.
 
 ## 19. <a id="reportes-csv"></a>Reportes CSV de servidor (ALIGN-028)
 
-Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
+Los Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
 
 | Reporte | Ruta | Archivo | Roles (permiso en `front/lib/server/dal.ts`) |
 |---|---|---|---|
@@ -1033,6 +1033,7 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | [Decisiones](#reporte-decisiones) | `/api/reports/decisions` | `equitas-decisiones.csv` | `consulta`, `operador`, `supervisor` (`decision:read`) |
 | [Supervisión](#reporte-supervision) | `/api/reports/supervision` | `equitas-supervision.csv` | `supervisor` (`supervision:read`) |
 | [Calidad de datos](#reporte-calidad) | `/api/reports/data-quality` | `equitas-calidad-de-datos.csv` | Igual que la cola (`portfolio:read`) |
+| [Accesos](#reporte-accesos) (ALIGN-069) | `/api/reports/access` | `equitas-accesos.csv` | `supervisor` (`audit:read`) |
 
 `importador` e `importador_sistema` no reciben ninguno, porque no leen cartera ([ADR-001][adr]).
 
@@ -1128,6 +1129,14 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | `pendientes_aprobacion` | `TOTAL` | De las anteriores, sin aprobación vigente | decisiones |
 | `aprobaciones_vigentes` | `APRUEBA`, `OBJETA` | De las anteriores, por aprobación vigente | decisiones |
 | `motivos_objecion` | Cada `reason_code` de la lista cerrada de una objeción vigente, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo | decisiones |
+
+### <a id="reporte-accesos"></a>Accesos
+
+- **Formato:** una fila `DETALLE` por registro de `access_audit`, con `registro_id`, `fecha` (UTC), `accion`, `objetivo`, `actor_id` y `rol_actor`, y una fila `TOTAL` con la cantidad en `registros`. `fecha_corte` y `version_reglas` valen `NO_APLICA`: no depende de un corte ni de reglas. Solo identificadores internos y códigos, sin nombres, correos ni documentos.
+- **Filtros:** `desde` y `hasta` (día UTC del registro, inclusive), `accion` (lista cerrada) y `actor` (`user.id`).
+- **Población:** registros del municipio activo. Bajar este reporte también deja un registro, que aparece en la descarga siguiente: se registra después de armar el archivo.
+- **Decisión que apoya:** detectar y explicar accesos indebidos: quién abrió un caso o exportó un reporte, y cuándo.
+- **No significa:** todo lo que se leyó. Una lectura directa por la Data API no queda registrada, ni los intentos denegados (contrato §15). HEAD consulta solo metadatos autorizados, sin descargar ni registrar una exportación, en los cinco reportes. Un registro indica que la ficha o el archivo se entregaron, no que alguien los haya mirado.
 
 ### <a id="reporte-calidad"></a>Calidad de datos
 

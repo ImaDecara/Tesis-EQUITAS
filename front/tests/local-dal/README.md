@@ -23,11 +23,15 @@ Procedimiento autorizado (solo cuando el stack esté disponible):
    Guardar sus credenciales y clave **publicable o anon** en un JSON privado
    `/tmp/equitas-align019/config.json`, modo 0600 y carpeta 0700. No usar service role.
    Formato: `{ "supabaseUrl": "http://127.0.0.1:54321", "publishableKey": "…",
-   "accounts": { "a": { "email": "…@example.test", "password": "…" }, … } }`.
+   "reviewServerJwt": "…", "accounts": { "a": { "email": "…@example.test", "password": "…" }, … } }`.
+   `reviewServerJwt` es el de `database/testing/case_review_local.py mint-jwt --role
+   equitas_review_server` (ALIGN-069: sin registro de auditoría la ficha falla cerrada).
 3. Aplicar `fixture.sql` mediante el `psql` del contenedor local, con `ON_ERROR_STOP=1`
    y las cinco variables `auth_a`, `auth_b`, `auth_none`, `auth_inactive`, `auth_multi`
    (los UUID verificados de esas cuentas). Requiere base vacía; no es idempotente.
    No aplicar desde una conexión remota ni reutilizar datos de otro ticket.
+   Después aplicar `audit-stub.sql`: esta base no tiene la auditoría y la suite prueba la
+   frontera de lectura, no el registro. La auditoría real se prueba en `tests/local-audit`.
 4. Desde `front/`, ejecutar:
 
    ```sh

@@ -6,6 +6,8 @@ import DataError from '@/app/error'
 import TenantSelectionPage from '@/app/select-tenant/page'
 import { labels, readLocalDalConfig } from '@/tests/local-dal/config'
 
+const serverJwt = (role: string) => `a.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.firma`
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }))
 vi.mock('@/components/auth/auth-provider', () => ({ useAuthState: () => ({ refreshAuthState: vi.fn() }) }))
 const { signOutCurrentSession } = vi.hoisted(() => ({ signOutCurrentSession: vi.fn() }))
@@ -25,7 +27,7 @@ function configFile(overrides: Record<string, unknown> = {}) {
   const directory = mkdtempSync('/tmp/align019-config-test-')
   directories.push(directory)
   const path = `${directory}/config.json`
-  const config = { supabaseUrl: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_fixture',
+  const config = { supabaseUrl: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_fixture', reviewServerJwt: serverJwt('equitas_review_server'),
     accounts: Object.fromEntries(labels.map(label => [label, { email: `${label}@example.test`, password: 'fixture-no-network' }])), ...overrides }
   writeFileSync(path, JSON.stringify(config), { mode: 0o600 })
   vi.stubEnv('EQUITAS_DAL_LOCAL_CONFIG', path)
@@ -93,6 +95,8 @@ describe('ALIGN-019: fronteras de entrada y prueba local segura', () => {
     { supabaseUrl: 'https://otro.example.test' },
     { publishableKey: 'sb_secret_no_es_una_clave' },
     { accounts: {} },
+    { reviewServerJwt: serverJwt('service_role') },
+    { reviewServerJwt: 'no-es-un-jwt' },
     { supabaseUrl: 'https://folyslqzqvnpolexcxjo.supabase.co' },
   ])('rechaza configuracion no autorizada antes de conectar: %j', overrides => {
     configFile(overrides)

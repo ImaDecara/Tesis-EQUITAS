@@ -5,6 +5,8 @@ const { serverClient, cookieStore } = vi.hoisted(() => ({ serverClient: vi.fn(),
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: serverClient }))
 vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('next/headers', () => ({ cookies: cookieStore }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: () => ({ rpc: async () => ({ data: { audit_id: 1, created: true }, error: null }) }) }))
 
 import { GET as getDataQuality } from '@/app/api/reports/data-quality/route'
 import { GET as getDecisions } from '@/app/api/reports/decisions/route'
