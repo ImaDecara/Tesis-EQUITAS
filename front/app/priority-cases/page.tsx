@@ -1,4 +1,7 @@
-import { formatWithUnit, readingFailed } from '@/lib/data-presence'
+import { PortfolioScope } from '@/components/equitas/portfolio-scope'
+import { portfolioContext } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref } from '@/lib/portfolio-filters'
+import { formatWithUnit } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Filter, ListChecks, Search, SlidersHorizontal } from 'lucide-react'
 
@@ -22,7 +25,6 @@ import { getDebtorsData } from '@/lib/equitas-data'
 import {
   buildRecommendationSummary,
   getPriorityCases,
-  matchesDebtorSearch,
   queueParam,
   RECOMMENDATION_BADGE_VARIANT,
   selectQueueGroup,
@@ -37,11 +39,13 @@ type PrioritySearchParams = {
   type?: string
   minAmount?: string
   queue?: string
+  status?: string
+  personId?: string
   page?: string
   pageSize?: string
 }
 
-const EMPTY_FILTERS = { q: '', risk: '', contact: '', type: '', minAmount: '' }
+const EMPTY_FILTERS = { q: '', risk: '', contact: '', type: '', minAmount: '', status: '', personId: '' }
 
 function buildPriorityHref(filters: Omit<Required<Omit<PrioritySearchParams, 'page' | 'pageSize'>>, 'queue'>, queue: string, page: number, pageSize: number) {
   const params = new URLSearchParams()
@@ -51,6 +55,8 @@ function buildPriorityHref(filters: Omit<Required<Omit<PrioritySearchParams, 'pa
   if (filters.contact) params.set('contact', filters.contact)
   if (filters.type) params.set('type', filters.type)
   if (filters.minAmount) params.set('minAmount', filters.minAmount)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.personId) params.set('personId', filters.personId)
   if (queue) params.set('queue', queue)
   if (page > 1) params.set('page', String(page))
   if (pageSize !== 10) params.set('pageSize', String(pageSize))
@@ -73,31 +79,18 @@ export default async function PriorityCasesPage({
     contact: resolvedSearchParams.contact?.trim() ?? '',
     type: resolvedSearchParams.type?.trim() ?? '',
     minAmount: resolvedSearchParams.minAmount?.trim() ?? '',
+    status: resolvedSearchParams.status?.trim() ?? '',
+    personId: resolvedSearchParams.personId?.trim() ?? '',
   }
   const minAmount = Number(filters.minAmount)
   const typeOptions = [...new Set(debtors.map((debtor) => debtor.type))].sort()
-  const matchesFilters = (debtor: (typeof debtors)[number]) => {
-    const matchesRisk = !filters.risk || debtor.risk === filters.risk
-    const matchesContact =
-      !filters.contact ||
-      (filters.contact === 'with' && debtor.hasContact) ||
-      (filters.contact === 'without' && debtor.hasContact === false)
-    const matchesType = !filters.type || debtor.type === filters.type
-    const matchesAmount =
-      !filters.minAmount || (Number.isFinite(minAmount) && debtor.totalDebt !== null && debtor.totalDebt >= minAmount)
-
-    return (
-      matchesDebtorSearch(debtor, filters.q) &&
-      matchesRisk &&
-      matchesContact &&
-      matchesType &&
-      matchesAmount
-    )
-  }
+  const selection = filterPortfolio(debtors, filters, warnings)
+  const selectedIds = new Set(selection.items.map(item => item.id))
+  const matchesFilters = (debtor: (typeof debtors)[number]) => selectedIds.has(debtor.id)
   const filteredCases = getPriorityCases(debtors).filter(matchesFilters)
   // Cada cola es una intervención y se ordena por su prioridad: entre colas no se compara.
   // La pertenencia se calcula sobre toda la cartera, no sobre lo que dejó el filtro.
-  const queues = buildRecommendationSummary(debtors, warnings).map(group => {
+  const queues = buildRecommendationSummary(debtors, selection.warnings).map(group => {
     const cases = group.cases.filter(matchesFilters)
     return { ...group, cases, count: group.count === null ? null : cases.length }
   })
@@ -125,12 +118,13 @@ export default async function PriorityCasesPage({
         </div>
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {formatWithUnit(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredCases.length, 'casos')}
+          {formatWithUnit(selection.failed ? null : filteredCases.length, 'casos')}
         </Badge>
       </section>
 
       <div className="space-y-6">
-        <DataWarnings warnings={warnings} />
+        <DataWarnings warnings={selection.warnings} />
+        <PortfolioScope context={portfolioContext(debtors, warnings)} filters={{ ...filters, queue: chosenQueue }} />
         {filters.minAmount && !Number.isFinite(minAmount) && <p role="alert">Monto mínimo inválido</p>}
 
         <Card className="border-[#d2dceb]">
@@ -142,6 +136,8 @@ export default async function PriorityCasesPage({
           </CardHeader>
           <CardContent>
             <form method="get" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+              {filters.status && <input type="hidden" name="status" value={filters.status} />}
+              {filters.personId && <input type="hidden" name="personId" value={filters.personId} />}
               {chosenQueue && <input type="hidden" name="queue" value={chosenQueue} />}
               <div className="xl:col-span-2">
                 <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
@@ -159,7 +155,7 @@ export default async function PriorityCasesPage({
                 </div>
               </div>
               <div>
-                <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Riesgo</label>
+                <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Severidad</label>
                 <select
                   id="risk"
                   name="risk"
@@ -268,8 +264,8 @@ export default async function PriorityCasesPage({
                 <TableRow>
                   <TableHead>Objeto</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead>Riesgo</TableHead>
-                  <TableHead>Score / prioridad</TableHead>
+                  <TableHead>Severidad</TableHead>
+                  <TableHead>Prioridad (puntos de 0 a 100)</TableHead>
                   <TableHead className="text-right">Atraso</TableHead>
                   <TableHead className="text-right">Deuda total</TableHead>
                   <TableHead>Contacto</TableHead>
@@ -318,7 +314,7 @@ export default async function PriorityCasesPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <Link
-                        href={`/debtors/${encodeURIComponent(debtor.id)}?tab=revision`}
+                        href={`${portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, queue: selectedQueueParam })}&tab=revision`}
                         aria-label={`Abrir revisión ${debtor.identifier}`}
                         className={buttonVariants({ variant: 'default', size: 'sm' })}
                       >

@@ -1,4 +1,4 @@
-import { aggregateData, metric, unavailable } from '@/lib/data-presence'
+import { sumMoney, metric, unavailable } from '@/lib/data-presence'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { buildDebtAgingSummary, getPriorityCases, matchesDebtorSearch } from '@/lib/equitas-view-selectors'
 import { serializeCsv, type CsvValue } from '@/lib/reports/csv'
@@ -126,8 +126,8 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
     fecha_calculo_usada: fechaCalculoUsada,
   }
   // Los totales salen del selector de /debt-aging: la misma suma con los mismos faltantes.
-  const { metrics } = buildDebtAgingSummary(cases)
-  const evaluable = aggregateData(cases.map(evaluableAmount))
+  const { metrics, cases: analyticalCases } = buildDebtAgingSummary(cases)
+  const evaluable = sumMoney(cases.map(evaluableAmount))
   const total: Record<Column, CsvValue> = {
     ...meta,
     tipo_fila: 'TOTAL',
@@ -144,5 +144,5 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
     objetos: cases.length,
     faltantes: missingLabel({ deuda_total_ars: metrics.totalDebt, deuda_vencida_ars: metrics.overdueDebt, monto_evaluable_ars: evaluable }),
   }
-  return serializeCsv(COLUMNS, [...cases.map((debtor, index) => ({ ...meta, ...rowValues(debtor, index + 1, access) })), total])
+  return serializeCsv(COLUMNS, [...analyticalCases.map((debtor, index) => ({ ...meta, ...rowValues(debtor, index + 1, access) })), total])
 }

@@ -5,7 +5,7 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { aggregateData, compareNullable, currentAmount, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
+import { aggregateData, compareNullable, currentAmount, metric, observed, readingFailed, selectNumericData, sumMoney, unavailable } from '@/lib/data-presence'
 import { clampRiskScore, mapRiskLevel } from '@/lib/services/debtor-risk-calculator'
 import type {
   DataWarning,
@@ -237,8 +237,8 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     )
     const exposureFailed = readingFailed(raw.warnings, 'debt', 'debtor', 'debtor_person', 'person')
     const debtExposure = debtorIds.map(debtorId => ({ debtorId,
-      amount: aggregateData(debtAmountsByDebtor.get(debtorId) ?? [], 'sum', exposureFailed) }))
-    const exposureMetric = aggregateData(debtExposure.map(item => item.amount), 'sum', exposureFailed)
+      amount: sumMoney(debtAmountsByDebtor.get(debtorId) ?? [], exposureFailed) }))
+    const exposureMetric = sumMoney(debtExposure.map(item => item.amount), exposureFailed)
     const totalDebtAssociated = exposureMetric.value
 
     people.push({
@@ -284,7 +284,7 @@ export function summarizePeople(people: PersonListItem[], warnings: DataWarning[
   }
   const failed = filterReadFailed || readingFailed(warnings, 'person', 'debtor_person', 'debtor', 'debt')
   return {
-    totalDebtAssociated: aggregateData([...objects.values()], 'sum', failed),
+    totalDebtAssociated: sumMoney([...objects.values()], failed),
     averageRiskValue: aggregateData(people.map(person => metric(person, 'riskValue')), 'mean', readingFailed(warnings, 'person', 'debtor_profile_detail')),
   }
 }

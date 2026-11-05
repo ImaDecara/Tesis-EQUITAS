@@ -120,11 +120,17 @@ describe('selectores operativos', () => {
   })
 
   it('resume deuda y distribuye atrasos en sus bandas', () => {
-    const debtors = [
-      buildDebtor({ id: 'without-delay', totalDebt: 50, overdueDebt: 0, maxDaysOverdue: 0 }),
-      buildDebtor({ id: 'short-delay', totalDebt: 100, overdueDebt: 25, maxDaysOverdue: 30 }),
-      buildDebtor({ id: 'long-delay', totalDebt: 200, overdueDebt: 150, maxDaysOverdue: 120 }),
+    const raw = buildRawData()
+    raw.debtorProfiles = []
+    raw.debtors = [1, 2, 3].map(id => ({ id, type: 6 }))
+    raw.debts = [
+      { id: 1, debtor: 1, current_amount: 50, due_date: '2026-10-01' },
+      { id: 2, debtor: 2, current_amount: 25, due_date: '2026-08-31' },
+      { id: 3, debtor: 2, current_amount: 75, due_date: '2026-10-01' },
+      { id: 4, debtor: 3, current_amount: 150, due_date: '2026-06-02' },
+      { id: 5, debtor: 3, current_amount: 50, due_date: '2026-10-01' },
     ]
+    const debtors = mapDebtorObjectsFromRawData(raw).debtors
 
     const summary = buildDebtAgingSummary(debtors)
 
@@ -132,10 +138,11 @@ describe('selectores operativos', () => {
     expect(summary.overdueDebt).toBe(175)
     expect(summary.averageOverdueDays).toBe(75)
     expect(summary.agingDistribution).toEqual([
-      { label: 'Sin atraso', value: 1 },
+      { label: 'Sin atraso', value: 0 },
       { label: '1-30 dias', value: 1 },
       { label: '31-90 dias', value: 0 },
       { label: '+90 dias', value: 1 },
+      { label: 'No aplica', value: 1 },
     ])
   })
 })
@@ -208,7 +215,8 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     const debtor = mapDebtorObjectsFromRawData(raw, { computedAt: '2026-10-15T12:00:00.000Z' }).debtors[0]
     expect(debtor.decision?.severidad.estado).toBe(partial ? 'PARCIAL' : 'COMPLETA')
     const date = manifest ? 'fecha de corte 2026-09-30' : 'fecha de cálculo usada 2026-10-15'
-    expect(debtor.recommendationReason).toContain(`${partial ? 'al menos ' : ''}1 obligación vencida a la ${date}.`)
+    expect(debtor.recommendationReason).toContain(`${partial ? 'Al menos ' : ''}1 obligación vencida a la ${date}.`)
+    if (!partial) expect(debtor.recommendationReason).not.toMatch(/al menos \d+ obligación/i)
     expect(debtor.recommendationReason).not.toContain('obligación vencida a la fecha de corte 2026-10-15')
   })
 
@@ -335,6 +343,7 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(after.hasContact).toBeNull()
     expect(after.decision?.severidad).toStrictEqual(before.decision?.severidad)
     expect(after.decision?.intervencion.codigo).toBe('MEJORAR_DATOS')
+    expect(after.decisionIssues).toContainEqual({ field: 'contactos_activos', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     expect(after.recommendationReason).toContain('Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.')
   })
 

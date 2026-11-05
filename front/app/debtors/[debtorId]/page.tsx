@@ -1,3 +1,4 @@
+import { portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
 import decisionRules from '../../../../contracts/decision-rules.v1.json'
 import Link from 'next/link'
@@ -36,13 +37,14 @@ export default async function DebtorDetailPage({
   searchParams,
 }: {
   params: Promise<{ debtorId: string }>
-  searchParams?: Promise<{ tab?: string }>
+  searchParams?: Promise<PortfolioSearchParams & { tab?: string }>
 }) {
   const { debtorId } = await params
-  const requestedTab = (await searchParams)?.tab
+  const { tab: requestedTab, ...filters } = await searchParams ?? {}
   const { detail, warnings } = await getDebtorDetailData(debtorId)
 
   if (!detail) {
+    if (readingFailed(warnings, 'debtor')) return <AppShell><h1>Objeto no disponible</h1><DataWarnings warnings={warnings} /><p>No disponible: no se pudo leer el objeto. No se puede determinar si existe.</p><Link href={portfolioHref('/debtors', filters)}>Volver al listado</Link></AppShell>
     notFound()
   }
 
@@ -65,7 +67,7 @@ export default async function DebtorDetailPage({
     <AppShell>
       <section className="mb-6 space-y-3">
         <Link
-          href="/debtors"
+          href={portfolioHref('/debtors', filters)}
           className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
         >
           <ArrowLeft className="size-3.5" />

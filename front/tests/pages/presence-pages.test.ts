@@ -91,17 +91,17 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
   })
 
-  it('muestra no disponible cuando el único estado es desconocido', async () => {
+  it('la mora v1 por calendario no depende del estado de catálogo desconocido', async () => {
     const raw = buildPresenceRawData()
     raw.debts[0].status = 8
     raw.debts[0].current_amount = 70
     configure(buildPresencePeopleData(), raw)
     const home = await HomePage()
     const aging = await DebtAgingPage({ searchParams: Promise.resolve({}) })
-    expect(cardValues(home)['Casos vencidos']).toBe('No disponible')
-    expect(cardValues(aging)['Deuda vencida']).toBe('No disponible')
-    expect(textFromReactTree(home)).toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
-    expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(cardValues(home)['Casos vencidos']).toBe('1')
+    expect(cardValues(aging)['Deuda vencida']).toMatch(/\$\s*70/)
+    expect(textFromReactTree(home)).not.toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(aging)).not.toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
   })
 
   it('las intervenciones v1 reemplazan las del perfil y conservan los faltantes del objeto parcial', async () => {
@@ -151,19 +151,19 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     const summary = buildRecommendationSummary(mapped.debtors, raw.warnings)
     const page = await RecommendedActionsPage()
     const cards = cardValues(page)
-    const text = textFromReactTree(page)
+    const text = textFromReactTree(page).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     for (const group of summary.filter(item => item.interventionCode !== null)) {
       expect(group).toMatchObject({ count: null, cases: [], highlightedCases: [], debtAssociated: null, averageRisk: null })
       expect(group.metrics.totalDebt.presence).toBe('NO_INTEGRADO')
       expect(group.metrics.riskScore.presence).toBe('NO_INTEGRADO')
       expect(cards[group.recommendation]).toBe('No disponible')
-      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s+Sin casos`))
+      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s+No disponible: lectura incompleta\\.`))
     }
     const unavailable = summary.find(group => group.interventionCode === null)!
     expect(unavailable.count).toBe(failure === 'debtor' ? null : mapped.debtors.length)
     expect(unavailable.cases).toEqual(mapped.debtors)
     expect(cards['No disponible']).toBe(failure === 'debtor' ? 'No disponible' : '1')
-    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toEqual([])
+    expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toEqual(failure === 'debtor' ? [] : [{ label: 'No disponible', value: 1 }])
     expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+No disponible\s+Revisión jurídica/)
   })
 
@@ -184,7 +184,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(summary.every(group => group.count === group.cases.length)).toBe(true)
     const page = await RecommendedActionsPage()
     expect(cardValues(page)).toMatchObject({ Seguimiento: '1', 'No disponible': '1', 'Mejorar datos': '0' })
-    expect(textFromReactTree(page)).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0\s*\/\s*100/)
+    expect(textFromReactTree(page).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0\s*\/\s*100/)
     expect(textFromReactTree(page)).toContain('Deuda total: 1 NO_INFORMADO_EN_ORIGEN')
     expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
   })
@@ -267,7 +267,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     raw.debts[0].current_amount = null
     configure(buildPresencePeopleData(), raw)
     const unavailable = textFromReactTree(await HomePage())
-    expect(unavailable).toMatch(/Objetos en riesgo alto:\s*No disponible/)
+    expect(unavailable).toMatch(/Objetos con severidad alta:\s*No disponible/)
     expect(unavailable).not.toMatch(/(?:^|\s)0%\s*de los objetos/)
   })
 

@@ -1,3 +1,4 @@
+import { moneyData, sumMoney } from '@/lib/analytics'
 import {
   parseBooleanFromUnknown,
   rowHasCandidateKey,
@@ -5,10 +6,10 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { aggregateData, daysSinceData, metric, numericData, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
+import { aggregateData, daysSinceData, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
-import { amountInCents, evaluateDecisionRulesV1, RULES_VERSION, type DecisionInput, type RuleDatum } from '@/lib/domain/decision-rules-v1'
+import { evaluateDecisionRulesV1, RULES_VERSION, type DecisionInput, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import type {
   DebtorContactItem,
   DebtorDebtItem,
@@ -122,17 +123,6 @@ function ruleDate(value: unknown, field: string, issues: DecisionDataIssue[], ab
   return { estado: 'OBSERVADO', valor: text }
 }
 
-function ruleAmount(data: NumericData): NumericData {
-  if (data.value === null) return data
-  try {
-    amountInCents(data.value)
-    return data
-  } catch (error) {
-    if (!(error instanceof RangeError)) throw error
-    return unavailable('INVALIDO', 'IMPORTE_NO_EXPRESABLE_EN_CENTAVOS_SEGUROS')
-  }
-}
-
 // Solo campos de origen explícitos: status y period heredados NO los sustituyen.
 function sourceDatum(row: RawRow, key: string): RuleDatum<string | number> {
   const value = selectValueFromRow(row, [key])
@@ -157,7 +147,9 @@ function decisionMetric(input: DecisionInput | null, value: number | null, issue
     return unavailable(issues.some(issue => issue.presence === 'INVALIDO') ? 'INVALIDO' : 'NO_INTEGRADO', 'DECISION_NO_EVALUABLE')
   }
   const missing = input.obligaciones.flatMap(item => [item.current_amount, item.due_date])
-    .filter(item => item.estado !== 'OBSERVADO').map(item => unavailable(item.estado))
+    .flatMap(item => item.estado !== 'OBSERVADO' ? [unavailable(item.estado)]
+      : typeof item.valor === 'number' ? item.valor < 0 ? [unavailable('INVALIDO')] : []
+      : item.valor < '1970-01-01' ? [unavailable('INVALIDO')] : [])
   const data = aggregateData(missing, 'max')
   return value === null ? missing.length ? data : unavailable('INVALIDO', 'OBLIGACIONES_NO_EVALUABLES')
     : { ...observed(value), missing: data.missing }
@@ -175,7 +167,7 @@ export function mapDebtorObjectsFromRawData(
   }
   const contextIssues: DecisionDataIssue[] = []
   const decisionAsOfSource = raw.batch ? 'MANIFIESTO_LOTE' : 'FECHA_CALCULO'
-  const decisionAsOf = ruleDate(raw.batch ? raw.batch.as_of : decisionComputedAt.slice(0, 10), 'as_of', contextIssues)
+  const decisionAsOf = ruleDate(raw.batch ? raw.batch.as_of : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Cordoba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(decisionComputedAt)), 'as_of', contextIssues)
   const sourceUpdatedAt = ruleDate(raw.batch?.source_updated_at, 'source_updated_at', contextIssues, 'NO_INTEGRADO')
   const cutoff = decisionAsOf.valor === null ? null : Date.parse(`${decisionAsOf.valor}T00:00:00.000Z`)
 
@@ -216,8 +208,8 @@ export function mapDebtorObjectsFromRawData(
       continue
     }
 
-    const original = selectNumericData(debt, ['original_amount', 'amount_original', 'capital_amount', 'amount', 'monto_original'])
-    const updated = ruleAmount(Object.hasOwn(debt, 'current_amount') ? numericData(debt.current_amount) : unavailable('NO_INTEGRADO'))
+    const original = moneyData(selectValueFromRow(debt, ['original_amount', 'amount_original', 'capital_amount', 'amount', 'monto_original']))
+    const updated = Object.hasOwn(debt, 'current_amount') ? moneyData(debt.current_amount) : unavailable('NO_INTEGRADO')
     const originalAmount = original.value
     const updatedAmount = updated.value
     const decisionIssues: DecisionDataIssue[] = []
@@ -472,18 +464,18 @@ export function mapDebtorObjectsFromRawData(
     const debtFailed = readingFailed(raw.warnings, 'debt', 'debtor')
     const profileFailed = readingFailed(raw.warnings, 'debtor_profile')
     const overdueDebts = debts.filter(debt => overdueDebtItems.has(debt))
-    const totalFromProfile = selectNumericData(profile ?? {}, ['total_debt_amount', 'total_debt', 'debt_total', 'amount_total'])
-    const overdueFromProfile = selectNumericData(profile ?? {}, ['overdue_debt_amount', 'overdue_debt', 'debt_overdue'])
+    const totalFromProfile = moneyData(selectValueFromRow(profile ?? {}, ['total_debt_amount', 'total_debt', 'debt_total', 'amount_total']))
+    const overdueFromProfile = moneyData(selectValueFromRow(profile ?? {}, ['overdue_debt_amount', 'overdue_debt', 'debt_overdue']))
     const totalMetric = debtFailed || profileFailed ? unavailable()
       : totalFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
-        ? aggregateData(debts.map(debt => metric(debt, 'updatedAmount'))) : totalFromProfile
+        ? sumMoney(debts.map(debt => metric(debt, 'updatedAmount'))) : totalFromProfile
     const missingStatuses = debts.filter(debt => debt.statusPresence !== 'OBSERVADO')
       .map(debt => unavailable(debt.statusPresence))
     const statusIncomplete = missingStatuses.length > 0
     const overdueMetric = debtFailed || profileFailed ? unavailable()
       // Con estados faltantes, el valor persistido es un subtotal: leerlo solo perdería su desglose (§4.1).
       : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN' || statusIncomplete
-        ? aggregateData([...overdueDebts.map(debt => metric(debt, 'updatedAmount')), ...missingStatuses])
+        ? sumMoney([...overdueDebts.map(debt => metric(debt, 'updatedAmount')), ...missingStatuses])
         : overdueFromProfile
     const totalDebt = totalMetric.value
     const overdueDebt = overdueMetric.value
@@ -535,7 +527,7 @@ export function mapDebtorObjectsFromRawData(
     const overdueCount = decision?.severidad.cantidad_vencidas ?? 0
     const overdueDateLabel = decisionAsOfSource === 'FECHA_CALCULO' ? 'fecha de cálculo usada' : 'fecha de corte'
     const overdueReason = overdueCount > 0
-      ? ` ${decision?.severidad.estado === 'PARCIAL' ? 'al menos ' : ''}${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la ${overdueDateLabel} ${decisionAsOf.valor}.`
+      ? ` ${decision?.severidad.estado === 'PARCIAL' ? 'Al menos ' : ''}${overdueCount} ${overdueCount === 1 ? 'obligación vencida' : 'obligaciones vencidas'} a la ${overdueDateLabel} ${decisionAsOf.valor}.`
       : ''
     const contactReason = contactsFailed ? ' Lectura de contactos no disponible: no se pudo verificar si hay contacto cargado.' : ''
     const temporalProvenance = `${decisionTime}; reglas v${RULES_VERSION}; decisión calculada el ${decisionComputedAt}. Importes del perfil: ${computedAt ?? 'momento de cálculo desconocido'}; estado del catálogo persistido: momento de cálculo desconocido.`

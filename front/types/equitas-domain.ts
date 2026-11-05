@@ -54,6 +54,9 @@ export type ChartBucket = {
 }
 
 export type DashboardData = PresenceMetrics & {
+  coverage?: Record<string, string>
+  context?: string
+  queuePreviews?: Array<{ code: string | null; label: RecommendationKind; count: number | null; cases: DebtorListItem[] }>
   totalDebtors: number | null
   totalDebt: number | null
   overdueCases: number | null

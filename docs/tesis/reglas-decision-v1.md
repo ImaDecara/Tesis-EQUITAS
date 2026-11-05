@@ -302,7 +302,7 @@ quedan null. Una lectura correcta sin relaciones sí permite `personas: []`.
 
 `RawDebtorDataBundle.batch` es el punto de entrada opcional del manifiesto
 (`as_of` y `source_updated_at`); el lector actual todavía no lo integra. Sin
-manifiesto se usa la fecha UTC de cálculo capturada una sola vez, con el aviso
+manifiesto se usa la fecha del calendario de Córdoba (`America/Argentina/Cordoba`) del instante UTC de cálculo capturado una sola vez, con el aviso
 **“Fecha de cálculo usada: …; corte de origen no informado (corte no integrado)”**.
 No se presenta como corte certificado. Con un manifiesto presente pero inválido
 o sin fecha, la decisión es no disponible, sin sustitución silenciosa. El segundo
@@ -335,7 +335,7 @@ Cuando hay obligaciones vencidas evaluables, el adaptador añade al motivo
 “N obligación(es) vencida(s) a la fecha de corte AAAA-MM-DD”, con concordancia
 singular/plural y la fecha del manifiesto, aunque se calcule otro día. Si no hay
 manifiesto dice “a la fecha de cálculo usada”; si la severidad es PARCIAL,
-antepone “al menos” porque la cantidad es un mínimo. Ante lectura fallida de
+antepone “Al menos” porque la cantidad es un mínimo; una decisión completa no lleva ese prefijo en el conteo. Ante lectura fallida de
 contactos añade “Lectura de contactos no disponible: no se pudo verificar si
 hay contacto cargado.” No modifica las frases del JSON congelado.
 

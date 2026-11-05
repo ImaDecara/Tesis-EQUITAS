@@ -76,7 +76,7 @@ describe('colas por intervención', () => {
     expect(text).toContain('Casos prioritarios')
     expect(text).toContain('Filtros operativos')
     expect(text).toContain('6 casos')
-    expect(text).toContain('Score / prioridad')
+    expect(text).toContain('Prioridad (puntos de 0 a 100)')
   })
 
   it('no presenta un ranking global: entre colas no se compara', async () => {
@@ -124,7 +124,7 @@ describe('colas por intervención', () => {
 
   it('el acceso al caso abre la pestaña Revisión y nombra el objeto', async () => {
     const { markup } = await open({ queue: 'RECORDATORIO_INFORMATIVO' })
-    expect(markup).toContain('href="/debtors/5?tab=revision"')
+    expect(markup).toContain('href="/debtors/5?queue=RECORDATORIO_INFORMATIVO&amp;tab=revision"')
     expect(markup).toContain('aria-label="Abrir revisión MEDIA"')
   })
 })
@@ -144,7 +144,7 @@ describe('los filtros se conservan', () => {
     expect(markup).toMatch(/href="\/priority-cases"[^>]*>Limpiar/)
     const found = await open({ q: 'media' })
     expect(found.text).toContain('Cola: Recordatorio')
-    expect(found.markup).toContain('href="/debtors/5?tab=revision"')
+    expect(found.markup).toContain('href="/debtors/5?q=media&amp;queue=RECORDATORIO_INFORMATIVO&amp;tab=revision"')
   })
 
   it('una cola inventada tampoco se conserva', async () => {
@@ -191,7 +191,7 @@ describe('los filtros se conservan', () => {
 
   it('cada filtro tiene un nombre accesible', async () => {
     const { markup } = await open()
-    for (const [name, label] of [['risk', 'Riesgo'], ['contact', 'Contacto'], ['type', 'Tipo'], ['q', 'Buscar por objeto o persona'], ['minAmount', 'Monto minimo']]) {
+    for (const [name, label] of [['risk', 'Severidad'], ['contact', 'Contacto'], ['type', 'Tipo'], ['q', 'Buscar por objeto o persona'], ['minAmount', 'Monto minimo']]) {
       const tag = new RegExp(`<(?:select|input)[^>]*name="${name}"[^>]*>`).exec(markup)?.[0] ?? ''
       const id = /\bid="([^"]+)"/.exec(tag)?.[1]
       expect(id, name).toBeTruthy()

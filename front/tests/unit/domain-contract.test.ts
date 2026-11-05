@@ -66,7 +66,7 @@ const visibleFields = [
     hasContact: true, totalDebtAssociated: true, debtorIds: true, debtorIdentifiers: true,
   }),
   ...fields<DashboardData>('DashboardData', {
-    metrics: true,
+    metrics: true, coverage: true, context: true, queuePreviews: true,
     totalDebtors: true, totalDebt: true, overdueCases: true, withContactCases: true,
     withoutContactCases: true, priorityCases: true, urgentRecommendationCases: true,
     criticalCasesToday: true, riskAboveNinetyCases: true, criticalDebtTotal: true,
@@ -105,7 +105,7 @@ const pageCalculations: Record<string, string[]> = {
   ],
   'app/debtors/page.tsx': ['filteredDebtors'],
   'app/priority-cases/page.tsx': ['filteredCases'],
-  'app/debt-aging/page.tsx': ['debtByStatusChart', 'topDebtChart'],
+  'app/debt-aging/page.tsx': ['debtByQueueChart', 'topDebtChart'],
   'app/risk-analysis/page.tsx': [
     'objectRiskDistribution', 'highRiskCases', 'highIndividualRiskPeople',
   ],
@@ -174,9 +174,9 @@ describe('ALIGN-007: contrato de dominio v1', () => {
     }
   })
 
-  it('distingue el conteo de obligaciones por estado de la suma en ARS por estado del objeto', () => {
+  it('distingue el conteo de obligaciones por estado de la suma en ARS por intervención', () => {
     expect(dictionaryRow('DashboardData.byDebtStatus')[4]).toBe('obligaciones')
-    expect(dictionaryRow('debtByStatusChart')[4]).toContain('ARS')
+    expect(dictionaryRow('debtByQueueChart')[4]).toContain('ARS')
   })
 
   it('separa las claves internas de los identificadores externos del archivo municipal', () => {

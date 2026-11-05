@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Ticket | ALIGN-013, plan `2026-10-28-v2` (M1) |
-| Versión | v1, **provisional**: hereda el carácter provisional del [contrato de dominio][contrato] (ALIGN-007) y de las [reglas de decisión v1][reglas] (ALIGN-008) |
+| Versión | v1 con [adenda vigente ALIGN-014 (§21)](#analitica-align014), **provisional**: hereda el carácter provisional del [contrato de dominio][contrato] (ALIGN-007) y de las [reglas de decisión v1][reglas] (ALIGN-008) |
 | Código descrito | `ab4c5b30526e5631390dd05e17851fb6ad7465a6`: integración del plan con ALIGN-011 (mapeadores con estados de presencia de datos). Las citas `archivo:línea` de este catálogo remiten a ese código; algunas citas del contrato ALIGN-007 remiten a `36f35b4` y se corrieron (§14) |
 | Fuentes | Pantallas `front/app/**/page.tsx` y componentes `front/components/**`; contrato de dominio v1 (§7, en especial §7.9); reglas de decisión v1; plan v2 §4 y §7 |
 | Consumidores | ALIGN-014 (tablero y vistas analíticas según este catálogo), ALIGN-010/021 (colas por intervención), ALIGN-012 (rótulos), tesis (capítulo de indicadores) |
@@ -12,7 +12,7 @@
 
 ## 1. Propósito y cómo leer cada entrada
 
-El tablero mezcla cifras que parecen iguales y no lo son: "críticos" y "deuda crítica" tienen poblaciones distintas ([KPI-55](#kpi-55) y [KPI-56](#kpi-56)), "Deuda asociada" significa tres cosas según la pantalla ([KPI-35](#kpi-35), [KPI-46](#kpi-46), [KPI-48](#kpi-48)) y el "riesgo" es un índice heredado de severidad, no una probabilidad ni un dato social `[P0105]`, `[P0108]`. Este catálogo da a **cada cifra visible** una definición enlazable y dice qué decisión apoya y qué **no** significa `[P0211]`, `[P0228]`.
+La versión histórica del tablero mezclaba cifras que parecían iguales; [§21](#analitica-align014) fija las correcciones vigentes. En la descripción histórica: "críticos" y "deuda crítica" tienen poblaciones distintas ([KPI-55](#kpi-55) y [KPI-56](#kpi-56)), "Deuda asociada" significa tres cosas según la pantalla ([KPI-35](#kpi-35), [KPI-46](#kpi-46), [KPI-48](#kpi-48)) y el "riesgo" es un índice heredado de severidad, no una probabilidad ni un dato social `[P0105]`, `[P0108]`. Este catálogo da a **cada cifra visible** una definición enlazable y dice qué decisión apoya y qué **no** significa `[P0211]`, `[P0228]`.
 
 Cada entrada tiene un ancla estable (`#kpi-NN`) y estos campos:
 
@@ -1164,3 +1164,51 @@ Cifras nuevas de la pestaña "Revisión" (`front/components/review/review-panel.
 | <a id="kpi-v1-contador-motivo"></a>KPI-V1-17 Contador del detalle | "n de 500 caracteres, contando los espacios" | `[...texto].length` | Puntos de código del texto escrito | Vacío → 0 y se envía `null` | Límite de `reason_text`. No es un dato de dominio |
 
 Campos de registro del historial (no son indicadores): fecha, rol, decisión, motivo, corte, versión de reglas y lista de control de `case_review` y `case_review_approval`. Las fechas de corte se muestran con `formatDate`; los instantes, en hora de Córdoba.
+
+## 21. <a id="analitica-align014"></a>Analítica vigente — ALIGN-014 (noche 5)
+
+Esta sección define el comportamiento vigente del tablero, `/risk-analysis`, `/debt-aging`, `/recommended-actions`, `/no-contact` y sus listados. Reemplaza las fórmulas y rótulos históricos incompatibles de las secciones anteriores; sus anclas se conservan como trazabilidad. Las reglas congeladas v1 y sus umbrales no cambian.
+
+### Población, corte y cobertura
+
+Cada vista muestra la población **antes de paginar**, la fecha del manifiesto cuando existe y, cuando falta, la fecha de cálculo del calendario de Córdoba (`America/Argentina/Cordoba`). El instante de cálculo sigue siendo UTC. Entre las 21:00 y 24:00 de Córdoba no se toma el día siguiente. Un manifiesto presente con fecha inválida bloquea la decisión; no se sustituye por el reloj.
+
+La leyenda distingue el corte de las decisiones del **saldo histórico**, cuyo corte de origen no está integrado y puede provenir de `debtor_profile`. Ningún monto afirma exigibilidad. Las lecturas no aportan un manifiesto municipal de cartera: esa ausencia se declara, no se deduce del último perfil.
+
+`n de N objetos con dato` significa valores observados sobre la población pertinente de cada cifra. Se informa además cuántos valores son parciales; el desglose de `DataPresence` conserva los faltantes de obligaciones. Un mínimo parcial no prueba ausencia de otras vencidas ni una banda máxima. En la media de atraso, N incluye objetos con mora observada y objetos cuyo atraso es desconocido; excluye los objetos completos sin mora, para los cuales el atraso es `NO_APLICA`.
+
+Los filtros `q`, `risk` (banda de severidad), `type`, `contact`, `minAmount`, `status`, `personId` y `queue` acompañan los enlaces entre las siete vistas, el detalle y el regreso al listado. La página y el tamaño se conservan en su paginación; cambiar de vista reinicia la página. La cola elegida explícitamente se conserva; una cola seleccionada por defecto no restringe una búsqueda nueva. Cuando falta un dato necesario para filtrar se declara cuántos objetos no pueden evaluarse y se muestran coincidencias observadas. Cero coincidencias con objetos no evaluables se presenta como selección incompleta, no como vacío confirmado.
+
+### Definiciones aplicadas
+
+| Cifra o vista | Fórmula y población | Unidad y denominador | Corte y ausencias |
+|---|---|---|---|
+| Objetos con severidad alta (KPI-02, KPI-42, AG05) | Objetos de banda ALTA v1, desde 70 inclusive; KPI y tabla comparten selección | objetos; porcentaje sobre todos los objetos seleccionados, incluidos los sin puntaje | Corte v1; perfil histórico fallido no invalida severidad |
+| Críticos y deuda crítica (KPI-55/56, compatibilidad) | `criticalCasesToday` cuenta banda ALTA; `criticalDebtTotal` suma el saldo histórico **de esa misma población** | objetos / ARS | Contador al corte v1; saldo histórico sin corte integrado. `riskAboveNinetyCases` se retiene solo por compatibilidad y no alimenta el KPI visible |
+| Deuda total (KPI-01/23) | Una suma por objeto de saldo histórico observado, conservando la preferencia previa por perfil | ARS; cobertura de objetos con saldo sobre seleccionados | No se equipara a monto evaluable ni a deuda exigible |
+| Casos vencidos (KPI-03) | Objetos con al menos una obligación evaluable, importe positivo y vencimiento estrictamente anterior al corte | objetos, nunca cantidad de obligaciones | Datos parciales: mínimo observado; no usa estado de catálogo ni saldo vencido persistido |
+| Deuda vencida y atraso (KPI-24/25/26) | Suma de importes evaluables vencidos; media redondeada del máximo de días por objeto con mora; distribución por máximo | ARS / días calendario / objetos; la media no pondera por obligaciones ni por monto | Corte v1; completo sin vencidas → `NO_APLICA` en atraso; parcial sin vencidas conocidas → no disponible; faltantes en categoría propia |
+| Con/sin contacto (KPI-04/05/45/47) | Objetos con/sin un contacto cargado activo por relación activa; `null` nunca es sin contacto | objetos; proporción sobre todos los seleccionados | Estado leído, sin fecha de verificación integrada; no equivale a contacto verificado ni consentimiento |
+| Revisión requerida (KPI-06) | Decisiones que exigen revisión, incluidas R2 sin puntaje | objetos con decisión; cobertura explícita | No se condiciona a tener un puntaje numérico |
+| Severidad por banda y por tipo | Objetos en cada categoría observada; sin puntaje en No disponible | objetos; porcentajes sobre suma de categorías, incluido No disponible | Corte v1 para banda; tipo leído sin fecha de origen |
+| Intervenciones, montos y medias (KPI-V1-04/05/06) | Cinco colas v1 y objetos sin cola conocida; cada monto suma obligaciones evaluables, vencidas o no; media de severidad observada | objetos / ARS / puntos 0–100; cobertura separada por monto y severidad | No disponible conserva conteo de objetos conocidos y motivos `INVALIDO`; una lectura fallida no crea cinco colas vacías |
+| Primeros casos de cada cola (reemplaza KPI-08 global) | Hasta tres por intervención, prioridad descendente → monto evaluable descendente → vencimiento más antiguo → ID por código | puntos 0–100 **solo dentro de esa cola** | Nunca se publica un orden comparativo de prioridad entre intervenciones; `topPriorityDebtors` queda vacío por compatibilidad |
+| Mayores saldos y concentración (KPI-09/27/28/29) | Top 5 o 10 de importes históricos observados; saldo descendente y empate ID por código; concentración top 5 / saldo observado seleccionado | ARS / % del subtotal observado | Nulos fuera del ranking y presentes en cobertura; subtotal parcial rotulado |
+| Monto evaluable por intervención (reemplaza KPI-22) | Misma suma por cola de KPI-V1-05 | ARS por intervención | Sustituye el gráfico de saldo por estado persistido; no cambia `byDebtStatus`, conteo de obligaciones de compatibilidad |
+| Panel de personas en análisis | Máximo del índice heredado entre perfiles vinculados; población completa de personas leídas, declarada junto al panel | personas / puntos; cobertura de personas | Corte del índice no integrado. Los filtros de objetos no se presentan como filtros de personas |
+
+`buildDebtAgingSummary` adapta sus filas al calendario v1; conserva el DTO histórico de detalle sin volver a ejecutar el motor. El CSV de cola toma esas mismas filas analíticas para deuda vencida y atraso, de modo que sus detalles concilian con su total y las tarjetas. La conciliación de montos en acciones conserva separados saldo histórico, monto evaluable, importes sin vencimiento evaluable y resto de la diferencia.
+
+### Vacío, fallo y precisión
+
+Una selección completa vacía permite conteo y suma cero; la media es `NO_APLICA`. Una lectura fallida devuelve valores no disponibles y aviso, no "No hay objetos/personas/casos", paginación 0–0 ni 404. La ficha usa 404 solo cuando la lectura del objeto concluyó sin encontrarlo. Las vistas conservan los objetos conocidos aun cuando no puede determinarse su cola. Los datos parciales muestran cobertura y faltantes.
+
+Los importes se leen como texto decimal desde PostgREST en `debt` y `debtor_profile`, antes de convertir a `number`; se verifica el valor exacto en centavos. Un importe o suma que exceda el rango seguro o pierda centavos se declara `INVALIDO`, sin redondearlo silenciosamente (incluye el límite heredado LIM-027-01). Las sumas y diferencias monetarias usan enteros `BigInt` en centavos y validan el resultado representable. Esto también protege la exposición asociada de personas. No se modifica el esquema ni el núcleo de reglas.
+
+La proyección de `person` excluye `birth_date`; la de `debtor_profile_detail` excluye `reason`. Se mantienen columnas usadas por los mapeadores, claves escalares, uniones y filtros de alcance existentes. ALIGN-014 no cambia autenticación, permisos ni filtros por municipio/objeto; la corrección de privacidad coordinada pertenece a su dueño separado.
+
+### Comprobación reproducible
+
+`front/tests/integration/analytics-reference.integration.test.ts` contrasta 3.507 objetos sintéticos y sus obligaciones contra consultas SQLite independientes (`front/tests/fixtures/analytics-reference.py`), sin importar selectores ni motor de producción en la referencia. Fija corte y compara seis selecciones, totales, mora, bandas, tipos, distribución de atraso, top 10 y 5 y **todos** los IDs ordenados de cada cola. Se conserva además la regresión de lectura paginada de 3.507 filas.
+
+Las pruebas de `analytics-catalog` cubren el día civil de Córdoba, perfil fallido, población de críticos, `INVALIDO`, mora por calendario, precisión decimal, filtros conservados, fallos frente a vacío y asociaciones de las cuatro etiquetas con sus controles. La evidencia de comandos, SHA, UI local, E06, SMOKE-01, gates y campaña 022 se entrega fuera de git en la carpeta de ALIGN-014/noche-5. La revisión independiente y la decisión de integración corresponden al padre.
