@@ -734,6 +734,7 @@ def test_reclasificacion_sql_respeta_estados_faltantes_fechas_y_objetos_ajenos(p
         *((key, "2026-09-01", "13", key) for key in
           ("PAID", "CANCELLED", "SUSPENDED", "UNKNOWN", None, "PAYMENT_PLAN", "JUDICIAL", "CERTIFICATE_ACTIVE")),
         ("ACTIVE", None, "17", "ACTIVE"),
+        ("OVERDUE", None, "19", "OVERDUE"),
     ]
     values = ",".join(
         f"({900000 + index},990001,{amount},{amount}," + (f"'{due}'" if due else "null") + ","
@@ -772,7 +773,7 @@ def test_reclasificacion_sql_respeta_estados_faltantes_fechas_y_objetos_ajenos(p
     profile = after["profiles"][0]
     assert profile["debtor"] == 990001
     assert profile["total_debt_amount"] == sum(Decimal(amount) for _, _, amount, _ in cases)
-    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("21.50"), 2, 2)
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("40.50"), 3, 2)
     assert (profile["oldest_debt_days"], profile["average_debt_age_days"]) == (5, 4)
 
 

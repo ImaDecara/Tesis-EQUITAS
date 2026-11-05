@@ -360,8 +360,11 @@ al validar sea el que quede en `import_batch.file_hashes` en `VALIDADO` y en `PU
   ("Política de ausentes"). Un objeto en cuarentena sí viene en el archivo: conserva su estado previo y no se compara.
   `--limit-objects` y `--priority-tipo-ingreso` se rechazan antes de leer.
 - **El perfil se calcula desde lo persistido.** `recompute_debtor_profiles(object_ids, as_of, contact_columns_integrated)`,
-  migración `20261102180000`, solo para `service_role`. Recalcula los objetos pedidos, solo reescribe el que cambió y devuelve
-  un único objeto JSON con los conteos. La carga la llama con los objetos aceptados: un perfil ajeno no se toca.
+  migración `20261102180000`, solo para `service_role`. Antes de calcular, también escribe `debt.status`: reclasifica
+  `ACTIVE`/`OVERDUE` con vencimiento conocido según el corte, solo en los objetos pedidos. Conserva los demás estados
+  y las obligaciones sin fecha. Solo reescribe filas que cambiaron y devuelve un único objeto JSON con los conteos,
+  incluidas `deudas_reclasificadas`. La carga la llama con los objetos aceptados: un perfil ajeno no se toca.
+  **Esta RPC escribe cartera; no debe usarse para un preview** (ALIGN-032/054).
 
 ### 8.5 Límites
 
