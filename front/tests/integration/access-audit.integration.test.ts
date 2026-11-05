@@ -73,6 +73,38 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', () => {
+  it.each(REPORTS)('%s: HEAD autoriza, sin leer cartera ni construir o auditar un CSV', async (name, get, code) => {
+    const rpc = writer()
+    const { requests } = session()
+    const response = await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('')
+    expect(response.headers.get('content-disposition')).toBe(`attachment; filename="equitas-${code}.csv"`)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(rpc).not.toHaveBeenCalled()
+    expect(createWriter).not.toHaveBeenCalled()
+    expect(requests.length).toBeGreaterThan(0)
+    expect(requests.every(read => ['user', 'tenant_user', 'tenant', 'role'].includes(read.table))).toBe(true)
+  })
+
+  it.each(REPORTS)('%s: HEAD no requiere la credencial de escritura de auditoria', async (name, get) => {
+    session()
+    createWriter.mockReturnValue(null)
+    const response = await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('')
+    expect(createWriter).not.toHaveBeenCalled()
+  })
+
+  it.each(REPORTS)('%s: HEAD conserva el rechazo sin sesion o permiso', async (name, get) => {
+    const rpc = writer()
+    session('supervisor', false)
+    expect((await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))).status).toBe(401)
+    session('importador')
+    expect((await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))).status).toBe(403)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
   it.each(REPORTS)('%s: un registro con actor y municipio de la sesion, despues de leer y antes de responder', async (name, get, code) => {
     const rpc = writer()
     const { requests } = session()

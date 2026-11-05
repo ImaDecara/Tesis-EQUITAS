@@ -35,7 +35,7 @@ create table public."access_audit" (
   )
 );
 
-comment on table public."access_audit" is 'ALIGN-069. Quien hizo que accion de la aplicacion, sin valores personales. Retencion declarada: 24 meses; la purga no esta automatizada (SUPABASE_TESTING_CALIDAD.md). No registra lecturas directas por la Data API.';
+comment on table public."access_audit" is 'ALIGN-069. Quien hizo que accion de la aplicacion, sin valores personales. Retencion propuesta: 24 meses, pendiente de aprobacion humana; sin purga automatica ni autorizacion de purga (SUPABASE_TESTING_CALIDAD.md). No registra lecturas directas por la Data API.';
 
 comment on column public."access_audit"."target" is 'Identificador interno (CASE_OPEN, CHANNEL_LINK: debtor.id; IMPORT_CONFIRM: import_batch.id) o codigo (REPORT_EXPORT, ANALYTICS_VIEW). Nunca un valor personal ni texto libre.';
 

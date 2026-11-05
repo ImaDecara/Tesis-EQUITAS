@@ -63,11 +63,11 @@ async function signIn(label) {
 const sessions = {}
 for (const label of Object.keys(accounts)) sessions[label] = await signIn(label)
 
-const app = (root, path, label, extra = {}) => {
+const app = (root, path, label, extra = {}, method = 'GET') => {
   const session = label ? sessions[label] : null
   const { tenant, ...headers } = extra
   const cookie = [session?.cookie, tenant ? `equitas_tenant_id=${tenant}` : ''].filter(Boolean).join('; ')
-  return fetch(new URL(path, root), { redirect: 'manual', headers: { ...(cookie ? { cookie } : {}), ...headers } })
+  return fetch(new URL(path, root), { method, redirect: 'manual', headers: { ...(cookie ? { cookie } : {}), ...headers } })
 }
 // Next 16 valida el hash de `_rsc`: la primera respuesta es un 307 a la misma ruta con el correcto.
 // Sin seguirlo no se renderiza nada, y un "sin registro" no probaria nada.
@@ -160,6 +160,15 @@ for (const [name, path, label, extra] of [
 // 2. Exportaciones: un registro por archivo entregado; ninguno si no se entrega.
 const REPORTS = { queue: 'cola-de-trabajo', decisions: 'decisiones', supervision: 'supervision', 'data-quality': 'calidad-de-datos', access: 'accesos' }
 for (const [route, code] of Object.entries(REPORTS)) {
+  for (const [name, root, label, expected] of [
+    ['autorizado', base, 'supervisor', 200],
+    ['sin credencial de auditoria', baseWithoutCredential, 'supervisor', 200],
+    ['anonimo', base, null, 307],
+    ['sin permiso', base, 'importador', 403],
+  ]) {
+    const { added, status, body } = await delta(() => app(root, `/api/reports/${route}`, label, {}, 'HEAD'))
+    check(`HEAD ${route} ${name}: sin archivo ni registro`, status === expected && body.length === 0 && added === 0, `status=${status} bytes=${body.length} agregados=${added}`)
+  }
   const { added, status, body } = await delta(() => app(base, `/api/reports/${route}`, 'supervisor'))
   const row = newestAudit()
   check(`exportar ${route}: un registro`, status === 200 && added === 1 && body.length > 0, `status=${status} agregados=${added}`)

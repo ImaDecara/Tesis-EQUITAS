@@ -2,7 +2,7 @@
 
 Las pruebas con transporte simulado están en `tests/integration/access-audit.integration.test.ts` y corren con los gates. Esta carpeta prueba lo mismo con `next start`, Auth, RLS y PostgREST reales. No entra en los gates porque necesita el stack y un turno. Solo acepta `127.0.0.1`.
 
-`run-audit.mjs` cubre: un registro por ficha entregada (HTML, RSC y clic en Chromium), ninguno en prefetch, listado ni denegaciones; un registro por exportación; el reporte contra la tabla, fila por fila; lectura por municipio y por rol; escritura, edición y borrado directos rechazados por la Data API y por el dueño de la tabla; validación e idempotencia de la función; lote `VALIDADO`, analítica y canal (057, 064, 066); la limitación declarada de las lecturas directas, y la falla cerrada con la aplicación sin credencial.
+`run-audit.mjs` cubre: un registro por ficha entregada (HTML, RSC y clic en Chromium), ninguno en prefetch, listado ni denegaciones; un registro por exportación GET y ninguno por HEAD en los cinco reportes, conservando los rechazos sin sesión o permiso; el reporte contra la tabla, fila por fila; lectura por municipio y por rol; escritura, edición y borrado directos rechazados por la Data API y por el dueño de la tabla; validación e idempotencia de la función; lote `VALIDADO`, analítica y canal (057, 064, 066); la limitación declarada de las lecturas directas, y la falla cerrada con la aplicación sin credencial. HEAD no necesita la credencial de escritura porque solo devuelve metadatos después de autorizar, sin leer ni entregar el CSV.
 
 ## Procedimiento
 

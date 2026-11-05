@@ -16,14 +16,17 @@ function failure(status: number, body: Record<string, unknown>) {
   return Response.json(body, { status, headers: PRIVATE_HEADERS })
 }
 
-export async function csvReportResponse(fileName: string, permission: DalPermission, build: (access: ReportAccess) => Promise<string>) {
+export async function csvReportResponse(request: Request, fileName: string, permission: DalPermission, build: (access: ReportAccess) => Promise<string>) {
   try {
     const access = await requireTenantAccess({ permission })
+    const headers = { ...PRIVATE_HEADERS, 'Content-Type': CSV_CONTENT_TYPE, 'Content-Disposition': `attachment; filename="equitas-${fileName}.csv"` }
+    // HEAD solo consulta metadatos autorizados: no lee la cartera ni entrega un archivo.
+    if (request.method === 'HEAD') return new Response(null, { status: 200, headers })
     const csv = await build(access)
     await recordAccessAudit(access.context, { action: 'REPORT_EXPORT', target: fileName })
     return new Response(csv, {
       status: 200,
-      headers: { ...PRIVATE_HEADERS, 'Content-Type': CSV_CONTENT_TYPE, 'Content-Disposition': `attachment; filename="equitas-${fileName}.csv"` },
+      headers,
     })
   } catch (error) {
     if (error instanceof DataAccessError) return failure(error.status, { error: error.code })

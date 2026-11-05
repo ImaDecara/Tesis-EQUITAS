@@ -1130,7 +1130,7 @@ Los Route Handlers de `front/app/api/reports/` generan estos archivos en el serv
 - **Filtros:** `desde` y `hasta` (día UTC del registro, inclusive), `accion` (lista cerrada) y `actor` (`user.id`).
 - **Población:** registros del municipio activo. Bajar este reporte también deja un registro, que aparece en la descarga siguiente: se registra después de armar el archivo.
 - **Decisión que apoya:** detectar y explicar accesos indebidos: quién abrió un caso o exportó un reporte, y cuándo.
-- **No significa:** todo lo que se leyó. Una lectura directa por la Data API no queda registrada, ni los intentos denegados (contrato §15). Un registro indica que la ficha o el archivo se entregaron, no que alguien los haya mirado.
+- **No significa:** todo lo que se leyó. Una lectura directa por la Data API no queda registrada, ni los intentos denegados (contrato §15). HEAD consulta solo metadatos autorizados, sin descargar ni registrar una exportación, en los cinco reportes. Un registro indica que la ficha o el archivo se entregaron, no que alguien los haya mirado.
 
 ### <a id="reporte-calidad"></a>Calidad de datos
 

@@ -536,7 +536,7 @@ Tabla append-only `access_audit`, **solo en la base local** (`supabase/migration
 **Qué se audita hoy.**
 
 - **Apertura de la ficha** (`front/app/debtors/[debtorId]/page.tsx`): un registro cada vez que la ficha se entrega al navegador, después de `notFound()` y antes de responder. Incluye la recarga y el refresco tras registrar una decisión, porque los datos vuelven a salir. ALIGN-021 lee `reason_text` dentro de esa misma apertura: queda cubierto por ese registro, sin el contenido. El listado y el prefetch no cuentan, porque no entregan la ficha.
-- **Exportaciones CSV** (`csvReportResponse`, `front/lib/server/report-response.ts`): un registro por archivo entregado, después de autorizar y de construir, antes de responder. Incluye el propio reporte de accesos.
+- **Exportaciones CSV** (`csvReportResponse`, `front/lib/server/report-response.ts`): un registro por archivo entregado mediante GET, después de autorizar y de construir, antes de responder. Incluye el propio reporte de accesos. HEAD conserva la autorización y responde solo con metadatos constantes del archivo, sin construir el CSV, consultar sus filas o registrar una exportación. No evalúa filtros ni disponibilidad de datos o auditoría: esas comprobaciones corresponden a GET.
 
 Una acción denegada, un objeto ajeno o inexistente, un filtro inválido y una lectura fallida no dejan registro: la acción no ocurrió. Los intentos denegados no se auditan en esta versión.
 
@@ -544,6 +544,6 @@ Una acción denegada, un objeto ajeno o inexistente, un filtro inválido y una l
 
 **Límite declarado: las lecturas directas por la Data API (PostgREST) no quedan auditadas.** RLS limita qué filas se ven, pero no obliga a pasar por la DAL: una persona autorizada puede leer `debtor` o `case_review` directamente con su sesión y no queda registro. `front/tests/local-audit/run-audit.mjs` lo confirma con una prueba. Forzar un camino de lectura auditado queda como evolución. Tampoco se auditan las pantallas de listas ni los accesos a la base con otras credenciales.
 
-**Retención declarada: 24 meses.** El volumen crece con cada apertura, por eso hay índices por `(tenant, id)` y `(tenant, created_at)`. **La purga no está automatizada:** no hay programador en este ticket y el disparador rechaza `DELETE`, de modo que purgar es una tarea de operación ([SUPABASE_TESTING_CALIDAD.md](../../SUPABASE_TESTING_CALIDAD.md)). El reporte recorre todos los registros del municipio y filtra en el servidor de la aplicación.
+**Retención propuesta: 24 meses, pendiente de aprobación humana.** El volumen crece con cada apertura, por eso hay índices por `(tenant, id)` y `(tenant, created_at)`. **La purga no está automatizada ni autorizada por esta propuesta:** no hay programador en este ticket y el disparador rechaza `DELETE`, de modo que purgar requiere una decisión y una tarea de operación ([SUPABASE_TESTING_CALIDAD.md](../../SUPABASE_TESTING_CALIDAD.md)). El reporte recorre todos los registros del municipio y filtra en el servidor de la aplicación.
 
 **Sin claves foráneas, a propósito.** El rastro debe sobrevivir a la baja de un objeto, un usuario o un municipio, y una FK haría fallar la limpieza de fixtures. La función verifica actor y objeto al escribir, pero una fila puede quedar apuntando a algo que ya no existe.

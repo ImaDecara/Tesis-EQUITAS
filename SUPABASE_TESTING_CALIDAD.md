@@ -312,7 +312,7 @@ notify pgrst, 'reload schema';
 
 **Precondición de despliegue:** la aplicación falla cerrada. Sin esta migración o sin `EQUITAS_REVIEW_SERVER_JWT` no entrega ninguna ficha ni reporte: la ficha cae en la pantalla de error y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`.
 
-**Retención declarada: 24 meses, sin purga automática.** Purgar es una tarea de operación, solo en la base local, porque el disparador rechaza `DELETE` también al dueño de la tabla:
+**Retención propuesta: 24 meses, pendiente de aprobación humana y sin purga automática.** El ejemplo siguiente no autoriza su ejecución. Purgar requiere una decisión explícita y una tarea de operación, solo en la base local, porque el disparador rechaza `DELETE` también al dueño de la tabla:
 
 ```sql
 begin;

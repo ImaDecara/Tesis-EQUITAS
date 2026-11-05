@@ -5,8 +5,10 @@ import { readReviewLedger } from '@/lib/server/review-report-reader'
 export const dynamic = 'force-dynamic'
 
 export function GET(request: Request) {
-  return csvReportResponse('decisiones', 'decision:read', async access => {
+  return csvReportResponse(request, 'decisiones', 'decision:read', async access => {
     const filters = parseDecisionFilters(new URL(request.url).searchParams)
     return buildDecisionsReport(await readReviewLedger(access), filters, new Date().toISOString())
   })
 }
+
+export const HEAD = GET
