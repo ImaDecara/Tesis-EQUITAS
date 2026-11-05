@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { getDebtorDetailData, loadCaseReviewScreen } = vi.hoisted(() => ({ getDebtorDetailData: vi.fn(), loadCaseReviewScreen: vi.fn() }))
 vi.mock('@/lib/equitas-data', () => ({ getDebtorDetailData }))
 vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen }))
+// Esta suite comprueba el marcado; la auditoria real se verifica en local-audit.
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: vi.fn() }))
 vi.mock('@/app/debtors/[debtorId]/actions', () => ({ recordCaseDecision: vi.fn(), approveCaseDecision: vi.fn() }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }), usePathname: () => '/debtors/99', notFound: () => { throw new Error('notFound') } }))
 vi.mock('next/image', () => ({ default: () => null }))
