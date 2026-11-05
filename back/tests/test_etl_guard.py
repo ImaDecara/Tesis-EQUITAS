@@ -85,11 +85,13 @@ def simular_carga(monkeypatch):
     })
     monkeypatch.setattr(run_etl, "fetch_published_objects", Mock(return_value={}))
     monkeypatch.setattr(run_etl, "record_import_batch", Mock(return_value=1))
-    for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact", "load_debtor_profile",
+    for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact",
                    "load_debtor_profile_detail", "load_province", "load_city", "load_address"):
         monkeypatch.setattr(run_etl, nombre, Mock(return_value={"id": 1}))
     monkeypatch.setattr(run_etl, "load_debts_bulk",
                         Mock(return_value={"unique": 1, "inserted": 1, "updated": 0, "unchanged": 0}))
+    monkeypatch.setattr(run_etl, "recompute_debtor_profiles",
+                        Mock(side_effect=lambda ids, _as_of, **_: {debtor: 1 for debtor in ids}))
 
 
 def comprobar_salida_segura(texto):
@@ -359,7 +361,6 @@ def test_reintentos_no_exponen_mensaje_ni_nombre_de_operacion(monkeypatch, capsy
     ("load_debtor_contact", {}, "CONTACT_PERSON_MISSING"),
     ("load_debtor_contact", {"person": 1}, "CONTACT_TYPE_MISSING"),
     ("load_debtor_contact", {"person": 1, "type": 1}, "CONTACT_VALUE_MISSING"),
-    ("load_debtor_profile", {}, "PROFILE_DEBTOR_MISSING"),
     ("load_debtor_profile_detail", {}, "DETAIL_PROFILE_MISSING"),
     ("load_debtor_profile_detail", {"debtor_profile": 1}, "DETAIL_PERSON_MISSING"),
 ])
@@ -386,14 +387,14 @@ def test_codigos_de_error_controlados_se_conservan():
 
 def test_respuestas_invalidas_y_catalogos_no_imprimen_valores(monkeypatch):
     cliente = Mock()
-    for metodo in ("table", "select", "in_", "insert", "eq", "limit"):
+    for metodo in ("table", "select", "in_", "insert", "eq", "limit", "order", "range"):
         getattr(cliente, metodo).return_value = cliente
     cliente.execute.return_value = SimpleNamespace(data={"datos": CENTINELAS})
     monkeypatch.setattr(load, "supabase", cliente)
     with pytest.raises(config.ETLError, match="BULK_RESPONSE_INVALID") as error:
         load.bulk_insert_rows("person", [{"datos": CENTINELAS}])
     comprobar_salida_segura(str(error.value))
-    with pytest.raises(config.ETLError, match="DEBT_LOOKUP_RESPONSE_INVALID") as error:
+    with pytest.raises(config.ETLError, match="READ_RESPONSE_INVALID") as error:
         load.fetch_existing_debts_by_key([{"debtor": 1, "external_id": 2}])
     comprobar_salida_segura(str(error.value))
     with pytest.raises(ValueError, match="FILTER_NULL"):

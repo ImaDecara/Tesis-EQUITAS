@@ -21,7 +21,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -38,11 +38,15 @@ from oracle_lots import (  # noqa: E402
     ESTADOS_A_CLAVE,
     FIXTURE,
     accepted_objects,
+    accepted_with_altered,
     derive_lot,
     object_by_case,
     oracle,
     persisted_mismatches,
+    synthetic_profile,
 )
+
+from ETL.transform import build_debtor_profile_payload  # noqa: E402
 
 TENANT = 1
 CONTRACT = ROOT / "contracts" / "source-contract.v1.json"
@@ -238,8 +242,9 @@ class Campaign:
         self.outputs.append(result.stdout + result.stderr)
         return result
 
-    def etl(self, folder: Path, *extra: str, cut_off: str = AS_OF) -> subprocess.CompletedProcess:
-        environment = {
+    def environment(self) -> dict[str, str]:
+        return {
+            "PATH": os.environ["PATH"],
             "EQUITAS_TARGET_ENV": "local",
             "SUPABASE_URL": self.env["API_URL"],
             "SUPABASE_SERVICE_ROLE_KEY": self.env["SERVICE_ROLE_KEY"],
@@ -247,7 +252,9 @@ class Campaign:
             "EQUITAS_IMPORT_SERVER_JWT": self.jwt,
             "EQUITAS_IMPORT_ACTOR_USER": self.actor,
         }
-        return self._run(environment, "ETL.run_etl", "--folder", str(folder), "--execute", "--cut-off", cut_off, *extra)
+
+    def etl(self, folder: Path, *extra: str, cut_off: str = AS_OF) -> subprocess.CompletedProcess:
+        return self._run(self.environment(), "ETL.run_etl", "--folder", str(folder), "--execute", "--cut-off", cut_off, *extra)
 
     def validate(self, folder: Path, output: Path) -> subprocess.CompletedProcess:
         """Sin ninguna clave ni URL: si necesitara la base, fallaría."""
@@ -573,6 +580,355 @@ def test_volver_al_lote_original_solo_toca_esas_mismas_dos_filas(campaign, publi
     assert persisted_mismatches(tenant_tables(after), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
+# ---------------------------------------------------------------------------
+# ALIGN-031: perfiles desde lo persistido, lectura completa y política de ausentes
+# ---------------------------------------------------------------------------
+
+PROFILE_AMOUNTS = ("total_debt_amount", "overdue_debt_amount")
+PROFILE_COLUMNS = (*PROFILE_AMOUNTS, "debt_count", "overdue_debt_count", "debt_state_not_observed_count", "oldest_debt_days",
+                   "average_debt_age_days", "active_person_count", "available_contact_count", "previous_contact_count",
+                   "previous_response_count", "socioeconomic_risk_level", "active")
+
+
+def _same_within_a_cent(column: str, found, wanted) -> bool:
+    if column in PROFILE_AMOUNTS and found is not None and wanted is not None:
+        return abs(Decimal(str(found)) - Decimal(str(wanted))) <= Decimal("0.01")
+    return found == wanted
+
+
+def _python_oracle(tables: dict, status_keys: dict, debtor: int) -> dict:
+    """El mismo cálculo en Python, alimentado solo con lo persistido."""
+    debts = [{**row, "status": status_keys.get(row["status"], "UNKNOWN")} for row in tables["debt"] if row["debtor"] == debtor]
+    people = {row["person"] for row in tables["debtor_person"] if row["debtor"] == debtor and row["active"]}
+    contacts = [row for row in tables["debtor_contact"] if row["person"] in people and row["active"]]
+    return build_debtor_profile_payload(debtor, debts, len(people), len(contacts), date.fromisoformat(AS_OF))
+
+
+def test_la_funcion_sql_coincide_con_los_dos_oraculos_en_un_lote_validado(campaign, published):
+    ids = catalogs()
+    before = snapshot()
+    tables = tenant_tables(before)
+    status_keys = {value: key for key, value in ids["debt_status"].items()}
+    debtors = sorted(row["id"] for row in tables["debtor"])
+    assert line_value(published.result, "Resultado del lote") == "VALIDADO"
+    answer = json.loads(psql(f"select public.recompute_debtor_profiles(array{debtors}::bigint[], '{AS_OF}')"))
+    assert answer == {"insertadas": 0, "actualizadas": 0, "sin_cambios": len(debtors), "detalles_actualizados": 0, "deudas_reclasificadas": 0}
+    assert changes(before, snapshot()) == {}, "Sin cambios no hay escritura: profile_generated_at se conserva"
+    assert persisted_mismatches(tables, accepted_objects(), ids, published.validated.lot) == []
+    differences = []
+    for profile in tables["debtor_profile"]:
+        wanted = _python_oracle(tables, status_keys, profile["debtor"])
+        differences += [(profile["debtor"], column) for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], wanted[column])]
+    assert differences == []
+    observed = {(row["overdue_debt_amount"] is None, row["debt_state_not_observed_count"] > 0) for row in tables["debtor_profile"]}
+    assert {(False, False), (False, True)} <= observed, "Completo, y subtotal con estados faltantes"
+    campaign.record("paridad SQL y oráculos", objetos=len(debtors), diferencias=len(differences))
+
+
+def test_con_estados_faltantes_y_sin_vencidas_la_paridad_se_mantiene_en_un_lote_validado(campaign, published):
+    item = object_by_case(MODIFIED_CASE)
+    ids = catalogs()
+    status_keys = {value: key for key, value in ids["debt_status"].items()}
+    lot = derive_lot(campaign.work / "sin-estados", (QUARANTINED_CASE,), detalle_cells={(item["clave_agrupacion"], None, "NOTD_ESTA_id"): ""})
+    result = campaign.etl(lot)
+    assert result.returncode == 0, result.stderr
+    assert line_value(result, "Resultado del lote") == "VALIDADO"
+    tables = tenant_tables(snapshot())
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor_of(tables, ids["debtor_type"], MODIFIED_CASE)["id"])
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (None, None), "Regla 2 de §4.1: no es un cero"
+    assert profile["debt_state_not_observed_count"] == item["obligaciones"]
+    assert persisted_mismatches(tables, accepted_with_altered((MODIFIED_CASE,), lot), ids, lot) == []
+    wanted = _python_oracle(tables, status_keys, profile["debtor"])
+    assert [column for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], wanted[column])] == []
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), ids, published.validated.lot) == []
+
+
+def _recompute_in_rollback(debts: list[tuple], *, integrated: bool = True, extra: str = "") -> tuple[dict, dict]:
+    """Objeto sintético dentro de una transacción que se revierte: no deja nada en la cartera de la campaña."""
+    ids = catalogs()
+    values = ", ".join(
+        f"({900000 + index}, 990001, {amount}, {amount}, " + (f"'{due}'" if due else "null") + ", "
+        + (str(ids["debt_status"][status]) if status else "null") + ")"
+        for index, (amount, status, due) in enumerate(debts)
+    )
+    insert = f"insert into public.debt (external_id, debtor, original_amount, current_amount, due_date, status) values {values};" if debts else ""
+    call = f"select public.recompute_debtor_profiles(array[990001, 990002]::bigint[], '{AS_OF}', {str(integrated).lower()});"
+    lines = psql(f"""begin;
+        insert into public.debtor (id, tenant, external_id, type) values (990001, {TENANT}, 990001, {next(iter(ids["debtor_type"].values()))});
+        {insert} {call} {extra}
+        select to_jsonb(p) from public.debtor_profile p where p.debtor = 990001;
+        rollback;""").strip().splitlines()
+    return json.loads(lines[0]), json.loads(lines[-1], parse_float=Decimal)
+
+
+RECOMPUTE_CASES = {
+    "sin-obligaciones-cero-derivado": ([], {"total_debt_amount": 0, "overdue_debt_amount": 0, "debt_count": 0, "overdue_debt_count": 0,
+                                            "debt_state_not_observed_count": 0, "oldest_debt_days": None}),
+    "faltantes-sin-vencidas-nulos": ([("10.50", "UNKNOWN", "2026-01-01"), ("5", "ACTIVE", AS_OF)],
+                                     {"total_debt_amount": Decimal("15.50"), "overdue_debt_amount": None, "overdue_debt_count": None,
+                                      "debt_state_not_observed_count": 1, "oldest_debt_days": None, "average_debt_age_days": None}),
+    "faltantes-con-vencidas-subtotal": ([("10.50", "OVERDUE", "2026-09-28"), ("3", "UNKNOWN", "2026-01-01")],
+                                        {"overdue_debt_amount": Decimal("10.50"), "overdue_debt_count": 1,
+                                         "debt_state_not_observed_count": 1, "oldest_debt_days": 2, "average_debt_age_days": 2}),
+    "observados-sin-vencidas-cero": ([("7", "ACTIVE", AS_OF)], {"overdue_debt_amount": 0, "overdue_debt_count": 0,
+                                                                        "debt_state_not_observed_count": 0}),
+    "promedio-mitad-hacia-arriba": ([("1", "OVERDUE", "2026-09-28"), ("1", "OVERDUE", "2026-09-27")],
+                                    {"oldest_debt_days": 3, "average_debt_age_days": 3}),
+}
+
+
+@pytest.mark.parametrize("name", RECOMPUTE_CASES)
+def test_cada_regla_del_perfil_coincide_con_el_oraculo_python(published, name):
+    debts, wanted = RECOMPUTE_CASES[name]
+    answer, profile = _recompute_in_rollback(debts)
+    assert answer == {"insertadas": 1, "actualizadas": 0, "sin_cambios": 0, "detalles_actualizados": 0, "deudas_reclasificadas": 0}, "El objeto que no existe no cuenta"
+    for column, value in wanted.items():
+        assert profile[column] == value, column
+    oracle_rows = [{"status": status, "due_date": due, "current_amount": amount} for amount, status, due in debts]
+    python = build_debtor_profile_payload(990001, oracle_rows, 0, 0, date.fromisoformat(AS_OF))
+    assert [column for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], python[column])] == []
+
+
+def test_un_estado_nulo_tampoco_esta_observado_y_sin_columnas_de_contacto_no_hay_conteo(published):
+    _answer, profile = _recompute_in_rollback([("4", None, "2026-01-01")], integrated=False)
+    assert (profile["debt_state_not_observed_count"], profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (1, None, None)
+    assert profile["available_contact_count"] is None
+    _answer, profile = _recompute_in_rollback([("4", "ACTIVE", "2026-01-01")])
+    assert profile["available_contact_count"] == 0
+
+
+def test_una_cifra_igual_con_otra_escala_no_reescribe_el_perfil(published):
+    answer, profile = _recompute_in_rollback([("10.50", "ACTIVE", "2026-01-01")], extra=f"""
+        update public.debtor_profile set total_debt_amount = 10.5, profile_generated_at = '2000-01-01 00:00:00+00' where debtor = 990001;
+        select public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');""")
+    assert profile["profile_generated_at"].startswith("2000-01-01")
+    _answer, profile = _recompute_in_rollback([("10.50", "ACTIVE", "2026-01-01")], extra=f"""
+        update public.debt set current_amount = 10.51 where debtor = 990001;
+        update public.debtor_profile set profile_generated_at = '2000-01-01 00:00:00+00' where debtor = 990001;
+        select public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');""")
+    assert not profile["profile_generated_at"].startswith("2000-01-01")
+    assert profile["total_debt_amount"] == Decimal("10.51")
+
+
+def test_la_funcion_no_es_ejecutable_por_clientes_y_rechaza_entradas_nulas(published):
+    signature = "public.recompute_debtor_profiles(bigint[], date, boolean)"
+    allowed = psql(f"select has_function_privilege('anon', '{signature}', 'execute'), has_function_privilege('authenticated', '{signature}', 'execute'), "
+                   f"has_function_privilege('service_role', '{signature}', 'execute')").strip()
+    assert allowed == "f|f|t"
+    with pytest.raises(pytest.fail.Exception, match="INVALID_RECOMPUTE_INPUT"):
+        psql(f"select public.recompute_debtor_profiles(null, '{AS_OF}')")
+    with pytest.raises(pytest.fail.Exception, match="INVALID_RECOMPUTE_INPUT"):
+        psql("select public.recompute_debtor_profiles(array[1]::bigint[], null)")
+
+
+def test_reclasificacion_sql_respeta_estados_faltantes_fechas_y_objetos_ajenos(published):
+    ids = catalogs()
+    # Estado previo, vencimiento, importe y resultado esperado: independientes del agregado SQL y del helper Python.
+    cases = [
+        ("ACTIVE", "2026-09-28", "10.50", "OVERDUE"),
+        ("OVERDUE", AS_OF, "7", "ACTIVE"),
+        ("OVERDUE", "2026-10-01", "9", "ACTIVE"),
+        ("ACTIVE", "2026-10-02", "5", "ACTIVE"),
+        ("OVERDUE", "2026-09-25", "11", "OVERDUE"),
+        *((key, "2026-09-01", "13", key) for key in
+          ("PAID", "CANCELLED", "SUSPENDED", "UNKNOWN", None, "PAYMENT_PLAN", "JUDICIAL", "CERTIFICATE_ACTIVE")),
+        ("ACTIVE", None, "17", "ACTIVE"),
+    ]
+    values = ",".join(
+        f"({900000 + index},990001,{amount},{amount}," + (f"'{due}'" if due else "null") + ","
+        + (str(ids["debt_status"][status]) if status else "null") + ")"
+        for index, (status, due, amount, _) in enumerate(cases)
+    )
+    # ctid, a diferencia de xmin, detecta otra versión incluso dentro de esta misma transacción.
+    read = """select json_build_object(
+        'debts', (select json_agg(to_jsonb(d) || jsonb_build_object('_ctid', d.ctid::text) order by d.id)
+                  from public.debt d where d.debtor in (990001,990002)),
+        'profiles', (select coalesce(json_agg(to_jsonb(p) || jsonb_build_object('_ctid', p.ctid::text) order by p.id), '[]')
+                     from public.debtor_profile p where p.debtor in (990001,990002)));"""
+    call = f"select public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');"
+    lines = psql(f"""begin;
+        insert into public.debtor(id,tenant,external_id,type) values
+            (990001,{TENANT},990001,{next(iter(ids['debtor_type'].values()))}),
+            (990002,{TENANT},990002,{next(iter(ids['debtor_type'].values()))});
+        insert into public.debt(external_id,debtor,original_amount,current_amount,due_date,status) values
+            {values}, (990002,990002,47,47,'2026-09-01',{ids['debt_status']['ACTIVE']});
+        {read} {call} {read} {call} {read}
+        rollback;""").splitlines()
+    before, first, after, second, repeated = [json.loads(line, parse_float=Decimal) for line in lines]
+    assert first == {"insertadas": 1, "actualizadas": 0, "sin_cambios": 0, "detalles_actualizados": 0, "deudas_reclasificadas": 3}
+    assert second == {"insertadas": 0, "actualizadas": 0, "sin_cambios": 1, "detalles_actualizados": 0, "deudas_reclasificadas": 0}
+    assert repeated == after, "Repetir el mismo corte no reescribe ninguna fila"
+    expected = {900000 + index: ids["debt_status"][status] if status else None for index, (*_, status) in enumerate(cases)}
+    expected[990002] = ids["debt_status"]["ACTIVE"]
+    for old, new in zip(before["debts"], after["debts"], strict=True):
+        assert new["status"] == expected[new["external_id"]]
+        if old["status"] == new["status"]:
+            assert old == new, "No se reescriben estados ajenos, faltantes ni ya correctos"
+        else:
+            assert {k: v for k, v in old.items() if k not in ("status", "_ctid")} == {
+                k: v for k, v in new.items() if k not in ("status", "_ctid")}
+    assert len(after["profiles"]) == 1
+    profile = after["profiles"][0]
+    assert profile["debtor"] == 990001
+    assert profile["total_debt_amount"] == sum(Decimal(amount) for _, _, amount, _ in cases)
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("21.50"), 2, 2)
+    assert (profile["oldest_debt_days"], profile["average_debt_age_days"]) == (5, 4)
+
+
+def test_error_de_perfil_revierte_la_reclasificacion_de_la_misma_rpc(published):
+    ids = catalogs()
+    # Solo atomicidad de la RPC. La publicación completa de la CLI sigue siendo alcance de ALIGN-032.
+    result = psql(f"""begin;
+        insert into public.debtor(id,tenant,external_id,type) values (990001,{TENANT},990001,{next(iter(ids['debtor_type'].values()))});
+        insert into public.debt(external_id,debtor,original_amount,current_amount,due_date,status)
+            values(990001,990001,10.50,10.50,'2026-09-01',{ids['debt_status']['ACTIVE']});
+        create function pg_temp.fail_profile031() returns trigger language plpgsql as $$
+            begin raise exception 'PROFILE031_TEST_FAILURE'; end $$;
+        create trigger fail_profile031 before insert on public.debtor_profile for each row execute function pg_temp.fail_profile031();
+        do $$ begin
+            perform public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');
+            raise exception 'EXPECTED_RPC_FAILURE';
+        exception when raise_exception then
+            if sqlerrm <> 'PROFILE031_TEST_FAILURE' then raise; end if;
+        end $$;
+        select json_build_object('status',(select status from public.debt where debtor=990001),
+            'profiles',(select count(*) from public.debtor_profile where debtor=990001));
+        rollback;""")
+    assert json.loads(result) == {"status": ids["debt_status"]["ACTIVE"], "profiles": 0}
+
+
+def test_carga_parcial_no_altera_perfiles_ajenos(campaign, published):
+    ids = catalogs()
+    before = snapshot()
+    tables = tenant_tables(before)
+    debtor = debtor_of(tables, ids["debtor_type"], MODIFIED_CASE)
+    debt = next(row for row in tables["debt"] if row["debtor"] == debtor["id"] and str(row["external_id"]) == MODIFIED_DEBT)
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor["id"])
+    lot = _modified_lot(campaign, "delta-un-objeto")
+    keys = [item["clave_agrupacion"] for item in published.validated.selected if item["caso"] != MODIFIED_CASE]
+    drop_lines(lot / "cabecera.tsv", *[(key,) for key in keys])
+    drop_lines(lot / "detalle.tsv", *[(key,) for key in keys])
+    previous = len(batches())
+    result = campaign.etl(lot, "--ausentes", "conservar")
+    after = snapshot()
+    assert result.returncode == 0, result.stderr
+    assert line_value(result, "Resultado del lote") == "VALIDADO"
+    assert changes(before, after) == {
+        "debt": {"insertadas": [], "actualizadas": [debt["id"]], "borradas": []},
+        "debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []},
+    }, "Un perfil ajeno reescrito cambia su xmin aunque deje los mismos valores"
+    assert Decimal(str(after["debtor_profile"][profile["id"]]["total_debt_amount"])) == Decimal(MODIFIED_TOTAL[1])
+    events = batches()[previous:]
+    assert [event["status"] for event in events] == ["VALIDADO", "PUBLICADO"]
+    assert all(event["counts"]["ausentes"] == {"objetos": len(tables["debtor"]) - 1} for event in events)
+    assert "Ausentes del archivo: objetos=" in result.stdout
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), ids, published.validated.lot) == []
+    campaign.record("delta con un objeto", salida=result.returncode, tablas_cambiadas=sorted(changes(before, after)))
+
+
+def test_una_obligacion_ausente_se_conserva_se_informa_y_sigue_contando(campaign, published):
+    lot = _rejected_missing_debt(campaign, "conservar-obligacion")[0]
+    before = snapshot()
+    previous = len(batches())
+    result = campaign.etl(lot, "--ausentes", "dar-de-baja")
+    assert result.returncode == 0, result.stderr
+    assert batches()[previous:][-1]["counts"]["ausentes"] == {"obligaciones": 1}
+    assert changes(before, snapshot()) == {}, "El archivo no dice que se pagó: la obligación y el perfil quedan como estaban"
+
+
+def test_dar_de_baja_una_relacion_es_explicita_y_reversible(campaign, published):
+    item = object_by_case("dos-personas-un-objeto")
+    lot = _rejected_missing_relation(campaign, "baja-relacion")[0]
+    before = snapshot()
+    tables = tenant_tables(before)
+    debtor = debtor_of(tables, catalogs()["debtor_type"], "dos-personas-un-objeto")
+    person = next(row["id"] for row in tables["person"] if row["external_id"] == item["personas"][-1])
+    relation = next(row for row in tables["debtor_person"] if row["debtor"] == debtor["id"] and row["person"] == person)
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor["id"])
+    detail = next(row for row in tables["debtor_profile_detail"] if row["debtor_profile"] == profile["id"] and row["person"] == person)
+    previous = len(batches())
+    result = campaign.etl(lot, "--ausentes", "dar-de-baja")
+    after = snapshot()
+    assert result.returncode == 0, result.stderr
+    assert changes(before, after) == {
+        "debtor_person": {"insertadas": [], "actualizadas": [relation["id"]], "borradas": []},
+        "debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []},
+        "debtor_profile_detail": {"insertadas": [], "actualizadas": [detail["id"]], "borradas": []},
+    }
+    assert after["debtor_person"][relation["id"]]["active"] is False
+    assert after["debtor_profile_detail"][detail["id"]]["active"] is False
+    assert after["debtor_profile"][profile["id"]]["active_person_count"] == profile["active_person_count"] - 1
+    counts = batches()[previous:][-1]["counts"]
+    assert (counts["ausentes"], counts["bajas_relaciones"], counts["bajas_contactos"]) == ({"relaciones": 1}, 1, 0)
+    assert (counts["filas_insertadas"], counts["filas_actualizadas"]) == (0, 3), "Lo informado es lo que muestra xmin"
+    # Ya dada de baja, recargar el mismo archivo con la política por defecto no encuentra ausentes ni escribe.
+    again = campaign.etl(lot)
+    assert again.returncode == 0, again.stderr
+    assert changes(after, snapshot()) == {}
+    assert "ausentes" not in batches()[-1]["counts"]
+    # Si vuelve a venir, se reactiva y todo concilia con el oráculo.
+    assert campaign.etl(published.validated.lot).returncode == 0
+    restored = snapshot()
+    assert restored["debtor_person"][relation["id"]]["active"] is True
+    assert persisted_mismatches(tenant_tables(restored), accepted_objects(), catalogs(), published.validated.lot) == []
+    campaign.record("baja de una relación", salida=result.returncode, bajas=counts["bajas_relaciones"])
+
+
+def test_un_contacto_ausente_se_informa_y_solo_se_desactiva_si_la_politica_lo_pide(campaign, published):
+    item = object_by_case(MODIFIED_CASE)
+    key = item["clave_agrupacion"]
+    assert item["contactos_utilizables"] == 1
+    lot = derive_lot(campaign.work / "sin-contacto", (QUARANTINED_CASE,), cabecera_cells={
+        (key, None, column): "" for column in ("Destinatario_Telefono", "Destinatario_Celular", "Destinatario_Email")})
+    before = snapshot()
+    tables = tenant_tables(before)
+    debtor = debtor_of(tables, catalogs()["debtor_type"], MODIFIED_CASE)
+    profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor["id"])
+    person = next(row["person"] for row in tables["debtor_person"] if row["debtor"] == debtor["id"])
+    contact = next(row for row in tables["debtor_contact"] if row["person"] == person and row["active"])
+    for policy in ((), ("--ausentes", "conservar")):
+        result = campaign.etl(lot, *policy)
+        assert result.returncode == 0, result.stderr
+        assert batches()[-1]["counts"]["ausentes"] == {"contactos": 1}
+        assert changes(before, snapshot()) == {}, "Sin baja pedida no se desactiva nada"
+    result = campaign.etl(lot, "--ausentes", "dar-de-baja")
+    after = snapshot()
+    assert result.returncode == 0, result.stderr
+    assert batches()[-1]["counts"]["bajas_contactos"] == 1
+    assert changes(before, after) == {
+        "debtor_contact": {"insertadas": [], "actualizadas": [contact["id"]], "borradas": []},
+        "debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []},
+    }
+    assert after["debtor_contact"][contact["id"]]["active"] is False
+    assert after["debtor_profile"][profile["id"]]["available_contact_count"] == 0
+    assert contact["value"] not in result.stdout + result.stderr, "El valor del contacto no sale por la CLI"
+    assert contact["value"] not in json.dumps(batches()[-1]["counts"]), "Ni queda en el lote"
+    assert campaign.etl(published.validated.lot).returncode == 0
+    assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
+
+
+def test_mas_de_1000_deudas_existentes_se_leen_todas_por_la_data_api(campaign, published):
+    tables = tenant_tables(snapshot())
+    debtor = debtor_of(tables, catalogs()["debtor_type"], MODIFIED_CASE)["id"]
+    psql(f"insert into public.debt (external_id, debtor, original_amount, current_amount) "
+         f"select 980000 + n, {debtor}, 1, 1.25 from generate_series(1, 1203) n")
+    try:
+        capped = httpx.get(f"{campaign.env['API_URL']}/rest/v1/debt", params={"select": "id", "debtor": f"eq.{debtor}"},
+                           headers={"apikey": campaign.env["SERVICE_ROLE_KEY"], "Authorization": f"Bearer {campaign.env['SERVICE_ROLE_KEY']}"},
+                           timeout=30, trust_env=False)
+        assert len(capped.json()) == 1000, "Sin el corte de la Data API esta prueba no prueba nada"
+        code = ("from ETL import load; "
+                f"keys = [{{'debtor': {debtor}, 'external_id': 980000 + n}} for n in range(1, 1204)]; "
+                "print(len(load.fetch_existing_debts_by_key(keys)))")
+        result = subprocess.run([sys.executable, "-c", code], cwd=BACK, env=campaign.environment(), capture_output=True, text=True, check=False)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip().splitlines()[-1] == "1203"
+    finally:
+        psql(f"delete from public.debt where debtor = {debtor} and external_id > 980000")
+
+
 def test_un_objeto_publicado_que_cae_en_cuarentena_conserva_su_estado_y_no_es_una_baja(campaign, published):
     key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
     lot = derive_lot(campaign.work / "cae-en-cuarentena", detalle_cells={(key, MODIFIED_DEBT, "NOTD_capital"): "sin-monto"})
@@ -643,6 +999,66 @@ def _rejected_missing_relation(campaign, name):
     lot = derive_lot(campaign.work / name, (QUARANTINED_CASE,))
     drop_lines(lot / "cabecera.tsv", (item["clave_agrupacion"], str(item["personas"][-1])))
     return lot, "PARTIAL_LOAD_REJECTED", True
+
+
+@pytest.mark.parametrize("policy", ["conservar", "dar-de-baja"])
+def test_delta_conservado_reclasifica_la_deuda_pendiente_al_nuevo_corte(campaign, published, policy):
+    """R31-01: el archivo omite una pendiente que vence entre ambos cortes; el oráculo no lee su estado guardado."""
+    key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
+    full = derive_lot(campaign.work / f"corte-inicial-{policy}", (QUARANTINED_CASE,),
+                      detalle_cells={(key, MODIFIED_DEBT, "NOTD_vencimiento"): "01/10/2026"})
+    delta = _rejected_missing_debt(campaign, f"corte-delta-{policy}")[0]
+    # El delta solo acepta el objeto objetivo: también debe dejar intactos los perfiles y deudas ajenos.
+    other_keys = [(item["clave_agrupacion"],) for item in published.validated.selected if item["caso"] != MODIFIED_CASE]
+    drop_lines(delta / "cabecera.tsv", *other_keys)
+    drop_lines(delta / "detalle.tsv", *other_keys)
+    try:
+        initial = campaign.etl(full)
+        assert initial.returncode == 0, initial.stderr
+        before = snapshot()
+        debtor = debtor_of(tenant_tables(before), catalogs()["debtor_type"], MODIFIED_CASE)["id"]
+        debt = next(row for row in before["debt"].values() if row["debtor"] == debtor and str(row["external_id"]) == MODIFIED_DEBT)
+        profile = next(row for row in before["debtor_profile"].values() if row["debtor"] == debtor)
+        assert debt["status"] == catalogs()["debt_status"]["ACTIVE"]
+        assert (profile["overdue_debt_count"], profile["overdue_debt_amount"]) == (2, Decimal("32462.07"))
+        for cutoff, expected_status, expected_count, expected_amount in (
+            ("2026-10-02", "OVERDUE", 3, Decimal("46279.60")),
+            ("2026-10-01", "ACTIVE", 2, Decimal("32462.07")),
+            (AS_OF, "ACTIVE", 2, Decimal("32462.07")),
+        ):
+            mapping = synthetic_profile(delta, fecha_corte=cutoff)
+            previous = snapshot()
+            result = campaign.etl(delta, "--ausentes", policy, "--mapping", str(mapping), cut_off=cutoff)
+            assert result.returncode == 0, result.stderr
+            after = snapshot()
+            got = after["debtor_profile"][profile["id"]]
+            assert after["debt"][debt["id"]]["status"] == catalogs()["debt_status"][expected_status]
+            assert (got["overdue_debt_count"], got["overdue_debt_amount"]) == (expected_count, expected_amount)
+            # Las tres obligaciones del caso son PENDIENTE en el origen: la fecha determina la mora, no la FK previa.
+            overdue = [row for row in before["debt"].values() if row["debtor"] == debtor and row["due_date"] < cutoff]
+            days = [(date.fromisoformat(cutoff) - date.fromisoformat(row["due_date"])).days for row in overdue]
+            assert got["oldest_debt_days"] == max(days)
+            assert got["average_debt_age_days"] == int((Decimal(sum(days)) / len(days)).quantize(Decimal(1), rounding="ROUND_HALF_UP"))
+            assert (got["debt_count"], got["total_debt_amount"]) == (3, Decimal("46279.60"))
+            changed_debts = [debt["id"]] if previous["debt"][debt["id"]]["status"] != after["debt"][debt["id"]]["status"] else []
+            expected_changes = {"debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []}}
+            if changed_debts:
+                expected_changes["debt"] = {"insertadas": [], "actualizadas": changed_debts, "borradas": []}
+            assert changes(previous, after) == expected_changes
+            counts = batches()[-1]["counts"]
+            assert counts["ausentes"]["obligaciones"] == 1
+            assert counts["filas_actualizadas"] == 1 + len(changed_debts)
+            assert counts["escrituras"]["debt"]["actualizadas"] == len(changed_debts)
+            assert counts["deudas_actualizadas"] == 0, "La reclasificación es de una deuda conservada, no de una fila del archivo"
+            again = campaign.etl(delta, "--ausentes", policy, "--mapping", str(mapping), cut_off=cutoff)
+            assert again.returncode == 0, again.stderr
+            assert changes(after, snapshot()) == {}, "Ni deuda ni profile_generated_at se reescriben al repetir el mismo corte"
+            assert batches()[-1]["counts"]["filas_actualizadas"] == 0
+            campaign.record("delta conservado al nuevo corte", politica=policy, corte=cutoff, mora=str(got["overdue_debt_amount"]),
+                            vencidas=got["overdue_debt_count"], reclasificadas=len(changed_debts), idempotente=True)
+    finally:
+        restored = campaign.etl(published.validated.lot)
+        assert restored.returncode == 0, restored.stderr
 
 
 REJECTED = {

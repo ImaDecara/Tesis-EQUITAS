@@ -4,6 +4,7 @@ import uuid
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from contextvars import ContextVar, Token
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from hashlib import blake2b
 from secrets import token_bytes
@@ -68,6 +69,10 @@ SUPABASE_RETRY_DELAYS_SECONDS = (1, 2, 4, 8)
 DEFAULT_BULK_BATCH_SIZE = 500
 READ_PAGE_SIZE = 1000
 READ_IDS_PER_REQUEST = 200
+PROFILE_RECOMPUTE_FUNCTION = "recompute_debtor_profiles"
+PROFILE_RECOMPUTE_OBJECTS_PER_CALL = 500
+PROFILE_DETAILS_UPDATED = "detalles_actualizados"
+PROFILE_DEBTS_RECLASSIFIED = "deudas_reclasificadas"
 
 # Qué le pasó a cada fila en una carga. Una recarga idéntica tiene que dar solo "sin_cambios".
 WRITE_INSERTED = "insertadas"
@@ -77,7 +82,6 @@ WRITE_OUTCOMES = (WRITE_INSERTED, WRITE_UPDATED, WRITE_UNCHANGED)
 _WRITE_TALLY: ContextVar[dict[str, Counter[str]] | None] = ContextVar("etl_write_tally", default=None)
 
 # Cuándo se calculó el perfil no es parte de lo calculado: si nada más cambió, sigue valiendo el cálculo anterior.
-PROFILE_COMPUTED_AT_COLUMN = "profile_generated_at"
 
 DEBT_COMPARE_COLUMNS = (
     "external_id",
@@ -101,7 +105,6 @@ DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
 # lo acota a 100 con dos decimales, y un float lo representa sin pérdida al volver a texto.
 EXACT_NUMERIC_COLUMNS = {
     DEBT_TABLE: frozenset(DEBT_NUMERIC_COLUMNS),
-    DEBTOR_PROFILE_TABLE: frozenset({"total_debt_amount", "overdue_debt_amount"}),
 }
 
 IMPORT_BATCH_RPC_PATH = "/rest/v1/rpc/record_import_batch"
@@ -363,33 +366,11 @@ def fetch_existing_debts_by_key(
 
     expected_keys = {normalize_debt_key(payload) for payload in payloads}
     debtor_ids = sorted({debtor_id for debtor_id, _ in expected_keys})
-    external_ids = sorted({external_id for _, external_id in expected_keys})
     select_columns = _exact_select(DEBT_TABLE, ("id", *DEBT_COMPARE_COLUMNS))
-
-    def select_existing_debts() -> Any:
-        return (
-            supabase
-            .table(DEBT_TABLE)
-            .select(select_columns)
-            .in_("debtor", debtor_ids)
-            .in_("external_id", external_ids)
-            .execute()
-        )
-
-    response = execute_supabase_operation(
-        operation_name=f"bulk select {DEBT_TABLE} ({len(payloads)} keys)",
-        operation=select_existing_debts,
-    )
-
     rows_by_key: dict[tuple[int, int], dict[str, Any]] = {}
 
-    if not response.data:
-        return rows_by_key
-
-    if not isinstance(response.data, list):
-        raise ETLError("DEBT_LOOKUP_RESPONSE_INVALID", etl_message("DEBT_LOOKUP_RESPONSE_INVALID"))
-
-    for row in response.data:
+    # Todas las páginas: una fila existente que no se lee se insertaría de nuevo o se contaría como nueva.
+    for row in _rows_for_ids(DEBT_TABLE, select_columns, "debtor", debtor_ids):
         if not isinstance(row, dict):
             continue
 
@@ -783,28 +764,6 @@ def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
             "value": value,
         },
     )
-# Inserta o actualiza el perfil calculado de un objeto de deuda.
-def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Regla de deduplicación:
-    debtor_profile.debtor
-    """
-
-    debtor = payload.get("debtor")
-
-    if debtor is None:
-        raise ValueError(etl_message("PROFILE_DEBTOR_MISSING"))
-
-    return insert_or_update_by_filters(
-        table_name=DEBTOR_PROFILE_TABLE,
-        payload=payload,
-        lookup_filters={
-            "debtor": debtor,
-        },
-        ignored_columns=(PROFILE_COMPUTED_AT_COLUMN,),
-    )
-
-
 # Inserta o actualiza el detalle de una persona dentro de un perfil.
 def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
     """
@@ -917,23 +876,89 @@ def _rows_for_ids(table_name: str, columns: str, column: str, ids: Iterable[int]
     ]
 
 
-# Objetos publicados del municipio, por (tipo, cuenta), con las obligaciones y personas que tienen hoy. Solo lee.
-def fetch_published_objects(tenant: int) -> dict[tuple[str | None, str], dict[str, set[int]]]:
+# Objetos publicados del municipio, por (tipo, cuenta), con las obligaciones, personas y contactos que tienen hoy. Solo lee.
+# Una relación o un contacto ya inactivos no pueden "dejar de venir": no se comparan.
+def fetch_published_objects(tenant: int) -> dict[tuple[str | None, str], dict[str, Any]]:
     type_keys = {row["id"]: row["key"] for row in fetch_all_rows("debtor_type", "id,key")}
+    contact_type_keys = {row["id"]: row["key"] for row in fetch_all_rows("contact_type", "id,key")}
     debtors = fetch_all_rows(DEBTOR_TABLE, "id,type,external_id", filters={"tenant": tenant})
     debtor_ids = [row["id"] for row in debtors]
-    relations = _rows_for_ids(DEBTOR_PERSON_TABLE, "id,debtor,person", "debtor", debtor_ids)
-    people = _rows_for_ids(PERSON_TABLE, "id,external_id", "id", [row["person"] for row in relations])
-    person_keys = {row["id"]: row["external_id"] for row in people}
-    published: dict[int, dict[str, set[int]]] = {row["id"]: {"obligaciones": set(), "relaciones": set()} for row in debtors}
+    relations = [row for row in _rows_for_ids(DEBTOR_PERSON_TABLE, "id,debtor,person,active", "debtor", debtor_ids) if row["active"]]
+    person_ids = [row["person"] for row in relations]
+    person_keys = {row["id"]: row["external_id"] for row in _rows_for_ids(PERSON_TABLE, "id,external_id", "id", person_ids)}
+    contacts_by_person: dict[int, dict[tuple[int, str | None, str], int]] = defaultdict(dict)
+
+    for row in _rows_for_ids(DEBTOR_CONTACT_TABLE, "id,person,type,value,active", "person", person_ids):
+        if row["active"]:
+            key = (person_keys[row["person"]], contact_type_keys.get(row["type"]), row["value"])
+            contacts_by_person[row["person"]][key] = row["id"]
+
+    published: dict[int, dict[str, Any]] = {
+        row["id"]: {"obligaciones": set(), "relaciones": {}, "contactos": {}} for row in debtors
+    }
 
     for row in _rows_for_ids(DEBT_TABLE, "id,debtor,external_id", "debtor", debtor_ids):
         published[row["debtor"]]["obligaciones"].add(row["external_id"])
 
     for row in relations:
-        published[row["debtor"]]["relaciones"].add(person_keys[row["person"]])
+        published[row["debtor"]]["relaciones"][person_keys[row["person"]]] = row["id"]
+        published[row["debtor"]]["contactos"].update(contacts_by_person.get(row["person"], {}))
 
     return {(type_keys.get(row["type"]), str(row["external_id"])): published[row["id"]] for row in debtors}
+
+
+# ============================================================
+# BAJAS Y PERFILES DESDE LO PERSISTIDO
+# ============================================================
+
+# Baja explícita de lo que la política pidió dar de baja. Nunca borra: una fila inactiva se reactiva si vuelve a venir.
+def deactivate_rows(table_name: str, row_ids: Iterable[int]) -> int:
+    unique_ids = sorted(set(row_ids))
+
+    for start in range(0, len(unique_ids), READ_IDS_PER_REQUEST):
+        chunk = unique_ids[start:start + READ_IDS_PER_REQUEST]
+        execute_supabase_operation(
+            f"deactivate {table_name}",
+            lambda ids=chunk: supabase.table(table_name).update({"active": False}).in_("id", ids).execute(),
+        )
+
+    _count_writes(table_name, WRITE_UPDATED, len(unique_ids))
+    return len(unique_ids)
+
+
+# Recalcula los perfiles pedidos desde las deudas, relaciones y contactos persistidos. No toca ningún otro objeto.
+# Devuelve el id de perfil por objeto, leído aparte y por páginas.
+def recompute_debtor_profiles(
+    debtor_ids: Iterable[int],
+    as_of: date,
+    *,
+    contact_columns_integrated: bool,
+) -> dict[int, int]:
+    unique_ids = sorted(set(debtor_ids))
+
+    for start in range(0, len(unique_ids), PROFILE_RECOMPUTE_OBJECTS_PER_CALL):
+        params = {
+            "p_object_ids": unique_ids[start:start + PROFILE_RECOMPUTE_OBJECTS_PER_CALL],
+            "p_as_of": as_of.isoformat(),
+            "p_contact_columns_integrated": contact_columns_integrated,
+        }
+        response = execute_supabase_operation(
+            "recompute debtor_profile",
+            lambda body=params: supabase.rpc(PROFILE_RECOMPUTE_FUNCTION, body).execute(),
+        )
+        result = response.data
+
+        counters = (*WRITE_OUTCOMES, PROFILE_DETAILS_UPDATED, PROFILE_DEBTS_RECLASSIFIED)
+        if not isinstance(result, dict) or any(not isinstance(result.get(name), int) for name in counters):
+            raise ETLError("PROFILE_RECOMPUTE_RESPONSE_INVALID", etl_message("PROFILE_RECOMPUTE_RESPONSE_INVALID"))
+
+        for outcome in WRITE_OUTCOMES:
+            _count_writes(DEBTOR_PROFILE_TABLE, outcome, result[outcome])
+
+        _count_writes(DEBTOR_PROFILE_DETAIL_TABLE, WRITE_UPDATED, result[PROFILE_DETAILS_UPDATED])
+        _count_writes(DEBT_TABLE, WRITE_UPDATED, result[PROFILE_DEBTS_RECLASSIFIED])
+
+    return {row["debtor"]: row["id"] for row in _rows_for_ids(DEBTOR_PROFILE_TABLE, "id,debtor", "debtor", unique_ids)}
 
 
 # ============================================================

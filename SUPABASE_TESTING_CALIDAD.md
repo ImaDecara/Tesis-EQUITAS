@@ -132,6 +132,10 @@ commit;
 notify pgrst, 'reload schema';
 ```
 
+## Perfiles desde lo persistido (ALIGN-031, solo base local)
+
+`supabase/migrations/20261102180000_recompute_debtor_profiles.sql` se aplica **solo en la base local** con `db reset`. Agrega `recompute_debtor_profiles(bigint[], date, boolean)`, ejecutable solo por `service_role`, sin filas ni cambios de políticas, RLS o grants de tabla. La usa `ETL.run_etl`; las reglas y la política de ausentes están en [`back/ETL/README.md`](back/ETL/README.md). Reversión: `drop function public.recompute_debtor_profiles(bigint[], date, boolean); delete from supabase_migrations.schema_migrations where version = '20261102180000';`.
+
 ## Revisión humana, aprobación y lote (ALIGN-018, solo base local)
 
 `supabase/migrations/20261030100000_case_review.sql`, y `20261102120000_case_review_cutoff.sql` que reemplaza sus dos funciones de escritura (ALIGN-020), se aplican **solo en la base local** con `db reset`: nunca en el original ni en el proyecto testing. Registra quién decidió qué, cuándo, con qué información y por qué. El diccionario de columnas está en [`docs/tesis/contrato-dominio-v1.md`](docs/tesis/contrato-dominio-v1.md) §13; la escala y los roles, en la decisión de ALIGN-003.

@@ -13,7 +13,10 @@ from ETL.extract import (
     source_folder,
 )
 from ETL.load import (
+    DEBTOR_CONTACT_TABLE,
+    DEBTOR_PERSON_TABLE,
     ImportBatchRejected,
+    deactivate_rows,
     etl_message,
     fetch_published_objects,
     load_address,
@@ -21,11 +24,11 @@ from ETL.load import (
     load_debtor,
     load_debtor_contact,
     load_debtor_person,
-    load_debtor_profile,
     load_debtor_profile_detail,
     load_debts_bulk,
     load_person,
     load_province,
+    recompute_debtor_profiles,
     record_import_batch,
     reset_log_context,
     resolve_catalogs,
@@ -37,10 +40,12 @@ from ETL.load import (
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
 from ETL.transform import (
     CATALOG_KEY_COLUMNS,
+    AbsentRows,
     PreparedBatch,
     PreparedObject,
     SourceRowContext,
     StructuralRejection,
+    absent_from_file,
     batch_counts,
     build_address_payload,
     build_city_payload,
@@ -49,11 +54,9 @@ from ETL.transform import (
     build_debtor_payload,
     build_debtor_person_payload,
     build_debtor_profile_detail_payload,
-    build_debtor_profile_payload,
     build_person_payload,
     build_province_payload,
     build_transform_summary,
-    coverage_gaps,
     parse_int,
     prepare_batch,
     required_catalog_keys,
@@ -68,6 +71,17 @@ STATUS_VALIDATED = "VALIDADO"
 STATUS_PUBLISHED = "PUBLICADO"
 STATUS_FAILED = "FALLIDO"
 
+# Qué hacer con lo publicado que el archivo ya no trae. La decide quien carga, nunca el ETL por su cuenta:
+# - rechazar (por defecto): lote completo. Falta un objeto, una obligación o una relación: FALLIDO, sin escribir;
+# - conservar: delta. Lo ausente queda como está, activo y contando en su perfil;
+# - dar-de-baja: delta con bajas. De los objetos aceptados, las relaciones y los contactos ausentes pasan a inactivos.
+# En las tres, un objeto ausente no se toca y una obligación ausente se conserva: el archivo no dice que se pagó, y debt no
+# tiene baja. Lo ausente se informa siempre en counts.ausentes y lo desactivado en bajas_relaciones y bajas_contactos.
+ABSENT_REJECT = "rechazar"
+ABSENT_KEEP = "conservar"
+ABSENT_DEACTIVATE = "dar-de-baja"
+ABSENT_POLICIES = (ABSENT_REJECT, ABSENT_KEEP, ABSENT_DEACTIVATE)
+
 
 # Función principal del ETL.
 def run_etl(
@@ -77,15 +91,18 @@ def run_etl(
     priority_tipo_ingreso_ids: list[int] | None = None,
     cut_off: str | None = None,
     mapping_path: str | None = None,
+    absent_policy: str = ABSENT_REJECT,
 ) -> None:
     token = set_log_context(0, None)
     try:
         # Rechazar antes de leer archivos, resumir filas o crear el cliente.
+        if absent_policy not in ABSENT_POLICIES:
+            raise ETLError("ABSENT_POLICY_INVALID")
         _require_inputs(execute, cut_off, limit_objects, priority_tipo_ingreso_ids)
         if cut_off is None:
             _summarize_source(folder_name, limit_objects, priority_tipo_ingreso_ids)
         else:
-            _validate_and_load(folder_name, execute, cut_off, mapping_path)
+            _validate_and_load(folder_name, execute, cut_off, mapping_path, absent_policy)
     # Frontera de salida: un error de parsing o del proveedor puede contener filas.
     except Exception as error:  # noqa: BLE001
         code = error.code if isinstance(error, ETLError) else "ETL_FAILED"
@@ -206,7 +223,7 @@ def _register_batch(
     )
 
 
-def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_path: str | None) -> None:
+def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_path: str | None, absent_policy: str) -> None:
     folder = source_folder(folder_name)
     mapping = _load_mapping(folder, mapping_path)
 
@@ -220,7 +237,7 @@ def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_pa
     _print_validation(batch)
 
     if execute and batch.publishable:
-        _publish_validated_batch(batch)
+        _publish_validated_batch(batch, absent_policy)
         return
 
     if execute:
@@ -238,17 +255,20 @@ def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_pa
 # V1: las escrituras por la Data API no son una transacción. Una falla deja el lote en FALLIDO y lo ya escrito
 # no se revierte; la publicación atómica es de ALIGN-032.
 # Desde que VALIDADO quedó registrado, todo camino en el que se sabe que PUBLICADO no quedó termina en FALLIDO con antecedente.
-def _publish_validated_batch(batch: PreparedBatch) -> None:
+def _publish_validated_batch(batch: PreparedBatch, absent_policy: str = ABSENT_REJECT) -> None:
     cut_off = batch.report["fecha_corte"]
     catalogs = resolve_catalogs(required_catalog_keys(batch), CATALOG_KEY_COLUMNS)
     counts = batch_counts(batch.report)
     # Lectura, sin escribir cartera. Un FALLIDO sin antecedente declara justamente eso: no tocó nada.
-    missing = coverage_gaps(batch, fetch_published_objects(settings.tenant_id))
+    absent = absent_from_file(batch, fetch_published_objects(settings.tenant_id))
 
-    if missing:
-        _register_batch(batch.file_hashes, cut_off, STATUS_FAILED, {**counts, "faltantes": missing},
+    if absent_policy == ABSENT_REJECT and absent.blocks_full_load:
+        _register_batch(batch.file_hashes, cut_off, STATUS_FAILED, {**counts, "faltantes": absent.counts()},
                         source_updated_at=batch.source_updated_at)
         raise ETLError("PARTIAL_LOAD_REJECTED")
+
+    if absent.counts():
+        counts = {**counts, "ausentes": absent.counts()}
 
     validated_id = _register_batch(batch.file_hashes, cut_off, STATUS_VALIDATED, counts,
                                    source_updated_at=batch.source_updated_at)
@@ -256,7 +276,7 @@ def _publish_validated_batch(batch: PreparedBatch) -> None:
     try:
         print("INICIANDO CARGA REAL EN SUPABASE")
         print("-" * 80)
-        loaded = _load_objects(batch, catalogs)
+        loaded = _load_objects(batch, catalogs, absent if absent_policy == ABSENT_DEACTIVATE else AbsentRows())
     # También ante una interrupción: se sabe que la carga no terminó.
     except BaseException:
         _register_failure(batch, counts, validated_id)
@@ -273,6 +293,9 @@ def _publish_validated_batch(batch: PreparedBatch) -> None:
     except BaseException:
         print(etl_message("PUBLISH_OUTCOME_UNKNOWN"))
         raise
+
+    if absent.counts():
+        print("Ausentes del archivo: " + ", ".join(f"{name}={count}" for name, count in absent.counts().items()))
 
     _print_load_summary(loaded)
 
@@ -347,22 +370,19 @@ def _load_header(
     id_by_person: Mapping[int, int],
     catalogs: Mapping[str, Mapping[str, int]],
     loaded: Counter[str],
-) -> tuple[int, set[tuple[str, str]]]:
+) -> int:
     row = header.values
     person_id = id_by_person[parse_int(row.get("Destinatario_Id"))]
     load_debtor_person(build_debtor_person_payload(row=row, debtor_id=debtor_id, person_id=person_id))
     loaded["relaciones_publicadas"] += 1
 
-    usable: set[tuple[str, str]] = set()
     contacts = build_debtor_contact_payloads(row=row, person_id=person_id, findings=header.contact_findings)
 
     for contact in contacts:
         load_debtor_contact(with_catalog_ids("debtor_contact", contact, catalogs))
         loaded["contactos_publicados"] += 1
-        if contact["active"]:
-            usable.add((contact["type"], contact["value"]))
 
-    return person_id, usable
+    return person_id
 
 
 def _load_object(
@@ -371,7 +391,7 @@ def _load_object(
     id_by_person: Mapping[int, int],
     catalogs: Mapping[str, Mapping[str, int]],
     loaded: Counter[str],
-) -> tuple[int, set[int], int, list[dict[str, Any]]]:
+) -> tuple[int, set[int], list[dict[str, Any]]]:
     first = item.headers[0]
     set_log_context(first.line, ("objeto", item.reference))
     debtor_payload = build_debtor_payload(first.values, batch.debtor_type_keys)
@@ -379,13 +399,10 @@ def _load_object(
     loaded["objetos_publicados"] += 1
 
     person_ids: set[int] = set()
-    usable_contacts = 0
 
     for header in item.headers:
         set_log_context(header.line, ("cabecera", item.reference))
-        person_id, usable = _load_header(header, debtor_id, id_by_person, catalogs, loaded)
-        person_ids.add(person_id)
-        usable_contacts += len(usable)
+        person_ids.add(_load_header(header, debtor_id, id_by_person, catalogs, loaded))
 
     debts = [
         build_debt_payload(
@@ -398,22 +415,22 @@ def _load_object(
         for row in item.details
     ]
 
-    return debtor_id, person_ids, usable_contacts, debts
+    return debtor_id, person_ids, debts
 
 
 # Solo llegan aquí filas que el motor aceptó en un lote cuya publicación está permitida.
 # Los objetos en cuarentena conservan su estado previo: no se escribe ninguna de sus filas.
-def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]]) -> dict[str, Any]:
+def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]], to_deactivate: AbsentRows) -> dict[str, Any]:
     tally = start_write_tally()
     loaded: Counter[str] = Counter()
-    profile_inputs = []
+    people_by_object: dict[int, set[int]] = {}
     all_debts: list[dict[str, Any]] = []
     id_by_person = _load_people(batch, catalogs, loaded)
 
     for index, item in enumerate(batch.objects, start=1):
-        debtor_id, person_ids, usable_contacts, debts = _load_object(item, batch, id_by_person, catalogs, loaded)
+        debtor_id, person_ids, debts = _load_object(item, batch, id_by_person, catalogs, loaded)
         all_debts.extend(debts)
-        profile_inputs.append((debtor_id, debts, person_ids, usable_contacts))
+        people_by_object[debtor_id] = person_ids
 
         if index % 10 == 0:
             print(f"Objetos procesados: {index}/{len(batch.objects)}")
@@ -427,22 +444,24 @@ def _load_objects(batch: PreparedBatch, catalogs: Mapping[str, Mapping[str, int]
     loaded["deudas_actualizadas"] = debt_summary["updated"]
     loaded["deudas_sin_cambios"] = debt_summary["unchanged"]
 
-    # El perfil se calcula al final porque resume las obligaciones del objeto al corte.
-    for debtor_id, debts, person_ids, usable_contacts in profile_inputs:
-        set_log_context(0, ("perfil", debtor_id))
-        profile = load_debtor_profile(
-            build_debtor_profile_payload(
-                debtor_id=debtor_id,
-                debt_rows=debts,
-                active_person_count=len(person_ids),
-                available_contact_count=usable_contacts if batch.contact_columns_integrated else None,
-                cut_off=batch.cut_off,
-            )
-        )
-        loaded["perfiles_publicados"] += 1
+    # Las bajas van antes del perfil: dejan de contar en él. Solo si la política las pidió.
+    set_log_context(0, None)
+    if to_deactivate.relation_ids or to_deactivate.contact_ids:
+        loaded["bajas_relaciones"] = deactivate_rows(DEBTOR_PERSON_TABLE, to_deactivate.relation_ids)
+        loaded["bajas_contactos"] = deactivate_rows(DEBTOR_CONTACT_TABLE, to_deactivate.contact_ids)
 
+    # El perfil se calcula al final y desde lo persistido, solo de los objetos aceptados: los demás no se tocan.
+    profile_ids = recompute_debtor_profiles(
+        people_by_object,
+        batch.cut_off,
+        contact_columns_integrated=batch.contact_columns_integrated,
+    )
+    loaded["perfiles_publicados"] = len(people_by_object)
+
+    for debtor_id, person_ids in people_by_object.items():
+        set_log_context(0, ("perfil", debtor_id))
         for person_id in sorted(person_ids):
-            load_debtor_profile_detail(build_debtor_profile_detail_payload(int(profile["id"]), person_id))
+            load_debtor_profile_detail(build_debtor_profile_detail_payload(profile_ids[debtor_id], person_id))
 
     return {**loaded, **write_summary(tally)}
 
@@ -460,6 +479,8 @@ def _print_load_summary(loaded: Mapping[str, Any]) -> None:
     print(f"Direcciones publicadas:              {loaded.get('direcciones_publicadas', 0)}")
     print(f"Contactos publicados:                {loaded.get('contactos_publicados', 0)}")
     print(f"Perfiles debtor_profile publicados:  {loaded.get('perfiles_publicados', 0)}")
+    print(f"Relaciones dadas de baja:            {loaded.get('bajas_relaciones', 0)}")
+    print(f"Contactos dados de baja:             {loaded.get('bajas_contactos', 0)}")
     print(f"Filas insertadas:                    {loaded.get('filas_insertadas', 0)}")
     print(f"Filas actualizadas:                  {loaded.get('filas_actualizadas', 0)}")
     print(f"Filas sin cambios:                   {loaded.get('filas_sin_cambios', 0)}")
@@ -497,6 +518,14 @@ def main() -> None:
     )
 
     parser.add_argument(
+        "--ausentes",
+        choices=ABSENT_POLICIES,
+        default=ABSENT_REJECT,
+        help="Qué hacer con lo publicado que el archivo ya no trae: rechazar el lote (por defecto), "
+        "conservarlo (delta) o dar de baja relaciones y contactos de los objetos aceptados.",
+    )
+
+    parser.add_argument(
         "--limit-objects",
         type=int,
         default=None,
@@ -521,6 +550,7 @@ def main() -> None:
             priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
             cut_off=args.cut_off,
             mapping_path=args.mapping,
+            absent_policy=args.ausentes,
         )
     except ETLError as error:
         print(str(error), file=sys.stderr)
