@@ -63,9 +63,15 @@ apareciendo en los logs. No equivale a anonimización de registros ni a una
 auditoría de todos los parámetros del producto. Tampoco certifica proxies,
 Vercel, otros despliegues o múltiples máquinas.
 La selección de una revisión al aprobar (`caseReviewId`, en
-`case-review-service.ts`) queda fuera de esta unidad: su filtro directo se
-identificó por lectura de código, sin reproducción en esta campaña. No se
-afirma que ese recorrido cumpla la misma garantía; requiere seguimiento propio.
+`case-review-service.ts`) también enviaba el dato del formulario a la URL.
+La sonda adicional del padre lo reprodujo sobre el commit `c3b6df8`: la acción
+rechazó la revisión inexistente, pero el centinela apareció una vez en Kong.
+Ahora se leen las revisiones del municipio autorizado con columnas explícitas
+y paginación completa; se compara el ID en memoria y se verifica el municipio
+de la fila antes de consultar cadenas o escribir. Las consultas siguientes usan
+su ID canónico. Una página posterior fallida no permite aprobar desde un prefijo.
+Este recorrido agrega O(R) filas y memoria, donde R son las revisiones visibles
+del municipio. Conserva la revalidación del corte y las restricciones de escritura.
 
 ## Evidencia y repetición
 
@@ -83,7 +89,8 @@ reconstruye la base y libera exclusivamente su lock. `probe.mjs` exige una
 lectura real de membresías y cartera, además de un centinela de control que
 debe aparecer en Kong. Una captura vacía o fallida no aprueba.
 
-El padre debe repetir la sonda y la campaña 022 sobre el SHA integrado. Sin
-commits en esta entrega, un SHA de base identifica la procedencia; el hash
-completo del diff identifica el código modificado. No se declara árbol limpio
-ni se altera el validador 022 para que acepte esa diferencia.
+La entrega inicial sin commit quedó preservada sin cambios en `c3b6df8`.
+Su campaña 022 original rechazó correctamente el árbol sucio. Los controles
+posteriores deben usar el commit limpio correspondiente, sin alterar el validador.
+El padre debe repetir la sonda y la campaña 022 sobre el SHA integrado; hasta
+entonces, los resultados de esta rama no certifican la integración.
