@@ -25,8 +25,8 @@ import { proxy } from '@/proxy'
 const anonymous = { data: { user: null }, error: new AuthSessionMissingError() }
 const signedIn = { data: { user: { id: 'auth-test' } }, error: null }
 // NextRequest reescribe los hosts locales a localhost; un host comun evita ese artefacto.
-const request = (path: string, headers: Record<string, string> = {}) =>
-  new NextRequest(new URL(path, 'https://equitas.test'), { headers })
+const request = (path: string, headers: Record<string, string> = {}, method = 'GET') =>
+  new NextRequest(new URL(path, 'https://equitas.test'), { headers, method })
 const passedThrough = (response: Response) => response.headers.get('x-middleware-next') === '1'
 
 describe('ALIGN-019 B2: comprobacion optimista en proxy, sin reemplazar la DAL', () => {
@@ -116,5 +116,75 @@ describe('ALIGN-019 B2: comprobacion optimista en proxy, sin reemplazar la DAL',
     credentials.value = false
     expect(passedThrough(await proxy(request('/debtors')))).toBe(true)
     expect(getUser).not.toHaveBeenCalled()
+  })
+
+  it.each(['/debtors/99', '/debtors/99/', '/debtors/99?tab=revision', '/debtors/no-existe'])('HEAD %s termina antes del render sin confirmar existencia del caso', async path => {
+    getUser.mockResolvedValue(signedIn)
+    const response = await proxy(request(path, {}, 'HEAD'))
+    expect(response.status).toBe(405)
+    expect(response.headers.get('allow')).toBe('GET')
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(passedThrough(response)).toBe(false)
+    expect(await response.text()).toBe('')
+    expect(getUser).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['RSC', 'prefetch'])('HEAD de ficha con %s no alcanza el render', async mode => {
+    const headers: Record<string, string> = { RSC: '1' }
+    if (mode === 'prefetch') headers['Next-Router-Prefetch'] = '1'
+    getUser.mockResolvedValue(signedIn)
+    const response = await proxy(request('/debtors/99?_rsc=abc', headers, 'HEAD'))
+    expect(response.status).toBe(405)
+    expect(passedThrough(response)).toBe(false)
+  })
+
+  it('HEAD sin sesion conserva 307 a login y descarta filtros internos', async () => {
+    getUser.mockResolvedValue(anonymous)
+    const response = await proxy(request('/debtors/99?tab=revision&_rsc=abc', {}, 'HEAD'))
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('https://equitas.test/login?next=%2Fdebtors%2F99')
+    expect(passedThrough(response)).toBe(false)
+  })
+
+  it.each(['GET', 'POST'])('%s de ficha sigue hasta la DAL o la Server Action', async method => {
+    getUser.mockResolvedValue(signedIn)
+    expect(passedThrough(await proxy(request('/debtors/99', {}, method)))).toBe(true)
+  })
+
+  it.each(['/debtors', '/people/99', '/api/reports/queue', '/api/reports/access', '/login', '/api/build-info', '/debtors/99/otra'])('HEAD %s conserva su controlador existente', async path => {
+    getUser.mockResolvedValue(signedIn)
+    expect(passedThrough(await proxy(request(path, {}, 'HEAD')))).toBe(true)
+  })
+
+  it.each([
+    ['Auth no disponible', () => getUser.mockResolvedValue({ data: { user: null }, error: new AuthRetryableFetchError('fetch failed', 0) })],
+    ['excepcion de Auth', () => getUser.mockRejectedValue(new Error('inesperado'))],
+  ])('HEAD de ficha con %s tampoco renderiza', async (_name, arrange) => {
+    arrange()
+    const response = await proxy(request('/debtors/99', {}, 'HEAD'))
+    expect(response.status).toBe(405)
+    expect(response.headers.has('location')).toBe(false)
+    expect(passedThrough(response)).toBe(false)
+  })
+
+  it('HEAD de ficha sin configuracion tampoco renderiza', async () => {
+    credentials.value = false
+    const response = await proxy(request('/debtors/99', {}, 'HEAD'))
+    expect(response.status).toBe(405)
+    expect(passedThrough(response)).toBe(false)
+    expect(getUser).not.toHaveBeenCalled()
+  })
+
+  it('el rechazo HEAD conserva cookies renovadas y cabeceras Auth sin habilitar render', async () => {
+    pending.cookies = [{ name: 'sb-test-auth-token', value: 'renovada', options: { path: '/', httpOnly: true } }]
+    pending.headers = { Expires: '0', Pragma: 'no-cache' }
+    getUser.mockResolvedValue(signedIn)
+    const response = await proxy(request('/debtors/99', {}, 'HEAD'))
+    expect(response.status).toBe(405)
+    expect(response.cookies.get('sb-test-auth-token')).toMatchObject({ value: 'renovada', path: '/', httpOnly: true })
+    expect(response.headers.get('expires')).toBe('0')
+    expect(response.headers.get('pragma')).toBe('no-cache')
+    expect(passedThrough(response)).toBe(false)
   })
 })

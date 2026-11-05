@@ -71,13 +71,13 @@ const app = (root, path, label, extra = {}, method = 'GET') => {
 }
 // Next 16 valida el hash de `_rsc`: la primera respuesta es un 307 a la misma ruta con el correcto.
 // Sin seguirlo no se renderiza nada, y un "sin registro" no probaria nada.
-const rscApp = async (root, path, label, extra = {}) => {
-  const first = await app(root, path, label, extra)
+const rscApp = async (root, path, label, extra = {}, method = 'GET') => {
+  const first = await app(root, path, label, extra, method)
   if (first.status !== 307) return first
   const location = new URL(first.headers.get('location'), root)
-  if (location.pathname !== path || !location.searchParams.has('_rsc')) return first
+  if (location.pathname !== new URL(path, root).pathname || !location.searchParams.has('_rsc')) return first
   await first.text()
-  return app(root, `${location.pathname}${location.search}`, label, extra)
+  return app(root, `${location.pathname}${location.search}`, label, extra, method)
 }
 const rest = (path, bearer, init = {}) => fetch(`${REST}${path}`, {
   ...init,
@@ -85,12 +85,33 @@ const rest = (path, bearer, init = {}) => fetch(`${REST}${path}`, {
 })
 const rpc = (bearer, args) => rest('/rpc/record_access_audit', bearer, { method: 'POST', body: JSON.stringify(args) })
 
-// Cuanto cambia la tabla con una accion. Lee el cuerpo entero: una respuesta en curso aun podria estar renderizando.
-async function delta(act) {
+// GET espera el cuerpo entero. HEAD puede terminar antes que el render de Next:
+// en sus casos se espera tambien 2 s para detectar registros tardios (H2).
+async function delta(act, settleMs = 0) {
   const before = auditCount()
   const response = await act()
   const body = response ? await response.text() : ''
-  return { added: auditCount() - before, status: response?.status, body }
+  const immediate = auditCount() - before
+  if (settleMs) await new Promise(resolve => setTimeout(resolve, settleMs))
+  return { added: settleMs ? auditCount() - before : immediate, immediate, status: response?.status, body, allow: response?.headers.get('allow') }
+}
+
+// HEAD de ficha se rechaza antes del render. La respuesta no revela si el caso
+// existe ni evalua permisos de cartera; la falta de sesion conserva el 307.
+for (const [name, root, path, label, headers, expected] of [
+  ...['consulta', 'operador', 'supervisor'].map(label => [label, base, `/debtors/${OWN}`, label, {}, 405]),
+  ['tab revision', base, `/debtors/${OWN}?tab=revision`, 'supervisor', {}, 405],
+  ['RSC', base, `/debtors/${OWN}`, 'supervisor', { RSC: '1' }, 405],
+  ['prefetch', base, `/debtors/${OWN}`, 'supervisor', { RSC: '1', 'Next-Router-Prefetch': '1' }, 405],
+  ['otro municipio', base, `/debtors/${FOREIGN}`, 'supervisor', {}, 405],
+  ['inexistente', base, '/debtors/999999999', 'supervisor', {}, 405],
+  ['importador', base, `/debtors/${OWN}`, 'importador', {}, 405],
+  ['anonimo', base, `/debtors/${OWN}`, null, {}, 307],
+  ['listado', base, '/debtors', 'supervisor', {}, 200],
+  ['sin credencial de auditoria', baseWithoutCredential, `/debtors/${OWN}`, 'supervisor', {}, 405],
+]) {
+  const { added, immediate, status, body, allow } = await delta(() => rscApp(root, path, label, headers, 'HEAD'), 2000)
+  check(`HEAD ficha ${name}: sin cuerpo ni registro tardio`, status === expected && body.length === 0 && added === 0 && (expected !== 405 || allow === 'GET'), `status=${status} bytes=${body.length} inmediato=${immediate} agregados=${added} espera_ms=2000`)
 }
 
 // 1. Apertura de la ficha: exactamente un registro por entrega, con actor y rol de la base.
@@ -166,8 +187,8 @@ for (const [route, code] of Object.entries(REPORTS)) {
     ['anonimo', base, null, 307],
     ['sin permiso', base, 'importador', 403],
   ]) {
-    const { added, status, body } = await delta(() => app(root, `/api/reports/${route}`, label, {}, 'HEAD'))
-    check(`HEAD ${route} ${name}: sin archivo ni registro`, status === expected && body.length === 0 && added === 0, `status=${status} bytes=${body.length} agregados=${added}`)
+    const { added, immediate, status, body } = await delta(() => app(root, `/api/reports/${route}`, label, {}, 'HEAD'), 2000)
+    check(`HEAD ${route} ${name}: sin archivo ni registro`, status === expected && body.length === 0 && added === 0, `status=${status} bytes=${body.length} inmediato=${immediate} agregados=${added} espera_ms=2000`)
   }
   const { added, status, body } = await delta(() => app(base, `/api/reports/${route}`, 'supervisor'))
   const row = newestAudit()

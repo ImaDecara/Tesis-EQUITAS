@@ -310,7 +310,7 @@ notify pgrst, 'reload schema';
 
 `case-review-verify.sql` no enumera esta tabla ni esta función: sus listas son fijas y sus valores no cambian. Los metadatos de la auditoría (dueño, `search_path`, privilegios, política) los comprueba `front/tests/local-audit/run-audit.mjs`.
 
-**Precondición de despliegue:** la aplicación falla cerrada. Sin esta migración o sin `EQUITAS_REVIEW_SERVER_JWT` no entrega ninguna ficha ni reporte: la ficha cae en la pantalla de error y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`.
+**Precondición de despliegue:** la aplicación falla cerrada. Sin esta migración o sin `EQUITAS_REVIEW_SERVER_JWT` no entrega ninguna ficha ni reporte mediante GET: la ficha cae en la pantalla de error y el reporte responde 503 `AUDITORIA_NO_DISPONIBLE`. HEAD no comprueba esta precondición: en los reportes solo autoriza y devuelve metadatos; en la ficha se rechaza antes del render (405, `Allow: GET`), conservando la redirección a login cuando falta sesión.
 
 **Retención propuesta: 24 meses, pendiente de aprobación humana y sin purga automática.** El ejemplo siguiente no autoriza su ejecución. Purgar requiere una decisión explícita y una tarea de operación, solo en la base local, porque el disparador rechaza `DELETE` también al dueño de la tabla:
 

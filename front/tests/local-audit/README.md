@@ -4,6 +4,8 @@ Las pruebas con transporte simulado están en `tests/integration/access-audit.in
 
 `run-audit.mjs` cubre: un registro por ficha entregada (HTML, RSC y clic en Chromium), ninguno en prefetch, listado ni denegaciones; un registro por exportación GET y ninguno por HEAD en los cinco reportes, conservando los rechazos sin sesión o permiso; el reporte contra la tabla, fila por fila; lectura por municipio y por rol; escritura, edición y borrado directos rechazados por la Data API y por el dueño de la tabla; validación e idempotencia de la función; lote `VALIDADO`, analítica y canal (057, 064, 066); la limitación declarada de las lecturas directas, y la falla cerrada con la aplicación sin credencial. HEAD no necesita la credencial de escritura porque solo devuelve metadatos después de autorizar, sin leer ni entregar el CSV.
 
+HEAD a una ficha termina en el proxy con 405 y `Allow: GET`, antes del render que registra la apertura; una sesión ausente conserva el 307 a login. Se prueba con consulta, operador y supervisor, HTML, RSC, prefetch y la pestaña de revisión, además de los controles de objeto ajeno, inexistente, importador y listado. Todos los casos HEAD, incluidos los cinco reportes, comparan el conteo inmediato y el posterior a una espera de dos segundos: Next puede terminar la respuesta HEAD antes de completar el render, por lo que contar solo al recibirla daba un falso negativo. Los GET de ficha y reporte siguen como controles positivos de un solo registro.
+
 ## Procedimiento
 
 Con `PATH` en npm 11.21.1 y el stack de `docs/tesis/entorno-aislado.md` levantado, desde la raíz del worktree:
