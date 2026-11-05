@@ -36,6 +36,10 @@ try {
   await tabTo(page.getByLabel('Password', { exact: true })); await page.keyboard.type(config.accounts.a.password)
   await tabTo(page.getByRole('button', { name: 'Iniciar sesion', exact: true })); await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: 'Dashboard ejecutivo', exact: true })).toBeVisible()
+  const severityLink = page.locator('aside').getByRole('link', { name: 'Análisis de severidad', exact: true })
+  await tabTo(severityLink); await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Análisis de severidad', exact: true })).toBeVisible()
+  report.checks.push('Menú y título usan Análisis de severidad; navegación con teclado.')
   await page.goto(new URL('/debtors?minAmount=100&queue=SEGUIMIENTO', origin).href)
   await expect(page.getByRole('heading', { name: 'Objetos de deuda', exact: true })).toBeVisible()
   for (const label of ['Severidad', 'Estado', 'Tipo', 'Contacto']) {
