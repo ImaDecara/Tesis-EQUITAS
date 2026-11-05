@@ -118,7 +118,9 @@ staging/publicación/cierre, con actor activo y rol `importador` o `importador_s
 reloj también está concedido a `postgres` para el job local; no le concede publicar ni editar staging.
 
 Se conserva el historial append-only de `import_batch`. Los eventos atómicos llevan `counts.publicacion_atomica=1`;
-la función legacy no puede crear esa marca ni prolongar una cadena atómica. El selector del corte vigente conserva el
+las referencias de raíz/cabeza se validan inmediatamente por existencia y tenant, sin interceptar el rechazo histórico
+`APPEND_ONLY` de `TRUNCATE` con una FK entrante. El historial tampoco admite update ni delete.
+La función legacy no puede crear esa marca ni prolongar una cadena atómica. El selector del corte vigente conserva el
 último `PUBLICADO` durante staging o rollback de 032, manteniendo la protección anterior para cargas legacy parciales.
 No se modifica la auditoría de accesos ni se implementa ALIGN-057.
 

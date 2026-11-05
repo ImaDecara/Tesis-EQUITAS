@@ -189,6 +189,25 @@ def test_idempotencia_es_canonica_y_esta_restringida_en_la_base(importer):
     assert conflict.returncode != 0 and "duplicate key" in conflict.stderr
 
 
+def test_historial_append_only_y_referencias_validas_al_lote(importer):
+    review = stage(prepared(importer, "history-integrity"))
+    stored = state(review)
+    commands = [
+        ("truncate public.import_batch", "APPEND_ONLY"),
+        (f"update public.import_publication set head_id=-1 where batch_id={review['batch_id']}", "IMPORT_HISTORY_REFERENCE_INVALID"),
+        ("insert into public.import_publication select batch_id+100000,tenant,head_id,actor,repeat('e',64),"
+         "revision,generation,payload_hash,status,document,versions,result,created_at,expires_at "
+         f"from public.import_publication where batch_id={review['batch_id']}", "IMPORT_HISTORY_REFERENCE_INVALID"),
+        ("insert into public.tenant(id,name) values(8033,'Municipio sintetico de integridad'); "
+         f"update public.import_publication set tenant=8033 where batch_id={review['batch_id']}", "IMPORT_HISTORY_REFERENCE_INVALID"),
+    ]
+    for statement, expected in commands:
+        result = subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-X", "-U", "supabase_admin", "-d", "postgres", "-v", "ON_ERROR_STOP=1"],
+                                input="begin; " + statement + "; rollback;", text=True, capture_output=True, timeout=15)
+        assert result.returncode != 0 and expected in result.stderr
+        assert state(review) == stored
+
+
 @pytest.mark.parametrize('variant', ['tenant-text', 'cutoff-spelling', 'unused-nonce'])
 def test_identidad_no_acepta_coerciones_o_parametros_sin_efecto(importer, variant):
     batch = prepared(importer, 'identity-' + variant)
