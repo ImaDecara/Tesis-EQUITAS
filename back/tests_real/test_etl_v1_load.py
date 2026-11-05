@@ -47,6 +47,7 @@ from oracle_lots import (  # noqa: E402
 )
 
 from ETL.transform import build_debtor_profile_payload  # noqa: E402
+from reissue_lot import reissue_lot  # noqa: E402
 
 TENANT = 1
 CONTRACT = ROOT / "contracts" / "source-contract.v1.json"
@@ -453,7 +454,7 @@ def test_el_perfil_de_cada_objeto_es_la_suma_de_sus_deudas(published):
 def test_el_hash_cargado_es_el_mismo_que_el_validado(campaign, published):
     hashes = published.validated.hashes
     assert lot_hashes(published.validated.lot) == hashes, "El archivo cambió después de validarlo"
-    assert [event["status"] for event in published.events] == ["VALIDADO", "PUBLICADO"]
+    assert [event["status"] for event in published.events] == ["RECIBIDO", "VALIDADO", "CONFIRMADO", "PUBLICADO"]
     for event in published.events:
         assert event["file_hashes"]["cabecera"] == hashes["cabecera"]
         assert event["file_hashes"]["detalle"] == hashes["detalle"]
@@ -476,19 +477,20 @@ def test_lo_que_vio_el_validador_es_lo_que_se_registro_al_cargar(published):
 
 
 def test_la_cadena_de_eventos_termina_publicada(published):
-    first, last = published.events
-    assert (first["status"], first["supersedes"]) == ("VALIDADO", None)
-    assert (last["status"], last["supersedes"]) == ("PUBLICADO", first["id"])
-    assert first["id"] < last["id"]
+    received, validated, confirmed, last = published.events
+    assert received['status'] == 'RECIBIDO' and received['supersedes'] is None
+    assert [event['status'] for event in published.events] == ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO']
+    for previous, current in zip(published.events, published.events[1:]):
+        assert current['supersedes'] == previous['id'] < current['id']
 
 
-def test_toda_escritura_de_cartera_ocurre_entre_validado_y_publicado(published):
-    """ALIGN-020: ninguna escritura antes de confirmar VALIDADO. xmin es el orden real de las transacciones."""
-    first, last = published.events
-    written = [int(row["_xmin"]) for rows in published.rows.values() for row in rows.values()]
+def test_toda_escritura_de_cartera_comparte_la_transaccion_de_publicado(published):
+    """032 fortalece 020: ninguna escritura antes de VALIDADO, todas junto a PUBLICADO."""
+    first, confirmed, last = published.events[1:]
+    written = [int(row['_xmin']) for rows in published.rows.values() for row in rows.values()]
     assert written, "Sin filas esta prueba sería vacía"
-    assert int(first["_xmin"]) < min(written)
-    assert max(written) < int(last["_xmin"])
+    assert int(first['_xmin']) < min(written)
+    assert set(written) == {int(last['_xmin'])} == {int(confirmed['_xmin'])}
 
 
 def test_la_primera_carga_informa_cuantas_filas_inserto(published):
@@ -509,25 +511,24 @@ def test_recargar_el_mismo_lote_no_inserta_ni_actualiza_nada(campaign, published
     assert result.returncode == 0, result.stderr
     assert changes(before, after) == {}, "La recarga reescribió filas de cartera"
     assert amounts_and_counts(tenant_tables(after)) == totals
-    events = batches()[previous:]
-    assert [(event["status"], event["supersedes"]) for event in events] == [("VALIDADO", None), ("PUBLICADO", events[0]["id"])]
-    counts = events[-1]["counts"]
-    assert (counts["filas_insertadas"], counts["filas_actualizadas"]) == (0, 0)
-    assert counts["filas_sin_cambios"] > 0
-    assert (counts["deudas_insertadas"], counts["deudas_actualizadas"]) == (0, 0)
-    assert (line_value(result, "Filas insertadas"), line_value(result, "Filas actualizadas")) == ("0", "0")
-    assert events[-1]["file_hashes"] == published.events[-1]["file_hashes"]
+    assert batches()[previous:] == [], "Repetir tampoco agrega eventos"
+    counts = batches()[-1]['counts']
+    assert counts == published.events[-1]['counts'], "Mismos conteos originales, no conteos de un reintento"
+    assert (line_value(result, 'Filas insertadas'), line_value(result, 'Filas actualizadas')) == (
+        str(counts['filas_insertadas']), str(counts['filas_actualizadas']))
     assert persisted_mismatches(tenant_tables(after), accepted_objects(), catalogs(), published.validated.lot) == []
     campaign.record("recarga", salida=result.returncode, filas_insertadas=counts["filas_insertadas"],
                     filas_actualizadas=counts["filas_actualizadas"], filas_sin_cambios=counts["filas_sin_cambios"],
+                    semantica_conteos="recibo_original_durable", filas_nuevas_en_la_base=0,
                     filas_reescritas_en_la_base=0, totales=_jsonable(totals))
 
 
 def _modified_lot(campaign, name: str) -> Path:
     key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
-    return derive_lot(campaign.work / name, (QUARANTINED_CASE,),
-                      cabecera_cells={(key, None, "Deuda_Actualizada"): MODIFIED_TOTAL[0]},
-                      detalle_cells={(key, MODIFIED_DEBT, "NOTD_totalActualizado"): MODIFIED_AMOUNT[0]})
+    lot = derive_lot(campaign.work / name, (QUARANTINED_CASE,),
+                     cabecera_cells={(key, None, "Deuda_Actualizada"): MODIFIED_TOTAL[0]},
+                     detalle_cells={(key, MODIFIED_DEBT, "NOTD_totalActualizado"): MODIFIED_AMOUNT[0]})
+    return reissue_lot(lot, campaign.work / (name + "-nueva-entrega"))
 
 
 def test_reimportar_una_obligacion_modificada_solo_cambia_esa_y_el_perfil_de_su_objeto(campaign, published):
@@ -569,9 +570,23 @@ def test_reimportar_una_obligacion_modificada_solo_cambia_esa_y_el_perfil_de_su_
                     tablas_cambiadas=sorted(changes(before, after)), hashes=lot_hashes(lot))
 
 
-def test_volver_al_lote_original_solo_toca_esas_mismas_dos_filas(campaign, published):
+def restore_original(campaign, published):
+    # Cada restauración es una entrega explícitamente nueva; el archivo original sigue inmutable.
+    number = getattr(campaign, '_restore_number', 0) + 1
+    campaign._restore_number = number
+    lot = reissue_lot(published.validated.lot, campaign.work / f'restauracion-{number}')
+    result = campaign.etl(lot)
+    campaign.record('nueva entrega de valores originales', salida=result.returncode,
+                    hashes=lot_hashes(lot), origen=published.validated.hashes)
+    return result
+
+
+def test_nueva_entrega_de_los_valores_originales_solo_toca_esas_mismas_dos_filas(campaign, published):
     before = snapshot()
-    result = campaign.etl(published.validated.lot)
+    repeat = campaign.etl(published.validated.lot)
+    assert repeat.returncode == 0 and changes(before, snapshot()) == {}
+    assert int(line_value(repeat, 'Filas insertadas')) == published.events[-1]['counts']['filas_insertadas']
+    result = restore_original(campaign, published)
     after = snapshot()
     assert result.returncode == 0, result.stderr
     found = changes(before, after)
@@ -640,7 +655,7 @@ def test_con_estados_faltantes_y_sin_vencidas_la_paridad_se_mantiene_en_un_lote_
     assert persisted_mismatches(tables, accepted_with_altered((MODIFIED_CASE,), lot), ids, lot) == []
     wanted = _python_oracle(tables, status_keys, profile["debtor"])
     assert [column for column in PROFILE_COLUMNS if not _same_within_a_cent(column, profile[column], wanted[column])] == []
-    assert campaign.etl(published.validated.lot).returncode == 0
+    assert restore_original(campaign, published).returncode == 0
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), ids, published.validated.lot) == []
 
 
@@ -821,10 +836,10 @@ def test_carga_parcial_no_altera_perfiles_ajenos(campaign, published):
     }, "Un perfil ajeno reescrito cambia su xmin aunque deje los mismos valores"
     assert Decimal(str(after["debtor_profile"][profile["id"]]["total_debt_amount"])) == Decimal(MODIFIED_TOTAL[1])
     events = batches()[previous:]
-    assert [event["status"] for event in events] == ["VALIDADO", "PUBLICADO"]
-    assert all(event["counts"]["ausentes"] == {"objetos": len(tables["debtor"]) - 1} for event in events)
+    assert [event["status"] for event in events] == ["RECIBIDO", "VALIDADO", "CONFIRMADO", "PUBLICADO"]
+    assert all(event["counts"]["ausentes"] == {"objetos": len(tables["debtor"]) - 1} for event in events[1:])
     assert "Ausentes del archivo: objetos=" in result.stdout
-    assert campaign.etl(published.validated.lot).returncode == 0
+    assert restore_original(campaign, published).returncode == 0
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), ids, published.validated.lot) == []
     campaign.record("delta con un objeto", salida=result.returncode, tablas_cambiadas=sorted(changes(before, after)))
 
@@ -870,7 +885,7 @@ def test_dar_de_baja_una_relacion_es_explicita_y_reversible(campaign, published)
     assert changes(after, snapshot()) == {}
     assert "ausentes" not in batches()[-1]["counts"]
     # Si vuelve a venir, se reactiva y todo concilia con el oráculo.
-    assert campaign.etl(published.validated.lot).returncode == 0
+    assert restore_original(campaign, published).returncode == 0
     restored = snapshot()
     assert restored["debtor_person"][relation["id"]]["active"] is True
     assert persisted_mismatches(tenant_tables(restored), accepted_objects(), catalogs(), published.validated.lot) == []
@@ -906,7 +921,7 @@ def test_un_contacto_ausente_se_informa_y_solo_se_desactiva_si_la_politica_lo_pi
     assert after["debtor_profile"][profile["id"]]["available_contact_count"] == 0
     assert contact["value"] not in result.stdout + result.stderr, "El valor del contacto no sale por la CLI"
     assert contact["value"] not in json.dumps(batches()[-1]["counts"]), "Ni queda en el lote"
-    assert campaign.etl(published.validated.lot).returncode == 0
+    assert restore_original(campaign, published).returncode == 0
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
@@ -958,8 +973,8 @@ def test_una_persona_con_datos_distintos_en_varios_objetos_no_se_reescribe_al_re
     result = campaign.etl(lot)
     assert result.returncode == 0
     assert changes(rows, snapshot()) == {}
-    assert (line_value(result, "Filas insertadas"), line_value(result, "Filas actualizadas")) == ("0", "0")
-    assert campaign.etl(published.validated.lot).returncode == 0
+    assert (line_value(result, "Filas insertadas"), line_value(result, "Filas actualizadas")) == ("0", "2")
+    assert restore_original(campaign, published).returncode == 0
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
@@ -1008,6 +1023,7 @@ def test_delta_conservado_reclasifica_la_deuda_pendiente_al_nuevo_corte(campaign
     key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
     full = derive_lot(campaign.work / f"corte-inicial-{policy}", (QUARANTINED_CASE,),
                       detalle_cells={(key, MODIFIED_DEBT, "NOTD_vencimiento"): "01/10/2026"})
+    full = reissue_lot(full, campaign.work / f"nueva-entrega-corte-{policy}")
     delta = _rejected_missing_debt(campaign, f"corte-delta-{policy}")[0]
     # El delta solo acepta el objeto objetivo: también debe dejar intactos los perfiles y deudas ajenos.
     other_keys = [(item["clave_agrupacion"],) for item in published.validated.selected if item["caso"] != MODIFIED_CASE]
@@ -1054,11 +1070,12 @@ def test_delta_conservado_reclasifica_la_deuda_pendiente_al_nuevo_corte(campaign
             again = campaign.etl(delta, "--ausentes", policy, "--mapping", str(mapping), cut_off=cutoff)
             assert again.returncode == 0, again.stderr
             assert changes(after, snapshot()) == {}, "Ni deuda ni profile_generated_at se reescriben al repetir el mismo corte"
-            assert batches()[-1]["counts"]["filas_actualizadas"] == 0
+            assert batches()[-1]["counts"] == counts
+            assert int(line_value(again, "Filas actualizadas")) == counts["filas_actualizadas"]
             campaign.record("delta conservado al nuevo corte", politica=policy, corte=cutoff, mora=str(got["overdue_debt_amount"]),
                             vencidas=got["overdue_debt_count"], reclasificadas=len(changed_debts), idempotente=True)
     finally:
-        restored = campaign.etl(published.validated.lot)
+        restored = restore_original(campaign, published)
         assert restored.returncode == 0, restored.stderr
 
 
@@ -1075,6 +1092,8 @@ REJECTED = {
 @pytest.mark.parametrize("name", REJECTED)
 def test_un_archivo_rechazado_no_cambia_nada_y_queda_fallido(campaign, published, name):
     lot, wanted_code, validates = REJECTED[name](campaign, name)
+    if validates:
+        lot = reissue_lot(lot, campaign.work / f'rechazo-nuevo-{name}')
     before = snapshot()
     previous = len(batches())
     result = campaign.etl(lot)
@@ -1087,11 +1106,12 @@ def test_un_archivo_rechazado_no_cambia_nada_y_queda_fallido(campaign, published
     if validates:
         assert line_value(result, "Resultado del lote") == "VALIDADO", "Debe rechazarse por parcial, no por otra causa"
     events = batches()[previous:]
-    assert [(event["status"], event["supersedes"]) for event in events] == [("FALLIDO", None)]
-    assert events[0]["file_hashes"]["detalle"] == sha256(lot / "detalle.tsv")
-    if wanted_code == "PARTIAL_LOAD_REJECTED":
-        assert sum(events[0]["counts"]["faltantes"].values()) >= 1
-    campaign.record(f"rechazo: {name}", salida=result.returncode, codigo=code, estado=events[0]["status"],
+    expected_events = [('RECIBIDO', None), ('FALLIDO', events[0]['id'])] if validates else [('FALLIDO', None)]
+    assert [(event['status'], event['supersedes']) for event in events] == expected_events
+    assert events[-1]['file_hashes']['detalle'] == sha256(lot / 'detalle.tsv')
+    if wanted_code == 'PARTIAL_LOAD_REJECTED':
+        assert sum(events[-1]['counts']['faltantes'].values()) >= 1
+    campaign.record(f'rechazo: {name}', salida=result.returncode, codigo=code, estado=events[-1]['status'],
                     filas_reescritas_en_la_base=0, dataset=dataset_hash(lot_hashes(lot)))
 
 
@@ -1117,10 +1137,10 @@ def test_una_falla_durante_la_carga_termina_fallido_con_antecedente(campaign, pu
     finally:
         psql("drop trigger a027_falla on public.debt; drop function public.a027_falla();")
     assert result.returncode == 1
-    assert error_code(result) == "SUPABASE_OPERATION_FAILED"
+    assert error_code(result) == "IMPORT_PUBLICATION_FAILED"
     assert "falla inyectada" not in result.stdout + result.stderr, "El mensaje del proveedor no se propaga"
     events = batches()[previous:]
-    assert [(event["status"], event["supersedes"]) for event in events] == [("VALIDADO", None), ("FALLIDO", events[0]["id"])]
+    assert [(event["status"], event["supersedes"]) for event in events] == [("RECIBIDO", None), ("VALIDADO", events[0]["id"]), ("FALLIDO", events[1]["id"])]
     assert changes(before, snapshot()) == {}
     campaign.record("falla durante la carga", salida=result.returncode, codigo=error_code(result),
                     eventos=[event["status"] for event in events])
@@ -1138,16 +1158,16 @@ def test_un_rechazo_de_publicado_termina_fallido_con_antecedente(campaign, publi
         result = campaign.etl(_modified_lot(campaign, "publicado-rechazado"))
     finally:
         psql("drop trigger a027_rechaza_publicado on public.import_batch; drop function public.a027_rechaza_publicado();")
-    assert (result.returncode, error_code(result)) == (1, "IMPORT_BATCH_REJECTED")
+    assert (result.returncode, error_code(result)) == (1, "IMPORT_PUBLICATION_FAILED")
     assert "rechazo inyectado" not in result.stdout + result.stderr, "El mensaje del proveedor no se propaga"
     events = batches()[previous:]
-    assert [(event["status"], event["supersedes"]) for event in events] == [("VALIDADO", None), ("FALLIDO", events[0]["id"])]
+    assert [(event["status"], event["supersedes"]) for event in events] == [("RECIBIDO", None), ("VALIDADO", events[0]["id"]), ("FALLIDO", events[1]["id"])]
     assert events[1]["file_hashes"] == events[0]["file_hashes"]
-    # Sin transacción, lo escrito queda (ALIGN-032). Por eso importa cerrar: FALLIDO con antecedente declara cartera tocada.
-    assert set(changes(before, snapshot())) == {"debt", "debtor_profile"}
+    # El rechazo del cierre revierte también deudas y perfiles, en la misma transacción.
+    assert changes(before, snapshot()) == {}
     campaign.record("rechazo de PUBLICADO", salida=result.returncode, codigo=error_code(result),
-                    eventos=[event["status"] for event in events], tablas_cambiadas=["debt", "debtor_profile"])
-    assert campaign.etl(published.validated.lot).returncode == 0, "Una recarga posterior recupera el lote"
+                    eventos=[event["status"] for event in events], tablas_cambiadas=[])
+    assert restore_original(campaign, published).returncode == 0, "Una recarga posterior recupera el lote"
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
@@ -1187,10 +1207,10 @@ def test_un_centavo_en_un_importe_extremo_se_actualiza_y_la_recarga_no_cambia_na
     assert after["debtor_profile"][profile["id"]]["total_debt_amount"] == Decimal(f"{base}.02") + others
     reload = campaign.etl(corrected)
     assert changes(after, snapshot()) == {}, "La recarga de un importe extremo reescribió filas"
-    assert (line_value(reload, "Filas insertadas"), line_value(reload, "Filas actualizadas")) == ("0", "0")
+    assert (line_value(reload, "Filas insertadas"), line_value(reload, "Filas actualizadas")) == ("0", "2")
     campaign.record(f"centavo en importe extremo {base}", salida=result.returncode, filas_actualizadas=2,
-                    recarga_filas_actualizadas=int(line_value(reload, "Filas actualizadas")))
-    assert campaign.etl(published.validated.lot).returncode == 0
+                    recibo_filas_actualizadas=int(line_value(reload, "Filas actualizadas")), recarga_filas_reescritas_en_la_base=0)
+    assert restore_original(campaign, published).returncode == 0
     assert persisted_mismatches(tenant_tables(snapshot()), accepted_objects(), catalogs(), published.validated.lot) == []
 
 
@@ -1198,8 +1218,8 @@ def test_ningun_lote_queda_sin_cerrar(campaign, published):
     events = batches()
     closed = {event["supersedes"] for event in events}
     assert [event["id"] for event in events if event["status"] == "VALIDADO" and event["id"] not in closed] == []
-    assert {event["status"] for event in events} == {"VALIDADO", "PUBLICADO", "FALLIDO"}
-    assert all(event["supersedes"] is None for event in events if event["status"] == "VALIDADO")
+    assert {event["status"] for event in events} == {"RECIBIDO", "VALIDADO", "CONFIRMADO", "PUBLICADO", "FALLIDO"}
+    assert all(event["supersedes"] is not None for event in events if event["status"] == "VALIDADO")
 
 
 def test_ninguna_salida_expone_claves_ni_datos_personales(campaign):

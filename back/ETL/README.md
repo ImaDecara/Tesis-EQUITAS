@@ -1,4 +1,4 @@
-# Ejecución segura y semántica del ETL — ALIGN-025, ALIGN-026 y ALIGN-027
+# Ejecución segura y publicación atómica del ETL — ALIGN-025/026/027/031/032
 
 ALIGN-025 aplica la separación de entornos del plan EQUITAS 2026-10-28-v2, §7.6, y reduce los datos
 expuestos por el ejecutor (objetivos 1 y 7 de la tesis; minimización según
@@ -34,7 +34,7 @@ Precondición: `db reset`, `etl-compat-catalogs.sql` y `etl-import-actor.sql`
 ```sh
 export EQUITAS_TARGET_ENV=local
 export SUPABASE_URL=http://127.0.0.1:54321
-# Desde /tmp/equitas-local-db/supabase-local.env, sin imprimirlas: clave de servicio (cartera) y clave anon (apikey).
+# Desde /tmp/equitas-local-db/supabase-local.env, sin imprimirlas: clave de servicio (lectura de catálogos) y clave anon (apikey).
 export SUPABASE_SERVICE_ROLE_KEY=...   SUPABASE_ANON_KEY=...
 # JWT de equitas_import_server (database/testing/case_review_local.py mint-jwt) y el id que imprime etl-import-actor.sql.
 export EQUITAS_IMPORT_SERVER_JWT=...   EQUITAS_IMPORT_ACTOR_USER=...
@@ -50,29 +50,77 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
 1. Calcula el SHA-256 de los archivos, del mapeo y del contrato, lee y valida con `ETL.validate_source`.
 2. **Lote bloqueado o ilegible:** registra `FALLIDO` en `import_batch`, no escribe ninguna fila de cartera y sale con 1
    (`BATCH_BLOCKED` o el código de la estructura). Un lote de `sintetico-v1` completo termina siempre así, a propósito.
-3. **Lo que el archivo ya no trae:** lee lo ya publicado del municipio y compara. Qué hacer lo decide quien carga, con
-   `--ausentes` (ver "Política de ausentes"). Por defecto, `rechazar`: si falta un objeto, una obligación de un objeto
-   aceptado o una relación persona–objeto, registra `FALLIDO`, no escribe y sale con `PARTIAL_LOAD_REJECTED`;
-   `counts.faltantes` dice cuántos.
-4. **Lote validado:** resuelve todas las claves de catálogo (`CATALOG_KEY_MISSING` detiene antes de escribir), registra
-   `VALIDADO`, carga solo las filas aceptadas y cierra con `PUBLICADO`, que reemplaza al evento anterior. Solo escribe lo
-   que cambió: recargar el mismo lote deja todas las filas intactas, y `PUBLICADO` guarda `filas_insertadas`,
-   `filas_actualizadas`, `filas_sin_cambios` y `escrituras` por tabla. Los perfiles de los objetos aceptados se recalculan
-   al final con `recompute_debtor_profiles`, desde lo persistido. La misma función reclasifica las obligaciones pendientes
-   (`ACTIVE`/`OVERDUE`) por vencimiento y corte, incluidas las conservadas. `profile_generated_at` solo cambia si cambia el perfil.
-   Una persona que viene en varios objetos se escribe una vez, con los datos de su última fila.
-5. **Falla durante la carga, interrupción o rechazo de `PUBLICADO`:** registra `FALLIDO` con antecedente y conserva el
-   código original. Las escrituras por la Data API no son una transacción: lo ya escrito no se revierte. La publicación
-   atómica, la recuperación y la clave de idempotencia por lote son de ALIGN-032; hoy cada ejecución agrega su propia
-   cadena de eventos.
-6. **`PUBLICADO` con resultado incierto** (respuesta perdida, 5xx o respuesta 200 ilegible): imprime
-   `PUBLISH_OUTCOME_UNKNOWN`, sale con 1 y no registra `FALLIDO`, que podría ser falso. `VALIDADO` queda sin desenlace hasta
-   ALIGN-032. Es rechazo confirmado solo si la base respondió 4xx.
+3. **Staging y validación:** `stage_import_batch` recibe exclusivamente filas normalizadas aceptadas. En la base
+   calcula ausentes, guarda versiones y una revisión congelada; agrega `RECIBIDO → VALIDADO` sin escribir cartera.
+   `rechazar` ante un objeto, obligación o relación faltante termina en `RECIBIDO → FALLIDO`, con `counts.faltantes`.
+4. **Publicación:** la CLI llama a `publish_import_batch`. Bajo el bloqueo del tenant compara identidad, revisión,
+   checksum del staging y todas las versiones. Si cambiaron, registra `REQUIERE_NUEVO_PREVIEW`, sin publicar.
+   Si coinciden, una sola transacción escribe personas/domicilios/contactos, objetos/relaciones/deudas, bajas explícitas,
+   `recompute_debtor_profiles`, detalles de perfiles, el recibo durable y `CONFIRMADO → PUBLICADO`.
+   Ninguna conexión puede ver deudas nuevas sin sus perfiles o sin `PUBLICADO`. No se afirma atomicidad entre llamadas REST.
+5. **Fallo:** la publicación completa revierte. Después, `settle_import_batch` espera el mismo bloqueo, consulta el resultado
+   y registra `FALLIDO` en otra transacción, solo si no se publicó. Se eliminan staging y el documento normalizado.
+   Si tampoco se puede consultar/cerrar el resultado, se conserva el error original y se informa `PUBLISH_OUTCOME_UNKNOWN`.
+6. **Doble confirmación o respuesta perdida después del commit:** la repetición devuelve el recibo persistido. No agrega
+   eventos, no reescribe filas ni recalcula perfiles. Conteos, montos y reclasificaciones son los originales, incluso si
+   hubo otra importación después. En particular, **los conteos impresos no representan escrituras nuevas del reintento**.
 
-Los importes de `debt` se comparan contra lo persistido leyéndolos como texto (`::text`). Por la Data API llegarían como
-`float`, que pierde el centavo desde unos 100 billones. Los del perfil los compara la función SQL como `numeric`. Toda lectura
-de lo existente recorre todas las páginas: la Data API corta en su máximo de filas sin avisar, y una deuda no leída se
-insertaría de nuevo.
+Los importes se comparan en PostgreSQL con los tipos `numeric` de las tablas, sin una conversión intermedia a `float`.
+Los helpers antiguos de lectura siguen paginando y leyendo importes como texto; `--execute` publica exclusivamente por la
+nueva función SQL, sin una alternativa de escrituras REST por fila.
+
+### Identidad, revisión y recuperación
+
+La clave SHA-256 incluye hashes de los archivos, hash **canónico del mapeo efectivo**, versión y hash del contrato,
+parámetros efectivos (corte, política de ausentes, límites de rechazos, versión de reglas) y tenant. El mapeo normaliza
+alias de identidad y defaults; ni su etiqueta `version`, ni el orden de claves JSON cambian su identidad. Las secuencias
+de transformaciones conservan orden. Existe `UNIQUE (tenant, idempotency_key)` en `import_publication`.
+
+El identificador estable es `batch_id` (el primer evento de la cadena); `published_event_id` identifica el evento final.
+La revisión liga identidad, filas normalizadas, versiones y generación. Confirmar nunca vuelve a enviar filas o mapeo.
+Mutar el mapeo efectivo después de validar invalida la confirmación. Reenviar filas distintas bajo la misma identidad
+produce `IMPORT_REVISION_CONFLICT`; no reemplaza el snapshot silenciosamente.
+
+La CLI imprime `Referencia del lote: <id> revision=<sha256>` antes de publicar. Ante `FALLIDO`, `DESCARTADO` o
+`REQUIERE_NUEVO_PREVIEW`, después de resolver la causa se puede revalidar explícitamente la misma entrada:
+
+```sh
+.venv/bin/python -m ETL.run_etl --folder <lote> --execute --cut-off 2026-09-30 \
+  --ausentes conservar --revalidate <revision-anterior>
+```
+
+Esto relee y valida los archivos, conserva identidad/lote y genera una revisión con versiones nuevas. No modifica una
+publicación terminada: `PUBLICADO` siempre devuelve su recibo original. Para aplicar nuevamente valores de una entrega
+anterior después de otra corrección se necesita una **nueva entrega de origen**. Repetir el archivo original no deshace la
+corrección. No hay un nonce o bandera que evada la idempotencia.
+
+Los consumidores internos usan `ETL.publication.stage_batch`, `publish_batch` y `settle_batch`; la CLI usa esas mismas
+funciones. El servicio debe conservar la referencia recibida. Si pierde también su registro de referencia, un administrador
+local puede consultar `import_publication` por tenant e identidad; no debe editar staging, estados o revisiones a mano.
+Los borrados, cambios y recreaciones de deudas, objetos, relaciones, personas, contactos, domicilios y perfiles invalidan
+versiones automáticamente. La validación incluye todo el tenant para comparar ausentes. Es una invalidación conservadora:
+un lote sobre otro objeto del mismo tenant también puede exigir revalidación. Personas y localidades compartidas usan
+bloqueos adicionales ordenados; actualmente las publicaciones se serializan también por localidades. Una persona vinculada
+a otro tenant se rechaza (`SHARED_PERSON_OTHER_TENANT`) antes de cualquier escritura de cartera.
+
+### Retención y permisos
+
+Staging y el documento con filas se vacían al pasar a `PUBLICADO`, `FALLIDO` o `DESCARTADO`. La expiración es de 24 horas
+por revisión. La base rechaza confirmar una revisión vencida y el job `equitas-import-staging-ttl` de `pg_cron` purga
+abandonados cada minuto, incluso sin nuevas cargas (latencia del scheduler hasta un minuto). El job tiene timeout de 45 s.
+`purge_import_staging()` usa siempre el reloj de la base; no recibe un reloj elegido por el cliente. El helper con reloj
+controlado es privado y solo se usa administrativamente en los ensayos locales.
+
+`import_row_staging`, `import_publication` y las tablas de versiones tienen RLS y ACL cerradas. `anon`, `authenticated`,
+`service_role` y `equitas_review_server` no pueden publicar ni escribir staging. Solo `equitas_import_server` ejecuta
+staging/publicación/cierre, con actor activo y rol `importador` o `importador_sistema` del tenant indicado. El definidor es
+`NOLOGIN`, no asumible por `authenticator`, con `search_path=''` y permisos concretos. El mantenimiento sin parámetros de
+reloj también está concedido a `postgres` para el job local; no le concede publicar ni editar staging.
+
+Se conserva el historial append-only de `import_batch`. Los eventos atómicos llevan `counts.publicacion_atomica=1`;
+la función legacy no puede crear esa marca ni prolongar una cadena atómica. El selector del corte vigente conserva el
+último `PUBLICADO` durante staging o rollback de 032, manteniendo la protección anterior para cargas legacy parciales.
+No se modifica la auditoría de accesos ni se implementa ALIGN-057.
 
 ### Política de ausentes
 
@@ -87,7 +135,7 @@ relación o un contacto ya inactivos no cuentan como ausentes.
 | `dar-de-baja` (delta con bajas) | No se toca | Se conserva y cuenta | `active=false`, también su detalle de perfil | `active=false` |
 
 - **Nada se desactiva sin pedirlo** y nada se borra. Lo dado de baja queda en `counts.bajas_relaciones` y
-  `counts.bajas_contactos`. Si vuelve a venir, se reactiva. Las bajas solo alcanzan a objetos aceptados de este archivo.
+  `counts.bajas_contactos`. Si vuelve a venir en una nueva entrega, se reactiva. Las bajas solo alcanzan a objetos aceptados de este archivo.
 - **Una obligación ausente nunca se da de baja:** el archivo no dice que se pagó y `debt` no tiene baja. Sigue sumando en el
   perfil. Un municipio que entrega solo deudas vivas puede recargar con `conservar`, pero el total de ese objeto incluye lo que
   dejó de venir, y `counts.ausentes.obligaciones` dice cuánto. Es un límite declarado: darlas de baja exige un cambio de esquema
@@ -97,7 +145,7 @@ relación o un contacto ya inactivos no cuentan como ausentes.
   conservan; sin fecha no se infiere un cambio. La RPC devuelve `deudas_reclasificadas`, incluido en
   `counts.escrituras.debt.actualizadas` y `counts.filas_actualizadas`. `counts.deudas_actualizadas` sigue contando solo
   las filas recibidas en el archivo. Repetir el mismo corte no vuelve a escribirlas. El estado y el perfil se actualizan
-  en la misma RPC; esto no hace atómica toda la carga CLI (ALIGN-032).
+  en la misma transacción que el resto de la carga y `PUBLICADO`. Repetir devuelve el conteo original durable; no lo sustituye por cero.
 - **Un contacto se compara por persona**, porque es de la persona y no del objeto: si lo trae en cualquiera de sus filas
   aceptadas, sigue viniendo. No se compara sin la columna de ese tipo en el archivo, ni para una persona con alguna cabecera no
   aceptada: en esos casos no hubo observación.
@@ -109,11 +157,16 @@ En el perfil, una ausencia queda nula y no en cero: sin vencidas observadas y co
 vencido, y `debt_state_not_observed_count` declara cuántas obligaciones no tienen estado. Ver el
 [contrato de dominio §14](../../docs/tesis/contrato-dominio-v1.md). `etl_semantic_local.py` lo verifica contra la base.
 
-Los objetos en cuarentena no se escriben: conservan el estado previo que tuvieran. La marca de actualización
-pendiente, sin columna donde guardarla, queda para ALIGN-032/054; su cantidad está en `import_batch.counts`.
+Los objetos en cuarentena no se escriben: conservan el estado previo que tuvieran. Su cantidad está en `import_batch.counts`. El recibo interno `object_cutoffs` conserva el último corte aplicado a cada
+objeto: los ausentes y cuarentenados no avanzan aunque cambie el corte global (O4 de 031). En objetos anteriores a 032,
+un corte no reconstruible se declara nulo, nunca se inventa a partir del global.
+
+**Límite de 054:** consumir revisión/versiones y `object_cutoffs`, distinguir objetos recalculados de conservados y construir
+su preview sin llamar a `recompute_debtor_profiles`, que también escribe `debt.status`. 032 no implementa pantallas, preview
+UI ni confirmación web de 054/056. El cliente no debe atribuir al corte global un recálculo de los objetos conservados.
 
 Los eventos de `import_batch` usan **solo** `EQUITAS_IMPORT_SERVER_JWT` y la clave `anon` como `apikey`, nunca la clave
-general, que no tiene permiso sobre la función. La cartera se sigue escribiendo con la clave de servicio local.
+general, que no tiene permiso sobre la función. La cartera la escribe el definidor de publicación dentro de la transacción; la clave de servicio se usa solo para leer catálogos antes de staging.
 La configuración se lee del entorno y, solo al ejecutar, de `back/.env` (sin reemplazar variables ya definidas).
 `SUPABASE_KEY` sigue disponible como alternativa a `SUPABASE_SERVICE_ROLE_KEY`. No registrar ni versionar esas claves.
 
@@ -145,7 +198,8 @@ Por ejemplo: `fila=3 clave_hash=<24 hexadecimales> codigo=DETAIL_ACCOUNT_MISSING
 No contienen filas, payloads, claves de negocio en claro ni mensajes del proveedor.
 El comando termina con código 1 ante un error y no imprime su traceback original.
 
-`fila` es la línea física de la cabecera del objeto que se está cargando. `fila=0` indica configuración, lote,
+Las llamadas atómicas informan `fila=0`: son operaciones de lote y no exponen la fila SQL que falló. Los helpers de diagnóstico
+pueden conservar la línea física de una cabecera. `fila=0` también indica configuración, lote,
 perfil agregado o una llamada aislada al loader sin contexto de fila. La clave del contexto se resume con BLAKE2b de
 96 bits y una clave aleatoria por proceso: permite correlación durante la
 ejecución, sin conservar un hash estable entre ejecuciones. Sin contexto se usa
@@ -155,7 +209,8 @@ de anonimización de archivos de origen.
 Códigos principales: `TARGET_ORIGINAL_FORBIDDEN`, `TARGET_ENV_INVALID`,
 `TARGET_URL_INVALID`, `TARGET_HOST_FORBIDDEN`, `SUPABASE_KEY_MISSING`,
 `CUT_OFF_REQUIRED`, `PARTIAL_LOAD_REJECTED`, `ABSENT_POLICY_INVALID`, `PROFILE_RECOMPUTE_RESPONSE_INVALID`, `IMPORT_CREDENTIAL_MISSING`, `IMPORT_ACTOR_INVALID`,
-`BATCH_BLOCKED`, `SOURCE_CHANGED_DURING_READ`, `CATALOG_KEY_MISSING`, `IMPORT_BATCH_REJECTED`, `PUBLISH_OUTCOME_UNKNOWN`,
+`IMPORT_REVISION_CONFLICT`, `IMPORT_REVALIDATION_REQUIRED`, `REQUIERE_NUEVO_PREVIEW`, `IMPORT_PUBLICATION_FAILED`,
+`SHARED_PERSON_OTHER_TENANT`, `BATCH_BLOCKED`, `SOURCE_CHANGED_DURING_READ`, `CATALOG_KEY_MISSING`, `IMPORT_BATCH_REJECTED`, `PUBLISH_OUTCOME_UNKNOWN`,
 `SUPABASE_RETRY`, `SUPABASE_RETRY_EXHAUSTED`, `SUPABASE_OPERATION_FAILED` y `ETL_FAILED`, además de los códigos
 del contrato de origen (`CORTE_INVALIDO`, `MAPEO_REQUERIDO`, `COLUMNA_OBLIGATORIA_AUSENTE`…) y los estables de
 `record_import_batch` (`ROLE_NOT_ALLOWED`, `ACTOR_NOT_ACTIVE_MEMBER`, `INVALID_IMPORT_BATCH:<restricción>`…).
@@ -195,3 +250,20 @@ esperado en [`entorno-aislado.md` §8](../../docs/tesis/entorno-aislado.md#8-car
 ```
 
 Ninguna de estas pruebas reemplaza la revisión independiente.
+
+La suite nueva `tests_real/test_import_publish.py` exige su propio reset y turno de base, igual que 027; la tanda de API/Next
+usa otras semillas y requiere otro reset. El conjunto completo se ejecuta en tandas separadas, sin omitir archivos:
+
+```sh
+.venv/bin/python -m pytest tests_real/test_import_publish.py -q
+# Nuevo reset local + esperar Auth y REST 200.
+.venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q
+# Nuevo reset local + esperar Auth y REST 200.
+.venv/bin/python -m pytest tests_real/test_imports_api.py tests_real/test_next_route.py -q
+```
+
+El arnés toma el lock atómico de `/tmp/equitas-local-db/lock`, mantiene JWT en memoria/temporales privados, registra SHA y
+hash del diff y limpia únicamente procesos y temporales propios. Los fallos se inyectan con triggers temporales de prueba
+o un proxy HTTP local que pierde una respuesta ya confirmada, sin interruptores de fallo en producción. La campaña 027
+conserva oráculos y comprobaciones por `xmin`; sus conteos de repetición ahora son el recibo original y las restauraciones
+usan nuevas entregas explícitas. Ver la migración `20261105201716_import_batch_staging.sql`.

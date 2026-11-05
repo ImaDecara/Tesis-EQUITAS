@@ -21,6 +21,8 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from import_publication_fake import PublicationModel
+from reissue_lot import reissue_lot
 from oracle_lots import (
     AS_OF,
     FIXTURE,
@@ -157,6 +159,7 @@ class FakeDatabase:
         self.writes = 0
         self.updates = 0
         self.next_id = 1000
+        self.publication = PublicationModel(self)
 
     def table(self, name):
         return FakeQuery(self, name)
@@ -189,6 +192,9 @@ class FakeDatabase:
         return dict(row)
 
     def post_rpc(self, url, *, headers, json, timeout, **_):  # noqa: A002
+        if not url.endswith('/record_import_batch'):
+            self.rpc_headers.append(headers)
+            return self.publication.post(url.rsplit('/', 1)[-1], json, url)
         assert url == 'http://127.0.0.1:54321/rest/v1/rpc/record_import_batch'
         self.rpc_headers.append(headers)
         body = json
@@ -366,10 +372,10 @@ def test_lote_validado_persistido_coincide_con_el_oraculo(database, tmp_path):
     lot = derive_lot(tmp_path / 'validado', ('cuenta-ceros-izquierda',))
     execute(lot)
     assert persisted_mismatches(database.tables, accepted_objects(), CATALOGS, lot) == []
-    assert [batch['p_status'] for batch in database.batches] == ['VALIDADO', 'PUBLICADO']
+    assert [batch['p_status'] for batch in database.batches] == ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO']
     assert database.batches[1]['p_supersedes'] == database.batches[0]['id']
-    assert database.batches[1]['p_counts']['objetos_publicados'] == 31
-    assert database.batches[1]['p_counts']['deudas_insertadas'] == sum(item['obligaciones'] for item in accepted_objects())
+    assert database.batches[-1]['p_counts']['objetos_publicados'] == 31
+    assert database.batches[-1]['p_counts']['deudas_insertadas'] == sum(item['obligaciones'] for item in accepted_objects())
 
 
 def test_municipio_b_validado_coincide_con_su_oraculo(database, tmp_path):
@@ -425,7 +431,7 @@ def test_invalido_de_capital_va_a_cuarentena_sin_guardar_cero(database, tmp_path
     target = accepted_objects()[0]
     lot = derive_lot(tmp_path / 'capital', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_capital'): 'sin-monto'})
     execute(lot)
-    assert database.batches[0]['p_status'] == 'VALIDADO'
+    assert database.batches[1]['p_status'] == 'VALIDADO'
     assert int(target['cuenta']) not in [row['external_id'] for row in database.tables['debtor']
                                          if row['type'] == CATALOGS['debtor_type']['RODADO']]
     assert database.batches[0]['p_counts']['hallazgos']['importe_no_numerico'] >= 1
@@ -673,7 +679,7 @@ def test_fecha_centinela_en_lote_iso_no_es_fecha_real_ni_rompe_la_carga(database
     formato = json.loads(synthetic_profile(tmp_path).read_text(encoding='utf-8'))['formato']
     profile = synthetic_profile(tmp_path, formato={**formato, 'fecha': 'aaaa-mm-dd'})
     execute(lot, mapping=profile)
-    assert database.batches[0]['p_status'] == 'VALIDADO'
+    assert database.batches[1]['p_status'] == 'VALIDADO'
     assert database.batches[0]['p_source_updated_at'] is None
 
 
@@ -896,8 +902,9 @@ def test_recarga_identica_no_inserta_ni_actualiza_deudas(database, tmp_path, cap
     execute(lot)
     salida = capsys.readouterr().out
     assert before == json.dumps(sorted(database.tables['debt'], key=lambda row: row['id']))
-    assert re.search(r'Deudas insertadas:\s+0', salida) and re.search(r'Deudas actualizadas:\s+0', salida)
-    assert database.batches[-1]['p_counts']['deudas_sin_cambios'] == len(database.tables['debt'])
+    assert re.search(r'Deudas insertadas:\s+' + str(len(database.tables['debt'])), salida)
+    assert database.batches[-1]['p_counts']['deudas_sin_cambios'] == 0
+    assert len(database.batches) == 4
 
 
 def _portfolio(database):
@@ -920,9 +927,9 @@ def test_recarga_identica_no_reescribe_ninguna_fila_ni_el_momento_del_perfil(dat
     assert _portfolio(database) == before
     assert (database.writes, database.updates) == (writes, 0)
     counts = database.batches[-1]['p_counts']
-    assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (0, 0)
-    assert counts['filas_sin_cambios'] >= database.cartera_rows()
-    assert re.search(r'Filas insertadas:\s+0\n', salida) and re.search(r'Filas actualizadas:\s+0\n', salida)
+    assert counts == first
+    assert len(database.batches) == 4
+    assert re.search(r'Filas insertadas:\s+' + str(first['filas_insertadas']) + r'\n', salida)
 
 
 def test_corregir_una_obligacion_solo_toca_esa_fila_y_el_perfil_de_su_objeto(database, tmp_path):
@@ -970,7 +977,8 @@ def test_persona_con_datos_distintos_en_dos_objetos_se_escribe_una_vez_y_mandan_
     assert database.updates == 0, 'Una sola escritura por persona y dirección'
     execute(lot)
     counts = database.batches[-1]['p_counts']
-    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (0, 0, 0)
+    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (database.cartera_rows(), 0, 0)
+    assert len(database.batches) == 4
 
 
 def test_la_ultima_fila_sin_domicilio_no_borra_el_de_una_fila_anterior(database, tmp_path):
@@ -993,7 +1001,8 @@ def test_localidad_sin_codigo_postal_no_borra_el_de_otra_ni_mueve_direcciones(da
     before = _portfolio(database)
     execute(lot)
     counts = database.batches[-1]['p_counts']
-    assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (0, 0)
+    assert (counts['filas_insertadas'], counts['filas_actualizadas']) == (database.cartera_rows(), 0)
+    assert len(database.batches) == 4
     assert _portfolio(database) == before
 
 
@@ -1004,8 +1013,8 @@ def _corrected_lot(tmp_path, name):
 
 
 @pytest.mark.parametrize(('outcome', 'code'), [
-    (400, 'IMPORT_BATCH_REJECTED'), (401, 'IMPORT_BATCH_REJECTED'), (403, 'IMPORT_BATCH_REJECTED'), (409, 'IMPORT_BATCH_REJECTED'),
-    ('ACTOR_NOT_ACTIVE_MEMBER', 'ACTOR_NOT_ACTIVE_MEMBER'), ('INVALID_IMPORT_BATCH:import_batch_counts_format', 'INVALID_IMPORT_BATCH:import_batch_counts_format'),
+    (400, 'IMPORT_PUBLICATION_FAILED'), (401, 'IMPORT_PUBLICATION_FAILED'), (403, 'IMPORT_PUBLICATION_FAILED'), (409, 'IMPORT_PUBLICATION_FAILED'),
+    ('ACTOR_NOT_ACTIVE_MEMBER', 'ACTOR_NOT_ACTIVE_MEMBER'), ('INVALID_IMPORT_BATCH:import_batch_counts_format', 'IMPORT_PUBLICATION_FAILED'),
 ])
 def test_rechazo_confirmado_de_publicado_cierra_con_fallido_y_conserva_el_error(database, tmp_path, capsys, outcome, code):
     execute(derive_lot(tmp_path / 'primero'))
@@ -1016,8 +1025,8 @@ def test_rechazo_confirmado_de_publicado_cierra_con_fallido_y_conserva_el_error(
         execute(_corrected_lot(tmp_path, 'corregido'))
     assert error.value.code == code
     events = database.batches[previous:]
-    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
-    assert events[1]['p_supersedes'] == events[0]['id']
+    assert [event['p_status'] for event in events] == ['RECIBIDO', 'VALIDADO', 'FALLIDO']
+    assert events[-1]['p_supersedes'] == events[-2]['id']
     assert events[1]['p_file_hashes'] == events[0]['p_file_hashes']
     # Son los conteos que ya aceptó VALIDADO: si el rechazo fue por los conteos de PUBLICADO, FALLIDO igual puede quedar.
     assert events[1]['p_counts'] == events[0]['p_counts']
@@ -1034,8 +1043,8 @@ def test_si_tampoco_se_puede_registrar_fallido_se_informa_la_causa_original(data
     with pytest.raises(ETLError) as error:
         execute(_corrected_lot(tmp_path, 'corregido'))
     assert error.value.code == 'ACTOR_NOT_ACTIVE_MEMBER'
-    assert [event['p_status'] for event in database.batches[previous:]] == ['VALIDADO']
-    assert 'IMPORT_BATCH_FAILURE_NOT_RECORDED' in capsys.readouterr().out
+    assert [event['p_status'] for event in database.batches[previous:]] == ['RECIBIDO', 'VALIDADO']
+    assert 'PUBLISH_OUTCOME_UNKNOWN' in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(('outcome', 'recorded'), [
@@ -1049,24 +1058,30 @@ def test_publicado_con_resultado_incierto_no_registra_un_fallido_que_podria_ser_
     database.rpc_outcomes['PUBLICADO'] = outcome
     previous = len(database.batches)
     capsys.readouterr()
-    with pytest.raises(ETLError):
+    before = _portfolio(database)
+    if recorded:
         execute(_corrected_lot(tmp_path, 'corregido'))
-    assert [event['p_status'] for event in database.batches[previous:]] == (['VALIDADO', 'PUBLICADO'] if recorded else ['VALIDADO'])
+    else:
+        with pytest.raises(ETLError):
+            execute(_corrected_lot(tmp_path, 'corregido'))
+        assert _portfolio(database) == before
+    assert [event['p_status'] for event in database.batches[previous:]] == (
+        ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO'] if recorded else ['RECIBIDO', 'VALIDADO', 'FALLIDO'])
     salida = capsys.readouterr()
-    assert 'codigo=PUBLISH_OUTCOME_UNKNOWN' in salida.out
+    assert 'codigo=PUBLISH_OUTCOME_UNKNOWN' not in salida.out
     assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
 
 
 def test_una_interrupcion_durante_la_carga_termina_fallido_con_antecedente(database, tmp_path, monkeypatch):
-    monkeypatch.setattr(run_etl, 'load_person', Mock(side_effect=KeyboardInterrupt))
+    monkeypatch.setattr(load, 'load_person', Mock(side_effect=KeyboardInterrupt))
     with pytest.raises(KeyboardInterrupt):
         execute(derive_lot(tmp_path / 'interrumpido'))
     events = database.batches
-    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
-    assert events[1]['p_supersedes'] == events[0]['id']
+    assert [event['p_status'] for event in events] == ['RECIBIDO', 'VALIDADO', 'FALLIDO']
+    assert events[-1]['p_supersedes'] == events[-2]['id']
 
 
-def test_una_falla_entre_validado_y_la_primera_escritura_tambien_cierra_el_lote(database, tmp_path, monkeypatch):
+def test_fallo_de_salida_antes_de_staging_no_inicia_ningun_lote(database, tmp_path, monkeypatch):
     def broken_stdout(*values, **_kwargs):
         if values and str(values[0]).startswith('INICIANDO'):
             raise BrokenPipeError
@@ -1074,8 +1089,7 @@ def test_una_falla_entre_validado_y_la_primera_escritura_tambien_cierra_el_lote(
     with pytest.raises(ETLError):
         execute(derive_lot(tmp_path / 'sin-salida'))
     events = database.batches
-    assert [event['p_status'] for event in events] == ['VALIDADO', 'FALLIDO']
-    assert events[1]['p_supersedes'] == events[0]['id']
+    assert events == []
     assert database.cartera_rows() == 0
 
 
@@ -1107,7 +1121,8 @@ def test_un_centavo_en_un_importe_extremo_se_actualiza_y_la_recarga_no_cambia_na
     updates = database.updates
     execute(second)
     counts = database.batches[-1]['p_counts']
-    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (0, 0, updates)
+    assert (counts['filas_insertadas'], counts['filas_actualizadas'], database.updates) == (0, 2, updates)
+    assert len(database.batches) == 8
 
 
 def test_un_centavo_en_el_capital_extremo_tambien_se_detecta(database, tmp_path):
@@ -1184,7 +1199,7 @@ def test_archivo_parcial_o_con_bajas_se_rechaza_sin_escribir(database, tmp_path,
     assert _portfolio(database) == before
     assert (database.writes, database.updates) == (writes, updates)
     event = database.batches[-1]
-    assert (event['p_status'], event['p_supersedes']) == ('FALLIDO', None)
+    assert (event['p_status'], event['p_supersedes']) == ('FALLIDO', database.batches[-2]['id'])
     assert event['p_counts']['faltantes'] == missing
     assert event['p_file_hashes']['detalle'] == hashlib.sha256((lot / 'detalle.tsv').read_bytes()).hexdigest()
 
@@ -1229,10 +1244,10 @@ def test_conservar_publica_el_delta_sin_desactivar_e_informa_lo_ausente(database
     debts = len(database.tables['debt'])
     lot, missing = partial(tmp_path)
     execute(lot, absent_policy=run_etl.ABSENT_KEEP)
-    validated, published = database.batches[-2:]
+    validated, published = database.batches[-3], database.batches[-1]
     assert (validated['p_status'], published['p_status']) == ('VALIDADO', 'PUBLICADO')
     assert validated['p_counts']['ausentes'] == published['p_counts']['ausentes'] == missing
-    assert 'bajas_relaciones' not in published['p_counts']
+    assert published['p_counts'].get('bajas_relaciones', 0) == 0
     assert json.dumps(database.tables['debtor_person']).count('"active": false') == relations.count('"active": false')
     assert len(database.tables['debt']) >= debts
 
@@ -1267,7 +1282,7 @@ def test_carga_parcial_no_altera_perfiles_ajenos(database, tmp_path):
     assert json.dumps(sorted((row for row in database.tables['debtor_profile'] if row['debtor'] != target_debtor),
                              key=lambda row: row['debtor'])) == others
     assert database.batches[-1]['p_counts']['ausentes'] == {'objetos': 1}
-    assert 'bajas_relaciones' not in database.batches[-1]['p_counts']
+    assert database.batches[-1]['p_counts'].get('bajas_relaciones', 0) == 0
 
 
 def test_dar_de_baja_una_relacion_es_explicita_informada_y_reversible(database, tmp_path):
@@ -1292,8 +1307,8 @@ def test_dar_de_baja_una_relacion_es_explicita_informada_y_reversible(database, 
     assert database.batches[-1]['p_status'] == 'PUBLICADO'
     assert 'ausentes' not in database.batches[-1]['p_counts']
     assert [row['active'] for row in database.tables['debtor_profile_detail'] if row['id'] == details[0]['id']] == [False]
-    # Si vuelve a venir, se reactiva.
-    execute(full)
+    # Una nueva entrega con esos valores reactiva; repetir la original solo devuelve su recibo.
+    execute(reissue_lot(full, tmp_path / 'restauracion'))
     assert all(row['active'] for row in database.tables['debtor_person'])
     assert _profile_of(database, item)['active_person_count'] == 2
     assert all(row['active'] for row in database.tables['debtor_profile_detail'])
@@ -1316,7 +1331,7 @@ def test_un_contacto_que_deja_de_venir_no_rechaza_y_se_informa(database, tmp_pat
     assert database.batches[-1]['p_counts']['bajas_contactos'] == 1
     assert _contact_row(database, item['personas'][0])['active'] is False
     assert _profile_of(database, item)['available_contact_count'] == count - 1
-    execute(lot)
+    execute(reissue_lot(lot, tmp_path / 'nuevo-sin-contacto'))
     assert 'ausentes' not in database.batches[-1]['p_counts']
 
 
@@ -1365,7 +1380,7 @@ def test_una_respuesta_invalida_del_recalculo_termina_fallido(database, tmp_path
     with pytest.raises(ETLError) as error:
         execute(derive_lot(tmp_path / 'lote'))
     assert error.value.code == 'PROFILE_RECOMPUTE_RESPONSE_INVALID'
-    assert [event['p_status'] for event in database.batches] == ['VALIDADO', 'FALLIDO']
+    assert [event['p_status'] for event in database.batches] == ['RECIBIDO', 'VALIDADO', 'FALLIDO']
     salida = capsys.readouterr()
     assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
 
@@ -1504,7 +1519,7 @@ def test_fallo_a_mitad_de_carga_registra_fallido_sin_filtrar_datos(database, tmp
     database.fail_on = 'debtor_profile'
     with pytest.raises(ETLError) as error:
         execute(lot)
-    assert [batch['p_status'] for batch in database.batches] == ['VALIDADO', 'FALLIDO']
+    assert [batch['p_status'] for batch in database.batches] == ['RECIBIDO', 'VALIDADO', 'FALLIDO']
     assert database.batches[1]['p_supersedes'] == database.batches[0]['id']
     salida = capsys.readouterr()
     assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err + str(error.value)
@@ -1524,9 +1539,9 @@ def test_error_de_estructura_registra_fallido_con_hashes(database, tmp_path):
 
 @pytest.mark.parametrize(('status', 'body', 'code'), [
     (400, {'message': 'ROLE_NOT_ALLOWED', 'details': 'NOMBRE_SINTETICO_A026'}, 'ROLE_NOT_ALLOWED'),
-    (400, {'message': 'INVALID_IMPORT_BATCH:import_batch_counts_format'}, 'INVALID_IMPORT_BATCH:import_batch_counts_format'),
-    (500, {'message': 'NOMBRE_SINTETICO_A026'}, 'IMPORT_BATCH_REJECTED'),
-    (403, None, 'IMPORT_BATCH_REJECTED'),
+    (400, {'message': 'INVALID_IMPORT_BATCH:import_batch_counts_format'}, 'IMPORT_PUBLICATION_FAILED'),
+    (500, {'message': 'NOMBRE_SINTETICO_A026'}, 'IMPORT_PUBLICATION_FAILED'),
+    (403, None, 'IMPORT_PUBLICATION_FAILED'),
 ])
 def test_rechazo_del_registro_detiene_la_carga_con_codigo_estable(database, tmp_path, monkeypatch, status, body, code):
     def rechazar(url, **_):
@@ -1658,7 +1673,7 @@ def test_cli_execute_con_perfil_explicito_publica(database, monkeypatch, capsys,
                                       '--mapping', str(municipio_b_mapping(tmp_path))])
     run_etl.main()
     assert 'CARGA FINALIZADA' in capsys.readouterr().out
-    assert [batch['p_status'] for batch in database.batches] == ['VALIDADO', 'PUBLICADO']
+    assert [batch['p_status'] for batch in database.batches] == ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO']
 
 
 def test_ningun_archivo_de_produccion_usa_el_reloj_para_edades_o_estado():

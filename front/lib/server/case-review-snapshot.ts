@@ -33,7 +33,7 @@ export function computeInputsHash(input: DecisionInput): string {
   return createHash('sha256').update(canonical).digest('hex')
 }
 
-export type BatchEvent = { id: unknown; as_of: unknown; source_updated_at: unknown; status: unknown; supersedes: unknown }
+export type BatchEvent = { id: unknown; as_of: unknown; source_updated_at: unknown; status: unknown; supersedes: unknown; counts?: { publicacion_atomica?: unknown } }
 
 // Evento vigente de un lote = ninguno lo reemplaza. El corte es el del último PUBLICADO.
 // VALIDADO o CONFIRMADO pueden estar escribiendo, y FALLIDO tras uno de ellos pudo dejar
@@ -41,6 +41,7 @@ export type BatchEvent = { id: unknown; as_of: unknown; source_updated_at: unkno
 // Un FALLIDO sin antecedente, RECIBIDO y los descartes no tocaron la cartera.
 // Es la misma regla de `equitas_current_cutoff`, que en la base es la autoridad: esta lectura
 // solo elige con qué calcular, y la función verifica ese corte al insertar.
+// 032 garantiza rollback íntegro: sus estados sin PUBLICADO conservan la cartera anterior.
 export function selectCurrentCutoff(events: readonly BatchEvent[]): BatchEvent | null {
   const replaced = new Set(events.map(event => databaseId(event.supersedes)))
   const heads = events
@@ -48,6 +49,7 @@ export function selectCurrentCutoff(events: readonly BatchEvent[]): BatchEvent |
     .sort((left, right) => (BigInt(String(left.id)) < BigInt(String(right.id)) ? 1 : -1))
   for (const event of heads) {
     if (event.status === 'PUBLICADO') return event
+    if (event.counts?.publicacion_atomica === 1) continue
     if (event.status === 'VALIDADO' || event.status === 'CONFIRMADO') return null
     if (event.status === 'FALLIDO' && event.supersedes !== null) return null
   }
@@ -89,7 +91,7 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
   const read = (table: DebtorScopedTable) => loadAllTableRows(table, supabase, debtorReadScope(table, tenantId, canonicalDebtorId))
 
   const batches = await loadAllTableRows('import_batch', supabase, {
-    select: 'id,as_of,source_updated_at,status,supersedes', filters: [['tenant', tenantId]],
+    select: 'id,as_of,source_updated_at,status,supersedes,counts', filters: [['tenant', tenantId]],
   })
   if (batches.warning) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
   const cutoff = selectCurrentCutoff(batches.rows as unknown as BatchEvent[])

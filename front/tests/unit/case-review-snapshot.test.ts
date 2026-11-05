@@ -86,6 +86,11 @@ describe('ALIGN-020: corte vigente del lote', () => {
   it('sin eventos no hay corte', () => {
     expect(selectCurrentCutoff([])).toBeNull()
   })
+
+  it.each(['RECIBIDO', 'VALIDADO', 'FALLIDO', 'DESCARTADO', 'REQUIERE_NUEVO_PREVIEW'])('032: %s atómico conserva el corte publicado', status => {
+    const pending = { ...event(3, status, 2), counts: { publicacion_atomica: 1 } }
+    expect(selectCurrentCutoff([event(1, 'PUBLICADO'), { ...event(2, 'RECIBIDO'), counts: { publicacion_atomica: 1 } }, pending])?.id).toBe(1)
+  })
 })
 
 describe('ALIGN-020: alcance de lectura por objeto', () => {
