@@ -43,6 +43,7 @@ from oracle_lots import (  # noqa: E402
     object_by_case,
     oracle,
     persisted_mismatches,
+    synthetic_profile,
 )
 
 from ETL.transform import build_debtor_profile_payload  # noqa: E402
@@ -611,7 +612,7 @@ def test_la_funcion_sql_coincide_con_los_dos_oraculos_en_un_lote_validado(campai
     debtors = sorted(row["id"] for row in tables["debtor"])
     assert line_value(published.result, "Resultado del lote") == "VALIDADO"
     answer = json.loads(psql(f"select public.recompute_debtor_profiles(array{debtors}::bigint[], '{AS_OF}')"))
-    assert answer == {"insertadas": 0, "actualizadas": 0, "sin_cambios": len(debtors), "detalles_actualizados": 0}
+    assert answer == {"insertadas": 0, "actualizadas": 0, "sin_cambios": len(debtors), "detalles_actualizados": 0, "deudas_reclasificadas": 0}
     assert changes(before, snapshot()) == {}, "Sin cambios no hay escritura: profile_generated_at se conserva"
     assert persisted_mismatches(tables, accepted_objects(), ids, published.validated.lot) == []
     differences = []
@@ -664,13 +665,13 @@ def _recompute_in_rollback(debts: list[tuple], *, integrated: bool = True, extra
 RECOMPUTE_CASES = {
     "sin-obligaciones-cero-derivado": ([], {"total_debt_amount": 0, "overdue_debt_amount": 0, "debt_count": 0, "overdue_debt_count": 0,
                                             "debt_state_not_observed_count": 0, "oldest_debt_days": None}),
-    "faltantes-sin-vencidas-nulos": ([("10.50", "UNKNOWN", "2026-01-01"), ("5", "ACTIVE", "2026-01-01")],
+    "faltantes-sin-vencidas-nulos": ([("10.50", "UNKNOWN", "2026-01-01"), ("5", "ACTIVE", AS_OF)],
                                      {"total_debt_amount": Decimal("15.50"), "overdue_debt_amount": None, "overdue_debt_count": None,
                                       "debt_state_not_observed_count": 1, "oldest_debt_days": None, "average_debt_age_days": None}),
     "faltantes-con-vencidas-subtotal": ([("10.50", "OVERDUE", "2026-09-28"), ("3", "UNKNOWN", "2026-01-01")],
                                         {"overdue_debt_amount": Decimal("10.50"), "overdue_debt_count": 1,
                                          "debt_state_not_observed_count": 1, "oldest_debt_days": 2, "average_debt_age_days": 2}),
-    "observados-sin-vencidas-cero": ([("7", "ACTIVE", "2026-01-01")], {"overdue_debt_amount": 0, "overdue_debt_count": 0,
+    "observados-sin-vencidas-cero": ([("7", "ACTIVE", AS_OF)], {"overdue_debt_amount": 0, "overdue_debt_count": 0,
                                                                         "debt_state_not_observed_count": 0}),
     "promedio-mitad-hacia-arriba": ([("1", "OVERDUE", "2026-09-28"), ("1", "OVERDUE", "2026-09-27")],
                                     {"oldest_debt_days": 3, "average_debt_age_days": 3}),
@@ -681,7 +682,7 @@ RECOMPUTE_CASES = {
 def test_cada_regla_del_perfil_coincide_con_el_oraculo_python(published, name):
     debts, wanted = RECOMPUTE_CASES[name]
     answer, profile = _recompute_in_rollback(debts)
-    assert answer == {"insertadas": 1, "actualizadas": 0, "sin_cambios": 0, "detalles_actualizados": 0}, "El objeto que no existe no cuenta"
+    assert answer == {"insertadas": 1, "actualizadas": 0, "sin_cambios": 0, "detalles_actualizados": 0, "deudas_reclasificadas": 0}, "El objeto que no existe no cuenta"
     for column, value in wanted.items():
         assert profile[column] == value, column
     oracle_rows = [{"status": status, "due_date": due, "current_amount": amount} for amount, status, due in debts]
@@ -719,6 +720,82 @@ def test_la_funcion_no_es_ejecutable_por_clientes_y_rechaza_entradas_nulas(publi
         psql(f"select public.recompute_debtor_profiles(null, '{AS_OF}')")
     with pytest.raises(pytest.fail.Exception, match="INVALID_RECOMPUTE_INPUT"):
         psql("select public.recompute_debtor_profiles(array[1]::bigint[], null)")
+
+
+def test_reclasificacion_sql_respeta_estados_faltantes_fechas_y_objetos_ajenos(published):
+    ids = catalogs()
+    # Estado previo, vencimiento, importe y resultado esperado: independientes del agregado SQL y del helper Python.
+    cases = [
+        ("ACTIVE", "2026-09-28", "10.50", "OVERDUE"),
+        ("OVERDUE", AS_OF, "7", "ACTIVE"),
+        ("OVERDUE", "2026-10-01", "9", "ACTIVE"),
+        ("ACTIVE", "2026-10-02", "5", "ACTIVE"),
+        ("OVERDUE", "2026-09-25", "11", "OVERDUE"),
+        *((key, "2026-09-01", "13", key) for key in
+          ("PAID", "CANCELLED", "SUSPENDED", "UNKNOWN", None, "PAYMENT_PLAN", "JUDICIAL", "CERTIFICATE_ACTIVE")),
+        ("ACTIVE", None, "17", "ACTIVE"),
+    ]
+    values = ",".join(
+        f"({900000 + index},990001,{amount},{amount}," + (f"'{due}'" if due else "null") + ","
+        + (str(ids["debt_status"][status]) if status else "null") + ")"
+        for index, (status, due, amount, _) in enumerate(cases)
+    )
+    # ctid, a diferencia de xmin, detecta otra versión incluso dentro de esta misma transacción.
+    read = """select json_build_object(
+        'debts', (select json_agg(to_jsonb(d) || jsonb_build_object('_ctid', d.ctid::text) order by d.id)
+                  from public.debt d where d.debtor in (990001,990002)),
+        'profiles', (select coalesce(json_agg(to_jsonb(p) || jsonb_build_object('_ctid', p.ctid::text) order by p.id), '[]')
+                     from public.debtor_profile p where p.debtor in (990001,990002)));"""
+    call = f"select public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');"
+    lines = psql(f"""begin;
+        insert into public.debtor(id,tenant,external_id,type) values
+            (990001,{TENANT},990001,{next(iter(ids['debtor_type'].values()))}),
+            (990002,{TENANT},990002,{next(iter(ids['debtor_type'].values()))});
+        insert into public.debt(external_id,debtor,original_amount,current_amount,due_date,status) values
+            {values}, (990002,990002,47,47,'2026-09-01',{ids['debt_status']['ACTIVE']});
+        {read} {call} {read} {call} {read}
+        rollback;""").splitlines()
+    before, first, after, second, repeated = [json.loads(line, parse_float=Decimal) for line in lines]
+    assert first == {"insertadas": 1, "actualizadas": 0, "sin_cambios": 0, "detalles_actualizados": 0, "deudas_reclasificadas": 3}
+    assert second == {"insertadas": 0, "actualizadas": 0, "sin_cambios": 1, "detalles_actualizados": 0, "deudas_reclasificadas": 0}
+    assert repeated == after, "Repetir el mismo corte no reescribe ninguna fila"
+    expected = {900000 + index: ids["debt_status"][status] if status else None for index, (*_, status) in enumerate(cases)}
+    expected[990002] = ids["debt_status"]["ACTIVE"]
+    for old, new in zip(before["debts"], after["debts"], strict=True):
+        assert new["status"] == expected[new["external_id"]]
+        if old["status"] == new["status"]:
+            assert old == new, "No se reescriben estados ajenos, faltantes ni ya correctos"
+        else:
+            assert {k: v for k, v in old.items() if k not in ("status", "_ctid")} == {
+                k: v for k, v in new.items() if k not in ("status", "_ctid")}
+    assert len(after["profiles"]) == 1
+    profile = after["profiles"][0]
+    assert profile["debtor"] == 990001
+    assert profile["total_debt_amount"] == sum(Decimal(amount) for _, _, amount, _ in cases)
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("21.50"), 2, 2)
+    assert (profile["oldest_debt_days"], profile["average_debt_age_days"]) == (5, 4)
+
+
+def test_error_de_perfil_revierte_la_reclasificacion_de_la_misma_rpc(published):
+    ids = catalogs()
+    # Solo atomicidad de la RPC. La publicación completa de la CLI sigue siendo alcance de ALIGN-032.
+    result = psql(f"""begin;
+        insert into public.debtor(id,tenant,external_id,type) values (990001,{TENANT},990001,{next(iter(ids['debtor_type'].values()))});
+        insert into public.debt(external_id,debtor,original_amount,current_amount,due_date,status)
+            values(990001,990001,10.50,10.50,'2026-09-01',{ids['debt_status']['ACTIVE']});
+        create function pg_temp.fail_profile031() returns trigger language plpgsql as $$
+            begin raise exception 'PROFILE031_TEST_FAILURE'; end $$;
+        create trigger fail_profile031 before insert on public.debtor_profile for each row execute function pg_temp.fail_profile031();
+        do $$ begin
+            perform public.recompute_debtor_profiles(array[990001]::bigint[], '{AS_OF}');
+            raise exception 'EXPECTED_RPC_FAILURE';
+        exception when raise_exception then
+            if sqlerrm <> 'PROFILE031_TEST_FAILURE' then raise; end if;
+        end $$;
+        select json_build_object('status',(select status from public.debt where debtor=990001),
+            'profiles',(select count(*) from public.debtor_profile where debtor=990001));
+        rollback;""")
+    assert json.loads(result) == {"status": ids["debt_status"]["ACTIVE"], "profiles": 0}
 
 
 def test_carga_parcial_no_altera_perfiles_ajenos(campaign, published):
@@ -922,6 +999,66 @@ def _rejected_missing_relation(campaign, name):
     lot = derive_lot(campaign.work / name, (QUARANTINED_CASE,))
     drop_lines(lot / "cabecera.tsv", (item["clave_agrupacion"], str(item["personas"][-1])))
     return lot, "PARTIAL_LOAD_REJECTED", True
+
+
+@pytest.mark.parametrize("policy", ["conservar", "dar-de-baja"])
+def test_delta_conservado_reclasifica_la_deuda_pendiente_al_nuevo_corte(campaign, published, policy):
+    """R31-01: el archivo omite una pendiente que vence entre ambos cortes; el oráculo no lee su estado guardado."""
+    key = object_by_case(MODIFIED_CASE)["clave_agrupacion"]
+    full = derive_lot(campaign.work / f"corte-inicial-{policy}", (QUARANTINED_CASE,),
+                      detalle_cells={(key, MODIFIED_DEBT, "NOTD_vencimiento"): "01/10/2026"})
+    delta = _rejected_missing_debt(campaign, f"corte-delta-{policy}")[0]
+    # El delta solo acepta el objeto objetivo: también debe dejar intactos los perfiles y deudas ajenos.
+    other_keys = [(item["clave_agrupacion"],) for item in published.validated.selected if item["caso"] != MODIFIED_CASE]
+    drop_lines(delta / "cabecera.tsv", *other_keys)
+    drop_lines(delta / "detalle.tsv", *other_keys)
+    try:
+        initial = campaign.etl(full)
+        assert initial.returncode == 0, initial.stderr
+        before = snapshot()
+        debtor = debtor_of(tenant_tables(before), catalogs()["debtor_type"], MODIFIED_CASE)["id"]
+        debt = next(row for row in before["debt"].values() if row["debtor"] == debtor and str(row["external_id"]) == MODIFIED_DEBT)
+        profile = next(row for row in before["debtor_profile"].values() if row["debtor"] == debtor)
+        assert debt["status"] == catalogs()["debt_status"]["ACTIVE"]
+        assert (profile["overdue_debt_count"], profile["overdue_debt_amount"]) == (2, Decimal("32462.07"))
+        for cutoff, expected_status, expected_count, expected_amount in (
+            ("2026-10-02", "OVERDUE", 3, Decimal("46279.60")),
+            ("2026-10-01", "ACTIVE", 2, Decimal("32462.07")),
+            (AS_OF, "ACTIVE", 2, Decimal("32462.07")),
+        ):
+            mapping = synthetic_profile(delta, fecha_corte=cutoff)
+            previous = snapshot()
+            result = campaign.etl(delta, "--ausentes", policy, "--mapping", str(mapping), cut_off=cutoff)
+            assert result.returncode == 0, result.stderr
+            after = snapshot()
+            got = after["debtor_profile"][profile["id"]]
+            assert after["debt"][debt["id"]]["status"] == catalogs()["debt_status"][expected_status]
+            assert (got["overdue_debt_count"], got["overdue_debt_amount"]) == (expected_count, expected_amount)
+            # Las tres obligaciones del caso son PENDIENTE en el origen: la fecha determina la mora, no la FK previa.
+            overdue = [row for row in before["debt"].values() if row["debtor"] == debtor and row["due_date"] < cutoff]
+            days = [(date.fromisoformat(cutoff) - date.fromisoformat(row["due_date"])).days for row in overdue]
+            assert got["oldest_debt_days"] == max(days)
+            assert got["average_debt_age_days"] == int((Decimal(sum(days)) / len(days)).quantize(Decimal(1), rounding="ROUND_HALF_UP"))
+            assert (got["debt_count"], got["total_debt_amount"]) == (3, Decimal("46279.60"))
+            changed_debts = [debt["id"]] if previous["debt"][debt["id"]]["status"] != after["debt"][debt["id"]]["status"] else []
+            expected_changes = {"debtor_profile": {"insertadas": [], "actualizadas": [profile["id"]], "borradas": []}}
+            if changed_debts:
+                expected_changes["debt"] = {"insertadas": [], "actualizadas": changed_debts, "borradas": []}
+            assert changes(previous, after) == expected_changes
+            counts = batches()[-1]["counts"]
+            assert counts["ausentes"]["obligaciones"] == 1
+            assert counts["filas_actualizadas"] == 1 + len(changed_debts)
+            assert counts["escrituras"]["debt"]["actualizadas"] == len(changed_debts)
+            assert counts["deudas_actualizadas"] == 0, "La reclasificación es de una deuda conservada, no de una fila del archivo"
+            again = campaign.etl(delta, "--ausentes", policy, "--mapping", str(mapping), cut_off=cutoff)
+            assert again.returncode == 0, again.stderr
+            assert changes(after, snapshot()) == {}, "Ni deuda ni profile_generated_at se reescriben al repetir el mismo corte"
+            assert batches()[-1]["counts"]["filas_actualizadas"] == 0
+            campaign.record("delta conservado al nuevo corte", politica=policy, corte=cutoff, mora=str(got["overdue_debt_amount"]),
+                            vencidas=got["overdue_debt_count"], reclasificadas=len(changed_debts), idempotente=True)
+    finally:
+        restored = campaign.etl(published.validated.lot)
+        assert restored.returncode == 0, restored.stderr
 
 
 REJECTED = {

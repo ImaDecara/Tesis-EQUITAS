@@ -58,7 +58,8 @@ Con ese manifiesto o con un perfil, `--cut-off` debe coincidir con la fecha que 
    `VALIDADO`, carga solo las filas aceptadas y cierra con `PUBLICADO`, que reemplaza al evento anterior. Solo escribe lo
    que cambió: recargar el mismo lote deja todas las filas intactas, y `PUBLICADO` guarda `filas_insertadas`,
    `filas_actualizadas`, `filas_sin_cambios` y `escrituras` por tabla. Los perfiles de los objetos aceptados se recalculan
-   al final con `recompute_debtor_profiles`, desde lo persistido. `profile_generated_at` solo cambia si cambia el perfil.
+   al final con `recompute_debtor_profiles`, desde lo persistido. La misma función reclasifica las obligaciones pendientes
+   (`ACTIVE`/`OVERDUE`) por vencimiento y corte, incluidas las conservadas. `profile_generated_at` solo cambia si cambia el perfil.
    Una persona que viene en varios objetos se escribe una vez, con los datos de su última fila.
 5. **Falla durante la carga, interrupción o rechazo de `PUBLICADO`:** registra `FALLIDO` con antecedente y conserva el
    código original. Las escrituras por la Data API no son una transacción: lo ya escrito no se revierte. La publicación
@@ -91,6 +92,12 @@ relación o un contacto ya inactivos no cuentan como ausentes.
   perfil. Un municipio que entrega solo deudas vivas puede recargar con `conservar`, pero el total de ese objeto incluye lo que
   dejó de venir, y `counts.ausentes.obligaciones` dice cuánto. Es un límite declarado: darlas de baja exige un cambio de esquema
   y de lecturas.
+- **Conservar una obligación no congela su estado temporal.** En un objeto aceptado, una pendiente vence solo si su fecha
+  es anterior al corte; al retroceder el corte puede volver a vigente. Los demás estados, los desconocidos y los nulos se
+  conservan; sin fecha no se infiere un cambio. La RPC devuelve `deudas_reclasificadas`, incluido en
+  `counts.escrituras.debt.actualizadas` y `counts.filas_actualizadas`. `counts.deudas_actualizadas` sigue contando solo
+  las filas recibidas en el archivo. Repetir el mismo corte no vuelve a escribirlas. El estado y el perfil se actualizan
+  en la misma RPC; esto no hace atómica toda la carga CLI (ALIGN-032).
 - **Un contacto se compara por persona**, porque es de la persona y no del objeto: si lo trae en cualquiera de sus filas
   aceptadas, sigue viniendo. No se compara sin la columna de ese tipo en el archivo, ni para una persona con alguna cabecera no
   aceptada: en esos casos no hubo observación.

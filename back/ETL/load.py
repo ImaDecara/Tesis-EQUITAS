@@ -72,6 +72,7 @@ READ_IDS_PER_REQUEST = 200
 PROFILE_RECOMPUTE_FUNCTION = "recompute_debtor_profiles"
 PROFILE_RECOMPUTE_OBJECTS_PER_CALL = 500
 PROFILE_DETAILS_UPDATED = "detalles_actualizados"
+PROFILE_DEBTS_RECLASSIFIED = "deudas_reclasificadas"
 
 # Qué le pasó a cada fila en una carga. Una recarga idéntica tiene que dar solo "sin_cambios".
 WRITE_INSERTED = "insertadas"
@@ -947,13 +948,15 @@ def recompute_debtor_profiles(
         )
         result = response.data
 
-        if not isinstance(result, dict) or any(not isinstance(result.get(name), int) for name in (*WRITE_OUTCOMES, PROFILE_DETAILS_UPDATED)):
+        counters = (*WRITE_OUTCOMES, PROFILE_DETAILS_UPDATED, PROFILE_DEBTS_RECLASSIFIED)
+        if not isinstance(result, dict) or any(not isinstance(result.get(name), int) for name in counters):
             raise ETLError("PROFILE_RECOMPUTE_RESPONSE_INVALID", etl_message("PROFILE_RECOMPUTE_RESPONSE_INVALID"))
 
         for outcome in WRITE_OUTCOMES:
             _count_writes(DEBTOR_PROFILE_TABLE, outcome, result[outcome])
 
         _count_writes(DEBTOR_PROFILE_DETAIL_TABLE, WRITE_UPDATED, result[PROFILE_DETAILS_UPDATED])
+        _count_writes(DEBT_TABLE, WRITE_UPDATED, result[PROFILE_DEBTS_RECLASSIFIED])
 
     return {row["debtor"]: row["id"] for row in _rows_for_ids(DEBTOR_PROFILE_TABLE, "id,debtor", "debtor", unique_ids)}
 

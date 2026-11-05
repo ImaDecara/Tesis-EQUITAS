@@ -228,8 +228,16 @@ class FakeDatabase:
             return self.recompute_response
         status_keys = {value: key for key, value in self.catalogs['debt_status'].items()}
         cut_off = date.fromisoformat(params['p_as_of'])
-        outcome = Counter({'insertadas': 0, 'actualizadas': 0, 'sin_cambios': 0, 'detalles_actualizados': 0})
+        outcome = Counter({'insertadas': 0, 'actualizadas': 0, 'sin_cambios': 0, 'detalles_actualizados': 0, 'deudas_reclasificadas': 0})
         for debtor in sorted(set(params['p_object_ids'])):
+            for row in self.tables['debt']:
+                if row['debtor'] == debtor and status_keys.get(row['status']) in ('ACTIVE', 'OVERDUE') and row['due_date']:
+                    key = 'OVERDUE' if date.fromisoformat(row['due_date']) < cut_off else 'ACTIVE'
+                    status = self.catalogs['debt_status'][key]
+                    if row['status'] != status:
+                        row['status'] = status
+                        self.updates += 1
+                        outcome['deudas_reclasificadas'] += 1
             debts = [{**row, 'status': status_keys[row['status']]} for row in self.tables['debt'] if row['debtor'] == debtor]
             relations = [row for row in self.tables['debtor_person'] if row['debtor'] == debtor]
             people = {row['person'] for row in relations if row['active']}
@@ -1360,6 +1368,24 @@ def test_una_respuesta_invalida_del_recalculo_termina_fallido(database, tmp_path
     assert [event['p_status'] for event in database.batches] == ['VALIDADO', 'FALLIDO']
     salida = capsys.readouterr()
     assert 'NOMBRE_SINTETICO_A026' not in salida.out + salida.err
+
+
+def test_las_deudas_reclasificadas_por_sql_se_cuentan_como_escrituras(database):
+    database.recompute_response = {'insertadas': 0, 'actualizadas': 1, 'sin_cambios': 0,
+                                   'detalles_actualizados': 0, 'deudas_reclasificadas': 3}
+    tally = load.start_write_tally()
+    load.recompute_debtor_profiles([123], date.fromisoformat(AS_OF), contact_columns_integrated=True)
+    summary = load.write_summary(tally)
+    assert summary['filas_actualizadas'] == 4
+    assert summary['escrituras']['debt'] == {'insertadas': 0, 'actualizadas': 3, 'sin_cambios': 0}
+
+
+@pytest.mark.parametrize('missing_count', [None, '3'])
+def test_recalculo_sin_conteo_valido_de_reclasificaciones_falla_cerrado(database, missing_count):
+    database.recompute_response = {'insertadas': 0, 'actualizadas': 0, 'sin_cambios': 1,
+                                   'detalles_actualizados': 0, 'deudas_reclasificadas': missing_count}
+    with pytest.raises(ETLError, match='PROFILE_RECOMPUTE_RESPONSE_INVALID'):
+        load.recompute_debtor_profiles([123], date.fromisoformat(AS_OF), contact_columns_integrated=True)
 
 
 def test_el_recalculo_por_tandas_cubre_todos_los_objetos_y_lee_todos_sus_perfiles(database, tmp_path, monkeypatch):

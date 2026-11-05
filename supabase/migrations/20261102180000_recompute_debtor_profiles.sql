@@ -19,10 +19,27 @@ declare
   v_inserted integer;
   v_updated integer;
   v_details integer;
+  v_reclassified bigint;
 begin
   if p_object_ids is null or p_as_of is null or p_contact_columns_integrated is null then
     raise exception 'INVALID_RECOMPUTE_INPUT';
   end if;
+
+  -- ACTIVE y OVERDUE son las dos derivaciones de PENDIENTE, no estados de pago distintos.
+  -- Una obligación conservada en un delta también envejece al corte nuevo. Resolverla antes
+  -- de agregar mantiene deuda y perfil coherentes; un corte anterior puede volverla ACTIVE.
+  -- No se infiere estado para UNKNOWN/nulo ni se modifican pagadas, anuladas o suspendidas.
+  update public.debt x
+  set status = next_status.id
+  from public.debt_status previous_status, public.debt_status next_status
+  where x.debtor = any(p_object_ids)
+    and previous_status.id = x.status
+    and previous_status.key in ('ACTIVE', 'OVERDUE')
+    and x.due_date is not null
+    and next_status.key = case when x.due_date < p_as_of then 'OVERDUE' else 'ACTIVE' end
+    and x.status is distinct from next_status.id;
+
+  get diagnostics v_reclassified = row_count;
 
   with targets as (
     select d.id from public.debtor d where d.id = any(p_object_ids)
@@ -114,7 +131,8 @@ begin
     'insertadas', v_inserted,
     'actualizadas', v_updated,
     'sin_cambios', v_requested - v_inserted - v_updated,
-    'detalles_actualizados', v_details
+    'detalles_actualizados', v_details,
+    'deudas_reclasificadas', v_reclassified
   );
 end;
 $$;
