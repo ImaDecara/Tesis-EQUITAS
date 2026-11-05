@@ -13,8 +13,8 @@ from flow_credentials;
 insert into auth.identities(provider_id,user_id,identity_data,provider,created_at,updated_at)
 select user_id::text,user_id,jsonb_build_object('sub',user_id::text,'email',email,
   'email_verified',true,'phone_verified',false),'email',now(),now() from flow_credentials;
-insert into public.role(name,description)
-select label, 'Rol sintetico ALIGN-029' from flow_credentials
+insert into public.role(id,name,description)
+select 290000 + row_number() over(order by label), label, 'Rol sintetico ALIGN-029' from flow_credentials
 where not exists(select 1 from public.role where name=label);
 insert into public."user"(auth_user,full_name,email)
 select user_id,'Actor sintetico ' || label,email from flow_credentials;
