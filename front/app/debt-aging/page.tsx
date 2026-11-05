@@ -71,7 +71,7 @@ export default async function DebtAgingPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
-        <PortfolioScope context={portfolioContext(source.debtors, source.warnings)} filters={filters} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
         <p className="text-xs text-slate-600">{missingSummary(summary.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">

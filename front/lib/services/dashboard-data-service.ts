@@ -19,7 +19,7 @@ export async function getDashboardDataFromService(filters: PortfolioFilters = {}
     debtStatusBuckets,
     warnings: selection.warnings,
   })
-  dashboard.context = portfolioContext(mapped.debtors, mapped.warnings)
+  dashboard.context = portfolioContext(mapped.debtors, mapped.warnings, rawData.batch)
   const { peopleDashboard, warnings: peopleWarnings } =
     await getPeopleDashboardDataFromService()
   const warningMap = new Map<string, (typeof mapped.warnings)[number]>()

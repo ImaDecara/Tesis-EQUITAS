@@ -301,8 +301,7 @@ enviar `[]` como si no hubiera personas; `peopleCount` y prioridad también
 quedan null. Una lectura correcta sin relaciones sí permite `personas: []`.
 
 `RawDebtorDataBundle.batch` es el punto de entrada opcional del manifiesto
-(`as_of` y `source_updated_at`); el lector actual todavía no lo integra. Sin
-manifiesto se usa la fecha del calendario de Córdoba (`America/Argentina/Cordoba`) del instante UTC de cálculo capturado una sola vez, con el aviso
+(`as_of` y `source_updated_at`). Desde ALIGN-014 el lector común integra el evento PUBLICADO vigente del municipio autorizado, con la misma selección de revisión. Lectura fallida, estado desconocido, publicación incompleta o cambio de corte durante la lectura bloquean la decisión y los reportes; no se sustituyen con el reloj. Solo sin publicación ni escritura parcial se usa la fecha del calendario de Córdoba (`America/Argentina/Cordoba`) del instante UTC de cálculo capturado una sola vez, con el aviso
 **“Fecha de cálculo usada: …; corte de origen no informado (corte no integrado)”**.
 No se presenta como corte certificado. Con un manifiesto presente pero inválido
 o sin fecha, la decisión es no disponible, sin sustitución silenciosa. El segundo
@@ -310,10 +309,9 @@ argumento del mapper permite inyectar `computedAt` para reproducir la consulta.
 La fecha persistida del perfil sigue en `computedAt`; no se confunde con
 `decisionComputedAt`. La versión y la fecha usada acompañan el motivo visible.
 
-Las acciones de revisión (ALIGN-020) sí completan `batch` con el último evento
+Las acciones de revisión (ALIGN-020) completan `batch` con el último evento
 `PUBLICADO` de `import_batch`, y sin ese corte no registran: no usan la fecha de
-cálculo. Hasta que ALIGN-021 lea la sugerencia con `getCaseReviewSnapshot`, los
-listados pueden mostrar un motivo calculado con otra fecha que la de la decisión.
+cálculo. Desde ALIGN-014 el cargador común comparte esa selección con `getCaseReviewSnapshot`; las lecturas hechas durante una importación no reutilizan una fecha anterior.
 
 Los campos `estado_origen` y `periodo_fiscal` solo se consideran integrados si
 llegan explícitamente. `debt.status` sigue siendo el catálogo persistido;

@@ -53,6 +53,7 @@ export async function getDebtorsDataFromService() {
   return {
     debtors: mapped.debtors,
     warnings: mapped.warnings,
+    batch: rawData.batch,
   }
 }
 

@@ -55,7 +55,7 @@ export default async function RiskAnalysisPage({ searchParams }: { searchParams?
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
-        <PortfolioScope context={portfolioContext(source.debtors, source.warnings)} filters={filters} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
         <p className="text-xs text-slate-600">Panel de personas: universo completo de personas leídas, independiente de los filtros de objetos; corte del índice heredado no informado.</p>
         <p className="text-xs text-slate-600">{missingSummary(objectDashboard.metrics)} {missingSummary(peopleDashboard.metrics)}</p>
 

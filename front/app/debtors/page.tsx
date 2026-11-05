@@ -91,7 +91,7 @@ export default async function DebtorsPage({
 }: {
   searchParams: Promise<PortfolioSearchParams>
 }) {
-  const { debtors, warnings } = await getDebtorsData()
+  const { debtors, warnings, batch } = await getDebtorsData()
   const resolvedSearchParams = await searchParams
 
   const filters: DebtorFilters = {
@@ -150,7 +150,7 @@ export default async function DebtorsPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={selection.warnings} />
-        <PortfolioScope context={portfolioContext(debtors, warnings)} filters={filters} />
+        <PortfolioScope context={portfolioContext(debtors, warnings, batch)} filters={filters} />
 
         <Card className="border-[#d2dceb]">
           <CardHeader>

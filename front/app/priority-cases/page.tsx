@@ -71,7 +71,7 @@ export default async function PriorityCasesPage({
 }: {
   searchParams: Promise<PrioritySearchParams>
 }) {
-  const { debtors, warnings } = await getDebtorsData()
+  const { debtors, warnings, batch } = await getDebtorsData()
   const resolvedSearchParams = await searchParams
   const filters = {
     q: resolvedSearchParams.q?.trim() ?? '',
@@ -124,7 +124,7 @@ export default async function PriorityCasesPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={selection.warnings} />
-        <PortfolioScope context={portfolioContext(debtors, warnings)} filters={{ ...filters, queue: chosenQueue }} />
+        <PortfolioScope context={portfolioContext(debtors, warnings, batch)} filters={{ ...filters, queue: chosenQueue }} />
         {filters.minAmount && !Number.isFinite(minAmount) && <p role="alert">Monto mínimo inválido</p>}
 
         <Card className="border-[#d2dceb]">

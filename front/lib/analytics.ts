@@ -1,6 +1,6 @@
 import rules from '../../contracts/decision-rules.v1.json'
 import { formatNumber, metric, observed, readingFailed, sumMoney, unavailable } from '@/lib/data-presence'
-import type { DataWarning, DebtorListItem, NumericData } from '@/types/equitas-domain'
+import type { DataWarning, DebtorListItem, NumericData, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 export { moneyData, sumMoney } from '@/lib/data-presence'
 
@@ -11,11 +11,12 @@ export function coverageText(values: NumericData[], failed = false, unit = 'obje
   return `${formatNumber(count)} de ${formatNumber(values.length)} ${unit} con dato${partial ? `; ${formatNumber(partial)} parciales` : ''}.`
 }
 
-export function portfolioContext(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
+export function portfolioContext(debtors: DebtorListItem[], warnings: DataWarning[] = [], batch?: RawDebtorDataBundle['batch']) {
   if (readingFailed(warnings, 'debtor')) return 'Población y corte no disponibles: lectura fallida de objetos.'
-  const dates = [...new Set(debtors.map(item => item.decisionAsOf?.valor).filter(Boolean))].sort()
-  const unknown = debtors.some(item => item.decisionAsOf?.estado !== 'OBSERVADO')
-  const clock = debtors.some(item => item.decisionAsOfSource === 'FECHA_CALCULO')
+  if (readingFailed(warnings, 'import_batch')) return 'Corte no disponible: publicación incompleta, inválida o lectura fallida. Las decisiones al corte no están disponibles; los saldos históricos pueden provenir del perfil persistido y no tienen corte de origen integrado.'
+  const dates = batch ? [batch.as_of].filter(Boolean) : [...new Set(debtors.map(item => item.decisionAsOf?.valor).filter(Boolean))].sort()
+  const unknown = batch ? !batch.as_of : debtors.some(item => item.decisionAsOf?.estado !== 'OBSERVADO')
+  const clock = !batch && debtors.some(item => item.decisionAsOfSource === 'FECHA_CALCULO')
   const cutoff = dates.length ? `${clock ? 'Fecha de cálculo usada (Córdoba)' : 'Corte del manifiesto'}: ${dates.join(', ')}.` : 'Corte no disponible.'
   return `${cutoff}${clock ? ' Corte de origen no informado (corte no integrado).' : ''}${unknown ? ' Hay objetos sin corte evaluable.' : ''} Saldos históricos: corte de origen no integrado; pueden provenir del perfil persistido. Las cifras se calculan antes de paginar.`
 }

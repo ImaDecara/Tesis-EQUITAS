@@ -369,3 +369,5 @@ un mutante de la DAL comprobó que la sonda puede fallar. En los gates, el únic
 en falla es `audit`, por el aviso GHSA-g3hv-75wg-m249 (solo desarrollo, 0 hallazgos en
 producción), desvío declarado que autorizó el usuario. Falta la re-revisión
 independiente.
+
+ALIGN-014 integra el corte publicado para las lecturas de cartera mediante `createTenantReader.readImportBatches`: misma sesión y contexto municipal, proyección mínima y paginación completa. No cambia resolución de identidad, membresía, tabla de permisos ni filtros de objeto. `portfolio-cutoff.ts` reutiliza `selectCurrentCutoff` de revisión sin modificar su archivo; valida eventos y compara publicación antes/después de leer cartera. Un corte incierto bloquea cálculo y exportación. La lectura HTTP no promete un snapshot MVCC; revisión conserva la verificación transaccional de la base.

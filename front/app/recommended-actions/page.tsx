@@ -65,7 +65,7 @@ export default async function RecommendedActionsPage({ searchParams }: { searchP
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
-        <PortfolioScope context={portfolioContext(source.debtors, source.warnings)} filters={filters} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
         <p className="text-xs text-slate-600">{summary.map(group => missingSummary(group.metrics)).filter(Boolean).join("; ")}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">

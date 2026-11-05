@@ -76,6 +76,13 @@ export async function createTenantReader() {
   const { supabase, context } = await requireTenantAccess()
   return {
     context,
+    // Metadatos mínimos del corte, con la misma sesión y municipio que la cartera.
+    // No amplía readTable ni los permisos del contexto.
+    async readImportBatches() {
+      return loadAllTableRows('import_batch', supabase, {
+        select: 'id,as_of,source_updated_at,status,supersedes', filters: [['tenant', context.tenantId]],
+      })
+    },
     async readTable(table: PortfolioTable) {
       const scope = tenantReadScope(table, context.tenantId)
       if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'La tabla no esta habilitada en la DAL.')

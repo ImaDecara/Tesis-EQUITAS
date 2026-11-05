@@ -3,7 +3,7 @@ import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { buildDebtAgingSummary, getPriorityCases, matchesDebtorSearch } from '@/lib/equitas-view-selectors'
 import { serializeCsv, type CsvValue } from '@/lib/reports/csv'
 import { absentState, definitionsLink, describeFilters, META_COLUMNS, numericCell, portfolioCutoff, readParams, ReportFilterError } from '@/lib/reports/report-format'
-import type { DataPresence, DebtorListItem, NumericData } from '@/types/equitas-domain'
+import type { DataPresence, DebtorListItem, NumericData, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // ALIGN-028. Cola de trabajo: las mismas filas, el mismo orden y los mismos filtros de
 // /priority-cases, completas. Sin personas, contactos ni descripcion, para ningun rol.
@@ -114,9 +114,9 @@ function rowValues(debtor: DebtorListItem, position: number, access: QueueAccess
 }
 
 // Sin indicar el acceso, el identificador no sale.
-export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilters, generatedAt: string, access: QueueAccess = { showIdentifier: false }) {
+export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilters, generatedAt: string, access: QueueAccess = { showIdentifier: false }, batch?: RawDebtorDataBundle['batch']) {
   const cases = filterQueueCases(universe, filters)
-  const { fechaCorte, fechaCalculoUsada } = portfolioCutoff(universe)
+  const { fechaCorte, fechaCalculoUsada } = portfolioCutoff(universe, batch)
   const meta = {
     fecha_corte: fechaCorte,
     version_reglas: RULES_VERSION,

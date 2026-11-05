@@ -244,7 +244,7 @@ export type DebtorPersonRelation = {
 }
 
 export type RawDebtorDataBundle = {
-  // Punto de integración del manifiesto. El lector actual no aporta este dato.
+  // Corte publicado del municipio autorizado; null bloquea el cálculo si no es fiable.
   batch?: { as_of: string | null; source_updated_at?: string | null }
   debtors: RawRow[]
   debtorTypes: RawRow[]

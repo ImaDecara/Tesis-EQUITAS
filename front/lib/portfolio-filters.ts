@@ -16,7 +16,7 @@ export function portfolioHref(path: string, filters: PortfolioSearchParams, over
 export function filterPortfolio(debtors: DebtorListItem[], filters: PortfolioFilters = {}, warnings: DataWarning[] = []) {
   const amount = Number(filters.minAmount)
   const invalid = Boolean(filters.minAmount && (!Number.isFinite(amount) || amount < 0))
-  const failed = readingFailed(warnings, 'debtor') ||
+  const failed = readingFailed(warnings, 'debtor', 'import_batch') ||
     Boolean(filters.q && readingFailed(warnings, 'person', 'debtor_person')) ||
     Boolean(filters.personId && readingFailed(warnings, 'debtor_person')) ||
     Boolean(filters.risk && readingFailed(warnings, 'debt', 'debtor_person')) ||
