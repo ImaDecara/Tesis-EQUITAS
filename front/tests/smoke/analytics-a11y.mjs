@@ -58,10 +58,16 @@ try {
   report.checks.push('Aplicar y navegar conserva búsqueda, monto y cola; corte visible.')
   for (const width of [360, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
     const filename = `analitica-${width}.png`
-    await page.screenshot({ path: resolve(output, filename), fullPage: true })
-    report.screenshots.push(filename)
+    try {
+      // ResizeObserver actualiza Recharts después del cambio de viewport. La misma
+      // condición se exige una vez asentado el diseño; un desborde persistente falla.
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+      report.checks.push(`Sin desborde estable a ${width} px.`)
+    } finally {
+      await page.screenshot({ path: resolve(output, filename), fullPage: true })
+      report.screenshots.push(filename)
+    }
   }
   await tabTo(navigation.getByRole('link', { name: 'Objetos y filtros', exact: true })); await page.keyboard.press('Enter')
   await expect(page.getByRole('button', { name: 'Limpiar', exact: true })).toBeVisible()
