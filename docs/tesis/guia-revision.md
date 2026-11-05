@@ -60,7 +60,7 @@ La respuesta aparece en la decisión vigente de intensidad 3 o 4.
 | Aviso | Qué hacer |
 |---|---|
 | Los datos o las reglas cambiaron | Revisa la sugerencia vigente y vuelve a elegir tu decisión. Nada quedó confirmado |
-| No hay un corte publicado y vigente | Hay una carga en curso. No es un error tuyo: vuelve cuando termine |
+| No hay un corte publicado y vigente | No hay un corte publicado utilizable; puede faltar la primera publicación o haber una carga pendiente o fallida. Verifica su estado antes de volver |
 | Ya hay otra decisión registrada | Recarga el caso y mira la nueva antes de continuar |
 | La aplicación se actualizó o falló la conexión | Recarga la página. Si ya había quedado guardado, no se duplica |
 

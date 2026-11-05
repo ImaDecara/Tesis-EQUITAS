@@ -15,6 +15,7 @@ import NoContactPage from '@/app/no-contact/page'
 import PriorityCasesPage from '@/app/priority-cases/page'
 import { buildRecommendationSummary } from '@/lib/equitas-view-selectors'
 import { getDebtorsData } from '@/lib/equitas-data'
+import { INTERVENTION_CODES } from '@/lib/services/debtor-recommendation-generator'
 import { formatCurrency } from '@/lib/utils'
 import { createPaginatedSupabase } from '@/tests/fixtures/paginated-supabase'
 import {
@@ -76,6 +77,14 @@ function cardValues(node: ReactNode): Record<string, unknown> {
 }
 const pageText = async (page: (props: never) => unknown, searchParams: Record<string, string> = {}) =>
   textFromReactTree(await page({ searchParams: Promise.resolve(searchParams) } as never) as never).replace(/\s+/g, ' ')
+
+// Lee los enlaces de las filas renderizadas, sin reutilizar el selector de la aplicación.
+function queueObjectIds(node: ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(queueObjectIds)
+  if (!isValidElement<{ href?: string; children?: ReactNode }>(node)) return []
+  const match = typeof node.props.href === 'string' && /^\/debtors\/([^?]+)\?tab=revision$/.exec(node.props.href)
+  return match ? [decodeURIComponent(match[1])] : queueObjectIds(node.props.children)
+}
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -531,13 +540,17 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     expect(shown, 'la pantalla debe mostrar su contador').not.toBeNull()
     expect(rows.length).toBe(Number(shown![1].replace(/\./g, '')))
     expect(csvNumber(totalRow(file.rows).objetos)).toBe(rows.length)
-    // Mismos objetos y mismo orden que los primeros de la tabla de la pantalla.
-    const { debtors } = await getDebtorsData()
-    const visible = await pageText(PriorityCasesPage as never, { ...filters, pageSize: '20' })
-    for (const row of rows.slice(0, 20)) {
-      const debtor = debtors.find(item => item.id === row.objeto_id)!
-      expect(visible).toContain(debtor.identifier.trim().replace(/\s+/g, ' '))
+    // ALIGN-021 muestra una cola por vez. El CSV reúne todas, en ese mismo orden.
+    const knownQueues = new Set<string>(INTERVENTION_CODES)
+    const visibleIds: string[] = []
+    for (const queue of [...INTERVENTION_CODES, 'SIN_COLA']) {
+      const tree = await PriorityCasesPage({ searchParams: Promise.resolve({ ...filters, queue, pageSize: '20' }) })
+      const ids = queueObjectIds(tree)
+      const expected = rows.filter(row => (knownQueues.has(row.intervencion_codigo) ? row.intervencion_codigo : 'SIN_COLA') === queue)
+      expect(ids, `objetos y orden de ${queue}`).toEqual(expected.map(row => row.objeto_id))
+      visibleIds.push(...ids)
     }
+    expect(visibleIds, 'todas las colas: sin omisiones, duplicados ni cambio de orden').toEqual(rows.map(row => row.objeto_id))
   })
 
   it('el total filtrado sale de las filas: un 0 de una seleccion vacia es derivado y conserva metadatos', async () => {
