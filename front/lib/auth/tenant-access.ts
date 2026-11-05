@@ -96,13 +96,24 @@ async function checkTenantAccess(
     const memberships = (activeOnly: boolean) => {
       let query = supabase.from('tenant_user').select('user,tenant,role,status', { count: 'exact' }).eq('user', appUserId)
       if (activeOnly) query = query.eq('status', true)
-      if (selectedTenantId !== undefined) query = query.eq('tenant', selectedTenantId)
       return query.limit(2)
     }
-    const active = await memberships(true)
+    // La cookie puede contener cualquier numero, incluso un dato personal. Validar
+    // su forma no permite enviarlo a PostgREST: su URL queda en los logs de Kong.
+    // Solo filtramos por el usuario resuelto; la seleccion se compara en memoria
+    // despues de leer todas sus membresias, incluidas las inactivas, hasta pagina vacia.
+    const selectedMemberships = selectedTenantId === undefined ? null : await loadAllTableRows('tenant_user', supabase, {
+      select: 'id,user,tenant,role,status', filters: [['user', appUserId]],
+    })
+    if (selectedMemberships?.warning) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
+    const matching = selectedMemberships?.rows.filter(row => databaseId(row.tenant) === selectedTenantId)
+    const selectedActive = matching?.filter(row => row.status === true)
+    const active = selectedActive
+      ? { data: selectedActive, count: selectedActive.length, error: null }
+      : await memberships(true)
     if (active.error || !Array.isArray(active.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
     if (active.data.length === 0) {
-      const anyStatus = await memberships(false)
+      const anyStatus = matching ? { data: matching, error: null } : await memberships(false)
       if (anyStatus.error || !Array.isArray(anyStatus.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
       return anyStatus.data.length
         ? denied('TENANT_ACCESS_INACTIVE', 'La membresia del municipio esta inactiva.')

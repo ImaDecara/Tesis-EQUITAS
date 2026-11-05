@@ -226,6 +226,14 @@ Sin selección se exige exactamente una membresía activa. Con varias, se devuel
 `equitas_tenant_id`. Esa selección es entrada no confiable: se vuelve a comprobar
 contra las membresías del usuario en cada entrada, y nunca concede acceso sola.
 El conteo exacto evita que un límite de filas oculte una segunda membresía.
+La selección no se agrega como filtro a PostgREST: primero se leen, con la sesión
+y el ID de usuario resuelto, todas sus membresías visibles, paginadas por `id`
+hasta una página vacía. La comparación con la cookie ocurre en memoria. Solo
+después de comprobar la membresía activa se usan los IDs canónicos de municipio
+y rol devueltos por la base. Una página fallida invalida toda la resolución;
+una página corta no se interpreta como fin. Sin cookie se conserva la consulta
+limitada con conteo exacto. El motivo y los límites de privacidad están en
+[la nota de la frontera DAL](privacidad-frontera-dal.md).
 El ingreso deriva a `/select-tenant` cuando hace falta elegir. Esa pantalla carga
 las membresías propias paginadas, sin opción preseleccionada; vuelve a validar la
 elección antes de guardar la cookie. Ingresar o salir borra la selección anterior.
@@ -257,6 +265,14 @@ alias de relación se eliminan de las filas antes de mapearlas. Solo los catálo
 compartidos carecen de filtro de municipio; también requieren autorización previa.
 RLS sigue siendo una segunda barrera, necesaria para las lecturas directas por la
 Data API. La DAL no reemplaza RLS ni audita accesos directos a PostgREST.
+
+El recálculo de decisiones (`case-review-snapshot.ts`) tampoco envía el `debtorId`
+del formulario como filtro antes de verificarlo. Lee los objetos del municipio
+autorizado, paginados hasta una respuesta vacía, busca el recibido en memoria
+y solo entonces usa el ID canónico para acotar deudas, personas y contactos.
+Una lectura incompleta detiene el recálculo. Conserva la verificación del corte,
+la sesión y RLS. Este paso cuesta O(N) objetos del municipio por recálculo;
+no acredita rendimiento a escala municipal.
 
 Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores de
 consulta conservan `DataWarning`: los indicadores dicen «No disponible» y hay aviso,

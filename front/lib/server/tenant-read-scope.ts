@@ -49,6 +49,8 @@ const DEBTOR_COLUMN = {
 
 export type DebtorScopedTable = keyof typeof DEBTOR_COLUMN
 
+// debtorId debe venir de una fila comprobada dentro del municipio. Validar solo
+// la forma de un ID de formulario no lo habilita como filtro: la URL se registra.
 export function debtorReadScope(table: DebtorScopedTable, tenantId: string, debtorId: string): TableReadScope {
   const scope = tenantReadScope(table, tenantId)!
   return { select: scope.select, filters: [...scope.filters, [DEBTOR_COLUMN[table], debtorId]] }

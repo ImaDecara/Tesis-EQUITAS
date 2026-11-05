@@ -8,7 +8,7 @@ import { databaseId } from '@/lib/auth/tenant-access'
 import { RULES_VERSION, type Decision, type DecisionInput } from '@/lib/domain/decision-rules-v1'
 import type { CaseReviewErrorCode, CaseReviewSnapshot } from '@/lib/domain/case-review-contract'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
-import { debtorReadScope, type DebtorScopedTable } from '@/lib/server/tenant-read-scope'
+import { debtorReadScope, tenantReadScope, type DebtorScopedTable } from '@/lib/server/tenant-read-scope'
 import type { RawRow } from '@/types/equitas-domain'
 
 function canonicalJson(value: unknown): string {
@@ -78,10 +78,15 @@ type SnapshotResult = { ok: true; value: ComputedSnapshot; cutoffBatchId: string
 // El corte se lee ANTES que la cartera: si una importación empieza después de esta lectura,
 // `cutoffBatchId` deja de estar vigente y la función de escritura rechaza la inserción.
 export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenantId: string, debtorId: string): Promise<SnapshotResult> {
-  const read = (table: DebtorScopedTable) => loadAllTableRows(table, supabase, debtorReadScope(table, tenantId, debtorId))
-  const debtors = await read('debtor')
+  // El ID del formulario no puede entrar en una URL de PostgREST/Kong antes
+  // de verificarlo. Resolverlo sobre la cartera del municipio, con sesion/RLS
+  // y paginacion completa; solo el ID canonico encontrado filtra las relaciones.
+  const debtors = await loadAllTableRows('debtor', supabase, tenantReadScope('debtor', tenantId)!)
   if (debtors.warning) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
-  if (debtors.rows.length === 0) return { ok: false, code: 'OBJECT_NOT_IN_TENANT' }
+  const debtor = debtors.rows.find(row => databaseId(row.id) === debtorId && databaseId(row.tenant) === tenantId)
+  if (!debtor) return { ok: false, code: 'OBJECT_NOT_IN_TENANT' }
+  const canonicalDebtorId = databaseId(debtor.id)!
+  const read = (table: DebtorScopedTable) => loadAllTableRows(table, supabase, debtorReadScope(table, tenantId, canonicalDebtorId))
 
   const batches = await loadAllTableRows('import_batch', supabase, {
     select: 'id,as_of,source_updated_at,status,supersedes', filters: [['tenant', tenantId]],
@@ -98,7 +103,7 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
 
   const mapped = mapDebtorObjectsFromRawData({
     batch: { as_of: cutoff.as_of as string | null, source_updated_at: cutoff.source_updated_at as string | null },
-    debtors: debtors.rows,
+    debtors: [debtor],
     debts: debts.rows,
     debtorPeople: debtorPeople.rows,
     people: people.rows,
@@ -109,14 +114,14 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
     debtorProfiles: [] as RawRow[],
     warnings: [],
   })
-  const item = mapped.debtors.find(debtor => debtor.id === debtorId)
+  const item = mapped.debtors.find(debtor => debtor.id === canonicalDebtorId)
   const asOf = item?.decisionAsOf?.valor
   if (!item?.decision || !item.decisionInput || !asOf) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
   return {
     ok: true,
     cutoffBatchId,
     value: {
-      debtorId,
+      debtorId: canonicalDebtorId,
       asOf,
       rulesVersion: RULES_VERSION,
       inputsHash: computeInputsHash(item.decisionInput),

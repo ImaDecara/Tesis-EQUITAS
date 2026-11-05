@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 const { browserClient } = vi.hoisted(() => ({ browserClient: vi.fn() }))
 vi.mock('@/lib/supabase-browser', () => ({ createBrowserSupabaseClient: browserClient }))
+vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 
 import {
   getCurrentAuthUser, mapAuthErrorMessage, selectCurrentTenant, signInWithPassword, signOutCurrentSession,
@@ -22,11 +23,16 @@ function clientWithReplies(replies: Reply[]) {
       const query = {
         select: vi.fn(() => query),
         eq: vi.fn((key: string, value: unknown) => { request.filters.push([key, value]); return query }),
-        limit: vi.fn(async (limit: number) => {
+        order: vi.fn(() => query),
+        gt: vi.fn(() => query),
+        limit: vi.fn((limit: number) => {
           request.limit = limit
-          if (!remaining.length) throw new Error('Unexpected database request')
-          return remaining.shift()!
+          return query
         }),
+        then: (resolve: (reply: Reply) => unknown) => {
+          if (!remaining.length) throw new Error('Unexpected database request')
+          return Promise.resolve(remaining.shift()!).then(resolve)
+        },
       }
       return query
     }),
@@ -145,14 +151,15 @@ describe('ALIGN-019: la seleccion de municipio es explicita y no confiere permis
   beforeEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
   const authorized = () => [ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]),
     ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])]
+  const selected = () => [authorized()[0], ok([{ id: 1, user: 42, tenant: 7, role: 3, status: true }]), ok([]), ...authorized().slice(2)]
 
   it.each(['https:', 'http:'])('guarda la eleccion solo despues de validarla (%s)', async protocol => {
     const document = { cookie: '' }
     vi.stubGlobal('document', document)
     vi.stubGlobal('location', { protocol })
-    const { queries } = clientWithReplies(authorized())
+    const { queries } = clientWithReplies(selected())
     expect((await selectCurrentTenant('7')).isAuthorized).toBe(true)
-    expect(queries[1].filters).toContainEqual(['tenant', '7'])
+    expect(queries[1].filters).toEqual([['user', '42']])
     expect(document.cookie).toBe(`equitas_tenant_id=7; Path=/; SameSite=Lax${protocol === 'https:' ? '; Secure' : ''}`)
   })
 
@@ -179,9 +186,9 @@ describe('ALIGN-019: la seleccion de municipio es explicita y no confiere permis
 
   it('null pide opciones nuevas mientras la consulta normal revalida la cookie', async () => {
     vi.stubGlobal('document', { cookie: 'preferencia=valor; equitas_tenant_id=7' })
-    const first = clientWithReplies(authorized())
+    const first = clientWithReplies(selected())
     await validateCurrentUserTenantAccess()
-    expect(first.queries[1].filters).toContainEqual(['tenant', '7'])
+    expect(first.queries[1].filters).toEqual([['user', '42']])
     const second = clientWithReplies(authorized())
     await validateCurrentUserTenantAccess(null)
     expect(second.queries[1].filters).not.toContainEqual(['tenant', '7'])

@@ -248,16 +248,19 @@ export async function approveCaseDecisionInSession(raw: unknown): Promise<Approv
     const { supabase, context } = await requireTenantAccess({ permission: 'decision:approve' })
     const parsed = parseApproveCaseDecisionInput(raw)
     if (!parsed.ok) return caseReviewFailure(parsed.code)
-    const input = parsed.value
 
+    // El ID del formulario no va a la URL de PostgREST: primero se resuelve
+    // en las revisiones del municipio autorizado, con paginacion completa.
     const stored = await loadAllTableRows('case_review', supabase, {
-      select: 'id,debtor,rules_version,as_of,inputs_hash,decided_intensity',
-      filters: [['tenant', context.tenantId], ['id', input.caseReviewId]],
+      select: 'id,tenant,debtor,rules_version,as_of,inputs_hash,decided_intensity',
+      filters: [['tenant', context.tenantId]],
     })
     if (stored.warning) return caseReviewFailure('SUGGESTION_UNAVAILABLE')
-    const review = stored.rows[0]
+    const review = stored.rows.find(row => databaseId(row.id) === parsed.value.caseReviewId && databaseId(row.tenant) === context.tenantId)
+    const caseReviewId = databaseId(review?.id)
     const debtorId = databaseId(review?.debtor)
-    if (!review || !debtorId) return caseReviewFailure('REVIEW_NOT_IN_TENANT')
+    if (!review || !caseReviewId || !debtorId) return caseReviewFailure('REVIEW_NOT_IN_TENANT')
+    const input = { ...parsed.value, caseReviewId }
     if (Number(review.decided_intensity ?? 0) < INTENSE_FROM) return caseReviewFailure('APPROVAL_NOT_REQUIRED')
 
     const [chain, approvals] = await Promise.all([
