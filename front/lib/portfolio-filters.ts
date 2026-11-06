@@ -4,16 +4,29 @@ import type { DataWarning, DebtorListItem } from '@/types/equitas-domain'
 
 export type PortfolioFilters = { q?: string; risk?: string; type?: string; contact?: string; minAmount?: string; status?: string; personId?: string; queue?: string }
 export type PortfolioSearchParams = PortfolioFilters & { page?: string; pageSize?: string }
+export type RawPortfolioSearchParams = { [K in keyof PortfolioSearchParams]: string | string[] }
 const filterKeys = ['q', 'risk', 'type', 'contact', 'minAmount', 'status', 'personId', 'queue'] as const
 
-export function portfolioHref(path: string, filters: PortfolioSearchParams, overrides: PortfolioSearchParams = {}) {
+// Next entrega un array cuando se repite una clave. Coincide con URLSearchParams.get:
+// el primer valor define el filtro, la paginación y los enlaces de regreso.
+export function normalizePortfolioSearchParams(params: RawPortfolioSearchParams = {}): PortfolioSearchParams {
+  const result: PortfolioSearchParams = {}
+  for (const key of [...filterKeys, 'page', 'pageSize'] as const) {
+    const value = params[key]
+    if (value !== undefined) result[key] = (Array.isArray(value) ? value[0] : value)?.trim()
+  }
+  return result
+}
+
+export function portfolioHref(path: string, filters: RawPortfolioSearchParams, overrides: RawPortfolioSearchParams = {}) {
   const params = new URLSearchParams()
-  const values = { ...filters, ...overrides }
+  const values = normalizePortfolioSearchParams({ ...filters, ...overrides })
   for (const key of [...filterKeys, 'page', 'pageSize'] as const) if (values[key]?.trim()) params.set(key, values[key]!.trim())
   return params.size ? `${path}?${params}` : path
 }
 
-export function filterPortfolio(debtors: DebtorListItem[], filters: PortfolioFilters = {}, warnings: DataWarning[] = []) {
+export function filterPortfolio(debtors: DebtorListItem[], rawFilters: RawPortfolioSearchParams = {}, warnings: DataWarning[] = []) {
+  const filters = normalizePortfolioSearchParams(rawFilters)
   const amount = Number(filters.minAmount)
   const invalid = Boolean(filters.minAmount && (!Number.isFinite(amount) || amount < 0))
   const failed = readingFailed(warnings, 'debtor', 'import_batch') ||

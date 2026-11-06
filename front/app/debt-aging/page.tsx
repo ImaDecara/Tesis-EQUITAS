@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
 import { compareObjectIds, portfolioContext } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { compareNullable, formatWithUnit, missingSummary, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { CalendarClock, CircleDollarSign, Eye, FileWarning } from 'lucide-react'
@@ -32,10 +32,10 @@ import { formatCurrency } from '@/lib/utils'
 export default async function DebtAgingPage({
   searchParams,
 }: {
-  searchParams: Promise<PortfolioSearchParams>
+  searchParams: Promise<RawPortfolioSearchParams>
 }) {
   const source = await getDebtorsData()
-  const resolvedSearchParams = await searchParams
+  const resolvedSearchParams = normalizePortfolioSearchParams(await searchParams)
   const filters = { ...resolvedSearchParams, page: undefined, pageSize: undefined }
   const { items: debtors, warnings, failed: selectionFailed } = filterPortfolio(source.debtors, filters, source.warnings)
   const buildDebtAgingHref = (page: number, pageSize: number) => portfolioHref('/debt-aging', filters, { page: String(page), pageSize: String(pageSize) })

@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
 import { coverageText, portfolioContext } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
 import { formatNumber, metric, missingSummary, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
@@ -27,10 +27,10 @@ import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-export default async function RiskAnalysisPage({ searchParams }: { searchParams?: Promise<PortfolioSearchParams> } = {}) {
+export default async function RiskAnalysisPage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
   const [source, { people, peopleDashboard, warnings: peopleWarnings }] =
     await Promise.all([getDebtorsData(), getPeopleData()])
-  const filters = await searchParams ?? {}
+  const filters = normalizePortfolioSearchParams(await searchParams ?? {})
   const { items: debtors, warnings: debtorWarnings } = filterPortfolio(source.debtors, filters, source.warnings)
   const warnings = [...debtorWarnings, ...peopleWarnings]
   const objectDashboard = mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets: new Map(), warnings: debtorWarnings })

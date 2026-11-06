@@ -1,4 +1,4 @@
-import { compareObjectIds, coverageText, maturityMetrics, sumMoney } from '@/lib/analytics'
+import { compareObjectIds, coverageText, withMaturityMetrics, sumMoney } from '@/lib/analytics'
 import decisionRules from '../../contracts/decision-rules.v1.json'
 import { comparePriority, type InterventionCode, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import { INTERVENTION_CODES, INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
@@ -81,11 +81,7 @@ export function getHighIndividualRiskPeople(people: PersonListItem[]) {
 export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const failed = readingFailed(warnings, 'debtor', 'debt', 'debtor_profile')
   const statusFailed = readingFailed(warnings, 'debtor', 'debt', 'debtor_person')
-  const cases = debtors.map(debtor => {
-    const maturity = maturityMetrics(debtor)
-    return { ...debtor, overdueDebt: maturity.overdueDebt.value, maxDaysOverdue: maturity.maxDaysOverdue.value,
-      metrics: { ...debtor.metrics, ...maturity } }
-  })
+  const cases = debtors.map(withMaturityMetrics)
   const averages = cases.flatMap(debtor => debtor.overdueDebt === null ? [metric(debtor, 'overdueDebt')]
     : debtor.overdueDebt > 0 || Object.keys(metric(debtor, 'maxDaysOverdue').missing).length ? [metric(debtor, 'maxDaysOverdue')] : [])
   const metrics = {

@@ -1,5 +1,5 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
-import { portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { sumMoney, formatNumber, formatPercentage, formatWithUnit, numericData, missingSummary, percentageData } from '@/lib/data-presence'
 import Link from 'next/link'
 import {
@@ -40,8 +40,8 @@ import { cn, formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-export default async function HomePage({ searchParams }: { searchParams?: Promise<PortfolioSearchParams> } = {}) {
-  const filters = await searchParams ?? {}
+export default async function HomePage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
+  const filters = normalizePortfolioSearchParams(await searchParams ?? {})
   const { dashboard, warnings } = await getDashboardData(filters)
   const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
   const highRiskShare = percentageData(dashboard.byRisk.length && dashboard.metrics?.highSeverityCases?.value !== null ? riskMap.get('ALTO') ?? 0 : null, dashboard.totalDebtors)

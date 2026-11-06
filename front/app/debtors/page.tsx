@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
 import { portfolioContext } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatCountOfTotal, formatNumber, formatWithUnit, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, SlidersHorizontal } from 'lucide-react'
@@ -89,10 +89,10 @@ function buildDebtorsHref(filters: DebtorFilters, page: number, pageSize: number
 export default async function DebtorsPage({
   searchParams,
 }: {
-  searchParams: Promise<PortfolioSearchParams>
+  searchParams: Promise<RawPortfolioSearchParams>
 }) {
   const { debtors, warnings, batch } = await getDebtorsData()
-  const resolvedSearchParams = await searchParams
+  const resolvedSearchParams = normalizePortfolioSearchParams(await searchParams)
 
   const filters: DebtorFilters = {
     q: resolvedSearchParams.q?.trim() ?? '',

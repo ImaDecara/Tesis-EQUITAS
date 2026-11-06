@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
 import { portfolioContext } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { ClipboardCheck, Eye } from 'lucide-react'
@@ -34,9 +34,9 @@ function countLabel(count: number, singular: string, plural: string) {
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`
 }
 
-export default async function RecommendedActionsPage({ searchParams }: { searchParams?: Promise<PortfolioSearchParams> } = {}) {
+export default async function RecommendedActionsPage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
   const source = await getDebtorsData()
-  const filters = await searchParams ?? {}
+  const filters = normalizePortfolioSearchParams(await searchParams ?? {})
   const { items: debtors, warnings } = filterPortfolio(source.debtors, filters, source.warnings)
   const summary = buildRecommendationSummary(debtors, warnings)
   const reconciliation = buildQueueReconciliation(debtors, warnings)

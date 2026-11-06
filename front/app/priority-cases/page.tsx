@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
-import { portfolioContext } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref } from '@/lib/portfolio-filters'
+import { portfolioContext, withMaturityMetrics } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatWithUnit } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Filter, ListChecks, Search, SlidersHorizontal } from 'lucide-react'
@@ -69,10 +69,11 @@ function buildPriorityHref(filters: Omit<Required<Omit<PrioritySearchParams, 'pa
 export default async function PriorityCasesPage({
   searchParams,
 }: {
-  searchParams: Promise<PrioritySearchParams>
+  searchParams: Promise<RawPortfolioSearchParams>
 }) {
-  const { debtors, warnings, batch } = await getDebtorsData()
-  const resolvedSearchParams = await searchParams
+  const { debtors: sourceDebtors, warnings, batch } = await getDebtorsData()
+  const debtors = sourceDebtors.map(withMaturityMetrics)
+  const resolvedSearchParams = normalizePortfolioSearchParams(await searchParams)
   const filters = {
     q: resolvedSearchParams.q?.trim() ?? '',
     risk: resolvedSearchParams.risk?.trim() ?? '',
@@ -86,7 +87,7 @@ export default async function PriorityCasesPage({
   const typeOptions = [...new Set(debtors.map((debtor) => debtor.type))].sort()
   const selection = filterPortfolio(debtors, filters, warnings)
   const selectedIds = new Set(selection.items.map(item => item.id))
-  const matchesFilters = (debtor: (typeof debtors)[number]) => selectedIds.has(debtor.id)
+  const matchesFilters = (debtor: (typeof sourceDebtors)[number]) => selectedIds.has(debtor.id)
   const filteredCases = getPriorityCases(debtors).filter(matchesFilters)
   // Cada cola es una intervención y se ordena por su prioridad: entre colas no se compara.
   // La pertenencia se calcula sobre toda la cartera, no sobre lo que dejó el filtro.

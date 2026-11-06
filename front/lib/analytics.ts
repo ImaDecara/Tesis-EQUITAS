@@ -48,6 +48,14 @@ export function maturityMetrics(debtor: DebtorListItem) {
   }
 }
 
+// Proyección para las vistas: conserva el saldo y el estado históricos, pero
+// muestra la misma mora al corte que la analítica y el CSV. No muta el DTO de origen.
+export function withMaturityMetrics(debtor: DebtorListItem) {
+  const maturity = maturityMetrics(debtor)
+  return { ...debtor, overdueDebt: maturity.overdueDebt.value, maxDaysOverdue: maturity.maxDaysOverdue.value,
+    metrics: { ...debtor.metrics, ...maturity } }
+}
+
 export function compareObjectIds(a: Pick<DebtorListItem, 'id'>, b: Pick<DebtorListItem, 'id'>) {
   return a.id === b.id ? 0 : a.id < b.id ? -1 : 1
 }

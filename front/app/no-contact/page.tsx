@@ -1,6 +1,6 @@
 import { PortfolioScope } from '@/components/equitas/portfolio-scope'
-import { coverageText, portfolioContext, sumMoney } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
+import { coverageText, portfolioContext, sumMoney, withMaturityMetrics } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { AlertCircle, CircleDollarSign, Eye, Percent, ShieldAlert } from 'lucide-react'
@@ -28,14 +28,14 @@ import { formatCurrency } from '@/lib/utils'
 export default async function NoContactPage({
   searchParams,
 }: {
-  searchParams: Promise<PortfolioSearchParams>
+  searchParams: Promise<RawPortfolioSearchParams>
 }) {
   const source = await getDebtorsData()
-  const resolvedSearchParams = await searchParams
+  const resolvedSearchParams = normalizePortfolioSearchParams(await searchParams)
   const filters = { ...resolvedSearchParams, page: undefined, pageSize: undefined }
   const { items: debtors, warnings } = filterPortfolio(source.debtors, filters, source.warnings)
   const buildNoContactHref = (page: number, pageSize: number) => portfolioHref('/no-contact', filters, { page: String(page), pageSize: String(pageSize) })
-  const noContactCases = getNoContactCases(debtors)
+  const noContactCases = getNoContactCases(debtors).map(withMaturityMetrics)
   const associatedDebt = sumMoney(noContactCases.map(debtor => metric(debtor, 'totalDebt')), readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_contact', 'debtor_person')).value
   const contactsFailed = readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person')
   const highRiskMetric = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))
