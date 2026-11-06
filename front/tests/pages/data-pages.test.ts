@@ -73,7 +73,7 @@ describe('pantallas con datos de gestion simulados', () => {
 
     expect(getDashboardDataMock).toHaveBeenCalledOnce()
     expect(text).toContain('Dashboard ejecutivo')
-    expect(text).toMatch(/33\s*%\s*de los objetos estan en riesgo alto/)
+    expect(text).toMatch(/33\s*%\s*de los objetos tienen severidad alta/)
     expect(text).toContain('Llamado prioritario')
     expect(text).toContain('AG-1001')
   })
@@ -156,7 +156,7 @@ describe('pantallas con datos de gestion simulados', () => {
     const text = textFromReactTree(page)
 
     expect(text).toContain('Análisis de severidad')
-    expect(text).toContain('Objetos con severidad mayor a 90 puntos')
+    expect(text).toContain('Objetos en banda alta, desde 70 puntos')
     expect(text).toContain('Personas con severidad heredada alta')
   })
 

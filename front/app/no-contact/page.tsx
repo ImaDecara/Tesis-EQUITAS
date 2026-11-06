@@ -1,3 +1,6 @@
+import { PortfolioScope } from '@/components/equitas/portfolio-scope'
+import { coverageText, portfolioContext, sumMoney } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { AlertCircle, CircleDollarSign, Eye, Percent, ShieldAlert } from 'lucide-react'
@@ -22,33 +25,20 @@ import { getNoContactCases } from '@/lib/equitas-view-selectors'
 import { paginateItems } from '@/lib/pagination'
 import { formatCurrency } from '@/lib/utils'
 
-type NoContactSearchParams = {
-  page?: string
-  pageSize?: string
-}
-
-function buildNoContactHref(page: number, pageSize: number) {
-  const params = new URLSearchParams()
-
-  if (page > 1) params.set('page', String(page))
-  if (pageSize !== 10) params.set('pageSize', String(pageSize))
-
-  const queryString = params.toString()
-
-  return queryString ? `/no-contact?${queryString}` : '/no-contact'
-}
-
 export default async function NoContactPage({
   searchParams,
 }: {
-  searchParams: Promise<NoContactSearchParams>
+  searchParams: Promise<PortfolioSearchParams>
 }) {
-  const { debtors, warnings } = await getDebtorsData()
+  const source = await getDebtorsData()
   const resolvedSearchParams = await searchParams
+  const filters = { ...resolvedSearchParams, page: undefined, pageSize: undefined }
+  const { items: debtors, warnings } = filterPortfolio(source.debtors, filters, source.warnings)
+  const buildNoContactHref = (page: number, pageSize: number) => portfolioHref('/no-contact', filters, { page: String(page), pageSize: String(pageSize) })
   const noContactCases = getNoContactCases(debtors)
-  const associatedDebt = aggregateData(noContactCases.map(debtor => metric(debtor, 'totalDebt')), 'sum', readingFailed(warnings, 'debtor', 'debt', 'debtor_contact', 'debtor_person')).value
+  const associatedDebt = sumMoney(noContactCases.map(debtor => metric(debtor, 'totalDebt')), readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_contact', 'debtor_person')).value
   const contactsFailed = readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person')
-  const highRiskMetric = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debtor_profile'))
+  const highRiskMetric = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))
   const highRiskNoContact = highRiskMetric.value
   const totalShare =
     percentageData(readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person') ? null : noContactCases.length, debtors.length)
@@ -71,34 +61,35 @@ export default async function NoContactPage({
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
         <p className="text-xs text-slate-600">{missingSummary({ riskScore: highRiskMetric })}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Total sin contacto"
             value={formatNumber(contactsFailed ? null : noContactCases.length)}
-            hint="Objetos sin canal activo"
+            hint={`Objetos sin contacto cargado. ${coverageText(debtors.map(item => metric(item, 'contactCount')), contactsFailed)}`}
             icon={AlertCircle}
             tone="warning"
           />
           <MetricCard
             label="Deuda asociada"
             value={formatCurrency(associatedDebt)}
-            hint="Saldo de casos bloqueados"
+            hint={`ARS históricos de los objetos sin contacto. ${coverageText(noContactCases.map(item => metric(item, 'totalDebt')), contactsFailed || readingFailed(warnings, 'debt', 'debtor_profile'))}`}
             icon={CircleDollarSign}
             tone="primary"
           />
           <MetricCard
-            label="Riesgo alto sin contacto"
+            label="Severidad alta sin contacto"
             value={formatNumber(highRiskNoContact)}
-            hint="Criticos sin canal directo"
+            hint={`Desde 70 puntos. ${coverageText(noContactCases.map(item => metric(item, 'riskScore')), contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))}`}
             icon={ShieldAlert}
             tone="danger"
           />
           <MetricCard
             label="Sobre el total"
             value={`${formatPercentage(totalShare)}`}
-            hint="Participacion del universo"
+            hint={`Denominador: ${formatWithUnit(contactsFailed ? null : debtors.length, 'objetos filtrados')}, incluidos los sin dato de contacto.`}
             icon={Percent}
             tone="accent"
           />
@@ -115,15 +106,15 @@ export default async function NoContactPage({
           <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
             <div>
               <CardTitle>Listado de casos sin contacto</CardTitle>
-              <CardDescription>Priorizado por score, riesgo, deuda y atraso.</CardDescription>
-              <PaginationSummary
+              <CardDescription>Orden de cola: prioridad, monto evaluable, vencimiento e identificador interno. Las prioridades de colas distintas no se comparan.</CardDescription>
+              {!contactsFailed && <PaginationSummary
                 currentStart={pagination.currentStart}
                 currentEnd={pagination.currentEnd}
                 totalItems={noContactCases.length}
                 itemLabel="casos"
                 pageSize={pagination.pageSize}
                 buildHref={buildNoContactHref}
-              />
+              />}
             </div>
           </CardHeader>
           <CardContent>
@@ -132,7 +123,7 @@ export default async function NoContactPage({
                 <TableRow>
                   <TableHead>Objeto</TableHead>
                   <TableHead>Personas asociadas</TableHead>
-                  <TableHead>Riesgo</TableHead>
+                  <TableHead>Severidad (puntos de 0 a 100)</TableHead>
                   <TableHead className="text-right">Deuda</TableHead>
                   <TableHead className="text-right">Atraso</TableHead>
                   <TableHead>Motivo</TableHead>
@@ -143,7 +134,7 @@ export default async function NoContactPage({
                 {pagination.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-slate-500">
-                      No hay casos sin contacto.
+                      {contactsFailed ? 'No disponible: lectura incompleta de objetos o contactos.' : 'No hay casos sin contacto.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -157,7 +148,7 @@ export default async function NoContactPage({
                       <p className="max-w-[260px] truncate text-sm text-slate-700">
                         {debtor.peopleNames.length > 0
                           ? debtor.peopleNames.join(', ')
-                          : 'Sin personas informadas'}
+                          : readingFailed(warnings, 'person', 'debtor_person') ? 'No disponible: lectura de personas fallida.' : 'Sin personas informadas'}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -168,7 +159,7 @@ export default async function NoContactPage({
                     <TableCell>Sin telefono/email activo</TableCell>
                     <TableCell className="text-right">
                       <Link
-                        href={`/debtors/${encodeURIComponent(debtor.id)}`}
+                        href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)}
                         className={buttonVariants({ variant: 'default', size: 'sm' })}
                       >
                         <Eye className="size-3.5" />
@@ -179,7 +170,7 @@ export default async function NoContactPage({
                 ))}
               </TableBody>
             </Table>
-            <PaginationControls
+            {!contactsFailed && <PaginationControls
               currentPage={pagination.currentPage}
               totalPages={pagination.totalPages}
               pageSize={pagination.pageSize}
@@ -188,7 +179,7 @@ export default async function NoContactPage({
               totalItems={noContactCases.length}
               itemLabel="casos"
               buildHref={buildNoContactHref}
-            />
+            />}
           </CardContent>
         </Card>
       </div>

@@ -1,5 +1,8 @@
+import { PortfolioScope } from '@/components/equitas/portfolio-scope'
+import { coverageText, portfolioContext } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
 import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
-import { formatNumber, missingSummary } from '@/lib/data-presence'
+import { formatNumber, metric, missingSummary, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, ShieldAlert, UsersRound } from 'lucide-react'
 
@@ -24,14 +27,18 @@ import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-export default async function RiskAnalysisPage() {
-  const [{ debtors, warnings: debtorWarnings }, { people, peopleDashboard, warnings: peopleWarnings }] =
+export default async function RiskAnalysisPage({ searchParams }: { searchParams?: Promise<PortfolioSearchParams> } = {}) {
+  const [source, { people, peopleDashboard, warnings: peopleWarnings }] =
     await Promise.all([getDebtorsData(), getPeopleData()])
+  const filters = await searchParams ?? {}
+  const { items: debtors, warnings: debtorWarnings } = filterPortfolio(source.debtors, filters, source.warnings)
   const warnings = [...debtorWarnings, ...peopleWarnings]
   const objectDashboard = mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets: new Map(), warnings: debtorWarnings })
   const objectRiskDistribution = objectDashboard.byRisk
   const highRiskCases = getHighRiskCases(debtors)
   const highIndividualRiskPeople = getHighIndividualRiskPeople(people)
+
+  const chartEmpty = 'No hay valores observados para graficar; consulte los avisos y la cobertura.'
 
   return (
     <AppShell>
@@ -48,6 +55,8 @@ export default async function RiskAnalysisPage() {
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
+        <p className="text-xs text-slate-600">Panel de personas: universo completo de personas leídas, independiente de los filtros de objetos; corte del índice heredado no informado.</p>
         <p className="text-xs text-slate-600">{missingSummary(objectDashboard.metrics)} {missingSummary(peopleDashboard.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -60,12 +69,12 @@ export default async function RiskAnalysisPage() {
               <div className="flex items-start justify-between gap-3 rounded-lg border border-[#efd2d2] bg-[#fbefef] p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase text-[#8f3434]">
-                    Objetos con severidad mayor a 90 puntos
+                    Objetos en banda alta, desde 70 puntos
                   </p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {formatNumber(objectDashboard.riskAboveNinetyCases)}
+                    {formatNumber(objectDashboard.priorityCases)}
                   </p>
-                  <p className="text-xs text-slate-600">Conteo de objetos con más de 90 puntos; excluye 90.</p>
+                  <p className="text-xs text-slate-600">Conteo desde 70 hasta 100 puntos, inclusive. {objectDashboard.coverage?.highSeverityCases}</p>
                 </div>
                 <ShieldAlert className="size-5 text-[#9d3d3d]" />
               </div>
@@ -86,7 +95,7 @@ export default async function RiskAnalysisPage() {
                   <p className="mt-2 text-2xl font-semibold text-slate-900">
                     {formatNumber(peopleDashboard.highRiskCount)}
                   </p>
-                  <p className="text-xs text-slate-600">Índice heredado desde 70 puntos</p>
+                  <p className="text-xs text-slate-600">Índice heredado desde 70 puntos. {coverageText(people.map(item => metric(item, 'riskValue')), readingFailed(peopleWarnings, 'person', 'debtor_profile_detail'), 'personas')}</p>
                 </div>
                 <UsersRound className="size-5 text-[#8a6f2a]" />
               </div>
@@ -95,8 +104,8 @@ export default async function RiskAnalysisPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <RiskDonutChart title="Distribución de objetos por severidad v1" data={objectRiskDistribution} />
-          <RiskDonutChart
+          <RiskDonutChart emptyMessage={chartEmpty} title="Distribución de objetos por severidad v1" data={objectRiskDistribution} />
+          <RiskDonutChart emptyMessage={chartEmpty}
             title="Distribución de personas por máxima severidad heredada"
             data={peopleDashboard.individualRiskDistribution}
           />
@@ -106,7 +115,7 @@ export default async function RiskAnalysisPage() {
           <Card className="border-[#d2dceb]">
             <CardHeader>
               <CardTitle>Objetos en banda alta, desde 70 puntos</CardTitle>
-              <CardDescription>Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90. Primeros 10 en orden operativo, no por severidad.</CardDescription>
+              <CardDescription>Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90. Primeros 10 agrupados por cola, no por severidad global. Las prioridades de colas distintas no se comparan.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table className="min-w-[760px]">
@@ -119,11 +128,12 @@ export default async function RiskAnalysisPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {highRiskCases.length === 0 && <TableRow><TableCell colSpan={4}>{objectDashboard.priorityCases === null ? 'No disponible: severidad no evaluable o lectura incompleta.' : 'No hay objetos en banda alta.'}</TableCell></TableRow>}
                   {highRiskCases.slice(0, 10).map((debtor) => (
                     <TableRow key={debtor.id}>
                       <TableCell>
                         <div className="font-medium text-slate-900">{debtor.identifier}</div>
-                        <p className="text-xs text-slate-500">{debtor.type}</p>
+                        <p className="text-xs text-slate-500">{debtor.type} · {debtor.recommendationType}</p>
                       </TableCell>
                       <TableCell>
                         <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
@@ -131,7 +141,7 @@ export default async function RiskAnalysisPage() {
                       <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
                       <TableCell className="text-right">
                         <Link
-                          href={`/debtors/${encodeURIComponent(debtor.id)}`}
+                          href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)}
                           className={buttonVariants({ variant: 'default', size: 'sm' })}
                         >
                           <Eye className="size-3.5" />
@@ -161,6 +171,7 @@ export default async function RiskAnalysisPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {highIndividualRiskPeople.length === 0 && <TableRow><TableCell colSpan={4}>{peopleDashboard.highRiskCount === null ? 'No disponible: índice heredado no integrado o lectura incompleta.' : 'No hay personas en banda alta.'}</TableCell></TableRow>}
                   {highIndividualRiskPeople.slice(0, 10).map((person) => (
                     <TableRow key={person.id}>
                       <TableCell>

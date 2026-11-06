@@ -1,3 +1,6 @@
+import { PortfolioScope } from '@/components/equitas/portfolio-scope'
+import { portfolioContext } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatCountOfTotal, formatNumber, formatWithUnit, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
 import { Eye, Filter, SlidersHorizontal } from 'lucide-react'
@@ -20,7 +23,6 @@ import {
 } from '@/components/ui/table'
 import { getDebtorsData } from '@/lib/equitas-data'
 import { cn, formatCurrency } from '@/lib/utils'
-import type { DebtorListItem } from '@/types/equitas-domain'
 
 const RECOMMENDATION_BADGE: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
   'Llamado prioritario': 'danger',
@@ -39,6 +41,8 @@ type DebtorFilters = {
   type: string
   contact: string
   personId: string
+  minAmount: string
+  queue: string
 }
 
 // Traduce la prioridad operacional a un bloque visual rapido para lectura en mesa de gestion.
@@ -68,39 +72,6 @@ function getPriorityVisual(priorityLevel: string | null) {
   }
 }
 
-function normalizeText(value: string) {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-}
-
-function applyDebtorFilters(debtors: DebtorListItem[], filters: DebtorFilters) {
-  const normalizedQuery = normalizeText(filters.q)
-
-  return debtors.filter((debtor) => {
-    const matchesQuery =
-      !normalizedQuery ||
-      normalizeText(debtor.identifier).includes(normalizedQuery) ||
-      normalizeText(debtor.description).includes(normalizedQuery) ||
-      debtor.peopleNames.some((name) => normalizeText(name).includes(normalizedQuery))
-    const matchesRisk = !filters.risk || debtor.risk === filters.risk
-    const matchesStatus = !filters.status || debtor.status === filters.status
-    const matchesType = !filters.type || debtor.type === filters.type
-    const matchesContact =
-      !filters.contact ||
-      (filters.contact === 'with' && debtor.hasContact) ||
-      (filters.contact === 'without' && debtor.hasContact === false)
-    const matchesPerson = !filters.personId || debtor.peopleIds.includes(filters.personId)
-
-    return (
-      matchesQuery &&
-      matchesRisk &&
-      matchesStatus &&
-      matchesType &&
-      matchesContact &&
-      matchesPerson
-    )
-  })
-}
-
 function parsePositiveInteger(value: string | undefined) {
   const parsedValue = Number(value)
 
@@ -112,37 +83,15 @@ function isPageSizeOption(value: number | null): value is (typeof PAGE_SIZE_OPTI
 }
 
 function buildDebtorsHref(filters: DebtorFilters, page: number, pageSize: number) {
-  const params = new URLSearchParams()
-
-  if (filters.q) params.set('q', filters.q)
-  if (filters.risk) params.set('risk', filters.risk)
-  if (filters.status) params.set('status', filters.status)
-  if (filters.type) params.set('type', filters.type)
-  if (filters.contact) params.set('contact', filters.contact)
-  if (filters.personId) params.set('personId', filters.personId)
-  if (page > 1) params.set('page', String(page))
-  if (pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(pageSize))
-
-  const queryString = params.toString()
-
-  return queryString ? `/debtors?${queryString}` : '/debtors'
+  return portfolioHref('/debtors', filters, { page: String(page), pageSize: String(pageSize) })
 }
 
 export default async function DebtorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    q?: string
-    risk?: string
-    status?: string
-    type?: string
-    contact?: string
-    personId?: string
-    page?: string
-    pageSize?: string
-  }>
+  searchParams: Promise<PortfolioSearchParams>
 }) {
-  const { debtors, warnings } = await getDebtorsData()
+  const { debtors, warnings, batch } = await getDebtorsData()
   const resolvedSearchParams = await searchParams
 
   const filters: DebtorFilters = {
@@ -152,9 +101,12 @@ export default async function DebtorsPage({
     type: resolvedSearchParams.type?.trim() ?? '',
     contact: resolvedSearchParams.contact?.trim() ?? '',
     personId: resolvedSearchParams.personId?.trim() ?? '',
+    minAmount: resolvedSearchParams.minAmount?.trim() ?? '',
+    queue: resolvedSearchParams.queue?.trim() ?? '',
   }
 
-  const filteredDebtors = applyDebtorFilters(debtors, filters)
+  const selection = filterPortfolio(debtors, filters, warnings)
+  const filteredDebtors = selection.items
   const parsedPageSize = parsePositiveInteger(resolvedSearchParams.pageSize)
   const pageSize = isPageSizeOption(parsedPageSize) ? parsedPageSize : DEFAULT_PAGE_SIZE
   const totalPages = Math.max(1, Math.ceil(filteredDebtors.length / pageSize))
@@ -186,18 +138,19 @@ export default async function DebtorsPage({
             Objetos de deuda
           </h1>
           <p className="text-sm text-slate-600">
-            Vista operativa para clasificar riesgo y priorizar gestion.
+            Objetos con severidad v1 y prioridad dentro de su cola. Los puntos no son porcentajes.
           </p>
         </div>
 
         <Badge variant="info" className="w-fit">
           <Filter className="mr-1 size-3.5" />
-          {formatCountOfTotal(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredDebtors.length, readingFailed(warnings, 'debtor') ? null : debtors.length, 'registros')}
+          {formatCountOfTotal(selection.failed ? null : filteredDebtors.length, readingFailed(warnings, 'debtor') ? null : debtors.length, 'registros')}
         </Badge>
       </section>
 
       <div className="space-y-6">
-        <DataWarnings warnings={warnings} />
+        <DataWarnings warnings={selection.warnings} />
+        <PortfolioScope context={portfolioContext(debtors, warnings, batch)} filters={filters} />
 
         <Card className="border-[#d2dceb]">
           <CardHeader>
@@ -218,7 +171,7 @@ export default async function DebtorsPage({
             {hasActiveFilters && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {filters.q && <Badge variant="neutral">Busqueda: {filters.q}</Badge>}
-                {filters.risk && <Badge variant="neutral">Riesgo: {filters.risk}</Badge>}
+                {filters.risk && <Badge variant="neutral">Severidad: {filters.risk}</Badge>}
                 {filters.status && <Badge variant="neutral">Estado: {filters.status}</Badge>}
                 {filters.type && <Badge variant="neutral">Tipo: {filters.type}</Badge>}
                 {filters.contact && (
@@ -239,9 +192,9 @@ export default async function DebtorsPage({
             <div>
               <CardTitle>Listado operativo</CardTitle>
               <p className="mt-2 text-sm text-slate-600">
-                Mostrando {currentStart.toLocaleString('es-AR')}-
+                {selection.failed ? 'No disponible: selección incompleta.' : <>Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {formatWithUnit(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_person', 'debtor_contact', 'person', 'debt_status', 'debtor_type') ? null : filteredDebtors.length, 'registros')}.
+                {formatWithUnit(selection.failed ? null : filteredDebtors.length, 'registros')}.</>}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -276,7 +229,7 @@ export default async function DebtorsPage({
                   <TableHead className="w-[120px]">Estado</TableHead>
                   <TableHead className="w-[190px]">Personas</TableHead>
                   <TableHead className="w-[120px]">Contacto</TableHead>
-                  <TableHead className="w-[120px]">Riesgo</TableHead>
+                  <TableHead className="w-[120px]">Severidad</TableHead>
                   <TableHead className="w-[210px]">Recomendacion</TableHead>
                   <TableHead className="w-[95px] text-right">Detalle</TableHead>
                 </TableRow>
@@ -285,13 +238,13 @@ export default async function DebtorsPage({
                 {paginatedDebtors.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center text-slate-500">
-                      No hay objetos que cumplan los filtros actuales.
+                      {selection.failed ? 'No disponible: lectura incompleta o filtro inválido.' : 'No hay objetos que cumplan los filtros actuales.'}
                     </TableCell>
                   </TableRow>
                 )}
 
                 {paginatedDebtors.map((debtor) => {
-                  const detailHref = `/debtors/${encodeURIComponent(debtor.id)}`
+                  const detailHref = portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, page: String(currentPage), pageSize: String(pageSize) })
                   const priorityVisual = getPriorityVisual(debtor.priorityLevel)
                   const linkClassName =
                     'block min-w-0 px-3 py-2.5 text-slate-700 transition-colors group-hover:text-slate-900'
@@ -319,7 +272,7 @@ export default async function DebtorsPage({
                             >
                               Prioridad {debtor.priorityLevel ?? 'No disponible'}
                             </span>
-                            <span className="text-xs text-slate-700">Score {formatNumber(debtor.priorityScore)}</span>
+                            <span className="text-xs text-slate-700">{formatWithUnit(debtor.priorityScore, 'puntos de 0 a 100')}</span>
                           </div>
                         </Link>
                       </TableCell>

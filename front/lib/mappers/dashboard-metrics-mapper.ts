@@ -1,162 +1,77 @@
 import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
-import { RECOMMENDATION_KINDS, recommendationQueuesUnknown } from '@/lib/equitas-view-selectors'
+import { compareObjectIds, coverageText, maturityMetrics, portfolioContext, sumMoney } from '@/lib/analytics'
+import { buildRecommendationSummary, getNoContactCases } from '@/lib/equitas-view-selectors'
 import type { DashboardData, DataWarning, DebtorListItem, NumericData } from '@/types/equitas-domain'
 
-type DashboardMapperInput = {
-  debtors: DebtorListItem[]
-  debtStatusBuckets: Map<string, number>
-  warnings?: DataWarning[]
-}
+type DashboardMapperInput = { debtors: DebtorListItem[]; debtStatusBuckets: Map<string, number>; warnings?: DataWarning[] }
 
-function buildTopDebtChart(debtors: DebtorListItem[]) {
-  return debtors.filter((debtor): debtor is DebtorListItem & { totalDebt: number } => debtor.totalDebt !== null)
-    .sort((a, b) => compareNullable(a.totalDebt, b.totalDebt))
-    .slice(0, 5)
-    .map((debtor) => ({
-      label: debtor.identifier,
-      value: debtor.totalDebt,
-    }))
-}
-
-// Convierte el universo de objetos de deuda en indicadores accionables de gestion diaria.
-export function mapDashboardMetricsFromDebtorObjects({
-  debtors,
-  debtStatusBuckets,
-  warnings = [],
-}: DashboardMapperInput): DashboardData {
-  const byDebtorTypeMap = new Map<string, number>()
-  const byRiskMap = new Map<string, number>([
-    ['ALTO', 0],
-    ['MEDIO', 0],
-    ['BAJO', 0],
-  ])
-  const byRecommendationMap = new Map<string, number>(RECOMMENDATION_KINDS.map(kind => [kind, 0]))
-
-  for (const debtor of debtors) {
-    byDebtorTypeMap.set(debtor.type, (byDebtorTypeMap.get(debtor.type) ?? 0) + 1)
-    byRiskMap.set(debtor.risk ?? 'No disponible', (byRiskMap.get(debtor.risk ?? 'No disponible') ?? 0) + 1)
-    byRecommendationMap.set(
-      debtor.recommendationType,
-      (byRecommendationMap.get(debtor.recommendationType) ?? 0) + 1
-    )
-  }
-
-  const sortedByPriority = [...debtors].sort((a, b) => {
-    if (b.priorityScore !== a.priorityScore) {
-      return compareNullable(a.priorityScore, b.priorityScore)
-    }
-
-    if (b.totalDebt !== a.totalDebt) {
-      return compareNullable(a.totalDebt, b.totalDebt)
-    }
-
-    return compareNullable(a.maxDaysOverdue, b.maxDaysOverdue)
-  })
-
-  const sortedByDebt = [...debtors].sort((a, b) => compareNullable(a.totalDebt, b.totalDebt))
-
-  const topPriorityDebtors = sortedByPriority.slice(0, 5).map((item) => ({
-    id: item.id,
-    identifier: item.identifier,
-    type: item.type,
-    totalDebt: item.totalDebt,
-    overdueDays: item.maxDaysOverdue,
-    risk: item.risk,
-    riskScore: item.riskScore,
-    hasContact: item.hasContact,
-    recommendationType: item.recommendationType,
-    priorityScore: item.priorityScore,
-    priorityLevel: item.priorityLevel,
-  }))
-
-  const topDebtDebtors = sortedByDebt.slice(0, 5).map((item) => ({
-    id: item.id,
-    identifier: item.identifier,
-    type: item.type,
-    totalDebt: item.totalDebt,
-    overdueDays: item.maxDaysOverdue,
-    risk: item.risk,
-    riskScore: item.riskScore,
-    recommendationType: item.recommendationType,
-  }))
-
-  const withoutContactDebtors = sortedByPriority
-    .filter((item) => item.hasContact === false)
-    .slice(0, 5)
-    .map((item) => ({
-      id: item.id,
-      identifier: item.identifier,
-      type: item.type,
-      totalDebt: item.totalDebt,
-      overdueDays: item.maxDaysOverdue,
-      risk: item.risk,
-      riskScore: item.riskScore,
-    }))
-
-  // Panel ejecutivo: define casos criticos con riesgo extremo o urgencia operativa de hoy.
-  const criticalDebtors = debtors.filter(
-    (debtor) =>
-      debtor.riskScore !== null && debtor.riskScore > 90 ||
-      debtor.isUrgentRecommendation ||
-      (debtor.overdueDebt !== null && debtor.overdueDebt > 0 && debtor.hasContact === false)
-  )
+export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets, warnings = [] }: DashboardMapperInput): DashboardData {
   const failed = (...tables: string[]) => readingFailed(warnings, 'debtor', ...tables)
-  const count = (key: keyof DebtorListItem & string, predicate: (debtor: DebtorListItem) => boolean, ...tables: string[]) =>
-    aggregateData(debtors.map(debtor => {
-      const input = metric(debtor, key)
-      // El universo del KPI son objetos: cada objeto incompleto cuenta una vez por estado.
-      const missing = Object.fromEntries(Object.entries(input.missing).filter(([, value]) => value > 0).map(([state]) => [state, 1]))
-      return { ...(input.value === null ? input : observed(predicate(debtor) ? 1 : 0)), missing }
-    }), 'sum', failed(...tables))
+  const severityFailed = failed('debt', 'debtor_person')
+  const moneyFailed = failed('debt', 'debtor_profile')
+  const contactsFailed = failed('debtor_contact', 'debtor_person')
+  const queues = buildRecommendationSummary(debtors, warnings)
+  const coverage: Record<string, string> = {}
+  const count = (key: keyof DebtorListItem & string, predicate: (item: DebtorListItem) => boolean, blocked: boolean) => {
+    const values = debtors.map(item => {
+      const data = metric(item, key)
+      const missing = Object.fromEntries(Object.entries(data.missing).filter(([, n]) => n > 0).map(([state]) => [state, 1]))
+      return { ...(data.value === null ? data : observed(predicate(item) ? 1 : 0)), missing }
+    })
+    return aggregateData(values, 'sum', blocked)
+  }
+  const severity = debtors.map(item => metric(item, 'riskScore'))
+  const amounts = debtors.map(item => metric(item, 'totalDebt'))
+  const contacts = debtors.map(item => metric(item, 'contactCount'))
+  const maturity = debtors.map(maturityMetrics)
+  const reviews = debtors.map(item => item.decision ? { ...observed(item.isUrgentRecommendation ? 1 : 0), missing: Object.fromEntries(Object.keys(metric(item, 'priorityScore').missing).map(state => [state, 1])) } : metric(item, 'priorityScore'))
+  const high = count('riskScore', item => item.risk === 'ALTO', severityFailed)
   const metrics: Record<string, NumericData> = {
     totalDebtors: failed() ? unavailable() : observed(debtors.length),
-    totalDebt: aggregateData(debtors.map(debtor => metric(debtor, 'totalDebt')), 'sum', failed('debt', 'debtor_profile')),
-    overdueCases: count('overdueDebt', debtor => debtor.overdueDebt !== null && debtor.overdueDebt > 0, 'debt', 'debt_status', 'debtor_profile'),
-    withContactCases: count('contactCount', debtor => debtor.hasContact === true, 'debtor_contact', 'debtor_person'),
-    withoutContactCases: count('contactCount', debtor => debtor.hasContact === false, 'debtor_contact', 'debtor_person'),
-    priorityCases: count('priorityScore', debtor => debtor.priorityLevel === 'ALTA', 'debt', 'debt_status', 'debtor_profile', 'debtor_contact', 'debtor_person'),
-    urgentRecommendationCases: count('priorityScore', debtor => debtor.isUrgentRecommendation, 'debt', 'debt_status', 'debtor_profile', 'debtor_contact', 'debtor_person'),
-    criticalCasesToday: count('priorityScore', debtor => criticalDebtors.includes(debtor), 'debt', 'debt_status', 'debtor_profile', 'debtor_contact', 'debtor_person'),
-    riskAboveNinetyCases: count('riskScore', debtor => debtor.riskScore !== null && debtor.riskScore > 90, 'debtor_profile'),
-    criticalDebtTotal: aggregateData(debtors.map(debtor => debtor.riskScore === null ? metric(debtor, 'riskScore') : debtor.riskScore > 90 ? metric(debtor, 'totalDebt') : observed(0)), 'sum', failed('debt', 'debtor_profile')),
+    totalDebt: sumMoney(amounts, moneyFailed),
+    overdueCases: aggregateData(maturity.map(item => ({ ...item.overdueCases, missing: Object.fromEntries(Object.keys(item.overdueCases.missing).map(key => [key, 1])) })), 'sum', severityFailed),
+    withContactCases: count('contactCount', item => item.hasContact === true, contactsFailed),
+    withoutContactCases: count('contactCount', item => item.hasContact === false, contactsFailed),
+    priorityCases: high,
+    highSeverityCases: high,
+    urgentRecommendationCases: aggregateData(reviews, 'sum', failed('debt', 'debtor_person', 'debtor_contact')),
+    // Compatibilidad: críticos se redefine por una sola población, banda alta v1.
+    criticalCasesToday: high,
+    riskAboveNinetyCases: count('riskScore', item => item.riskScore! > 90, severityFailed),
+    criticalDebtTotal: sumMoney(debtors.map(item => item.riskScore === null ? metric(item, 'riskScore') : item.risk === 'ALTO' ? metric(item, 'totalDebt') : observed(0)), severityFailed || moneyFailed),
   }
-
+  coverage.totalDebt = coverageText(amounts, moneyFailed)
+  coverage.priorityCases = coverageText(severity, severityFailed)
+  coverage.highSeverityCases = coverage.priorityCases
+  coverage.overdueCases = coverageText(maturity.map(item => item.overdueCases), severityFailed)
+  coverage.withContactCases = coverage.withoutContactCases = coverageText(contacts, contactsFailed)
+  coverage.urgentRecommendationCases = coverageText(reviews, failed('debt', 'debtor_person', 'debtor_contact'))
+  const topDebt = moneyFailed ? [] : [...debtors].filter(item => item.totalDebt !== null)
+    .sort((a, b) => compareNullable(a.totalDebt, b.totalDebt) || compareObjectIds(a, b)).slice(0, 5)
+  const byType = new Map<string, number>()
+  const byRisk = new Map<string, number>([['ALTO', 0], ['MEDIO', 0], ['BAJO', 0]])
+  for (const item of debtors) {
+    byType.set(item.type, (byType.get(item.type) ?? 0) + 1)
+    byRisk.set(item.risk ?? 'No disponible', (byRisk.get(item.risk ?? 'No disponible') ?? 0) + 1)
+  }
   return {
-    metrics,
-    totalDebtors: metrics.totalDebtors.value,
-    totalDebt: metrics.totalDebt.value,
-    overdueCases: metrics.overdueCases.value,
-    withContactCases: metrics.withContactCases.value,
-    withoutContactCases: metrics.withoutContactCases.value,
-    priorityCases: metrics.priorityCases.value,
+    metrics, coverage, context: portfolioContext(debtors, warnings),
+    queuePreviews: queues.map(group => ({ code: group.interventionCode, label: group.recommendation, count: group.count, cases: group.highlightedCases })),
+    totalDebtors: metrics.totalDebtors.value, totalDebt: metrics.totalDebt.value,
+    overdueCases: metrics.overdueCases.value, withContactCases: metrics.withContactCases.value,
+    withoutContactCases: metrics.withoutContactCases.value, priorityCases: metrics.priorityCases.value,
     urgentRecommendationCases: metrics.urgentRecommendationCases.value,
-    criticalCasesToday: metrics.criticalCasesToday.value,
-    riskAboveNinetyCases: metrics.riskAboveNinetyCases.value,
+    criticalCasesToday: metrics.criticalCasesToday.value, riskAboveNinetyCases: metrics.riskAboveNinetyCases.value,
     criticalDebtTotal: metrics.criticalDebtTotal.value,
-    byDebtStatus: failed('debt', 'debt_status') ? [] : Array.from(debtStatusBuckets.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value),
-    byDebtorType: failed('debtor_type') ? [] : Array.from(byDebtorTypeMap.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value),
-    byRisk: failed('debtor_profile') ? [] : Array.from(byRiskMap.entries())
-      .filter(([label]) => label === 'No disponible' || !debtors.length || debtors.some(debtor => debtor.risk !== null))
-      .map(([label, value]) => ({ label, value })),
-    byRecommendation: recommendationQueuesUnknown(debtors, warnings) ? [] : Array.from(byRecommendationMap.entries()).map(([label, value]) => ({
-      label,
-      value,
-    })),
-    topDebtChart: buildTopDebtChart(debtors),
-    topDebtors: topDebtDebtors.map((item) => ({
-      id: item.id,
-      identifier: item.identifier,
-      type: item.type,
-      totalDebt: item.totalDebt,
-      risk: item.risk,
-      riskScore: item.riskScore,
-    })),
-    topPriorityDebtors: topPriorityDebtors.filter(debtor => debtor.priorityScore !== null),
-    withoutContactDebtors,
-    topDebtDebtors,
+    byDebtStatus: failed('debt', 'debt_status') ? [] : Array.from(debtStatusBuckets, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+    byDebtorType: failed('debtor_type') ? [] : Array.from(byType, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value || a.label.localeCompare(b.label)),
+    byRisk: severityFailed ? [] : Array.from(byRisk).filter(([label]) => label === 'No disponible' || !debtors.length || severity.some(item => item.value !== null)).map(([label, value]) => ({ label, value })),
+    byRecommendation: queues.flatMap(group => group.count === null ? [] : [{ label: group.recommendation, value: group.count }]),
+    topDebtChart: topDebt.map(item => ({ label: item.identifier, value: item.totalDebt! })),
+    topDebtors: topDebt,
+    // No se publica un ranking global de prioridad entre intervenciones.
+    topPriorityDebtors: [],
+    withoutContactDebtors: contactsFailed ? [] : getNoContactCases(debtors).slice(0, 5).map(item => ({ ...item, overdueDays: maturityMetrics(item).maxDaysOverdue.value })),
+    topDebtDebtors: topDebt.map(item => ({ ...item, overdueDays: maturityMetrics(item).maxDaysOverdue.value })),
   }
 }

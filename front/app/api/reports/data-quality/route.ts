@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic'
 export function GET(request: Request) {
   return csvReportResponse(request, 'calidad-de-datos', 'portfolio:read', async () => {
     parseDataQualityFilters(new URL(request.url).searchParams)
-    const { debtors, warnings } = await getDebtorsData()
+    const { debtors, warnings, batch } = await getDebtorsData()
     assertReadsComplete(warnings)
-    return buildDataQualityReport(debtors, new Date().toISOString())
+    return buildDataQualityReport(debtors, new Date().toISOString(), batch)
   })
 }
 

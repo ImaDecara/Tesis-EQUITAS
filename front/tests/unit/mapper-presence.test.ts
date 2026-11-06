@@ -122,11 +122,11 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     raw.debtorProfiles = [{ debtor: 901, socioeconomic_risk_level: 80 }]
     const mapped = mapDebtorObjectsFromRawData(raw)
     const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
-    expect(dashboard.metrics?.overdueCases).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
+    expect(dashboard.metrics?.overdueCases).toEqual({ value: 1, presence: 'OBSERVADO', missing: {} })
     expect(dashboard.metrics?.priorityCases).toEqual({ value: 0, presence: 'OBSERVADO', missing: {} })
     expect(dashboard.metrics?.urgentRecommendationCases).toEqual({ value: 1, presence: 'OBSERVADO', missing: {} })
     expect(mapped.debtors[0].decision?.severidad.estado).toBe('COMPLETA')
-    expect(buildDebtAgingSummary(mapped.debtors).metrics.overdueDebt).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
+    expect(buildDebtAgingSummary(mapped.debtors).metrics.overdueDebt).toEqual({ value: 70, presence: 'OBSERVADO', missing: {} })
   })
 
   it('cuenta objetos incompletos una vez por estado en los KPI, sin perder sus obligaciones faltantes', () => {
@@ -231,6 +231,11 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     const result = mapDashboardMetricsFromDebtorObjects(mapDebtorObjectsFromRawData(raw))
     const key = table === 'debtor' ? 'totalDebtors' : table === 'debt_status' ? 'overdueCases'
       : table === 'debtor_contact' || table === 'debtor_person' ? 'withContactCases' : 'totalDebt'
+    if (table === 'debt_status') {
+      expect(result.overdueCases).toBe(0)
+      expect(result.byDebtStatus).toEqual([])
+      return
+    }
     expect(result[key]).toBeNull()
     expect(result.metrics?.[key].presence).toBe('NO_INTEGRADO')
   })

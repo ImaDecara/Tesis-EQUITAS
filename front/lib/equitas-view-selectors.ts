@@ -1,3 +1,4 @@
+import { compareObjectIds, coverageText, maturityMetrics, sumMoney } from '@/lib/analytics'
 import decisionRules from '../../contracts/decision-rules.v1.json'
 import { comparePriority, type InterventionCode, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import { INTERVENTION_CODES, INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
@@ -79,48 +80,56 @@ export function getHighIndividualRiskPeople(people: PersonListItem[]) {
 
 export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const failed = readingFailed(warnings, 'debtor', 'debt', 'debtor_profile')
-  const statusFailed = failed || readingFailed(warnings, 'debt_status')
+  const statusFailed = readingFailed(warnings, 'debtor', 'debt', 'debtor_person')
+  const cases = debtors.map(debtor => {
+    const maturity = maturityMetrics(debtor)
+    return { ...debtor, overdueDebt: maturity.overdueDebt.value, maxDaysOverdue: maturity.maxDaysOverdue.value,
+      metrics: { ...debtor.metrics, ...maturity } }
+  })
+  const averages = cases.flatMap(debtor => debtor.overdueDebt === null ? [metric(debtor, 'overdueDebt')]
+    : debtor.overdueDebt > 0 || Object.keys(metric(debtor, 'maxDaysOverdue').missing).length ? [metric(debtor, 'maxDaysOverdue')] : [])
   const metrics = {
-    totalDebt: aggregateData(debtors.map(debtor => metric(debtor, 'totalDebt')), 'sum', failed),
-    overdueDebt: aggregateData(debtors.map(debtor => metric(debtor, 'overdueDebt')), 'sum', statusFailed),
-    averageOverdueDays: aggregateData(debtors.flatMap(debtor => debtor.overdueDebt === null
-      ? [metric(debtor, 'overdueDebt')] : debtor.overdueDebt > 0 ? [metric(debtor, 'maxDaysOverdue')] : []), 'mean', statusFailed),
+    totalDebt: sumMoney(debtors.map(debtor => metric(debtor, 'totalDebt')), failed),
+    overdueDebt: sumMoney(cases.map(debtor => metric(debtor, 'overdueDebt')), statusFailed),
+    averageOverdueDays: aggregateData(averages, 'mean', statusFailed),
   }
   const totalDebt = metrics.totalDebt.value
   const overdueDebt = metrics.overdueDebt.value
   const averageOverdueDays = metrics.averageOverdueDays.value === null ? null : Math.round(metrics.averageOverdueDays.value)
-  const topDebtCases = [...debtors].sort((a, b) => compareNullable(a.totalDebt, b.totalDebt)).slice(0, 10)
+  const topDebtCases = failed ? [] : [...cases].filter(item => item.totalDebt !== null).sort((a, b) => compareNullable(a.totalDebt, b.totalDebt) || compareObjectIds(a, b)).slice(0, 10)
   const agingDistribution: ChartBucket[] = statusFailed ? [] : [
     {
       label: 'Sin atraso',
-      value: debtors.filter((debtor) => debtor.maxDaysOverdue === 0).length,
+      value: cases.filter((debtor) => debtor.maxDaysOverdue === 0).length,
     },
     {
       label: '1-30 dias',
-      value: debtors.filter(
+      value: cases.filter(
         (debtor) => debtor.maxDaysOverdue !== null && debtor.maxDaysOverdue > 0 && debtor.maxDaysOverdue <= 30
       ).length,
     },
     {
       label: '31-90 dias',
-      value: debtors.filter(
+      value: cases.filter(
         (debtor) => debtor.maxDaysOverdue !== null && debtor.maxDaysOverdue > 30 && debtor.maxDaysOverdue <= 90
       ).length,
     },
     {
       label: '+90 dias',
-      value: debtors.filter((debtor) => debtor.maxDaysOverdue !== null && debtor.maxDaysOverdue > 90).length,
+      value: cases.filter((debtor) => debtor.maxDaysOverdue !== null && debtor.maxDaysOverdue > 90).length,
     },
   ]
 
   if (!statusFailed) {
-    const notApplicable = debtors.filter(debtor => debtor.metrics?.maxDaysOverdue.presence === 'NO_APLICA').length
-    const unavailableDays = debtors.filter(debtor => debtor.maxDaysOverdue === null).length - notApplicable
+    const notApplicable = cases.filter(debtor => debtor.metrics?.maxDaysOverdue.presence === 'NO_APLICA').length
+    const unavailableDays = cases.filter(debtor => debtor.maxDaysOverdue === null).length - notApplicable
     if (notApplicable) agingDistribution.push({ label: 'No aplica', value: notApplicable })
     if (unavailableDays) agingDistribution.push({ label: 'No disponible', value: unavailableDays })
   }
   return {
     metrics,
+    cases,
+    coverage: { totalDebt: coverageText(debtors.map(item => metric(item, 'totalDebt')), failed), overdueDebt: coverageText(cases.map(item => metric(item, 'overdueDebt')), statusFailed), averageOverdueDays: coverageText(averages, statusFailed) },
     totalDebt,
     overdueDebt,
     averageOverdueDays,
@@ -143,18 +152,22 @@ export function buildRecommendationSummary(debtors: DebtorListItem[], warnings: 
     const cases = groupFailed ? [] : code === null
       ? debtors.filter(item => !item.decision || queuesUnknown).sort(compareIds) : getInterventionCases(debtors, code)
     const metrics = {
-      totalDebt: aggregateData(cases.map(debtor => debtor.decision
+      totalDebt: sumMoney(cases.map(debtor => debtor.decision
         ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.monto_actualizado_ars }
-        : unavailable()), 'sum', groupFailed),
+        : metric(debtor, 'priorityScore')), groupFailed),
       riskScore: aggregateData(cases.map(debtor => debtor.decision
         ? { ...metric(debtor, 'priorityScore'), value: debtor.decision.severidad.valor }
-        : unavailable()), 'mean', groupFailed),
+        : metric(debtor, 'priorityScore')), 'mean', groupFailed),
     }
     return {
       interventionCode: code,
       recommendation: code === null ? 'No disponible' as const : INTERVENTION_LABELS[code],
       cases,
       metrics,
+      coverage: {
+        totalDebt: coverageText(cases.map(item => item.decision ? { ...metric(item, 'priorityScore'), value: item.decision.severidad.monto_actualizado_ars } : metric(item, 'priorityScore')), groupFailed),
+        riskScore: coverageText(cases.map(item => metric(item, 'priorityScore')), groupFailed),
+      },
       // La categoría sin cola conocida conserva los objetos; nunca oculta sus filas.
       count: groupFailed ? null : cases.length,
       debtAssociated: metrics.totalDebt.value,
@@ -181,24 +194,24 @@ function dueDateNotEvaluable(due: RuleDatum<string>) {
 
 function differenceData(left: NumericData, right: NumericData) {
   return left.value === null || right.value === null
-    ? unavailable() : observed(Math.round((left.value - right.value) * 100) / 100)
+    ? aggregateData([left, right], 'sum', true) : sumMoney([left, { ...right, value: -right.value }])
 }
 
 // KPI-V1-07 a 09. No recalcula colas ni tablero: explica por qué sus sumas no coinciden.
 export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
   // Una cola vacía no observa ningún importe: su 0 no reemplaza al monto que falta en otra.
-  const queueTotal = aggregateData(buildRecommendationSummary(debtors, warnings)
+  const queueTotal = sumMoney(buildRecommendationSummary(debtors, warnings)
     .filter(group => group.interventionCode !== null && group.count !== 0)
-    .map(group => group.metrics.totalDebt), 'sum', queuesUnknown)
+    .map(group => group.metrics.totalDebt), queuesUnknown)
   const dashboardTotal = buildDebtAgingSummary(debtors, warnings).metrics.totalDebt
   const outsideByObject = queuesUnknown ? [] : debtors
     .map(debtor => (debtor.decisionInput?.obligaciones ?? []).filter(item => dueDateNotEvaluable(item.due_date)))
     .filter(items => items.length > 0)
   const outside = outsideByObject.flat()
   // Un importe negativo no es evaluable por sí mismo: queda en el resto de la diferencia.
-  const outsideAmount = aggregateData(outside.flatMap(({ current_amount: amount }) => amount.estado !== 'OBSERVADO'
-    ? [unavailable(amount.estado)] : amount.valor < 0 ? [] : [observed(amount.valor)]), 'sum', queuesUnknown)
+  const outsideAmount = sumMoney(outside.flatMap(({ current_amount: amount }) => amount.estado !== 'OBSERVADO'
+    ? [unavailable(amount.estado)] : amount.valor < 0 ? [] : [observed(amount.valor)]), queuesUnknown)
   const difference = differenceData(dashboardTotal, queueTotal)
   return {
     queueTotal,

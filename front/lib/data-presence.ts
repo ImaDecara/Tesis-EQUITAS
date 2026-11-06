@@ -1,3 +1,4 @@
+import { amountInCents } from '@/lib/domain/decision-rules-v1'
 import { findMatchingRowKey, selectValueFromRow } from '@/lib/parsers/generic-value-selector'
 import type { DataPresence, DataWarning, NumericData, PresenceMetrics, RawRow } from '@/types/equitas-domain'
 
@@ -20,14 +21,49 @@ export function numericData(value: unknown): NumericData {
   return Number.isFinite(parsed) ? observed(parsed) : unavailable('INVALIDO', 'NUMERO_INVALIDO')
 }
 
+// Number solo es válido si conserva exactamente los centavos recibidos.
+export function moneyData(raw: unknown): NumericData {
+  const data = numericData(raw)
+  if (data.value === null) return data
+  try {
+    const cents = amountInCents(data.value)
+    if (typeof raw === 'string') {
+      const match = /^([+-]?)(\d*)(?:[.,](\d*))?$/.exec(raw.trim())!
+      const decimals = match[3] ?? ''
+      if (decimals.slice(2).replace(/0/g, '')) throw new RangeError()
+      const exact = (BigInt(match[2] || '0') * BigInt(100) + BigInt(decimals.slice(0, 2).padEnd(2, '0'))) * (match[1] === '-' ? -BigInt(1) : BigInt(1))
+      if (exact !== BigInt(cents)) throw new RangeError()
+    }
+    return data
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    return unavailable('INVALIDO', 'IMPORTE_NO_EXPRESABLE_EN_CENTAVOS_SEGUROS')
+  }
+}
+
+export function sumMoney(values: NumericData[], failed = false): NumericData {
+  const result = aggregateData(values, 'sum', failed)
+  if (result.value === null) return result
+  try {
+    const cents = values.reduce((sum, item) => sum + (item.value === null ? BigInt(0) : BigInt(amountInCents(item.value))), BigInt(0))
+    if (cents > BigInt(Number.MAX_SAFE_INTEGER) || cents < -BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError()
+    const value = Number(cents) / 100
+    if (BigInt(amountInCents(value)) !== cents) throw new RangeError()
+    return { ...result, value }
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    return { ...unavailable('INVALIDO', 'SUMA_FUERA_DE_RANGO_SEGURO'), missing: { ...result.missing, INVALIDO: (result.missing.INVALIDO ?? 0) + 1 } }
+  }
+}
+
 export function selectNumericData(row: RawRow, candidates: string[]) {
   return numericData(selectValueFromRow(row, candidates))
 }
 
 export function currentAmount(row: RawRow) {
   const currentKey = findMatchingRowKey(row, ['current_amount'])
-  return currentKey === null ? selectNumericData(row, ['updated_amount', 'amount_updated',
-    'total_amount', 'amount_due', 'monto_actualizado']) : numericData(row[currentKey])
+  return currentKey === null ? moneyData(selectValueFromRow(row, ['updated_amount', 'amount_updated',
+    'total_amount', 'amount_due', 'monto_actualizado'])) : moneyData(row[currentKey])
 }
 
 export function readingFailed(warnings: DataWarning[], ...tables: string[]) {
@@ -102,7 +138,7 @@ export function formatPercentage(data: NumericData) {
 export function missingSummary(metrics?: Record<string, NumericData>) {
   const labels: Record<string, string> = {
     totalDebt: 'Deuda total', overdueDebt: 'Deuda vencida', totalDebtAssociated: 'Deuda asociada',
-    riskValue: 'Puntaje', riskScore: 'Severidad', averageRiskValue: 'Promedio del índice heredado',
+    highSeverityCases: 'Severidad alta', riskValue: 'Puntaje', riskScore: 'Severidad', averageRiskValue: 'Promedio del índice heredado',
     totalDebtors: 'Objetos', overdueCases: 'Casos vencidos', withContactCases: 'Con contacto',
     withoutContactCases: 'Sin contacto', priorityCases: 'Prioridad', urgentRecommendationCases: 'Revisión requerida',
     criticalCasesToday: 'Casos críticos', riskAboveNinetyCases: 'Objetos con severidad mayor a 90 puntos', criticalDebtTotal: 'Deuda crítica',

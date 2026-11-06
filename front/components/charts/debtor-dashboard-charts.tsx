@@ -20,6 +20,7 @@ import { type ChartBucket } from '@/types/equitas-domain'
 
 type ChartProps = {
   title: string
+  emptyMessage?: string
   data: ChartBucket[]
   legendLayout?: 'side' | 'bottom'
   size?: 'default' | 'compact'
@@ -60,14 +61,15 @@ function ChartSkeleton({ title }: { title: string }) {
   )
 }
 
-function EmptyChart({ title }: { title: string }) {
+function EmptyChart({ title, message = 'Sin datos disponibles' }: { title: string; message?: string }) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader>
-    <CardContent>Sin datos disponibles</CardContent></Card>
+    <CardContent>{message}</CardContent></Card>
 }
 
 export function BarDistributionChart({
   title,
   data,
+  emptyMessage,
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
@@ -76,7 +78,7 @@ export function BarDistributionChart({
   const maxValue = Math.max(...rows.map((row) => row.value), 0)
   const yAxisWidth = maxValue >= 10000 ? 58 : 34
 
-  if (!rows.length) return <EmptyChart title={title} />
+  if (!rows.length) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -123,6 +125,7 @@ export function BarDistributionChart({
 export function RiskDonutChart({
   title,
   data,
+  emptyMessage,
   legendLayout = 'side',
   size = 'default',
 }: ChartProps) {
@@ -132,7 +135,7 @@ export function RiskDonutChart({
   const isBottomLegend = legendLayout === 'bottom'
   const isCompact = size === 'compact'
 
-  if (!rows.length || total === 0) return <EmptyChart title={title} />
+  if (!rows.length || total === 0) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -221,13 +224,14 @@ export function RiskDonutChart({
 export function TopDebtHorizontalChart({
   title,
   data,
+  emptyMessage,
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
   const rows = data
   const contentHeightClass = size === 'compact' ? 'h-56' : 'h-72'
 
-  if (!rows.length) return <EmptyChart title={title} />
+  if (!rows.length) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }

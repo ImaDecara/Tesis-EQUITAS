@@ -47,8 +47,8 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(result.debts).toEqual([{ id: 11, debtor: 1 }])
     expect(result.debtorTypes).toEqual([])
     expect(result.warnings).toEqual([])
-    // Cuatro consultas de autorizacion, ocho tablas y dos paginas terminales.
-    expect(client.from).toHaveBeenCalledTimes(14)
+    // Cuatro de autorización, ocho tablas, dos páginas terminales y corte antes/después.
+    expect(client.from).toHaveBeenCalledTimes(16)
   })
 
   it('acepta respuestas vacias como listados validos sin alerta', async () => {

@@ -1,3 +1,6 @@
+import { PortfolioScope } from '@/components/equitas/portfolio-scope'
+import { portfolioContext } from '@/lib/analytics'
+import { filterPortfolio, portfolioHref, type PortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, missingSummary } from '@/lib/data-presence'
 import Link from 'next/link'
 import { ClipboardCheck, Eye } from 'lucide-react'
@@ -31,8 +34,10 @@ function countLabel(count: number, singular: string, plural: string) {
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`
 }
 
-export default async function RecommendedActionsPage() {
-  const { debtors, warnings } = await getDebtorsData()
+export default async function RecommendedActionsPage({ searchParams }: { searchParams?: Promise<PortfolioSearchParams> } = {}) {
+  const source = await getDebtorsData()
+  const filters = await searchParams ?? {}
+  const { items: debtors, warnings } = filterPortfolio(source.debtors, filters, source.warnings)
   const summary = buildRecommendationSummary(debtors, warnings)
   const reconciliation = buildQueueReconciliation(debtors, warnings)
   const queueMissing = missingSummary({ totalDebtAssociated: reconciliation.queueTotal })
@@ -60,6 +65,7 @@ export default async function RecommendedActionsPage() {
 
       <div className="space-y-6">
         <DataWarnings warnings={warnings} />
+        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
         <p className="text-xs text-slate-600">{summary.map(group => missingSummary(group.metrics)).filter(Boolean).join("; ")}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -71,7 +77,7 @@ export default async function RecommendedActionsPage() {
                 key={recommendation}
                 label={recommendation}
                 value={formatNumber(item?.count ?? null)}
-                hint={formatCurrency(item?.debtAssociated ?? null)}
+                hint={`ARS evaluables: ${formatCurrency(item?.debtAssociated ?? null)}. ${item?.coverage.totalDebt ?? ""}`}
                 icon={ClipboardCheck}
                 tone={
                   recommendation === 'Llamado prioritario'
@@ -134,24 +140,23 @@ export default async function RecommendedActionsPage() {
           <CardHeader>
             <CardTitle>Resumen por recomendacion</CardTitle>
             <CardDescription>
-              Mantiene las recomendaciones operativas actuales y sus casos destacados.
+              Cada cola se ordena por su propia prioridad; hasta 3 casos destacados. Severidad parcial significa un mínimo. No se comparan prioridades entre colas.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Table className="min-w-[1120px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Recomendacion</TableHead>
+                  <TableHead>Intervención</TableHead>
                   <TableHead className="text-right">Cantidad de casos</TableHead>
-                  <TableHead className="text-right">Deuda asociada</TableHead>
-                  <TableHead className="text-right">Riesgo promedio</TableHead>
+                  <TableHead className="text-right">Monto evaluable (ARS)</TableHead>
+                  <TableHead className="text-right">Severidad media (puntos de 0 a 100)</TableHead>
                   <TableHead>Casos destacados</TableHead>
                   <TableHead className="text-right">Accion</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {summary.map((group) => {
-                  const primaryCase = group.highlightedCases[0]
 
                   return (
                     <TableRow key={group.recommendation}>
@@ -164,20 +169,20 @@ export default async function RecommendedActionsPage() {
                         {formatNumber(group.count)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatCurrency(group.debtAssociated)}
+                        {formatCurrency(group.debtAssociated)}<p className="text-xs">{group.coverage.totalDebt}</p>
                       </TableCell>
                       <TableCell className="text-right">
-                        {group.metrics.riskScore.presence === 'NO_APLICA' ? 'No aplica' : formatWithUnit(group.averageRisk, '/ 100', 1)}
+                        {group.metrics.riskScore.presence === 'NO_APLICA' ? 'No aplica' : formatWithUnit(group.averageRisk, '/ 100', 1)}<p className="text-xs">{group.coverage.riskScore}</p>
                       </TableCell>
                       <TableCell>
                         <div className="flex max-w-[420px] flex-wrap gap-2">
                           {group.highlightedCases.length === 0 && (
-                            <span className="text-sm text-slate-500">Sin casos</span>
+                            <span className="text-sm text-slate-500">{group.count === null ? 'No disponible: lectura incompleta.' : 'Sin casos'}</span>
                           )}
                           {group.highlightedCases.map((debtor) => (
                             <Link
                               key={debtor.id}
-                              href={`/debtors/${encodeURIComponent(debtor.id)}`}
+                              href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)}
                               className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-[#163a63] hover:bg-[#edf2f9]"
                             >
                               {debtor.identifier}
@@ -186,16 +191,16 @@ export default async function RecommendedActionsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {primaryCase ? (
+                        {group.count !== null ? (
                           <Link
-                            href={`/debtors/${encodeURIComponent(primaryCase.id)}`}
+                            href={portfolioHref('/priority-cases', filters, { queue: group.interventionCode ?? 'SIN_COLA', page: '' })}
                             className={buttonVariants({ variant: 'default', size: 'sm' })}
                           >
                             <Eye className="size-3.5" />
                             Ver casos
                           </Link>
                         ) : (
-                          <span className="text-sm text-slate-400">Sin casos</span>
+                          <span className="text-sm text-slate-400">{group.count === null ? 'No disponible: lectura incompleta.' : 'Sin casos'}</span>
                         )}
                       </TableCell>
                     </TableRow>

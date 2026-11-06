@@ -84,7 +84,8 @@ const pageText = async (page: (props: never) => unknown, searchParams: Record<st
 function queueObjectIds(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(queueObjectIds)
   if (!isValidElement<{ href?: string; children?: ReactNode }>(node)) return []
-  const match = typeof node.props.href === 'string' && /^\/debtors\/([^?]+)\?tab=revision$/.exec(node.props.href)
+  const href = typeof node.props.href === 'string' ? new URL(node.props.href, 'http://test.local') : null
+  const match = href?.searchParams.get('tab') === 'revision' && /^\/debtors\/([^/]+)$/.exec(href.pathname)
   return match ? [decodeURIComponent(match[1])] : queueObjectIds(node.props.children)
 }
 
@@ -314,14 +315,15 @@ describe('ALIGN-028: formato y metadatos', () => {
 })
 
 describe('ALIGN-028: una falla inesperada', () => {
-  it('un numero irrepresentable responde 500 sin archivo y sin el detalle', async () => {
+  it('un importe irrepresentable se declara INVALIDO sin perder las filas legibles', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     client({ debtor_profile: [{ id: 1, debtor: 101, total_debt_amount: 1e21, __scope: { tenant: 7 } }] })
     const response = await getQueue(request('queue'))
-    expect(response.status).toBe(500)
-    expect(await response.json()).toEqual({ error: 'REPORTE_NO_DISPONIBLE' })
-    expect(response.headers.get('content-disposition')).toBeNull()
-    expect(log.mock.calls.flat().join(' ')).toBe('Reporte cola-de-trabajo no disponible: RangeError')
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('INVALIDO')
+    expect(body).not.toContain('1e+21')
+    expect(log).not.toHaveBeenCalled()
     log.mockRestore()
   })
 })
@@ -539,8 +541,14 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     const rows = details(file.rows)
     const text = await pageText(PriorityCasesPage as never, filters)
     const shown = /(\d[\d.]*) ?casos/.exec(text)
-    expect(shown, 'la pantalla debe mostrar su contador').not.toBeNull()
-    expect(rows.length).toBe(Number(shown![1].replace(/\./g, '')))
+    if (filters.risk === 'ALTO' && rows.length === 0) {
+      // Hay objetos sin puntaje: cero coincidencias observadas no prueba una cola vacía.
+      expect(text).toContain('No disponible: no se pudo determinar qué casos hay en esta cola.')
+      expect(shown).toBeNull()
+    } else {
+      expect(shown, 'la pantalla debe mostrar su contador').not.toBeNull()
+      expect(rows.length).toBe(Number(shown![1].replace(/\./g, '')))
+    }
     expect(csvNumber(totalRow(file.rows).objetos)).toBe(rows.length)
     // ALIGN-021 muestra una cola por vez. El CSV reúne todas, en ese mismo orden.
     const knownQueues = new Set<string>(INTERVENTION_CODES)
