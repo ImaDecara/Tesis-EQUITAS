@@ -3,6 +3,8 @@ const { serverClient } = vi.hoisted(() => ({ serverClient: vi.fn() }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: serverClient }))
 vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
+// ALIGN-069: esta suite aísla la lectura del corte; access-audit.integration prueba la escritura y su falla cerrada.
+vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: () => ({ rpc: async () => ({ data: { audit_id: 1, created: true }, error: null }) }) }))
 
 import { GET } from '@/app/api/reports/queue/route'
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
@@ -103,6 +105,7 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(raw.batch).toBeUndefined()
     expect(raw.warnings).toEqual([])
     const response = await exportQueue()
+    expect(response.status).toBe(200)
     const csv = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
     expect(csv.rows.every(row => row.fecha_corte === 'NO_INTEGRADO' && /^\d{4}-\d{2}-\d{2}$/.test(row.fecha_calculo_usada))).toBe(true)
   })
@@ -113,6 +116,7 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     const { dashboard } = await getDashboardDataFromService()
     expect(dashboard.context).toContain('Corte del manifiesto: 2026-09-30')
     const response = await exportQueue()
+    expect(response.status).toBe(200)
     const csv = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
     expect(csv.rows).toHaveLength(1)
     expect(csv.rows[0]).toMatchObject({ fecha_corte: '2026-09-30', objetos: '0', deuda_total_ars: '0' })
