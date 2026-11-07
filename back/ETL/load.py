@@ -1023,6 +1023,14 @@ def record_import_batch(
     return int(response.json()["batch_id"])
 
 
+def execute_import_batch(batch: Any, *, tenant: int, absent_policy: str,
+                         expected_revision: str | None = None) -> dict[str, Any]:
+    """Único camino de publicación de la CLI; el commit y sus conteos viven en SQL."""
+    from ETL.publication import execute_batch
+
+    return execute_batch(batch, tenant=tenant, absent_policy=absent_policy, expected_revision=expected_revision)
+
+
 # ============================================================
 # TEST RÁPIDO DE CONEXIÓN
 # ============================================================

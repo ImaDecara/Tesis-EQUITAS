@@ -17,7 +17,7 @@ import pytest
 
 from oracle_lots import AS_OF, accepted_objects, derive_lot
 
-from ETL import config, extract, load, run_etl
+from ETL import config, extract, load, publication, run_etl
 
 ORIGINAL = "folyslqzqvnpolexcxjo"
 CENTINELAS = (
@@ -83,15 +83,8 @@ def simular_carga(monkeypatch):
     monkeypatch.setattr(run_etl, "resolve_catalogs", lambda required, _columns: {
         table: {key: index for index, key in enumerate(sorted(keys), start=1)} for table, keys in required.items()
     })
-    monkeypatch.setattr(run_etl, "fetch_published_objects", Mock(return_value={}))
     monkeypatch.setattr(run_etl, "record_import_batch", Mock(return_value=1))
-    for nombre in ("load_person", "load_debtor", "load_debtor_person", "load_debtor_contact",
-                   "load_debtor_profile_detail", "load_province", "load_city", "load_address"):
-        monkeypatch.setattr(run_etl, nombre, Mock(return_value={"id": 1}))
-    monkeypatch.setattr(run_etl, "load_debts_bulk",
-                        Mock(return_value={"unique": 1, "inserted": 1, "updated": 0, "unchanged": 0}))
-    monkeypatch.setattr(run_etl, "recompute_debtor_profiles",
-                        Mock(side_effect=lambda ids, _as_of, **_: {debtor: 1 for debtor in ids}))
+    monkeypatch.setattr(run_etl, "execute_import_batch", Mock(return_value={"batch_id": 1, "counts": {}}))
 
 
 def comprobar_salida_segura(texto):
@@ -253,7 +246,8 @@ def test_filas_sin_clave_se_rechazan_con_codigo_y_sin_datos(monkeypatch, capsys,
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
     assert f"Rechazo {codigo}: 1" in salida.out
-    registradas = [llamada.args[0].get("full_name") for llamada in run_etl.load_person.call_args_list]
+    rows = publication.normalized_rows(run_etl.execute_import_batch.call_args.args[0], 1)
+    registradas = [row['payload']['person']['full_name'] for row in rows if row['kind'] == 'person']
     assert CENTINELAS[0] not in registradas
 
 
@@ -270,7 +264,7 @@ def test_error_del_proveedor_no_sale_en_cli_ni_traceback(monkeypatch, capsys, tm
     preparar_ejecucion(monkeypatch)
     simular_carga(monkeypatch)
     _, carpeta = lote_con_centinelas(tmp_path)
-    monkeypatch.setattr(run_etl, "load_person", Mock(side_effect=RuntimeError(" ".join(CENTINELAS))))
+    monkeypatch.setattr(run_etl, "execute_import_batch", Mock(side_effect=RuntimeError(" ".join(CENTINELAS))))
     with pytest.raises(RuntimeError) as error:
         run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
     comprobar_salida_segura("".join(traceback.format_exception(error.value)))
@@ -280,7 +274,7 @@ def test_error_del_proveedor_no_sale_en_cli_ni_traceback(monkeypatch, capsys, tm
     assert exit_info.value.code == 1
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
-    assert re.search(r"fila=2 clave_hash=[0-9a-f]{24} codigo=ETL_FAILED", salida.err)
+    assert re.search(r"fila=0 clave_hash=[0-9a-f]{24} codigo=ETL_FAILED", salida.err)
 
 
 def test_execute_completo_preserva_payloads_y_no_los_imprime(monkeypatch, capsys, tmp_path):
@@ -288,7 +282,8 @@ def test_execute_completo_preserva_payloads_y_no_los_imprime(monkeypatch, capsys
     simular_carga(monkeypatch)
     _, carpeta = lote_con_centinelas(tmp_path)
     run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
-    assert CENTINELAS[0] in [llamada.args[0]["full_name"] for llamada in run_etl.load_person.call_args_list]
+    rows = publication.normalized_rows(run_etl.execute_import_batch.call_args.args[0], 1)
+    assert CENTINELAS[0] in [row['payload']['person']['full_name'] for row in rows if row['kind'] == 'person']
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
     assert "CARGA FINALIZADA" in salida.out
@@ -298,14 +293,16 @@ def test_falla_del_registro_de_una_falla_no_oculta_la_causa(monkeypatch, capsys,
     preparar_ejecucion(monkeypatch)
     simular_carga(monkeypatch)
     _, carpeta = lote_con_centinelas(tmp_path)
-    monkeypatch.setattr(run_etl, "load_person", Mock(side_effect=config.ETLError("CAUSA_ORIGINAL")))
-    monkeypatch.setattr(run_etl, "record_import_batch", Mock(side_effect=[1, RuntimeError(CENTINELAS[0])]))
+    monkeypatch.setattr(run_etl, "execute_import_batch", load.execute_import_batch)
+    monkeypatch.setattr(publication, "stage_batch", Mock(return_value={"batch_id": 1, "revision": "a", "idempotency_key": "b"}))
+    monkeypatch.setattr(publication, "_rpc", Mock(side_effect=config.ETLError("CAUSA_ORIGINAL")))
+    monkeypatch.setattr(publication, "settle_batch", Mock(side_effect=RuntimeError(CENTINELAS[0])))
     with pytest.raises(config.ETLError) as error:
         run_etl.run_etl(str(carpeta), execute=True, cut_off=AS_OF)
     assert error.value.code == "CAUSA_ORIGINAL"
     salida = capsys.readouterr()
     comprobar_salida_segura(salida.out + salida.err)
-    assert "IMPORT_BATCH_FAILURE_NOT_RECORDED" in salida.out
+    assert "PUBLISH_OUTCOME_UNKNOWN" in salida.out
 
 
 @pytest.mark.parametrize("operacion", ["insertar", "actualizar", "bulk", "respuesta", "clave", "persona"])
