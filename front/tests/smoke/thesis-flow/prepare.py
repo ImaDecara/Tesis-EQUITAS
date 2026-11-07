@@ -143,16 +143,27 @@ def main():
         assert validation['resultado_lote'] == 'VALIDADO' and validation['publicacion_permitida'] is True
         assert validation['conteos']['objetos_aceptados'] == 2
         events = json.loads(sql("select json_agg(t order by id) from (select id,status,supersedes,file_hashes,as_of,rules_version,counts,source from public.import_batch) t"))
-        assert [event['status'] for event in events] == ['VALIDADO', 'PUBLICADO']
-        assert events[1]['supersedes'] == events[0]['id']
-        for event in events:
+        assert [event['status'] for event in events] == ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO']
+        for index, event in enumerate(events):
+            assert event['supersedes'] == (events[index - 1]['id'] if index else None)
+            assert type(event['counts'].get('publicacion_atomica')) is int and event['counts']['publicacion_atomica'] == 1
             assert all(event['file_hashes'][key] == value for key, value in hashes.items())
             assert event['as_of'] == CUTOFF and event['rules_version'] == evidence['rules_version'] and event['source'] == 'ETL_CLI'
+        publications = json.loads(sql('select json_agg(t) from (select batch_id,head_id,status,idempotency_key,revision,result from public.import_publication) t'))
+        assert len(publications) == 1
+        publication = publications[0]
+        assert publication['status'] == 'PUBLICADO' and publication['result']['status'] == 'PUBLICADO'
+        assert publication['batch_id'] == publication['result']['batch_id'] == events[0]['id']
+        assert publication['head_id'] == publication['result']['published_event_id'] == events[-1]['id']
+        for key in ('idempotency_key', 'revision'):
+            assert publication[key] == publication['result'][key] and len(publication[key]) == 64
+        assert all(events[-1]['counts'][key] == value for key, value in publication['result']['counts'].items())
+        assert sql('select count(*) from public.import_row_staging') == '0'
         debtors = json.loads(sql('select json_agg(t order by identifier) from (select id,identifier from public.debtor where tenant=1) t'))
         assert [row['identifier'] for row in debtors] == ['FLOW029-A', 'FLOW029-B']
         totals = json.loads(sql('select json_build_object(\'objects\',(select count(*) from public.debtor),\'obligations\',count(*),\'amount\',sum(current_amount)) from public.debt'))
         assert totals == {'objects': 2, 'obligations': 6, 'amount': 1800000}
-        evidence.update(passed=True, events=events, debtors=debtors, totals=totals,
+        evidence.update(passed=True, events=events, publication=publication, staging_rows=0, debtors=debtors, totals=totals,
                         validator_sha256=digest(output / 'validator/report.json'))
     finally:
         evidence['ended_at_utc'] = utc()

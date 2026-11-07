@@ -40,8 +40,8 @@ export async function loadEvidence(path, sha, rulesPath) {
   assert.equal(validator.publicacion_permitida, true)
   assert.equal(validator.fecha_corte, load.cutoff)
   assert.deepEqual(validator.motivos_bloqueo, [])
-  assert.deepEqual(load.events.map(event => event.status), ['VALIDADO', 'PUBLICADO'])
-  assert.equal(load.events[1].supersedes, load.events[0].id)
+  assertAtomicPublication(load.events, load.publication)
+  assert.equal(load.staging_rows, 0)
   for (const event of load.events) {
     for (const [name, hash] of Object.entries(hashes)) assert.equal(event.file_hashes[name], hash)
     assert.equal(event.rules_version, load.rules_version)
@@ -51,6 +51,29 @@ export async function loadEvidence(path, sha, rulesPath) {
   assert.deepEqual(load.totals, { objects: 2, obligations: 6, amount: 1800000 })
   assert.deepEqual(load.debtors.map(row => row.identifier), ['FLOW029-A', 'FLOW029-B'])
   return load
+}
+
+export function assertAtomicPublication(events, publication) {
+  assert.deepEqual(events.map(event => event.status), ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO'])
+  assert.equal(new Set(events.map(event => event.id)).size, 4)
+  events.forEach((event, index) => {
+    assert(Number.isSafeInteger(event.id) && event.id > 0)
+    assert.equal(event.supersedes, index ? events[index - 1].id : null)
+    assert.equal(event.counts.publicacion_atomica, 1)
+  })
+  assert.equal(publication.status, 'PUBLICADO')
+  assert.equal(publication.result.status, 'PUBLICADO')
+  assert.equal(publication.batch_id, events[0].id)
+  assert.equal(publication.result.batch_id, events[0].id)
+  assert.equal(publication.head_id, events.at(-1).id)
+  assert.equal(publication.result.published_event_id, events.at(-1).id)
+  for (const key of ['idempotency_key', 'revision']) {
+    assert.match(publication[key], /^[a-f0-9]{64}$/)
+    assert.equal(publication.result[key], publication[key])
+  }
+  for (const [key, value] of Object.entries(publication.result.counts)) {
+    assert.deepEqual(events.at(-1).counts[key], value)
+  }
 }
 
 // CSV RFC4180 con separador local: conserva ';' y comillas dentro de celdas.
