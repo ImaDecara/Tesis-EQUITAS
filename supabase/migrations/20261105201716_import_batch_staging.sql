@@ -2,6 +2,12 @@
 -- La única transacción que escribe cartera es publish_import_batch. Staging no publica.
 -- El servidor registra FALLIDO en otra transacción; el recibo de PUBLICADO es durable.
 
+-- Presupuesto acotado para la RPC de publicación completa, también por PostgREST.
+-- No cambia authenticator ni los límites de los roles de lectura/revisión. El
+-- cliente conserva 120 s para transporte y recuperación; la consulta tiene 60 s.
+alter role equitas_import_server set statement_timeout = '60s';
+alter role equitas_import_server set lock_timeout = '55s';
+
 do $$ begin if not exists(select 1 from pg_roles where rolname='equitas_import_definer') then create role equitas_import_definer; end if; end $$;
 alter role equitas_import_definer nologin noinherit nocreatedb nocreaterole bypassrls;
 grant equitas_import_definer to postgres;
@@ -168,8 +174,11 @@ begin
     select coalesce(array_agg(id),'{}') into ids from public.debtor where id in
       (select debtor from public.debtor_profile where id in ((old_row->>'debtor_profile')::bigint,(new_row->>'debtor_profile')::bigint));
   end if;
-  for d in select distinct obj.* from public.debtor obj where obj.id=any(ids) or obj.id in
-    (select debtor from public.debtor_person where person=any(people)) order by obj.tenant,obj.id loop
+  -- Unir primero las claves afectadas permite búsquedas por PK. El OR anterior
+  -- recorría debtor entero por cada deuda escrita (decenas de miles por lote).
+  for d in select obj.* from public.debtor obj join
+    (select unnest(ids) id union select debtor from public.debtor_person where person=any(people)) affected
+    on obj.id=affected.id order by obj.tenant,obj.id loop
     perform equitas_import_private.bump_object(d.id);
   end loop;
   if tg_op='DELETE' then return old; end if;
@@ -226,7 +235,11 @@ begin
     else null end;
   if allowed is null or jsonb_typeof(p_payload)<>'object' or p_payload-array(select unnest(allowed))<>'{}'::jsonb
     or not p_keys<@allowed or not p_ignore<@allowed or not p_payload ?& p_keys then raise exception 'IMPORT_INPUT_INVALID'; end if;
-  select string_agg(format('t.%I is not distinct from r.%I',x,x),' and ') into predicate from unnest(p_keys) x;
+  -- Las claves no nulas usan igualdad e índices; la rama nula conserva exactamente
+  -- la semántica anterior. IS NOT DISTINCT FROM sigue comparando los valores para
+  -- evitar reescribir una fila sin cambios, pero no obliga a buscarla por barrido.
+  select string_agg(case when p_payload->x='null'::jsonb then format('t.%I is null',x)
+    else format('t.%I = r.%I',x,x) end,' and ') into predicate from unnest(p_keys) x;
   select string_agg(format('t.%I is not distinct from r.%I',x,x),' and '),
     string_agg(format('%I = r.%I',x,x),',') into equal_sql,set_sql
     from jsonb_object_keys(p_payload) x where not x=any(p_ignore);
@@ -666,3 +679,4 @@ revoke equitas_import_definer from postgres;
 select cron.schedule('equitas-import-staging-ttl','* * * * *',
   $$set statement_timeout='45s'; select public.purge_import_staging();$$);
 notify pgrst, 'reload schema';
+notify pgrst, 'reload config';

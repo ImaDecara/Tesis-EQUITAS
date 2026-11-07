@@ -69,6 +69,35 @@ Los importes se comparan en PostgreSQL con los tipos `numeric` de las tablas, si
 Los helpers antiguos de lectura siguen paginando y leyendo importes como texto; `--execute` publica exclusivamente por la
 nueva función SQL, sin una alternativa de escrituras REST por fila.
 
+### Presupuesto de la publicación y volumen municipal
+
+La migración fija `statement_timeout=60s` y `lock_timeout=55s` solo para
+`equitas_import_server`, y notifica a PostgREST para recargar la configuración.
+El cliente mantiene `RPC_TIMEOUT=120s`, que deja margen para transporte y recuperación.
+No se amplían los límites de `authenticator`, de los lectores ni del rol de revisión.
+Estos son límites por llamada; no se desactiva el timeout ni se divide la publicación
+en transacciones parciales. La espera de un bloqueo consume también el presupuesto
+de la sentencia. Una carga que exceda ese presupuesto falla de manera cerrada y su
+recuperación sigue el mismo procedimiento del recibo durable.
+
+Las búsquedas de filas por claves no nulas usan igualdad e índices. Las claves nulas
+se buscan con `IS NULL`, y la comparación de valores sigue usando `IS NOT DISTINCT
+FROM` para evitar reescrituras. Los triggers resuelven las claves de objetos afectados
+antes de leer `debtor`; no recorren toda esa tabla por cada obligación. Se conservan
+los mismos bloqueos, versiones, checksum canónico, cuarentena y transacción única.
+
+El ensayo de escala utiliza 2924 objetos aceptados y 56273 obligaciones del generador
+versionado: primera publicación, repetición de los mismos archivos y reentrega con
+otros bytes pero idénticos valores. Exige carga por la CLI/Data API real y compara
+las huellas de todas las tablas de cartera, incluyendo `xmin`, en las repeticiones.
+No garantiza ese tiempo para cualquier hardware o para el máximo contractual de filas.
+El bloqueo global de localidades y el del tenant siguen serializando escrituras;
+una operación concurrente puede agotar su propio límite y debe mostrar el fallo.
+
+La configuración por rol y su aplicación en REST están descritas en
+[Supabase: Timeouts](https://supabase.com/docs/guides/database/postgres/timeouts) y
+[PostgREST: Transactions](https://docs.postgrest.org/en/v12/references/transactions.html).
+
 ### Identidad, revisión y recuperación
 
 La clave SHA-256 incluye hashes de los archivos, hash **canónico del mapeo efectivo**, versión y hash del contrato,
@@ -262,6 +291,8 @@ usa otras semillas y requiere otro reset. El conjunto completo se ejecuta en tan
 .venv/bin/python -m pytest tests_real/test_etl_v1_load.py -q
 # Nuevo reset local + esperar Auth y REST 200.
 .venv/bin/python -m pytest tests_real/test_imports_api.py tests_real/test_next_route.py -q
+# Nuevo reset local + esperar Auth y REST 200.
+.venv/bin/python -m pytest tests_real/test_import_publish_scale.py -q --tb=short --assert=plain
 ```
 
 El arnés toma el lock atómico de `/tmp/equitas-local-db/lock`, mantiene JWT en memoria/temporales privados, registra SHA y
