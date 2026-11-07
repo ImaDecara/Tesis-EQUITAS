@@ -1,4 +1,5 @@
 import contract from '../../../contracts/decision-rules.v1.json'
+import { withMaturityMetrics } from '@/lib/analytics'
 import { metric } from '@/lib/data-presence'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { serializeCsv } from '@/lib/reports/csv'
@@ -29,6 +30,7 @@ function presenceCategory(data: NumericData) {
 
 export function buildDataQualityReport(debtors: readonly DebtorListItem[], generatedAt: string, batch?: RawDebtorDataBundle['batch']) {
   const objects = debtors.length
+  const analytical = debtors.map(withMaturityMetrics)
   const decisions = debtors.flatMap(debtor => debtor.decision ? [debtor.decision] : [])
   const unevaluable = decisions.flatMap(decision => decision.severidad.motivos_no_evaluables)
   const issues = debtors.flatMap(debtor => debtor.decisionIssues ?? [])
@@ -43,7 +45,7 @@ export function buildDataQualityReport(debtors: readonly DebtorListItem[], gener
   const rows = [
     totalRow(meta, 'objetos_leidos', objects, 'objetos'),
     ...PRESENCE_INDICATORS.flatMap(([indicator, key]) => {
-      const categories = debtors.map(debtor => presenceCategory(metric(debtor, key)))
+      const categories = analytical.map(debtor => presenceCategory(metric(debtor, key)))
       return PRESENCE_CATEGORIES.map(category =>
         shareRow(meta, indicator, category, categories.filter(item => item === category).length, objects, 'objetos'))
     }),

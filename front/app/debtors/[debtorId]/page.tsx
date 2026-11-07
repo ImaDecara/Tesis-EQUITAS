@@ -426,7 +426,7 @@ export default async function DebtorDetailPage({
           </TabsContent>
 
           <TabsContent value="review" keepMounted>
-            <ReviewPanel screen={reviewScreen} detail={detail} warnings={warnings} />
+            <ReviewPanel screen={reviewScreen} detail={{ ...detail, debtor }} warnings={warnings} />
           </TabsContent>
         </Tabs>
       </div>

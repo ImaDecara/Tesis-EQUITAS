@@ -162,7 +162,7 @@ export default async function DebtAgingPage({
                   <TableHead className="text-right">Deuda total</TableHead>
                   <TableHead className="text-right">Deuda vencida</TableHead>
                   <TableHead className="text-right">Dias de atraso</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Estado de catálogo</TableHead>
                   <TableHead className="text-right">Accion</TableHead>
                 </TableRow>
               </TableHeader>
