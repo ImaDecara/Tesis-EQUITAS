@@ -2,13 +2,14 @@
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 
 from ETL.config import ETLError
-from ETL.readers.supervised import BACK, _resident_bytes, _worker_environment
+from ETL.readers.supervised import BACK, _worker_environment
 
 PROCESS_SECONDS = 180
 MEMORY_BYTES = 2 * 1024**3
@@ -19,20 +20,49 @@ class PreviewSourceError(ETLError):
     """A bounded reader/validator rejection, with a safe code and no source value."""
 
 
-def prepare_input(files, profile, tenant, policy):
+def _stop(process):
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            raise
+
+
+def _group_memory(pid):
+    try:
+        result = subprocess.run(['ps', '-e', '-o', 'pgid=,rss='], capture_output=True,
+                                text=True, timeout=1, check=True)
+        return sum(int(rss) * 1024 for group, rss in (line.split() for line in result.stdout.splitlines())
+                   if int(group) == pid)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise ETLError('PREVIEW_PROCESS_FAILED') from None
+
+
+def prepare_input(files, profile, tenant, policy, *, lock_fd=None):
     request = {'files': {k: str(v) for k, v in files.items()}, 'profile': profile,
                'tenant': tenant, 'policy': policy}
     with tempfile.TemporaryFile() as incoming, tempfile.TemporaryFile() as outgoing:
         incoming.write(json.dumps(request, allow_nan=False).encode())
         incoming.seek(0)
-        process = subprocess.Popen([sys.executable, '-B', '-m', 'services.import_preview_worker'], cwd=BACK,
-                                   env=_worker_environment(), stdin=incoming, stdout=outgoing, stderr=subprocess.DEVNULL)
+        life_read, life_write = os.pipe()
+        try:
+            process = subprocess.Popen([sys.executable, '-B', '-m', 'services.import_preview_worker'], cwd=BACK,
+                                       env={**_worker_environment(), 'EQUITAS_PREVIEW_LIFELINE_FD': str(life_read)},
+                                       stdin=incoming, stdout=outgoing, stderr=subprocess.DEVNULL,
+                                       start_new_session=True, pass_fds=(life_read,) + (() if lock_fd is None else (lock_fd,)))
+        except OSError:
+            os.close(life_write)
+            raise ETLError('PREVIEW_PROCESS_FAILED') from None
+        finally:
+            os.close(life_read)
         started = time.monotonic()
         try:
             while process.poll() is None:
                 if time.monotonic()-started > PROCESS_SECONDS:
                     raise ETLError('PREVIEW_TIME_LIMIT')
-                if _resident_bytes(process.pid) > MEMORY_BYTES or os.fstat(outgoing.fileno()).st_size > RESULT_BYTES:
+                if _group_memory(process.pid) > MEMORY_BYTES or os.fstat(outgoing.fileno()).st_size > RESULT_BYTES:
                     raise ETLError('PREVIEW_WORK_LIMIT')
                 time.sleep(0.1)
             if process.returncode != 0 or os.fstat(outgoing.fileno()).st_size > RESULT_BYTES:
@@ -48,6 +78,6 @@ def prepare_input(files, profile, tenant, policy):
                 raise ETLError('PREVIEW_PROCESS_FAILED')
             return result
         finally:
-            if process.poll() is None:
-                process.kill()
+            os.close(life_write)
+            _stop(process)
             process.wait(timeout=10)

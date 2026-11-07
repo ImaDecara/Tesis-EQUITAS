@@ -342,3 +342,190 @@ def test_14_payload_integrity_and_ttl_purge(seeded,http,token):
     assert http.get(f'/imports/{root}/preview',headers=auth).status_code==410
     psql('select public.purge_import_previews()')
     assert psql(f'select count(*) from public.import_preview_row_staging where root_id={root}').strip()=='0'
+
+
+def administrative(sql):
+    """Synthetic local mutations only; never include credentials in a failure."""
+    result=subprocess.run(['docker','exec','-i','supabase_db_equitas-tp-testing','psql','-X','-qAt',
+                           '-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
+                          input=sql,capture_output=True,text=True,timeout=20)
+    assert result.returncode==0,'Administrative synthetic probe failed'
+    return result.stdout.strip()
+
+
+def small_source(seeded,edit=None):
+    """Three accepted objects; each invocation has a distinct, reproducible identity."""
+    global _counter
+    _counter+=1
+    files={}
+    for kind in ('cabecera','detalle'):
+        reader=csv.DictReader(io.StringIO(seeded[kind].decode()),delimiter='\t')
+        rows=[next(reader) for _ in range(3)]
+        if edit:edit(kind,rows)
+        output=io.StringIO()
+        writer=csv.DictWriter(output,fieldnames=reader.fieldnames,delimiter='\t',lineterminator='\n')
+        writer.writeheader();writer.writerows(rows)
+        files[kind]=output.getvalue().encode()+b'\n'*_counter
+    return files
+
+
+def prepare_files(http,token,files):
+    root=upload(http,token,files)
+    result=http.post(f'/imports/{root}/preview',headers={'Authorization':'Bearer '+token},json=body(root))
+    assert result.status_code==200,result.text
+    return root,result.json()
+
+
+def publication_call(env,import_jwt,name,record,**extra):
+    actor=int(psql("select id from public.\"user\" where email='tp-a018-importador@example.test'"))
+    response=httpx.post(env['API_URL']+'/rest/v1/rpc/'+name,timeout=120,trust_env=False,
+        headers={'apikey':env['ANON_KEY'],'Authorization':'Bearer '+import_jwt},json={
+            'p_actor_user':actor,'p_tenant':920001,'p_batch_id':record['batch_id'],
+            'p_revision':record['revision'],'p_idempotency_key':record['idempotency_key'],**extra})
+    assert response.status_code==200,response.text
+    return response.json()
+
+
+def test_15_shared_source_person_uses_032_final_payload_without_conflict(seeded,http,token):
+    def change(kind,rows):
+        if kind!='cabecera':return
+        for n,row in enumerate(rows):
+            row.update(Destinatario_Id='9000001',Destinatario=f'Nombre sintetico final {n+1}')
+        rows[0].update(Destinatario_Calle='Calle sintetica',Destinatario_Numeracion='123',
+                       Destinatario_Localidad='Ciudad sintetica',Destinatario_Provincia='Provincia sintetica')
+    before=snapshot()
+    root,review=prepare_files(http,token,small_source(seeded,change))
+    page=http.get(f'/imports/{root}/preview',headers={'Authorization':'Bearer '+token}).json()
+    assert page['summary']['publishable'] is True
+    assert page['summary']['counts']['conflicto']==0
+    assert len(page['rows'])==6
+    batch=review['publication']['batch_id']
+    people=json.loads(administrative(f"select jsonb_agg(payload) from public.import_row_staging where batch_id={batch} and kind='person'"))
+    assert len(people)==1
+    assert people[0]['person']['full_name']=='Nombre sintetico final 3'
+    assert people[0]['location']['address']['street']=='Calle sintetica'
+    assert snapshot()==before
+
+
+@pytest.mark.parametrize('terminal',['expired','FALLIDO','DESCARTADO','REQUIERE_NUEVO_PREVIEW'])
+def test_16_same_bytes_recover_terminal_or_expired_staging(seeded,http,token,env,import_jwt,terminal):
+    files=small_source(seeded)
+    root,review=prepare_files(http,token,files)
+    auth={'Authorization':'Bearer '+token};record=review['publication'];batch=record['batch_id']
+    if terminal=='expired':
+        administrative(f"update public.import_publication set expires_at=now()-interval '1 second' where batch_id={batch}")
+    elif terminal=='REQUIERE_NUEVO_PREVIEW':
+        administrative(f"set role equitas_import_definer; select equitas_import_private.event({batch},'{terminal}','{{}}');")
+    else:
+        assert publication_call(env,import_jwt,'settle_import_batch',record,p_status=terminal)['status']==terminal
+    before=snapshot()
+    assert http.get(f'/imports/{root}/preview',headers=auth).status_code==409
+    ref=http.get(f'/imports/{root}/preview?reference=1',headers=auth)
+    assert ref.status_code==200 and ref.json()['revision']==review['revision']
+    assert ref.json()['status']=='PREVIEW_REFERENCIA' and 'rows' not in ref.json()
+    stale=http.post(f'/imports/{root}/preview',headers=auth,json=body(root,expected_preview='f'*64))
+    assert stale.status_code==409
+    result=http.post(f'/imports/{root}/preview',headers=auth,json=body(root,expected_preview=ref.json()['revision']))
+    assert result.status_code==200,result.text
+    updated=result.json()
+    assert updated['publication']['batch_id']==batch and updated['publication']['status']=='VALIDADO'
+    assert updated['publication']['revision']!=record['revision']
+    assert updated['revision']!=review['revision']
+    assert http.get(f'/imports/{root}/preview',headers=auth).status_code==200
+    assert snapshot()==before
+
+
+def test_17_new_upload_supersedes_old_binding_and_returns_publication_receipt(seeded,http,token,env,import_jwt,api_server):
+    import os
+    files=small_source(seeded)
+    root,review=prepare_files(http,token,files);auth={'Authorization':'Bearer '+token}
+    record=review['publication'];batch=record['batch_id']
+    administrative(f"update public.import_publication set expires_at=now()-interval '1 second' where batch_id={batch}")
+    os.utime(api_server.store_root/'lotes'/'920001'/str(root),(1,1))
+    assert http.get(f'/imports/{root}/preview',headers=auth).status_code==410
+    reference=http.get(f'/imports/{root}/preview?reference=1',headers=auth)
+    assert reference.status_code==200 and reference.json()['revision']==review['revision']
+    second,current=prepare_files(http,token,files)
+    assert second!=root and current['publication']['batch_id']==batch
+    assert administrative(f"select invalidated from public.import_preview where root_id={root}")=='t'
+    assert http.get(f'/imports/{second}/preview',headers=auth).status_code==200
+    published=publication_call(env,import_jwt,'publish_import_batch',current['publication'])
+    assert published['status']=='PUBLICADO'
+    before=snapshot()
+    third,receipt=prepare_files(http,token,files)
+    assert third not in (root,second)
+    assert receipt['status']=='PREVIEW_YA_PUBLICADO' and receipt['publication']==published
+    assert snapshot()==before
+
+
+@pytest.mark.parametrize('operation',['insert','update','delete','move'])
+def test_18_staging_epoch_invalidates_only_affected_publications(seeded,http,token,operation):
+    root,review=prepare_files(http,token,small_source(seeded))
+    other,other_review=prepare_files(http,token,small_source(seeded))
+    batch=review['publication']['batch_id'];other_batch=other_review['publication']['batch_id']
+    before=snapshot();auth={'Authorization':'Bearer '+token}
+    if operation=='insert':
+        sql=f"insert into public.import_row_staging(batch_id,row_number,kind,payload) select batch_id,999999,kind,payload from public.import_row_staging where batch_id={batch} and row_number=1"
+    elif operation=='update':
+        sql=f"update public.import_row_staging set payload=payload||'{{\"synthetic_tamper\":true}}' where batch_id={batch} and row_number=1"
+    elif operation=='delete':
+        sql=f"delete from public.import_row_staging where batch_id={batch} and row_number=1"
+    else:
+        sql=f"update public.import_row_staging set batch_id={other_batch},row_number=999999 where batch_id={batch} and row_number=1"
+    administrative(sql)
+    assert http.get(f'/imports/{root}/preview',headers=auth).status_code==409
+    assert http.get(f'/imports/{other}/preview',headers=auth).status_code==(409 if operation=='move' else 200)
+    assert snapshot()==before
+
+
+def test_19_absent_counts_and_soft_deactivations_match_real_publication(seeded,http,token,env,import_jwt):
+    psql("""
+    insert into public.contact_type(id,key,value) values(956054,'EMAIL','Correo') on conflict(key) do nothing;
+    insert into public.debtor_contact(id,person,type,value,active) values
+      (956054,954001,(select id from public.contact_type where key='EMAIL'),'synthetic-absent@example.test',true);
+    insert into public.debtor_person(id,debtor,person,priority,role,active) values(956054,954001,954004,100,'Titular',true);
+    """)
+    root=upload(http,token,small_source(seeded));auth={'Authorization':'Bearer '+token};before=snapshot()
+    response=http.post(f'/imports/{root}/preview',headers=auth,json=body(root,absent_policy='dar-de-baja'))
+    assert response.status_code==200,response.text
+    page=http.get(f'/imports/{root}/preview',headers=auth).json()
+    assert page['summary']['absent_counts']['relaciones']==1
+    assert page['summary']['absent_counts']['contactos']==1
+    assert page['summary']['deactivations']=={'relaciones':1,'contactos':1}
+    assert page['publication']['counts']['ausentes']==page['summary']['absent_counts']
+    first=next(row for row in page['rows'] if row['archivo']=='cabecera' and row['linea']==2)
+    assert first['kind']=='actualizacion' and 'BAJAS_PREVISTAS' in first['codes']
+    assert {'debtor_person.active','debtor_contact.active'}<=set(first['changed_fields'])
+    assert all('object_key' not in row for row in page['rows'])
+    assert snapshot()==before
+    published=publication_call(env,import_jwt,'publish_import_batch',response.json()['publication'])
+    assert published['status']=='PUBLICADO'
+    assert published['counts']['bajas_relaciones']==published['counts']['bajas_contactos']==1
+    assert psql('select active from public.debtor_contact where id=956054').strip()=='f'
+    assert psql('select active from public.debtor_person where id=956054').strip()=='f'
+
+
+def test_20_foreign_person_link_never_localizes_the_rejection(seeded,http,token):
+    auth={'Authorization':'Bearer '+token};results=[]
+    try:
+        for person in (954001,954002):
+            psql(f"insert into public.debtor_person(id,debtor,person,active) values(956055,955100,{person},true) on conflict(id) do update set person=excluded.person")
+            before=snapshot()
+            root,review=prepare_files(http,token,small_source(seeded))
+            page=http.get(f'/imports/{root}/preview',headers=auth).json()
+            assert page['summary']['publishable'] is False and review['publication'] is None
+            assert all(row['codes']==['BASE_NO_DISPONIBLE_PARA_PREVIEW'] for row in page['rows'])
+            results.append(page['rows'])
+            assert snapshot()==before
+        assert results[0]==results[1]
+    finally:
+        psql('delete from public.debtor_person where id=956055')
+
+
+def test_21_truncate_staging_invalidates_all_bound_previews(seeded,http,token):
+    roots=[prepare_files(http,token,small_source(seeded))[0] for _ in range(2)]
+    before=snapshot()
+    administrative('truncate public.import_row_staging')
+    for root in roots:
+        assert http.get(f'/imports/{root}/preview',headers={'Authorization':'Bearer '+token}).status_code==409
+    assert snapshot()==before

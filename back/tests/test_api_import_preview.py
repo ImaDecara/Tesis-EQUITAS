@@ -148,6 +148,21 @@ def test_expired_copy_does_not_read_staging(client,supabase,monkeypatch):
     assert client.get(f'/imports/{root}/preview',headers=auth_headers(supabase)).status_code==410
 
 
+def test_expired_copy_can_read_reference_but_never_obsolete_rows(client,supabase,monkeypatch):
+    root=upload(client,supabase).json()['root_id']
+    preview.imports.load_store().release(1,root)
+    calls=[]
+    def rpc(*args,**kwargs):
+        calls.append((args[2],kwargs))
+        return {'status':'PREVIEW_REFERENCIA','revision':'a'*64}
+    monkeypatch.setattr(preview,'_rpc',rpc)
+    result=client.get(f'/imports/{root}/preview?reference=1',headers=auth_headers(supabase))
+    assert result.status_code==200 and 'rows' not in result.json()
+    assert calls==[('read_import_preview_reference',{'p_root':root,'p_head':root})]
+    for query in ('reference=1&kind=alta','reference=0','reference=1&reference=1'):
+        assert client.get(f'/imports/{root}/preview?{query}',headers=auth_headers(supabase)).status_code==422
+
+
 def test_a_validado_label_without056_binding_is_not_a_valid_preview_source(client,supabase,monkeypatch):
     root=upload(client,supabase).json()['root_id']
     original=preview.imports._resolve_chain

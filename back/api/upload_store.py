@@ -141,10 +141,28 @@ class UploadStore:
     ) -> Iterator[None]:
         """Exclusión por lote, reentrante en el mismo hilo. `flock` no se hereda entre
         descriptores: rige entre hilos y procesos, y el núcleo la suelta si el proceso muere."""
-        path = str(self._lock_path(tenant, batch))
-        held = _held.__dict__.setdefault("paths", set())
-        if path in held:
+        with self._exclusive(self._lock_path(tenant, batch), wait):
             yield
+
+    @contextmanager
+    def processing_slot(self) -> Iterator[int]:
+        """Un solo procesamiento pesado por almacén, entre procesos, sin cola de espera.
+
+        Siempre se toma ANTES de lock(tenant, root). Archivo separado de los stripes:
+        no hay inversión ni reentrada accidental por una colisión del hash del lote.
+
+        El descriptor puede heredarlo el trabajador: la muerte del servidor no libera
+        capacidad hasta que termine también ese proceso. No contiene datos del lote.
+        """
+        with self._exclusive(self._locks / 'mapping.lock', 0) as descriptor:
+            yield descriptor
+
+    @contextmanager
+    def _exclusive(self, lock_path: Path, wait: float | None) -> Iterator[int]:
+        path = str(lock_path)
+        held = _held.__dict__.setdefault("paths", {})
+        if path in held:
+            yield held[path]
             return
         descriptor = os.open(
             path,
@@ -157,11 +175,11 @@ class UploadStore:
                 if time.monotonic() >= deadline:
                     raise UploadStoreBusy()
                 time.sleep(LOCK_POLL_SECONDS)
-            held.add(path)
+            held[path] = descriptor
             try:
-                yield
+                yield descriptor
             finally:
-                held.discard(path)
+                del held[path]
         finally:
             os.close(descriptor)
 

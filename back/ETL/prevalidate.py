@@ -6,8 +6,7 @@ RPC, writes, catalog IDs or floating point arithmetic belong in this module.
 from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 
-from ETL.publication import _location, normalized_rows
-from ETL.transform import build_person_payload
+from ETL.publication import normalized_rows
 
 KINDS = ('alta', 'actualizacion', 'sin_cambios', 'conflicto')
 TABLES = ('debtor', 'person', 'debt', 'debtor_person', 'debtor_contact', 'address')
@@ -31,24 +30,49 @@ def different_fields(expected, persisted):
     return sorted(changes)
 
 
-def candidates(batch, tenant):
-    rows = normalized_rows(batch, tenant)
-    objects = [row['payload'] for row in rows if row['kind'] == 'object']
+def candidates(batch, tenant, *, rows=None, compact=False):
+    """Source locators refer to the exact032 payload, never a second interpretation.
+
+    A person shared by source objects has one final payload (last header and last
+    nonempty address in032 order). Compact locators avoid serializing every debt
+    twice across the process boundary; expanding them does not copy its payload.
+    """
+    rows = normalized_rows(batch, tenant) if rows is None else rows
+    objects = [(index, row['payload']) for index, row in enumerate(rows) if row['kind'] == 'object']
     source = []
-    for obj, payload in zip(batch.objects, objects, strict=True):
-        key = (payload['debtor']['type'], payload['debtor']['external_id'])
-        for header, relation in zip(obj.headers, payload['relations'], strict=True):
+    for obj, (index, payload) in zip(batch.objects, objects, strict=True):
+        for member, header in enumerate(obj.headers):
             source.append({'archivo': 'cabecera', 'linea': header.line, 'objeto': obj.reference,
-                           'key': key, 'debtor': payload['debtor'], 'person': build_person_payload(header.values),
-                           'relation': relation, 'location': _location(header.values)})
-        for detail, debt in zip(obj.details, payload['debts'], strict=True):
+                           'entity': index, 'member': member})
+        for member, detail in enumerate(obj.details):
             source.append({'archivo': 'detalle', 'linea': detail.line, 'objeto': obj.reference,
-                           'key': key, 'debt': debt})
+                           'entity': index, 'member': member})
     accepted = {(row['archivo'], row['linea']) for row in source}
     for decision in batch.report['decisiones_filas']:
         if (decision['archivo'], decision['linea']) not in accepted:
             source.append({**decision, 'excluded': True})
-    return sorted(source, key=lambda row: (row['archivo'], row['linea']))
+    source.sort(key=lambda row: (row['archivo'], row['linea']))
+    return source if compact else list(expand_candidates(source, rows))
+
+
+def expand_candidates(source, rows):
+    people = {row['payload']['person']['external_id']: row['payload']
+              for row in rows if row['kind'] == 'person'}
+    for row in source:
+        if row.get('excluded'):
+            yield row
+            continue
+        payload = rows[row['entity']]['payload']
+        value = {key: row[key] for key in ('archivo', 'linea', 'objeto')}
+        value['key'] = (payload['debtor']['type'], payload['debtor']['external_id'])
+        if row['archivo'] == 'detalle':
+            value['debt'] = payload['debts'][row['member']]
+        else:
+            relation = payload['relations'][row['member']]
+            person = people[relation['external_id']]
+            value.update(debtor=payload['debtor'], relation=relation,
+                         person=person['person'], location=person['location'])
+        yield value
 
 
 def _index(rows, keys):
@@ -117,19 +141,17 @@ class Comparison:
 
 
 def classify_candidates(source, persisted):
+    # A batch-level rejection already exists in032. Do not refine that signal into
+    # the identity or source row of a person related to another municipality.
+    if any(row.get('shared') for row in persisted['person']):
+        results = [{**{key: row[key] for key in ('archivo', 'linea', 'objeto')},
+                    'kind': 'conflicto', 'codes': ['BASE_NO_DISPONIBLE_PARA_PREVIEW'],
+                    'changed_fields': [], 'excluded': True} for row in source]
+        counts = {kind: len(results) if kind == 'conflicto' else 0 for kind in KINDS}
+        return {'rows': results, 'counts': counts, 'excluded_counts': {'conflicto': len(results)},
+                'new_conflicts': True}
     comparison = Comparison(persisted)
-    conflicts, person_values = {}, defaultdict(list)
-    # 024 groups by object; a person may occur in several objects. 032 would keep the
-    # last person's payload: differing values are an explicit conflict, never last-wins.
-    for row in source:
-        if row['archivo'] == 'cabecera' and not row.get('excluded'):
-            key = row['person']['external_id']
-            value = (row['person'], row['location'])
-            person_values[key].append((value, row['objeto']))
-    for occurrences in person_values.values():
-        if any(value != occurrences[0][0] for value, _ in occurrences[1:]):
-            for _, reference in occurrences:
-                conflicts[reference] = 'PERSONA_INTRAARCHIVO_CONFLICTIVA'
+    conflicts = {}
     results = []
     for row in source:
         result = {key: row[key] for key in ('archivo', 'linea', 'objeto')}
@@ -142,6 +164,10 @@ def classify_candidates(source, persisted):
             if kind == 'conflicto':
                 conflicts[row['objeto']] = codes[0]
             codes = codes or ['BASE_' + kind.upper()]
+            # Private input to the RPC: it identifies source headers affected by
+            # relation/contact deactivations. The RPC strips it before persistence.
+            if row['archivo'] == 'cabecera':
+                result['object_key'] = list(row['key'])
         results.append({**result, 'kind': kind, 'codes': codes, 'changed_fields': fields, 'excluded': excluded})
     for row in results:
         if row['objeto'] in conflicts:

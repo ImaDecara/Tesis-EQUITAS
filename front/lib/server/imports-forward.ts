@@ -106,7 +106,8 @@ export async function forwardImportRequest(request: NextRequest, segments: reado
   if (!path) return failure(404, 'NOT_FOUND')
   if (segments[1] === 'preview' && request.method === 'GET') {
     const query = request.nextUrl.searchParams
-    const allowed = new Set(['kind', 'page', 'revision'])
+    const referenceOnly = query.size === 1 && query.get('reference') === '1'
+    const allowed = new Set(referenceOnly ? ['reference'] : ['kind', 'page', 'revision'])
     if ([...query.keys()].some(key => !allowed.has(key) || query.getAll(key).length !== 1)) return failure(422, 'PREVIEW_INPUT_INVALID')
     const kind = query.get('kind') ?? ''
     const page = query.get('page') ?? '1'

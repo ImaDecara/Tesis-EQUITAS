@@ -23,7 +23,7 @@ from api.auth import (
 from api.upload_store import UploadStoreBusy
 from ETL.config import ETLError
 from ETL.extract import validate_source_profile
-from ETL.prevalidate import KINDS, TABLES, classify_candidates
+from ETL.prevalidate import KINDS, TABLES, classify_candidates, expand_candidates
 from ETL.publication import effective_mapping
 from ETL.transform import canonical_json_hash
 from ETL.validate_source import ValidationError, _unique_keys
@@ -179,19 +179,19 @@ def _prepare(body, batch_id, context, session, client):
         raise HTTPException(409, 'PREVIEW_MAPPING_CONFLICT')
     try:
         # Global fixed lock per store; prepare work has one bounded worker, no queue.
-        with store.lock('preview-processing','global',wait=0), store.lock(tenant,origin,wait=0):
+        with store.processing_slot() as lock_fd, store.lock(tenant,origin,wait=0):
             expires = _available(store,tenant,origin,current)
             if not store.verify(tenant,origin,current['file_hashes']):
                 raise HTTPException(410, 'PREVIEW_COPY_CHANGED')
             files = store.files(tenant,origin)
             if set(files)=={'libro'}:
                 files = dict.fromkeys(('cabecera','detalle'),files['libro'])
-            prepared = prepare_input(files,body['profile'],tenant,body['absent_policy'])
+            prepared = prepare_input(files,body['profile'],tenant,body['absent_policy'],lock_fd=lock_fd)
             people = sorted({r['payload']['person']['external_id'] for r in prepared['rows'] if r['kind']=='person'})
             persisted, token = read_snapshot(lambda table,after: _rpc(session,context,'read_import_preview_source',
                 p_root=origin,p_head=current['id'],p_people=people,p_table=table,p_after=after))
             try:
-                result = classify_candidates(prepared['source'],persisted)
+                result = classify_candidates(expand_candidates(prepared['source'],prepared['rows']),persisted)
             except (ValueError, TypeError, KeyError):
                 raise HTTPException(503, 'PREVIEW_DATA_INVALID') from None
             if not store.verify(tenant,origin,current['file_hashes']):
@@ -233,6 +233,10 @@ def read_preview(request: Request,batch_id: PreviewId,context: ImporterContext,
                  session: SessionDep,client: UserClientDep):
     origin,current = imports._resolve_chain(client,context.tenant_id,_id(int(batch_id)))
     query = request.query_params
+    if set(query)=={'reference'} and query.getlist('reference')==['1']:
+        # Only the current CAS reference, never obsolete effect rows. It is also
+        # available when the local copy expired and must be received again.
+        return _rpc(session,context,'read_import_preview_reference',p_root=origin,p_head=current['id'])
     if set(query)-{'kind','page','revision'} or any(len(query.getlist(k))!=1 for k in query):
         raise HTTPException(422,'PREVIEW_INPUT_INVALID')
     kind,page,revision = query.get('kind') or None,query.get('page','1'),query.get('revision')

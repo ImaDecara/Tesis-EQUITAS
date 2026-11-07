@@ -290,6 +290,13 @@ describe('ALIGN-052: el navegador no recibe la URL interna', () => {
 })
 
 describe('ALIGN-054: preview cerrado y revision entre paginas', () => {
+  it('permite recuperar solo la referencia tras invalidacion o vencimiento', async () => {
+    const fetchMock = upstreamReturns(200, { status: 'PREVIEW_REFERENCIA', revision: 'a'.repeat(64) })
+    const response = await readBatch(request('/api/imports/12/preview?reference=1'), context('12', 'preview'))
+    expect(response.status).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${INTERNAL}/imports/12/preview?reference=1`)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
   it('reenvia solo filtros permitidos y la revision, sin cambiarla', async () => {
     const fetchMock = upstreamReturns()
     const query = `kind=actualizacion&page=2&revision=${'a'.repeat(64)}`
@@ -299,7 +306,8 @@ describe('ALIGN-054: preview cerrado y revision entre paginas', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
   })
   it.each(['kind=person', 'page=0', 'page=-1', 'page=1.5', 'page=6001', 'page=1&page=2',
-    'tenant=2', 'revision=sentinela', 'kind=alta&kind=conflicto'])('rechaza %s sin upstream', async query => {
+    'tenant=2', 'revision=sentinela', 'kind=alta&kind=conflicto',
+    'reference=0', 'reference=1&kind=alta', 'reference=1&reference=1'])('rechaza %s sin upstream', async query => {
     const fetchMock = upstreamReturns()
     const response = await readBatch(request(`/api/imports/12/preview?${query}`), context('12', 'preview'))
     expect(response.status).toBe(422)
