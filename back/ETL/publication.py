@@ -138,14 +138,12 @@ def _rpc(name: str, body: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def stage_batch(batch: PreparedBatch, *, tenant: int, absent_policy: str = "rechazar",
-                expected_revision: str | None = None) -> dict[str, Any]:
-    if not batch.publishable:
-        raise ETLError("BATCH_BLOCKED")
+def staging_document(batch: PreparedBatch, tenant: int, absent_policy: str) -> dict[str, Any]:
+    """Documento compartido; los metadatos de preview se guardan fuera de este payload."""
     if canonical_json_hash(batch.mapping) != batch.file_hashes["mapeo"]:
         raise ETLError("IMPORT_REVISION_CONFLICT")
     identity = publication_identity(batch, tenant, absent_policy)
-    document = {
+    return {
         "identity": identity, "mapping": effective_mapping(batch.mapping), "file_hashes": batch.file_hashes,
         "source": "ETL_CLI", "source_updated_at": batch.source_updated_at, "counts": batch_counts(batch.report),
         "file_object_keys": sorted([list(key) for key in batch.file_object_keys]),
@@ -153,6 +151,13 @@ def stage_batch(batch: PreparedBatch, *, tenant: int, absent_policy: str = "rech
         "contact_types": sorted(batch.contact_types_in_file),
         "contact_columns_integrated": batch.contact_columns_integrated,
     }
+
+
+def stage_batch(batch: PreparedBatch, *, tenant: int, absent_policy: str = "rechazar",
+                expected_revision: str | None = None) -> dict[str, Any]:
+    if not batch.publishable:
+        raise ETLError("BATCH_BLOCKED")
+    document = staging_document(batch, tenant, absent_policy)
     return _rpc("stage_import_batch", {"p_actor_user": get_import_credentials().actor_user, "p_tenant": tenant,
                 "p_document": document, "p_rows": normalized_rows(batch, tenant), "p_expected_revision": expected_revision})
 

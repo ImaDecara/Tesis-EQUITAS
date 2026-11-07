@@ -288,3 +288,29 @@ describe('ALIGN-052: el navegador no recibe la URL interna', () => {
     expect(source).not.toContain('NEXT_PUBLIC_EQUITAS')
   })
 })
+
+describe('ALIGN-054: preview cerrado y revision entre paginas', () => {
+  it('reenvia solo filtros permitidos y la revision, sin cambiarla', async () => {
+    const fetchMock = upstreamReturns()
+    const query = `kind=actualizacion&page=2&revision=${'a'.repeat(64)}`
+    const response = await readBatch(request(`/api/imports/12/preview?${query}`), context('12', 'preview'))
+    expect(response.status).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${INTERNAL}/imports/12/preview?${query}`)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+  it.each(['kind=person', 'page=0', 'page=-1', 'page=1.5', 'page=6001', 'page=1&page=2',
+    'tenant=2', 'revision=sentinela', 'kind=alta&kind=conflicto'])('rechaza %s sin upstream', async query => {
+    const fetchMock = upstreamReturns()
+    const response = await readBatch(request(`/api/imports/12/preview?${query}`), context('12', 'preview'))
+    expect(response.status).toBe(422)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+  it('preparar conserva JSON en flujo y CSRF', async () => {
+    const fetchMock = upstreamReturns()
+    const req = request('/api/imports/12/preview', { method: 'POST', headers: { ...sameOrigin, 'content-type': 'application/json' }, body: '{"expected_event":12}' })
+    expect((await batchAction(req, context('12', 'preview'))).status).toBe(200)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${INTERNAL}/imports/12/preview`)
+    expect((fetchMock.mock.calls[0][1]?.headers as Headers).get('content-type')).toBe('application/json')
+    expect((await batchAction(request('/api/imports/12/preview', { method: 'POST' }), context('12', 'preview'))).status).toBe(403)
+  })
+})

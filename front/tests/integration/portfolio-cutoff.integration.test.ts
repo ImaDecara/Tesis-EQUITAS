@@ -93,6 +93,19 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(parseCsvBytes(new Uint8Array(await response.arrayBuffer())).rows.every(row => row.fecha_corte === 'NO_INTEGRADO')).toBe(true)
   })
 
+  it('032 S2: PUBLICADO atómico estable es corte de tablero, CSV y ficha', async () => {
+    fixture([event(1), { ...event(2, 'PUBLICADO'), as_of: '2026-10-01', counts: { publicacion_atomica: 1 } }])
+    const raw = await loadRawDebtorData()
+    expect(raw.batch?.as_of).toBe('2026-10-01')
+    expect(raw.warnings).toEqual([])
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].decisionInput?.as_of).toBe('2026-10-01')
+    const { dashboard } = await getDashboardDataFromService()
+    expect(dashboard.context).toContain('Corte del manifiesto: 2026-10-01')
+    const response = await exportQueue()
+    expect(response.status).toBe(200)
+    expect(parseCsvBytes(new Uint8Array(await response.arrayBuffer())).rows.every(row => row.fecha_corte === '2026-10-01')).toBe(true)
+  })
+
   it.each([null, 0, '1', true, {}, { publicacion_atomica: '1' }])('una marca no numérica o ausente no habilita un corte viejo: %j', async marker => {
     fixture([event(1), { ...event(2, 'VALIDADO'), counts: { publicacion_atomica: marker } }])
     expect((await loadRawDebtorData()).batch?.as_of).toBeNull()

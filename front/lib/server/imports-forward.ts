@@ -26,6 +26,9 @@ function internalPath(method: string, segments: readonly string[]): string | nul
   const [id, action] = segments
   if (method === 'POST' && segments.length === 0) return '/imports'
   if (method === 'GET' && segments.length === 1 && BATCH_ID.test(id)) return `/imports/${id}`
+  if ((method === 'GET' || method === 'POST') && segments.length === 2 && BATCH_ID.test(id) && action === 'preview') {
+    return `/imports/${id}/preview`
+  }
   if (method === 'POST' && segments.length === 2 && BATCH_ID.test(id) && action === 'discard') {
     return `/imports/${id}/discard`
   }
@@ -99,8 +102,19 @@ async function browserResponse(upstream: Response): Promise<Response> {
 }
 
 export async function forwardImportRequest(request: NextRequest, segments: readonly string[]): Promise<Response> {
-  const path = internalPath(request.method, segments)
+  let path = internalPath(request.method, segments)
   if (!path) return failure(404, 'NOT_FOUND')
+  if (segments[1] === 'preview' && request.method === 'GET') {
+    const query = request.nextUrl.searchParams
+    const allowed = new Set(['kind', 'page', 'revision'])
+    if ([...query.keys()].some(key => !allowed.has(key) || query.getAll(key).length !== 1)) return failure(422, 'PREVIEW_INPUT_INVALID')
+    const kind = query.get('kind') ?? ''
+    const page = query.get('page') ?? '1'
+    const revision = query.get('revision')
+    if (!['', 'alta', 'actualizacion', 'sin_cambios', 'conflicto'].includes(kind) || !/^[1-9][0-9]{0,3}$/.test(page) || Number(page) > 6000 ||
+      (revision !== null && !/^[0-9a-f]{64}$/.test(revision))) return failure(422, 'PREVIEW_INPUT_INVALID')
+    path += query.size ? `?${query.toString()}` : ''
+  }
   if (request.method !== 'GET' && !isSameOrigin(request)) return failure(403, 'ORIGIN_NOT_ALLOWED')
   if (Number(request.headers.get('content-length') ?? 0) > MAX_REQUEST_BYTES) return failure(413, 'LIMITE_ARCHIVO_EXCEDIDO')
   const baseUrl = internalBaseUrl()

@@ -1,8 +1,8 @@
-# Importación web: API interna de lotes (ALIGN-052)
+# Importación web: API interna de lotes (ALIGN-052/054)
 
 Cómo una persona autorizada del municipio entrega un lote sin intervención técnica y sin abrir una puerta nueva a los datos `[P0189]`, `[T02.R02]`. Reglas de autenticación, roles y credenciales: [`back/api/README.md`](../../back/api/README.md). Decisión de arquitectura: [ADR-001](adr-001-reglas-y-capas.md) §5.1.
 
-> Esta sección cubre recibir, consultar y descartar. El lote llega a `RECIBIDO` y el archivo no se interpreta. Mapeo (ALIGN-056), preview (ALIGN-054) y confirmación (ALIGN-057) agregan sus rutas a `back/api/imports.py` y a la lista cerrada de `front/lib/server/imports-forward.ts`.
+> La recepción052 deja el lote en `RECIBIDO`, sin interpretar el archivo. La sección final documenta la preparación y lectura del preview054. Mapeo056 y confirmación057 requieren su integración y revisión correspondientes.
 
 ## Camino de una solicitud
 
@@ -12,7 +12,7 @@ Navegador ── cookie de sesión ──> Route Handler de Next ── Bearer +
 ```
 
 - **El navegador nunca llama a FastAPI.** La URL interna está en `EQUITAS_IMPORT_API_URL`, sin prefijo público, y solo la lee un módulo `server-only`. Esta versión solo admite loopback.
-- **Qué pasa y qué vuelve.** El Route Handler reenvía una lista cerrada de rutas, sin la consulta ni las cookies. Al navegador vuelven el código y un cuerpo JSON. Una redirección o una respuesta que no sea JSON se convierte en `502`, y un servicio caído en `503`, sin citar la URL.
+- **Qué pasa y qué vuelve.** El Route Handler reenvía una lista cerrada de rutas y parámetros de preview, sin las cookies. Al navegador vuelven el código y un cuerpo JSON. Una redirección o una respuesta que no sea JSON se convierte en `502`, y un servicio caído en `503`, sin citar la URL.
 - **Origen.** Una escritura exige un `Origin` igual al de la aplicación: esquema, host y puerto, tal como lo serializa un navegador. Si viene, además, `Sec-Fetch-Site: same-origin`. Si no, `403 ORIGIN_NOT_ALLOWED`.
 - **La autoridad es FastAPI.** El Route Handler solo extrae el token de la sesión y la renueva si venció. Una cookie falsificada termina en `401` en FastAPI.
 
@@ -80,7 +80,7 @@ Ninguna ruta se arma con datos del cliente y el nombre del archivo no se guarda.
 - **Quien agregue un cierre (ALIGN-057 al publicar) debe escribir el evento y llamar a `release` bajo `store.lock(tenant, root_id)`.** Instalar relee el estado después de copiar, así que un cierre sin exclusión tampoco deja copia de un `DESCARTADO`, pero esa relectura no sustituye a la exclusión.
 - **Costo:** `GET`, descarte y reintento leen todos los eventos del municipio, paginados, para no poner el `{id}` en una URL. Son pocos: un lote produce un puñado de eventos.
 
-**Para quien lea el archivo (ALIGN-054, 056).** `UploadStore.files(tenant, root_id)` devuelve las rutas de la copia vigente y `verify(tenant, root_id, file_hashes)` comprueba el contenido antes de confiar en él. Si no están, se perdió o venció: hay que pedir que se reenvíe con la misma clave. Cuando ALIGN-053 esté integrado, el lector corre **en un proceso aparte, con tope de memoria y de tiempo**, y hay que decidir si este almacén se unifica con `PrivateUploadStore`, que resuelve lo mismo por token.
+**Para quien lea el archivo (ALIGN-054, 056).** `UploadStore.files(tenant, root_id)` devuelve las rutas de la copia vigente y `verify(tenant, root_id, file_hashes)` comprueba el contenido antes de confiar en él. Si no están, se perdió o venció: hay que pedir que se reenvíe con la misma clave. El lector053 corre **en un proceso aparte, con tope de memoria y de tiempo**, y hay que decidir si este almacén se unifica con `PrivateUploadStore`, que resuelve lo mismo por token.
 
 ## Lo que esta versión no hace
 
@@ -249,7 +249,7 @@ El hijo es no confiable: no hereda el entorno, así que no ve ninguna credencial
 
 **Qué resuelve este ticket y qué queda para quien lo invoca:**
 
-- **ALIGN-054/055** llaman a `read_source_batch_supervised` con las rutas que entrega `UploadStore.files`, y traducen sus códigos a la respuesta HTTP. Ese almacén sigue siendo el dueño del archivo: la lectura no copia ni borra nada. No hace falta `PrivateUploadStore`, y no conviene copiar a un segundo almacén, porque reiniciaría el TTL.
+- **ALIGN-054** usa un proceso supervisado que cubre también la validación y preparación del payload030/024/032, con las rutas que entrega `UploadStore.files`; traduce los códigos seguros a HTTP. El lector interno conserva las defensas053. Ese almacén sigue siendo el dueño del archivo: la lectura no copia ni borra nada. No hace falta `PrivateUploadStore`, y no conviene copiar a un segundo almacén, porque reiniciaría el TTL.
 - **`validate_batch` no está cubierto** por `read_seconds`: corre después, en quien invoca, sobre filas ya acotadas. Si esa ruta necesita un máximo total, lo pone quien la arma.
 - **La llamada bloquea:** el hijo tarda hasta `read_seconds`. Quien la haga desde una ruta asíncrona la manda a un hilo y limita cuántas corren a la vez, porque cada una usa hasta `read_memory_bytes`. Eso, y cuántos lotes simultáneos admite el servidor, es de ALIGN-055 y del despliegue.
 - **ALIGN-059** cuenta con que el tope de memoria es una medición del padre cada 0,1 s, no un límite del núcleo: una reserva muy brusca puede pasarlo por un instante antes del corte. Un `cgroup` o `--memory` en el despliegue lo vuelve estricto. El hijo tampoco está encerrado: sin red ni disco, si se quiere, es tarea del despliegue.
@@ -269,3 +269,58 @@ batch = read_source_batch_supervised({'cabecera': ruta, 'detalle': ruta}, mappin
 Con archivos sueltos, fuera de la API, `PrivateUploadStore` los guarda con TTL: `save` devuelve un token, `resolve` da la ruta y `release` borra al publicar o descartar.
 
 Los errores son `ValidationError`, cuyo texto es `CODIGO: archivo=…, linea=…, campo=…` o solo el código. El de `.xls` es `FORMATO_XLS_NO_SOPORTADO: ` seguido de `XLS_MESSAGE`.
+
+## Prevalidación y preview persistido (ALIGN-054)
+
+La preparación y la lectura son operaciones separadas. `POST /imports/{id}/preview` interpreta la copia privada con el perfil 030, valida 024, compara con la cartera del municipio y guarda el resultado. `GET /imports/{id}/preview` solo lee un resultado identificado y vigente. Ninguna de las dos publica ni recalcula perfiles; `recompute_debtor_profiles` también escribe `debt.status` y no participa de este recorrido. La confirmación web 057 sigue fuera de este alcance.
+
+Ambas rutas exigen la misma sesión, membresía activa y rol importador que 052. El servidor resuelve primero el lote autorizado y su raíz, incluso cuando `{id}` es otro evento de la cadena. Las RPC vuelven a verificar actor, municipio y rol. Las tablas de preview y staging no admiten acceso directo de `anon`, `authenticated` ni del rol servidor; este último solo ejecuta RPC específicas. Next permite estas dos rutas, conserva su control de origen en POST y reenvía únicamente los parámetros de lectura documentados abajo.
+
+### Preparar y obtener una revisión
+
+El POST recibe JSON de hasta 128 KiB: `expected_event` (cabeza observada), `profile` (perfil 030 completo), `mapping_hash` (SHA256 canónico del mapeo **efectivo**032) y `absent_policy` (`rechazar`, `conservar` o `dar-de-baja`). Al reemplazar un preview requiere además `expected_preview`, su revisión anterior. El corte del perfil debe coincidir con el del lote. Un hash diferente, una cabeza desplazada o una revisión vieja producen 409.
+
+Esta implementación aislada acepta únicamente una cabeza `RECIBIDO`. Ejecuta la validación real 030/024 como parte de preparar; no inventa un evento `VALIDADO` al terminar la solicitud. El adaptador a 056 deberá resolver en servidor el resultado ligado exactamente a `validation_event == event_id == expected_event` y al perfil inmutable `applied_profile.id/version/profile_hash`. Un HTTP200 de 056 puede ser `FALLIDO`; `mapping_pending` no acredita trabajo vivo. Hasta integrar y revisar ese adaptador, una cabeza `VALIDADO` de otro recorrido falla con `PREVIEW_SOURCE_NOT_READY`. El hash JSONB del perfil 056 no sustituye al hash del mapeo efectivo 032. No hay editor de mapeo nuevo aquí.
+
+Una respuesta de preparación lleva `root_id`, `revision`, `status: PREVIEW_PREPARADO` y, si es publicable, un recibo `publication`. La raíz 052 del archivo y el `publication.batch_id` del staging 032 son identidades distintas y quedan enlazadas explícitamente. El estado de la raíz 052 continúa `RECIBIDO`; el estado 032 solo procede de `stage_import_batch`. El payload 032 conserva exactamente sus filas `person`/`object`, su hash y sus versiones. Los efectos del preview se guardan en tablas separadas, nunca dentro de ese payload. Una nueva preparación retira la revisión 032 anterior antes de enlazar otra; una revisión terminal no se reutiliza.
+
+### Qué representa cada fila
+
+Las claves siguen 007: objeto `(tenant, tipo, external_id)`, obligación `(objeto, external_id)`, persona `external_id` global y relación `(objeto, persona)`. La comparación usa moneda y decimales exactos, distingue nulos y conserva estados desconocidos. Cada resultado lleva `archivo`, `linea`, `objeto`, `kind`, `codes`, `changed_fields` y `excluded`. No incluye valores personales anteriores/nuevos.
+
+| `kind` | Interpretación |
+|---|---|
+| `alta` | Objeto/relación u obligación que falta en la cartera autorizada |
+| `actualizacion` | Cambia algún campo que 032 escribiría, incluida persona, relación, contacto o domicilio de la cabecera |
+| `sin_cambios` | Los campos coinciden; también identifica una repetición idéntica excluida por 024 |
+| `conflicto` | Fila en cuarentena 024 o colisión que impide una comparación publicable |
+
+`DUPLICADO_IDENTICO` y `DUPLICADO_CONFLICTIVO` conservan las decisiones y filas de origen 024. `BASE_CLAVE_AMBIGUA`, `BASE_MONEDA_CONFLICTIVA` y `BASE_PERSONA_COMPARTIDA` identifican colisiones contra base; `PERSONA_INTRAARCHIVO_CONFLICTIVA` alcanza todos los objetos con valores incompatibles para la misma persona. Un nuevo conflicto pone en cuarentena el objeto completo y deja el preview como diagnóstico no publicable. No se leen los valores de una persona vinculada a otro municipio. `summary.counts` cuenta todas las filas trazadas; `excluded_counts` separa las excluidas. Por eso un duplicado idéntico excluido aparece en ambos conteos, sin representar otra escritura.
+
+Las políticas de ausentes conservan su significado 032. Cuando `rechazar` detecta una carga parcial, el intento de staging se revierte y se guarda solo el diagnóstico con `publishable:false`, `blocked_reason:PARTIAL_LOAD_REJECTED` y los conteos de ausentes. No queda una identidad 032 fallida artificial. `conservar` y `dar-de-baja` mantienen el cálculo 032 de ausentes, relaciones y contactos; no ejecutan esas acciones durante el preview. Los objetos ausentes o en cuarentena conservan su corte anterior, aunque una publicación futura avance el corte global; no se presentan como recalculados.
+
+### Lectura, paginación y vigencia
+
+`GET /imports/{id}/preview?kind=alta&page=1` devuelve hasta 100 filas, `total`, `page_size`, `preview_id`, `revision`, `mapping_hash`, fechas de preparación/caducidad, cabeza fuente y resumen. `kind` acepta las cuatro clases anteriores; omitido o vacío lee todas. `page` es un entero decimal canónico entre 1 y 6000. Desde la segunda página es obligatorio enviar `revision`; conviene enviarla también al cambiar filtros. Los parámetros desconocidos, repetidos o mal formados dan 422. Las páginas usan el orden persistido, estable, por archivo y fila; si una preparación reemplazó el resultado,409 impide mezclar revisiones.
+
+La cartera se lee completa con cursor por ID, páginas de hasta 1000 y una página vacía final. Cada página trae un token calculado en la misma instantánea SQL a partir de versiones 032 y catálogos. Un cambio entre páginas, incluso antes de la vacía final, descarta toda la comparación. Al persistir se vuelve a verificar el token bajo los locks de 032. Cada GET comprueba cabeza, TTL, token, revisión 032 y hash real del payload congelado. La publicación 032 conserva su comprobación de versiones: el preview no crea versiones de negocio ni simula que la cartera cambió.
+
+| Respuesta | Acción |
+|---|---|
+| `404 PREVIEW_NOT_PREPARED` | Preparar explícitamente; GET no lo hace |
+| `409 PREVIEW_INVALIDATED` / `PREVIEW_REVISION_CONFLICT` | Releer cabeza/revisión, revisar el cambio y preparar nuevamente |
+| `409 PREVIEW_SOURCE_NOT_READY` | El recorrido fuente no es compatible o el lote es terminal; no asumir que hay validación vigente |
+| `410 PREVIEW_EXPIRED` / `PREVIEW_COPY_CHANGED` | Recuperar la copia mediante 052 si el lote sigue abierto y preparar de nuevo |
+| `422 PREVIEW_PAGE_OUT_OF_RANGE` / `PREVIEW_INPUT_INVALID` | Corregir página o parámetros |
+| `429 PREVIEW_BUSY` | Ya hay una preparación usando este almacén; no se encola otra |
+| `503 PREVIEW_SERVICE_UNAVAILABLE` / `IMPORT_RETRY_REQUIRED` | Revisar el servicio, la contención y los límites antes de reintentar |
+
+La preparación corre en hilo y la interpretación 030/024 en un proceso sin credenciales, vigilado cada 0,1 s:180 s,2 GiB residentes y 64 MiB de salida. La comparación acepta hasta 200000 filas persistidas/64 MiB y 180 s de lectura; superar el presupuesto falla sin guardar un resultado parcial. Hay una preparación simultánea por almacén, sin cola. La medición de memoria no es un límite del núcleo y una reserva brusca puede rebasarlo transitoriamente. Las RPC mantienen `statement_timeout=60 s` y `lock_timeout=8 s` del rol importador.
+
+El preview vence como máximo junto con la copia privada y nunca después de 24 h. Publicación/cierre 032 purga sus filas; una tarea local cada minuto purga las vencidas o con cabeza fuente sustituida. El GET deniega el acceso desde el vencimiento o cambio, sin esperar a esa tarea. Los resúmenes no contienen datos personales. La retención y el despliegue siguen pendientes de aprobación humana.
+
+### Recuperación operativa 032
+
+`IMPORT_RETRY_REQUIRED` significa que stage revirtió por espera de lock, deadlock o cancelación/timeout. Repetir la misma identidad tras resolver una contención transitoria puede recuperar el trabajo. Si se repite sin contención y coincide con 60 s, hay que investigar volumen y capacidad: repetir el lote en las mismas condiciones no soluciona un exceso persistente de presupuesto. No aumentar límites ni dividir silenciosamente la unidad atómica. El máximo soportado no está medido;032 verificó 2924 objetos y 56273 deudas en el equipo local.
+
+En CLI, otra confirmación concurrente puede detenerse en stage con `IMPORT_RETRY_REQUIRED`; si alcanza publish y vence la espera, `IMPORT_PUBLICATION_FAILED` deja desenlace desconocido. Se conserva la identidad para recuperar el recibo durable; si quedó `FALLIDO`, corresponde la revalidación explícita 032. En 052, la espera del pool se suma a la del lock:503 no demuestra que no se registró un evento. Reconciliar con la misma `Idempotency-Key`, sin reintentos ilimitados. Ningún error equivale a aprobación o publicación exitosa.
