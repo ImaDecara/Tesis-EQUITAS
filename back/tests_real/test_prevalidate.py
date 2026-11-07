@@ -331,9 +331,14 @@ def test_13_server_rpc_rechecks_actor_and_tenant(seeded,http,token,env,import_jw
 def test_14_payload_integrity_and_ttl_purge(seeded,http,token):
     root,review=new_preview(http,token,seeded);auth={'Authorization':'Bearer '+token}
     batch=review['publication']['batch_id']
-    psql(f"update public.import_row_staging set payload=payload||'{{\"tamper\":true}}'::jsonb where batch_id={batch} and row_number=1")
+    def administrative_probe(sql):
+        result=subprocess.run(['docker','exec','-i','supabase_db_equitas-tp-testing','psql','-X','-qAt',
+                               '-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
+                              input=sql,capture_output=True,text=True,timeout=10)
+        assert result.returncode==0,'Administrative synthetic probe failed'
+    administrative_probe(f"update public.import_row_staging set payload=payload||'{{\"tamper\":true}}'::jsonb where batch_id={batch} and row_number=1")
     assert http.get(f'/imports/{root}/preview',headers=auth).status_code==409
-    psql(f"update public.import_preview set expires_at=now()-interval '1 second' where root_id={root}")
+    administrative_probe(f"update public.import_preview set expires_at=now()-interval '1 second' where root_id={root}")
     assert http.get(f'/imports/{root}/preview',headers=auth).status_code==410
     psql('select public.purge_import_previews()')
     assert psql(f'select count(*) from public.import_preview_row_staging where root_id={root}').strip()=='0'
