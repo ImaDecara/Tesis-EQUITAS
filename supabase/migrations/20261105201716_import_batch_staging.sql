@@ -4,9 +4,10 @@
 
 -- Presupuesto acotado para la RPC de publicación completa, también por PostgREST.
 -- No cambia authenticator ni los límites de los roles de lectura/revisión. El
--- cliente conserva 120 s para transporte y recuperación; la consulta tiene 60 s.
+-- cómputo tiene 60 s, pero la espera debe terminar antes del cliente de 10 s de
+-- la API 052, que comparte este rol con publicación (120 s) y CLI legacy (15 s).
 alter role equitas_import_server set statement_timeout = '60s';
-alter role equitas_import_server set lock_timeout = '55s';
+alter role equitas_import_server set lock_timeout = '8s';
 
 do $$ begin if not exists(select 1 from pg_roles where rolname='equitas_import_definer') then create role equitas_import_definer; end if; end $$;
 alter role equitas_import_definer nologin noinherit nocreatedb nocreaterole bypassrls;

@@ -71,14 +71,19 @@ nueva función SQL, sin una alternativa de escrituras REST por fila.
 
 ### Presupuesto de la publicación y volumen municipal
 
-La migración fija `statement_timeout=60s` y `lock_timeout=55s` solo para
+La migración fija `statement_timeout=60s` y `lock_timeout=8s` solo para
 `equitas_import_server`, y notifica a PostgREST para recargar la configuración.
-El cliente mantiene `RPC_TIMEOUT=120s`, que deja margen para transporte y recuperación.
+El rol también lo usan la API 052 (cliente de 10 s) y `record_import_batch` legacy
+(15 s con reintentos). La espera de lock se corta antes de esos clientes: una
+solicitud bloqueada no debe confirmar después de informar un error. El cliente de
+publicación mantiene `RPC_TIMEOUT=120s` para transporte y recuperación; no extiende
+el corte de 60 s del gateway local ni el máximo de 60 s de la API de Supabase alojado.
 No se amplían los límites de `authenticator`, de los lectores ni del rol de revisión.
 Estos son límites por llamada; no se desactiva el timeout ni se divide la publicación
-en transacciones parciales. La espera de un bloqueo consume también el presupuesto
-de la sentencia. Una carga que exceda ese presupuesto falla de manera cerrada y su
-recuperación sigue el mismo procedimiento del recibo durable.
+en transacciones parciales. `lock_timeout` rige por adquisición; cada espera también
+consume el presupuesto de la sentencia. Una respuesta perdida o un corte del gateway
+no prueba que no hubo commit: la recuperación consulta el recibo durable con la misma
+identidad, según el procedimiento de abajo.
 
 Las búsquedas de filas por claves no nulas usan igualdad e índices. Las claves nulas
 se buscan con `IS NULL`, y la comparación de valores sigue usando `IS NOT DISTINCT
@@ -91,8 +96,18 @@ versionado: primera publicación, repetición de los mismos archivos y reentrega
 otros bytes pero idénticos valores. Exige carga por la CLI/Data API real y compara
 las huellas de todas las tablas de cartera, incluyendo `xmin`, en las repeticiones.
 No garantiza ese tiempo para cualquier hardware o para el máximo contractual de filas.
-El bloqueo global de localidades y el del tenant siguen serializando escrituras;
-una operación concurrente puede agotar su propio límite y debe mostrar el fallo.
+En la revisión local, con carga baja, publicar tomó unos 24 s de servidor; la
+reentrega tomó 11,5 s de stage y 14,4 s de publicación. No son un SLA ni permiten
+subir el límite de la API por encima de 60 s si el volumen o la carga lo superan.
+
+El bloqueo global de localidades y el del tenant siguen serializando escrituras.
+Otra importación que espera un lock se rechaza a los 8 s; el guardado de una revisión
+del mismo municipio también puede fallar a los 8 s mientras se publica. Debe mostrarse
+el fallo y reintentarse después, conservando la identidad de la operación. Las esperas
+ocupan conexiones del pool de PostgREST hasta su cancelación: acotarlas evita retenerlas
+55 s, pero no garantiza disponibilidad con cualquier concurrencia. La regresión real
+ejercita la API 052 bloqueada (503 sin evento tardío), doce escrituras en espera y una
+lectura ajena. No elimina los límites del pool ni implementa el flujo web de 057.
 
 La configuración por rol y su aplicación en REST están descritas en
 [Supabase: Timeouts](https://supabase.com/docs/guides/database/postgres/timeouts) y
@@ -293,6 +308,14 @@ usa otras semillas y requiere otro reset. El conjunto completo se ejecuta en tan
 .venv/bin/python -m pytest tests_real/test_imports_api.py tests_real/test_next_route.py -q
 # Nuevo reset local + esperar Auth y REST 200.
 .venv/bin/python -m pytest tests_real/test_import_publish_scale.py -q --tb=short --assert=plain
+```
+
+En otra tanda, con reset local propio, verificar el presupuesto de locks del rol
+compartido por la API 052 y la CLI. Usa Auth, API y PostgREST reales, sin modificar
+los límites de la migración durante el ensayo:
+
+```sh
+.venv/bin/python -m pytest tests_real/test_import_lock_budget.py -q --tb=short --assert=plain
 ```
 
 El arnés toma el lock atómico de `/tmp/equitas-local-db/lock`, mantiene JWT en memoria/temporales privados, registra SHA y
