@@ -171,7 +171,10 @@ async function run() {
   })
   const panel = panelOf(page)
   await check('case_facts', async () => {
-    await expect(page).toHaveURL(new RegExp(`/debtors/${load.debtors[0].id}\\?tab=revision`))
+    await expect(page).toHaveURL(url => url.origin === base
+      && url.pathname === `/debtors/${load.debtors[0].id}`
+      && url.searchParams.getAll('tab').join() === 'revision'
+      && url.searchParams.getAll('queue').join() === 'CONTACTO_PERSONAL_Y_PLAN')
     const positions = []
     for (const name of ['Hechos del caso', 'Sugerencia del sistema', 'Tu decisión', 'Historial de decisiones']) {
       const heading = panel.getByRole('heading', { name, exact: true })
