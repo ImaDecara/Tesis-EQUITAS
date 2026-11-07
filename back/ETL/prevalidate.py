@@ -165,9 +165,10 @@ def classify_candidates(source, persisted):
                 conflicts[row['objeto']] = codes[0]
             codes = codes or ['BASE_' + kind.upper()]
             # Private input to the RPC: it identifies source headers affected by
-            # relation/contact deactivations. The RPC strips it before persistence.
+            # relation/contact deactivations, including the person to distinguish
+            # coholders. The RPC strips this entire locator before persistence.
             if row['archivo'] == 'cabecera':
-                result['object_key'] = list(row['key'])
+                result['object_key'] = [*row['key'], row['person']['external_id']]
         results.append({**result, 'kind': kind, 'codes': codes, 'changed_fields': fields, 'excluded': excluded})
     for row in results:
         if row['objeto'] in conflicts:

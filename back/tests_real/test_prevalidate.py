@@ -529,3 +529,42 @@ def test_21_truncate_staging_invalidates_all_bound_previews(seeded,http,token):
     for root in roots:
         assert http.get(f'/imports/{root}/preview',headers={'Authorization':'Bearer '+token}).status_code==409
     assert snapshot()==before
+
+
+@pytest.mark.parametrize('person,changed_lines',[(1,{2}),(2,{3,4})])
+def test_22_contact_deactivation_belongs_to_person_not_coholder(seeded,http,token,env,import_jwt,person,changed_lines):
+    """One contact, two holders and a person shared by two objects; oracle is032."""
+    psql(f"""
+    insert into public.contact_type(id,key,value) values(957054,'EMAIL','Correo') on conflict(key) do nothing;
+    insert into public.debtor_contact(id,person,type,value,active) values
+      (957054,{954000+person},(select id from public.contact_type where key='EMAIL'),'coholder-absent@example.test',true);
+    insert into public.debtor_person(id,debtor,person,priority,role,active) values(957054,954001,954002,100,'Titular',true);
+    """)
+    try:
+        def coholder(kind,rows):
+            if kind=='cabecera':
+                rows.insert(1,{**rows[0],**{k:v for k,v in rows[1].items() if k.startswith('Destinatario')}})
+        files=small_source(seeded,coholder)
+        root=upload(http,token,files);auth={'Authorization':'Bearer '+token};before=snapshot()
+        response=http.post(f'/imports/{root}/preview',headers=auth,json=body(root,absent_policy='dar-de-baja'))
+        assert response.status_code==200
+        page=http.get(f'/imports/{root}/preview',headers=auth).json()
+        assert page['summary']['publishable'] is True
+        assert page['summary']['deactivations']=={'contactos':1}
+        assert page['summary']['counts']=={'alta':0,'actualizacion':len(changed_lines),
+                                          'sin_cambios':7-len(changed_lines),'conflicto':0}
+        assert {r['linea'] for r in page['rows'] if r['kind']=='actualizacion'}==changed_lines
+        assert all(r['archivo']=='cabecera' and r['changed_fields']==['debtor_contact.active']
+                   and 'BAJAS_PREVISTAS' in r['codes'] for r in page['rows'] if r['kind']=='actualizacion')
+        assert all(set(r)=={'archivo','linea','objeto','kind','codes','changed_fields','excluded'} for r in page['rows'])
+        assert snapshot()==before
+        contact_before=psql('select id,active,xmin from public.debtor_contact where id=957054')
+        relations_before=psql('select id,active,xmin from public.debtor_person where id in (954001,954002,957054) order by id')
+        published=publication_call(env,import_jwt,'publish_import_batch',response.json()['publication'])
+        assert published['status']=='PUBLICADO'
+        assert published['counts']['bajas_contactos']==1 and published['counts']['bajas_relaciones']==0
+        assert psql('select active from public.debtor_contact where id=957054').strip()=='f'
+        assert psql('select id,active,xmin from public.debtor_contact where id=957054')!=contact_before
+        assert psql('select id,active,xmin from public.debtor_person where id in (954001,954002,957054) order by id')==relations_before
+    finally:
+        psql('delete from public.debtor_contact where id=957054; delete from public.debtor_person where id=957054;')
