@@ -74,8 +74,11 @@ nueva función SQL, sin una alternativa de escrituras REST por fila.
 La migración fija `statement_timeout=60s` y `lock_timeout=8s` solo para
 `equitas_import_server`, y notifica a PostgREST para recargar la configuración.
 El rol también lo usan la API 052 (cliente de 10 s) y `record_import_batch` legacy
-(15 s con reintentos). La espera de lock se corta antes de esos clientes: una
-solicitud bloqueada no debe confirmar después de informar un error. El cliente de
+(15 s con reintentos). Una vez adquirida la conexión, una espera de lock se corta
+a los 8 s, antes de esos clientes. La adquisición de conexión al pool puede sumar
+hasta 10 s previos: un 503 de la API 052 no demuestra que no se registró el evento.
+Se debe reintentar con la **misma `Idempotency-Key`**, que recupera el recibo sin duplicar.
+El cliente de
 publicación mantiene `RPC_TIMEOUT=120s` para transporte y recuperación; no extiende
 el corte de 60 s del gateway local ni el máximo de 60 s de la API de Supabase alojado.
 No se amplían los límites de `authenticator`, de los lectores ni del rol de revisión.
@@ -108,6 +111,17 @@ ocupan conexiones del pool de PostgREST hasta su cancelación: acotarlas evita r
 55 s, pero no garantiza disponibilidad con cualquier concurrencia. La regresión real
 ejercita la API 052 bloqueada (503 sin evento tardío), doce escrituras en espera y una
 lectura ajena. No elimina los límites del pool ni implementa el flujo web de 057.
+
+Si stage aborta por espera de lock, deadlock o cancelación de sentencia, devuelve
+`IMPORT_RETRY_REQUIRED`: no significa que el archivo sea inválido. Se revierte el
+stage y se reintenta la misma entrada después de resolver la contención o carga;
+no se repite dentro de la transacción ni se aumenta el presupuesto automáticamente.
+Dos confirmaciones concurrentes a escala publican una sola vez, pero el segundo
+llamador puede agotar su espera antes de que termine la primera y recibir
+`IMPORT_PUBLICATION_FAILED` con `PUBLISH_OUTCOME_UNKNOWN`. Tras terminar la primera,
+repetir la misma identidad recupera su recibo, conteos y montos originales. Si la
+publicación revirtió y el cierre posterior registró `FALLIDO`, se necesita
+`--revalidate <revision-anterior>`; un resultado desconocido nunca se declara éxito.
 
 La configuración por rol y su aplicación en REST están descritas en
 [Supabase: Timeouts](https://supabase.com/docs/guides/database/postgres/timeouts) y
@@ -166,6 +180,10 @@ las referencias de raíz/cabeza se validan inmediatamente por existencia y tenan
 `APPEND_ONLY` de `TRUNCATE` con una FK entrante. El historial tampoco admite update ni delete.
 La función legacy no puede crear esa marca ni prolongar una cadena atómica. El selector del corte vigente conserva el
 último `PUBLICADO` durante staging o rollback de 032, manteniendo la protección anterior para cargas legacy parciales.
+Las vistas y los CSV leen exclusivamente la marca JSON numérica mediante la DAL
+del municipio y aplican la misma regla. Antes de la primera publicación atómica
+siguen declarando `NO_INTEGRADO`, con fecha de cálculo separada; una carga legacy
+que pudo escribir parcialmente sigue dejando el corte no disponible.
 No se modifica la auditoría de accesos ni se implementa ALIGN-057.
 
 ### Política de ausentes

@@ -433,7 +433,12 @@ begin
     perform equitas_import_private.event(root_id,'VALIDADO',counts_value);
   end if;
   return equitas_import_private.receipt(root_id);
-exception when others then
+exception
+when lock_not_available or deadlock_detected or query_canceled then
+  -- El bloque revierte entero. No atribuir contención/cancelación a los archivos
+  -- ni continuar escribiendo: el llamador debe repetir la misma identidad.
+  raise exception 'IMPORT_RETRY_REQUIRED';
+when others then
   if sqlerrm in ('ACTOR_NOT_ACTIVE_MEMBER','ROLE_NOT_ALLOWED','IMPORT_INPUT_INVALID','IMPORT_REVISION_CONFLICT',
     'IMPORT_REVALIDATION_REQUIRED','SHARED_PERSON_OTHER_TENANT') then raise exception '%',sqlerrm; end if;
   raise exception 'IMPORT_INPUT_INVALID';

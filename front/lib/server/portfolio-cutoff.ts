@@ -27,7 +27,8 @@ export function resolvePortfolioCutoff(rows: RawRow[], warning: DataWarning | nu
   }
   const selected = selectCurrentCutoff(rows as BatchEvent[])
   if (!selected) {
-    const mayHaveWritten = rows.some(row => ['VALIDADO', 'CONFIRMADO', 'PUBLICADO'].includes(String(row.status)) || (row.status === 'FALLIDO' && row.supersedes !== null))
+    const mayHaveWritten = rows.some(row => row.status === 'PUBLICADO' || ((row as BatchEvent).counts?.publicacion_atomica !== 1 &&
+      (['VALIDADO', 'CONFIRMADO'].includes(String(row.status)) || (row.status === 'FALLIDO' && row.supersedes !== null))))
     return mayHaveWritten ? unavailablePortfolioCutoff() : { key: 'NO_INTEGRADO' }
   }
   if (!isCalendarDate(selected.as_of) || selected.as_of.startsWith('0000')) return unavailablePortfolioCutoff('CUTOFF_INVALID')

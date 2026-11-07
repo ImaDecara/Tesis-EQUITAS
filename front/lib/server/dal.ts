@@ -81,9 +81,11 @@ export async function createTenantReader() {
     // Metadatos mínimos del corte, con la misma sesión y municipio que la cartera.
     // No amplía readTable ni los permisos del contexto.
     async readImportBatches() {
-      return loadAllTableRows('import_batch', supabase, {
-        select: 'id,as_of,source_updated_at,status,supersedes', filters: [['tenant', context.tenantId]],
+      const result = await loadAllTableRows('import_batch', supabase, {
+        select: 'id,as_of,source_updated_at,status,supersedes,publicacion_atomica:counts->publicacion_atomica', filters: [['tenant', context.tenantId]],
       })
+      // Solo la marca JSON protegida de 032, sin el resto de los conteos del lote.
+      return { ...result, rows: result.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })) }
     },
     async readTable(table: PortfolioTable) {
       const scope = tenantReadScope(table, context.tenantId)

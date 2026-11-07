@@ -84,6 +84,12 @@ def test_error_rpc_solo_expone_codigo_controlado(database, monkeypatch, body):
     assert 'CENTINELA_PERSONAL' not in str(error.value)
 
 
+def test_stage_preserva_codigo_reintentable_sin_atribuirlo_a_los_archivos(database, monkeypatch):
+    monkeypatch.setattr(httpx, 'post', lambda *_args, **_kwargs: httpx.Response(400, json={'message': 'IMPORT_RETRY_REQUIRED'}))
+    with pytest.raises(ETLError, match='IMPORT_RETRY_REQUIRED'):
+        publication._rpc('stage_import_batch', {})
+
+
 @pytest.mark.parametrize('status', ['REQUIERE_NUEVO_PREVIEW', 'FALLIDO', 'DESCARTADO', 'RECIBIDO'])
 def test_confirmacion_no_publicada_no_se_informa_como_exito(database, prepared, monkeypatch, status):
     review = publication.stage_batch(prepared, tenant=1)

@@ -94,6 +94,31 @@ def reference(importer, review, **overrides):
             "p_revision": review["revision"], "p_tenant": 1, "p_actor_user": int(importer.actor), **overrides}
 
 
+@pytest.mark.parametrize('sqlstate', ['55P03', '40P01', '57014'])
+def test_stage_abortado_es_reintentable_y_revierte_antes_del_mismo_reintento(importer, sqlstate):
+    batch = prepared(importer, 'retry-' + sqlstate)
+    before = snapshot()
+    before_jobs = publications()
+    before_events = psql('select count(*) from public.import_batch')
+    psql(f"""
+        create function public.align032_stage_retry() returns trigger language plpgsql as $$
+        begin raise exception using errcode='{sqlstate}', message='SYNTHETIC_STAGE_ABORT'; end $$;
+        create trigger align032_stage_retry before insert on public.import_batch
+        for each row execute function public.align032_stage_retry();
+    """)
+    try:
+        with pytest.raises(ETLError, match='IMPORT_RETRY_REQUIRED'):
+            stage(batch)
+    finally:
+        psql('drop trigger align032_stage_retry on public.import_batch; drop function public.align032_stage_retry();')
+    assert changes(before, snapshot()) == {}
+    assert publications() == before_jobs
+    assert psql('select count(*) from public.import_batch') == before_events
+    review = stage(batch)
+    assert review['status'] == 'VALIDADO'
+    assert publish(batch, review)['status'] == 'PUBLICADO'
+
+
 def test_fallo_entre_deudas_y_perfiles_no_es_visible_y_revierte_toda_la_carga(campaign, validated):
     before = snapshot()
     psql("""

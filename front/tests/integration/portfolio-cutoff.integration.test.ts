@@ -53,7 +53,7 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(reads.some(read => read.after === '1000')).toBe(true)
     for (const read of reads) {
       expect(read.filters).toEqual({ tenant: 'eq.7' })
-      expect(read.select).toBe('id,as_of,source_updated_at,status,supersedes')
+      expect(read.select).toBe('id,as_of,source_updated_at,status,supersedes,publicacion_atomica:counts->publicacion_atomica')
     }
   })
 
@@ -69,6 +69,44 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
   it.each(['RECIBIDO', 'DESCARTADO', 'REQUIERE_NUEVO_PREVIEW', 'FALLIDO'])('un %s sin escritura no desplaza una publicación válida', async status => {
     fixture([event(1), event(2, status)])
     expect((await loadRawDebtorData()).batch?.as_of).toBe('2026-09-30')
+  })
+
+  it.each(['VALIDADO', 'CONFIRMADO', 'FALLIDO', 'DESCARTADO', 'REQUIERE_NUEVO_PREVIEW'])('032: %s atómico conserva el corte publicado en cartera y CSV', async status => {
+    fixture([event(1), { ...event(2, 'RECIBIDO'), counts: { publicacion_atomica: 1 } },
+      { ...event(3, status, 2), counts: { publicacion_atomica: 1 } }])
+    const raw = await loadRawDebtorData()
+    expect(raw.batch?.as_of).toBe('2026-09-30')
+    expect(raw.warnings).toEqual([])
+    const response = await exportQueue()
+    expect(response.status).toBe(200)
+    expect(parseCsvBytes(new Uint8Array(await response.arrayBuffer())).rows.every(row => row.fecha_corte === '2026-09-30')).toBe(true)
+  })
+
+  it.each(['VALIDADO', 'CONFIRMADO', 'FALLIDO', 'DESCARTADO', 'REQUIERE_NUEVO_PREVIEW'])('032: primer lote %s atómico no implica escrituras ni inventa publicación', async status => {
+    fixture([{ ...event(1, 'RECIBIDO'), counts: { publicacion_atomica: 1 } },
+      { ...event(2, status, 1), counts: { publicacion_atomica: 1 } }])
+    const raw = await loadRawDebtorData()
+    expect(raw.batch).toBeUndefined()
+    expect(raw.warnings).toEqual([])
+    const response = await exportQueue()
+    expect(response.status).toBe(200)
+    expect(parseCsvBytes(new Uint8Array(await response.arrayBuffer())).rows.every(row => row.fecha_corte === 'NO_INTEGRADO')).toBe(true)
+  })
+
+  it.each([null, 0, '1', true, {}, { publicacion_atomica: '1' }])('una marca no numérica o ausente no habilita un corte viejo: %j', async marker => {
+    fixture([event(1), { ...event(2, 'VALIDADO'), counts: { publicacion_atomica: marker } }])
+    expect((await loadRawDebtorData()).batch?.as_of).toBeNull()
+    expect((await exportQueue()).status).toBe(503)
+  })
+
+  it('032: la primera publicación atómica intercalada invalida la lectura aunque antes no hubiera corte', async () => {
+    const events = [{ ...event(1, 'VALIDADO'), counts: { publicacion_atomica: 1 } }]
+    fixture(events, { fail: request => {
+      if (request.table === 'debt') events.push({ ...event(events.length + 1, 'PUBLICADO', events.length), counts: { publicacion_atomica: 1 } })
+      return null
+    } })
+    const raw = await loadRawDebtorData()
+    expect(raw.warnings).toContainEqual(expect.objectContaining({ code: 'CUTOFF_CHANGED' }))
   })
 
   it('un fallo después de la primera página no produce un corte ni CSV parcial', async () => {
