@@ -535,6 +535,8 @@ def _rounded_average(values: list[int]) -> int:
     return int((Decimal(sum(values)) / len(values)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+# Oráculo Python de recompute_debtor_profiles (ALIGN-031): la carga ya calcula el perfil en SQL, desde lo persistido, y las
+# pruebas exigen paridad con esta función. Si cambia una regla, cambia en los dos lados.
 # Perfil del objeto: agregados de sus obligaciones respecto del corte. debt_rows lleva claves de catálogo.
 # Saber si una obligación está vencida exige su estado de origen (contrato de dominio §4.1):
 # - estados faltantes y ninguna vencida observada: importe y conteo vencidos son nulos. No es un cero legítimo
@@ -623,6 +625,8 @@ class PreparedBatch:
     source_updated_at: str | None
     # (debtor_type.key, Cuenta) de toda cabecera con tipo catalogado, también las de objetos en cuarentena.
     file_object_keys: frozenset[tuple[str, str]] = frozenset()
+    # Destinatario_Id de las cabeceras no aceptadas: sus contactos no se leyeron, y no ver uno no prueba que dejó de venir.
+    people_outside_accepted_rows: frozenset[str] = frozenset()
 
     @property
     def publishable(self) -> bool:
@@ -632,11 +636,15 @@ class PreparedBatch:
     def debtor_type_keys(self) -> dict[str, str]:
         return self.mapping["catalogos"]["Bien_Tipo_Id"]
 
+    @property
+    def contact_types_in_file(self) -> frozenset[str]:
+        present = self.report["columnas"]["cabecera"]["opcionales_presentes"] or []
+        return frozenset(contact_type for column, contact_type in CONTACT_COLUMNS if column in present)
+
     # Sin ninguna columna de contacto en el archivo no se sabe cuántos hay: no son cero contactos.
     @property
     def contact_columns_integrated(self) -> bool:
-        present = self.report["columnas"]["cabecera"]["opcionales_presentes"] or []
-        return any(column in present for column, _ in CONTACT_COLUMNS)
+        return bool(self.contact_types_in_file)
 
 
 class StructuralRejection(Exception):
@@ -709,6 +717,20 @@ def _file_object_keys(tables: Mapping[str, Any], mapping: dict, contract: dict) 
     return frozenset(keys)
 
 
+def _people_outside_accepted_rows(tables: Mapping[str, Any], report: dict, mapping: dict, contract: dict) -> frozenset[str]:
+    accepted = {item["linea"] for item in report["decisiones_filas"] if item["archivo"] == "cabecera" and item["resultado"] == "ACEPTADA"}
+    table = tables["cabecera"]
+    people = set()
+
+    for source, record in zip(table.rows, canonical_records(table, "cabecera", mapping, contract), strict=True):
+        person = clean_text(record.get("Destinatario_Id"))
+
+        if source.line not in accepted and person is not None:
+            people.add(str(int(person)) if person.isdecimal() else person)
+
+    return frozenset(people)
+
+
 def _latest_source_update(objects: Iterable[PreparedObject]) -> str | None:
     dates = [
         parse_date(row.values.get("Fecha_Actualizacion"))
@@ -746,6 +768,7 @@ def prepare_batch(files: Mapping[str, Path], mapping: dict, contract: dict, cut_
         objects=objects,
         source_updated_at=_latest_source_update(objects),
         file_object_keys=_file_object_keys(tables, mapping, contract),
+        people_outside_accepted_rows=_people_outside_accepted_rows(tables, report, mapping, contract),
     )
 
 
@@ -769,30 +792,72 @@ def required_catalog_keys(batch: PreparedBatch) -> dict[str, set[str]]:
     }
 
 
-# V1 solo admite el lote completo. Lo publicado que el archivo ya no trae sería un delta o una baja, y darlo por válido
-# dejaría filas viejas contando en los perfiles: se rechaza hasta que ALIGN-031 defina esa política. Un objeto en
-# cuarentena sí viene en el archivo: conserva su estado previo y no se compara.
-def coverage_gaps(batch: PreparedBatch, published: Mapping[tuple[str | None, str], Mapping[str, set[int]]]) -> dict[str, int]:
+@dataclass(frozen=True)
+class AbsentRows:
+    """Lo publicado que el archivo ya no trae. Solo el conteo sale de la memoria: los contactos son datos personales."""
 
+    objects: int = 0
+    debts: int = 0
+    relation_ids: frozenset[int] = frozenset()
+    contact_ids: frozenset[int] = frozenset()
+
+    # Un teléfono que deja de venir no invalida un lote entero (ALIGN-027, D2): se informa siempre, y rechaza lo demás.
+    @property
+    def blocks_full_load(self) -> bool:
+        return bool(self.objects or self.debts or self.relation_ids)
+
+    def counts(self) -> dict[str, int]:
+        counts = {"contactos": len(self.contact_ids), "obligaciones": self.debts, "objetos": self.objects, "relaciones": len(self.relation_ids)}
+        return {name: count for name, count in sorted(counts.items()) if count}
+
+
+def _contacts_in_file(batch: PreparedBatch) -> dict[int, set[tuple[str, str]]]:
+    contacts: dict[int, set[tuple[str, str]]] = {}
+
+    for item in batch.objects:
+        for header in item.headers:
+            person = parse_int(header.values.get("Destinatario_Id"))
+            payloads = build_debtor_contact_payloads(header.values, 0, header.contact_findings)
+            contacts.setdefault(person, set()).update((row["type"], row["value"]) for row in payloads)
+
+    return contacts
+
+
+# Compara lo publicado con el archivo. La política la decide quien carga (run_etl); acá solo se dice qué dejó de venir:
+# - un objeto en cuarentena sí viene en el archivo: conserva su estado previo y no se compara;
+# - un contacto se compara por persona, porque es de la persona y no del objeto, y solo si el archivo la trae en filas aceptadas
+#   y trae la columna de ese tipo: sin observación no se puede decir que dejó de venir.
+def absent_from_file(batch: PreparedBatch, published: Mapping[tuple[str | None, str], Mapping[str, Any]]) -> AbsentRows:
     accepted = {
         (batch.debtor_type_keys[clean_text(item.headers[0].values.get("Bien_Tipo_Id"))],
          clean_text(item.headers[0].values.get("Cuenta"))): item
         for item in batch.objects
     }
-    gaps: Counter[str] = Counter()
+    contacts_in_file = _contacts_in_file(batch)
+    observed_types = batch.contact_types_in_file
+    objects = debts = 0
+    relation_ids: set[int] = set()
+    contact_ids: set[int] = set()
 
     for key, rows in published.items():
+        for (person, contact_type, value), contact_id in rows["contactos"].items():
+            seen = contacts_in_file.get(person)
+            if (seen is not None and str(person) not in batch.people_outside_accepted_rows
+                    and contact_type in observed_types and (contact_type, value) not in seen):
+                contact_ids.add(contact_id)
+
         if key not in batch.file_object_keys:
-            gaps["objetos"] += 1
+            objects += 1
             continue
 
         item = accepted.get(key)
 
         if item is not None:
-            gaps["obligaciones"] += len(rows["obligaciones"] - {parse_int(row.values.get("DEUD_id")) for row in item.details})
-            gaps["relaciones"] += len(rows["relaciones"] - {parse_int(row.values.get("Destinatario_Id")) for row in item.headers})
+            debts += len(rows["obligaciones"] - {parse_int(row.values.get("DEUD_id")) for row in item.details})
+            people_in_file = {parse_int(row.values.get("Destinatario_Id")) for row in item.headers}
+            relation_ids.update(relation for person, relation in rows["relaciones"].items() if person not in people_in_file)
 
-    return {name: count for name, count in sorted(gaps.items()) if count}
+    return AbsentRows(objects, debts, frozenset(relation_ids), frozenset(contact_ids))
 
 
 def _lower_keys(values: Mapping[str, int]) -> dict[str, int]:

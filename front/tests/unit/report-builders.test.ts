@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { buildAccessAuditReport } from '@/lib/reports/access-audit-report'
 import { buildDataQualityReport } from '@/lib/reports/data-quality-report'
 import { buildDecisionsReport } from '@/lib/reports/decisions-report'
 import { buildQueueReport } from '@/lib/reports/queue-report'
@@ -184,6 +185,7 @@ describe('ALIGN-028: el catalogo define cada columna e indicador (regla de incor
     'reporte-decisiones': parse(buildDecisionsReport(ledger, {}, NOW)),
     'reporte-supervision': parse(buildSupervisionReport(ledger, {}, NOW)),
     'reporte-calidad': parse(buildDataQualityReport(debtors, NOW)),
+    'reporte-accesos': parse(buildAccessAuditReport([{ id: 1, actor: 2, actor_role: 'supervisor', action: 'CASE_OPEN', target: '3', created_at: '2026-11-02T10:00:00Z' }], {}, NOW)),
   }
 
   it.each(Object.entries(reports))('%s: ancla, enlace y columnas', (anchor, file) => {

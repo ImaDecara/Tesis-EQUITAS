@@ -27,13 +27,15 @@ vi.mock('@/lib/equitas-data', () => ({ getDebtorDetailData, getDebtorsData, getP
 vi.mock('@/lib/data/paginated-table-reader', () => ({ loadAllTableRows }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: async () => ({}) }))
 // ALIGN-019 lleva esta lectura a createTenantReader: la prueba pasa por el mismo lector en ambos caminos.
-vi.mock('@/lib/server/dal', () => ({ createTenantReader: async () => ({ readTable: loadAllTableRows }) }))
+vi.mock('@/lib/server/dal', () => ({ createTenantReader: async () => ({ readTable: loadAllTableRows, readImportBatches: async () => ({ rows: [], warning: null }) }) }))
 // Se renderizan los componentes reales. Solo se reemplaza lo que exige navegador o sesión.
 vi.mock('next/navigation', () => ({
   usePathname: () => '/people', useRouter: () => ({ replace: () => undefined }),
   notFound: () => { throw new Error('notFound') },
 }))
 vi.mock('next/image', () => ({ default: () => null }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
 vi.mock('@/components/auth/login-form', () => ({ LoginForm: () => null }))
 
@@ -309,7 +311,7 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(tabText(await detailPage(), 'summary')).toContain('Contacto disponible: Si')
   })
 
-  it('distingue el conteo estricto >90 de la tabla inclusiva desde 70 puntos', async () => {
+  it('comparte la banda inclusiva desde 70 puntos entre tarjeta y tabla', async () => {
     const raw = rawObject()
     // 1 vencida: 40 de monto + 25 de antigüedad + 5 de cantidad = 70.
     raw.debts = [{ id: 801, debtor: 901, current_amount: 500000, due_date: '2025-01-01' }]
@@ -321,13 +323,13 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     configureLists(raw)
     const page = await RiskAnalysisPage()
     const text = renderedText(page)
-    expect(text).toContain('Objetos con severidad mayor a 90 puntos')
-    expect(text).toContain('Conteo de objetos con más de 90 puntos; excluye 90')
+    expect(text).toContain('Objetos en banda alta, desde 70 puntos')
+    expect(text).toContain('Conteo desde 70 hasta 100 puntos, inclusive')
     expect(text).toContain('Objetos en banda alta, desde 70 puntos')
     expect(text).toContain('Hasta 10 objetos con severidad de 70 a 100 puntos')
     const cards = nodesOfType(page, Card)
-    expect(renderedText(cards[0])).toMatch(/Objetos con severidad mayor a 90 puntos\s+1\s+Conteo/)
-    const high = cards.find(card => renderedText(card).includes('Objetos en banda alta, desde 70 puntos'))!
+    expect(renderedText(cards[0])).toMatch(/Objetos en banda alta, desde 70 puntos\s+4\s+Conteo/)
+    const high = cards.find(card => renderedText(card).includes('Hasta 10 objetos'))!
     expect(nodesOfType(high, RiskBadge).map(node => node.props.score).sort()).toEqual([70, 80, 90, 95])
     expect(text).toContain('no son porcentajes ni probabilidades de pago')
     expect(text).not.toMatch(/riesgo|\bscore\b/i)
@@ -341,8 +343,7 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       ['La severidad v1 describe el objeto', 1],
       ['Severidad del objeto (v1)', 1],
       ['Puntaje heurístico del objeto según las reglas v1.', 1],
-      ['Objetos con severidad mayor a 90 puntos', 1],
-      ['Conteo de objetos con más de 90 puntos; excluye 90.', 1],
+      ['Conteo desde 70 hasta 100 puntos, inclusive.', 1],
       // Título de tarjeta y columna de la tabla de personas.
       ['Máxima severidad heredada', 2],
       ['Máximo del índice heredado por persona entre sus objetos vinculados.', 1],
@@ -351,9 +352,9 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       ['Índice heredado desde 70 puntos', 1],
       ['Distribución de objetos por severidad v1', 1],
       ['Distribución de personas por máxima severidad heredada', 1],
-      ['Objetos en banda alta, desde 70 puntos', 1],
+      ['Objetos en banda alta, desde 70 puntos', 2],
       ['Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90.', 1],
-      ['Primeros 10 en orden operativo, no por severidad.', 1],
+      ['Primeros 10 agrupados por cola, no por severidad global.', 1],
       ['Hasta 10 personas con índice heredado máximo desde 70 puntos entre sus objetos.', 1],
     ] as const) expect(countOf(text, label), label).toBe(times)
     expect(tablesOf(markup).map(headersOf)).toEqual([

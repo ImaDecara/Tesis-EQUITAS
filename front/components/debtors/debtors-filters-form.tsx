@@ -31,6 +31,8 @@ type DebtorsFiltersFormProps = {
     type: string
     contact: string
     personId: string
+    minAmount?: string
+    queue?: string
   }
   riskOptions: string[]
   statusOptions: string[]
@@ -67,6 +69,10 @@ export function DebtorsFiltersForm({
     if (contact) params.set('contact', contact)
     if (personId) params.set('personId', personId)
 
+    for (const key of ['minAmount', 'queue']) {
+      const value = String(formData.get(key) ?? '').trim()
+      if (value) params.set(key, value)
+    }
     const href = params.toString() ? `${pathname}?${params.toString()}` : pathname
 
     startTransition(() => {
@@ -83,6 +89,8 @@ export function DebtorsFiltersForm({
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
       {initialValues.personId && <input type="hidden" name="personId" value={initialValues.personId} />}
+      {initialValues.minAmount && <input type="hidden" name="minAmount" value={initialValues.minAmount} />}
+      {initialValues.queue && <input type="hidden" name="queue" value={initialValues.queue} />}
       <div className="xl:col-span-2">
         <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
           Buscar por objeto o persona
@@ -100,8 +108,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Riesgo</label>
+        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Severidad</label>
         <select
+          id="risk"
           name="risk"
           defaultValue={initialValues.risk}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -116,8 +125,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Estado</label>
+        <label htmlFor="status" className="mb-1 block text-xs font-semibold text-slate-600">Estado</label>
         <select
+          id="status"
           name="status"
           defaultValue={initialValues.status}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -132,8 +142,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
+        <label htmlFor="type" className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
         <select
+          id="type"
           name="type"
           defaultValue={initialValues.type}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -148,8 +159,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
+        <label htmlFor="contact" className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
         <select
+          id="contact"
           name="contact"
           defaultValue={initialValues.contact}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"

@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Ticket | ALIGN-013, plan `2026-10-28-v2` (M1) |
-| Versión | v1, **provisional**: hereda el carácter provisional del [contrato de dominio][contrato] (ALIGN-007) y de las [reglas de decisión v1][reglas] (ALIGN-008) |
+| Versión | v1 con [adenda vigente ALIGN-014 (§21)](#analitica-align014), **provisional**: hereda el carácter provisional del [contrato de dominio][contrato] (ALIGN-007) y de las [reglas de decisión v1][reglas] (ALIGN-008) |
 | Código descrito | `ab4c5b30526e5631390dd05e17851fb6ad7465a6`: integración del plan con ALIGN-011 (mapeadores con estados de presencia de datos). Las citas `archivo:línea` de este catálogo remiten a ese código; algunas citas del contrato ALIGN-007 remiten a `36f35b4` y se corrieron (§14) |
 | Fuentes | Pantallas `front/app/**/page.tsx` y componentes `front/components/**`; contrato de dominio v1 (§7, en especial §7.9); reglas de decisión v1; plan v2 §4 y §7 |
 | Consumidores | ALIGN-014 (tablero y vistas analíticas según este catálogo), ALIGN-010/021 (colas por intervención), ALIGN-012 (rótulos), tesis (capítulo de indicadores) |
@@ -12,7 +12,7 @@
 
 ## 1. Propósito y cómo leer cada entrada
 
-El tablero mezcla cifras que parecen iguales y no lo son: "críticos" y "deuda crítica" tienen poblaciones distintas ([KPI-55](#kpi-55) y [KPI-56](#kpi-56)), "Deuda asociada" significa tres cosas según la pantalla ([KPI-35](#kpi-35), [KPI-46](#kpi-46), [KPI-48](#kpi-48)) y el "riesgo" es un índice heredado de severidad, no una probabilidad ni un dato social `[P0105]`, `[P0108]`. Este catálogo da a **cada cifra visible** una definición enlazable y dice qué decisión apoya y qué **no** significa `[P0211]`, `[P0228]`.
+La versión histórica del tablero mezclaba cifras que parecían iguales; [§21](#analitica-align014) fija las correcciones vigentes. En la descripción histórica: "críticos" y "deuda crítica" tienen poblaciones distintas ([KPI-55](#kpi-55) y [KPI-56](#kpi-56)), "Deuda asociada" significa tres cosas según la pantalla ([KPI-35](#kpi-35), [KPI-46](#kpi-46), [KPI-48](#kpi-48)) y el "riesgo" es un índice heredado de severidad, no una probabilidad ni un dato social `[P0105]`, `[P0108]`. Este catálogo da a **cada cifra visible** una definición enlazable y dice qué decisión apoya y qué **no** significa `[P0211]`, `[P0228]`.
 
 Cada entrada tiene un ancla estable (`#kpi-NN`) y estos campos:
 
@@ -51,21 +51,21 @@ Inventario completo de `front/app/**/page.tsx` y `front/components/**`. La colum
 | Tablero (`front/app/page.tsx`) | A quien gestionar primero; Casos sin contacto (top 5, orden propio del tablero): Objeto, Riesgo, Deuda, Atraso, Recomendacion, "Score n" | `debtor.riskScore`, `debtor.risk`, `debtor.totalDebt`, `debtor.overdueDays`, `debtor.recommendationType`, `debtor.priorityScore` | [KPI-58](#kpi-58), [KPI-09](#kpi-09), [KPI-01](#kpi-01), [KPI-03](#kpi-03), [KPI-13](#kpi-13), [KPI-11](#kpi-11) |
 | Objetos (`front/app/debtors/page.tsx`) | "n / N registros" | `filteredDebtors.length`, `debtors.length` | [KPI-51](#kpi-51) |
 | Objetos (`front/app/debtors/page.tsx`) | Deuda total | `debtor.totalDebt` | [KPI-01](#kpi-01) |
-| Objetos (`front/app/debtors/page.tsx`) | Estado | `debtor.status` | [KPI-14](#kpi-14) |
+| Objetos (`front/app/debtors/page.tsx`) | Estado de catálogo | `debtor.status` | [KPI-14](#kpi-14) |
 | Objetos (`front/app/debtors/page.tsx`) | Personas | `debtor.peopleCount` | [KPI-06](#kpi-06) |
 | Objetos (`front/app/debtors/page.tsx`) | Contacto | `debtor.hasContact` | [KPI-08](#kpi-08) |
 | Objetos (`front/app/debtors/page.tsx`) | Riesgo | `debtor.risk`, `debtor.riskScore` | [KPI-09](#kpi-09) |
 | Objetos (`front/app/debtors/page.tsx`) | "Prioridad <banda>", "Score n" | `debtor.priorityLevel`, `debtor.priorityScore` | [KPI-12](#kpi-12), [KPI-11](#kpi-11) |
 | Objetos (`front/app/debtors/page.tsx`) | Recomendacion y motivo | `debtor.recommendationType`, `debtor.recommendationReason` | [KPI-13](#kpi-13) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Riesgo (cabecera y tarjeta) | `debtor.risk`, `debtor.riskScore` | [KPI-09](#kpi-09) |
-| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Deuda total; Deuda vencida | `debtor.totalDebt`, `debtor.overdueDebt` | [KPI-01](#kpi-01), [KPI-02](#kpi-02) |
+| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Deuda total; Deuda vencida al corte | `debtor.totalDebt`, `debtor.overdueDebt` | [KPI-01](#kpi-01), [KPI-02](#kpi-02) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Atraso ("n dias", resumen y lectura operativa) | `debtor.maxDaysOverdue` | [KPI-03](#kpi-03) |
-| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Estado | `debtor.status` | [KPI-14](#kpi-14) |
+| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Estado de catálogo | `debtor.status` | [KPI-14](#kpi-14) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Contacto: Disponible / Faltante / No disponible | `debtor.hasContact` | [KPI-08](#kpi-08) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | "n persona(s) asociada(s)" | `debtor.peopleCount` | [KPI-06](#kpi-06) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | "<banda> (score n)" | `debtor.priorityLevel`, `debtor.priorityScore` | [KPI-12](#kpi-12), [KPI-11](#kpi-11) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Recomendacion actual / sugerida, texto y motivo | `debtor.recommendationType`, `debtor.recommendation`, `debtor.recommendationReason` | [KPI-13](#kpi-13) |
-| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Perfil: Deuda total; Deuda vencida | `profile.totalDebt`, `profile.overdueDebt` | [KPI-01](#kpi-01), [KPI-02](#kpi-02) |
+| Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Perfil: Deuda total; Deuda vencida al corte | `profile.totalDebt`, `debtor.overdueDebt` proyectado al calendario | [KPI-01](#kpi-01), [KPI-02](#kpi-02) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Perfil: Cantidad de deudas | `profile.debtCount` | [KPI-05](#kpi-05) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Perfil: Antiguedad | `profile.antiquityDays` | [KPI-04](#kpi-04) |
 | Ficha (`front/app/debtors/[debtorId]/page.tsx`) | Perfil: Contactos disponibles | `profile.availableContacts` | [KPI-07](#kpi-07) |
@@ -75,6 +75,7 @@ Inventario completo de `front/app/**/page.tsx` y `front/components/**`. La colum
 | Casos prioritarios (`front/app/priority-cases/page.tsx`) | "n casos" | `filteredCases.length` | [KPI-51](#kpi-51) |
 | Casos prioritarios (`front/app/priority-cases/page.tsx`) | Cola elegida (antes "Ranking operativo"): Riesgo, Score / prioridad, Atraso, Deuda total, Contacto, Recomendacion | `debtor.risk`, `debtor.riskScore`, `debtor.priorityScore`, `debtor.priorityLevel`, `debtor.maxDaysOverdue`, `debtor.totalDebt`, `debtor.hasContact`, `debtor.recommendationType` | [KPI-31](#kpi-31), [KPI-09](#kpi-09), [KPI-11](#kpi-11), [KPI-12](#kpi-12), [KPI-03](#kpi-03), [KPI-01](#kpi-01), [KPI-08](#kpi-08), [KPI-13](#kpi-13) |
 | Casos prioritarios (`front/app/priority-cases/page.tsx`) | "<cola> n casos" en la navegación de colas | `group.count` | [KPI-V1-10](#kpi-v1-casos-cola) |
+| Ficha, pestaña Revisión sin snapshot (`front/components/review/review-panel.tsx`) | Deuda total; Deuda vencida; procedencia temporal de la ficha | `detail.debtor.totalDebt` histórico y `detail.debtor.overdueDebt` proyectado como el resumen. Sin corte evaluable, mora no disponible; sin publicaciones, la fecha de cálculo queda explícita y no habilita registrar | [KPI-01](#kpi-01), [KPI-02](#kpi-02) |
 | Ficha, pestaña Revisión (`front/components/review/review-panel.tsx`) | Monto actualizado al corte; Obligaciones vencidas al corte; Atraso máximo al corte; Obligaciones no evaluables | factores y severidad de `getCaseReviewSnapshot` | [KPI-V1-11](#kpi-v1-monto-corte), [KPI-V1-12](#kpi-v1-vencidas-corte), [KPI-V1-13](#kpi-v1-atraso-corte), [KPI-V1-14](#kpi-v1-no-evaluables) |
 | Ficha, pestaña Revisión (`front/components/review/review-panel.tsx`) | Severidad del objeto (v1); "n de m puntos"; Intensidad n | `explanation.severidad`, `explanation.factores`, `suggestedIntensity`, `decided_intensity` | [KPI-V1-15](#kpi-v1-severidad-revision), [KPI-V1-16](#kpi-v1-intensidad) |
 | Ficha, pestaña Revisión (`front/components/review/review-form-controls.tsx`) | "n de 500 caracteres, contando los espacios" | `reasonCharCount` | [KPI-V1-17](#kpi-v1-contador-motivo) |
@@ -92,7 +93,7 @@ Inventario completo de `front/app/**/page.tsx` y `front/components/**`. La colum
 | Personas (`front/app/people/page.tsx`) | Contacto disponible: Disponible / Faltante / No disponible | `person.hasContact` | [KPI-17](#kpi-17) |
 | Personas (`front/app/people/page.tsx`) | Deuda total asociada; rótulo "Exposición asociada (no aditiva)" | `person.totalDebtAssociated`, `person.exposureLabel` | [KPI-18](#kpi-18) |
 | Personas (`front/app/people/page.tsx`) | Nombre; Documento | `person.name`, `person.document` | [Campos de registro](#campos-de-registro) |
-| Riesgo (`front/app/risk-analysis/page.tsx`) | "Objetos con riesgo > 90" y tabla de 10 | `objectDashboard.riskAboveNinetyCases`, `highRiskCases` | [KPI-38](#kpi-38), [KPI-31](#kpi-31) |
+| Riesgo (`front/app/risk-analysis/page.tsx`) | Objetos con severidad alta y tabla de hasta 10 por cola | `objectDashboard.priorityCases`, `highRiskCases` | [KPI-38](#kpi-38), [KPI-31](#kpi-31) |
 | Riesgo (`front/app/risk-analysis/page.tsx`) | "Personas con puntaje alto" y tabla de 10 | `peopleDashboard.highRiskCount`, `highIndividualRiskPeople` | [KPI-39](#kpi-39) |
 | Riesgo (`front/app/risk-analysis/page.tsx`) | Distribucion de objetos por riesgo | `objectRiskDistribution` | [KPI-28](#kpi-28) |
 | Riesgo (`front/app/risk-analysis/page.tsx`) | Distribucion de personas por riesgo individual | `peopleDashboard.individualRiskDistribution` | [KPI-32](#kpi-32) |
@@ -105,7 +106,7 @@ Inventario completo de `front/app/**/page.tsx` y `front/components/**`. La colum
 | Deuda y mora (`front/app/debt-aging/page.tsx`) | Deuda por estado | `debtByStatusChart` | [KPI-43](#kpi-43) |
 | Deuda y mora (`front/app/debt-aging/page.tsx`) | Top deuda por objeto; Top 10 mayor deuda | `topDebtChart`, `summary.topDebtCases` | [KPI-44](#kpi-44) |
 | Deuda y mora (`front/app/debt-aging/page.tsx`) | Listado economico: orden de las filas | `sortedDebtors` | [KPI-59](#kpi-59) |
-| Deuda y mora (`front/app/debt-aging/page.tsx`) | Tablas: Deuda total, Deuda vencida, Atraso / Dias de atraso, Estado | `debtor.totalDebt`, `debtor.overdueDebt`, `debtor.maxDaysOverdue`, `debtor.status` | [KPI-01](#kpi-01), [KPI-02](#kpi-02), [KPI-03](#kpi-03), [KPI-14](#kpi-14) |
+| Deuda y mora (`front/app/debt-aging/page.tsx`) | Tablas: Deuda total, Deuda vencida, Atraso / Dias de atraso, Estado de catálogo | `debtor.totalDebt`, `debtor.overdueDebt`, `debtor.maxDaysOverdue`, `debtor.status` | [KPI-01](#kpi-01), [KPI-02](#kpi-02), [KPI-03](#kpi-03), [KPI-14](#kpi-14) |
 | Acciones (`front/app/recommended-actions/page.tsx`) | Tarjeta por recomendación: cantidad y monto | `item?.count`, `item?.debtAssociated` | [KPI-45](#kpi-45), [KPI-46](#kpi-46) |
 | Acciones (`front/app/recommended-actions/page.tsx`) | Resumen: Cantidad de casos; Deuda asociada; "Riesgo promedio n / 100" | `group.count`, `group.debtAssociated`, `group.averageRisk` | [KPI-45](#kpi-45), [KPI-46](#kpi-46), [KPI-47](#kpi-47) |
 | Acciones (`front/app/recommended-actions/page.tsx`) | Recomendacion; Casos destacados | `group.recommendation`, `group.highlightedCases` | [KPI-13](#kpi-13), [KPI-31](#kpi-31) |
@@ -146,27 +147,19 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 
 ### <a id="kpi-02"></a>KPI-02 · Deuda vencida del objeto
 
-- **Pantallas:** "Deuda vencida" en Ficha (resumen y perfil) y tablas de Deuda y mora.
-- **Fórmula:** `debtor_profile.overdue_debt_amount` o, si el perfil no trae ese dato, Σ del importe actual de las obligaciones cuyo estado de catálogo es vencido (clave `OVERDUE`; solo sin clave se admite la etiqueta "venc/mora/atras") (`front/lib/mappers/debtor-object-mapper.ts:70-84`, `218-220`, `436-439`).
-- **Unidad:** ARS por objeto.
-- **Población:** obligaciones del objeto con estado de catálogo vencido; el frontend ya no infiere el estado por la fecha.
-- **Corte:** mixto; el estado lo infiere el ETL contra la fecha de la carga ([DE10][c73]); `as_of` no integrado.
-- **Cobertura:** sin perfil, una obligación con estado no observado se cuenta como faltante y la suma es parcial ([KPI-60](#kpi-60)); lectura fallida → "No disponible". El estado de origen no está integrado: las 56 286 obligaciones del corte figuran vencidas por inferencia del ETL ([DE10][c73]).
-- **Decisión que apoya:** distinguir un objeto en mora de uno al día antes de sugerir una gestión.
-- **No significa:** deuda exigible ni con estado jurídico verificado; tampoco el estado administrativo de origen.
-- **Contrato:** [FO02][c76], [PR02][c75], [DE10][c73].
+- **Pantallas:** «Deuda vencida al corte» en Ficha (resumen y tarjeta), tablas de Deuda y mora y CSV de cola.
+- **Fórmula:** suma en centavos de importes actuales positivos evaluables con vencimiento estrictamente anterior al corte v1 (`maturityMetrics` y `withMaturityMetrics`). No usa el estado de catálogo ni `debtor_profile.overdue_debt_amount` para representar la mora actual.
+- **Unidad y población:** ARS de las obligaciones evaluables del objeto; no implica exigibilidad ni verificación jurídica.
+- **Corte y cobertura:** mismo `decisionAsOf` que la severidad; datos parciales conservan subtotal y faltantes. Sin decisión evaluable → «No disponible»; completo sin vencidas → 0 observado. Véase [§21](#analitica-align014).
+- **Histórico:** FO02/PR02 del mapeador y la base conservan su definición por estado de catálogo; la proyección de la vista no reescribe ese dato.
 
 ### <a id="kpi-03"></a>KPI-03 · Días de atraso del objeto
 
-- **Pantallas:** "Atraso" / "Dias de atraso" en Ficha, Casos prioritarios, Sin contacto, Deuda y mora y "Casos sin contacto" del tablero (`overdueDays`).
-- **Fórmula:** máximo de días desde `dueDate` entre las obligaciones vencidas ([KPI-02](#kpi-02)), contados con el reloj de la consulta (`front/lib/mappers/debtor-object-mapper.ts:443-445`; `daysSinceData`, `front/lib/data-presence.ts:62-68`).
-- **Unidad:** días.
-- **Población:** obligaciones vencidas del objeto.
-- **Corte:** mixto (conjunto de vencidas persistido por el ETL; días con el reloj de la consulta); `as_of` no integrado.
-- **Cobertura:** sin vencidas, `NO_APLICA`, que las tablas muestran como "No disponible", sin unidad (solo la distribución de Deuda y mora lo separa como "No aplica", [KPI-42](#kpi-42)); un vencimiento ilegible es `INVALIDO`; si alguna obligación del objeto no tiene estado observado, el máximo queda "No disponible".
-- **Decisión que apoya:** ordenar por antigüedad de la mora; insumo de antigüedad de la severidad v1 ([reglas §4][r4]).
-- **No significa:** días desde la última gestión ni desde la emisión; tampoco prescripción (eso solo lo indica la bandera `VERIFICAR_PRESCRIPCION`, que pide verificación jurídica).
-- **Contrato:** [FO05][c76].
+- **Pantallas:** «Atraso» / «Dias de atraso» en Ficha, Casos prioritarios, Sin contacto, Deuda y mora, tablas del tablero y CSV de cola.
+- **Fórmula:** máximo de días calendario entre vencimiento y corte v1 para obligaciones evaluables con importe positivo y vencimiento anterior al corte; reutiliza `decision.severidad.dias_atraso_maximo`.
+- **Unidad y población:** días, obligaciones evaluables vencidas del objeto; no es prescripción ni fecha de última gestión.
+- **Corte y cobertura:** mismo `decisionAsOf` que [KPI-02](#kpi-02). Completo sin vencidas → `NO_APLICA`; las tablas lo presentan como «No disponible» sin unidad y la distribución como «No aplica». Parcial sin vencidas conocidas o corte no evaluable → «No disponible». Los faltantes permanecen en cobertura.
+- **Histórico:** FO05 del DTO interno conserva la derivación por estado; la vista usa la proyección común de [§21](#analitica-align014), también ante objetos ausentes o en cuarentena en una carga parcial de ALIGN-031.
 
 ### <a id="kpi-04"></a>KPI-04 · Antigüedad
 
@@ -596,17 +589,17 @@ La unidad es el **objeto tributario** (cuenta), no la persona ni el hogar ([cont
 
 ## 7. Riesgo (`/risk-analysis`)
 
-### <a id="kpi-38"></a>KPI-38 · Objetos con riesgo mayor a 90
+### <a id="kpi-38"></a>KPI-38 · Objetos con severidad alta
 
-- **Pantallas:** "Objetos con riesgo > 90" y tabla "Objetos con riesgo mayor a 90" (10 primeros).
-- **Fórmula:** conteo de objetos con [KPI-09](#kpi-09) `riskScore > 90` estrictamente (`riskAboveNinetyCases`, `front/lib/mappers/dashboard-metrics-mapper.ts:124`; mostrado en `front/app/risk-analysis/page.tsx:65`); la tabla lista esos objetos (`getHighRiskCases`, `front/lib/equitas-view-selectors.ts:58-60`) en el orden de [KPI-31](#kpi-31).
-- **Unidad:** objetos.
-- **Población:** todos los objetos leídos.
-- **Corte:** persistido (KPI-09).
-- **Cobertura:** los objetos sin riesgo no se cuentan y se informan en [KPI-60](#kpi-60); si ninguno tiene riesgo o falla la lectura de perfiles, "No disponible".
-- **Decisión que apoya:** revisar el extremo superior del índice heredado.
-- **No significa:** "casos críticos" ([KPI-55](#kpi-55)), que es un conjunto más amplio. Es la misma condición que `riskAboveNinetyCases` (AG07b).
-- **Contrato:** [VP10][c79], [AG07b][c78].
+- **Pantallas:** tarjeta «Objetos con severidad alta» y tabla de hasta diez objetos, ordenados dentro de cada cola.
+- **Fórmula:** banda `ALTA` de la severidad v1, desde 70 puntos inclusive. Tarjeta (`priorityCases`) y tabla (`getHighRiskCases`) comparten selección. La prioridad solo ordena dentro de cada intervención; no compara colas.
+- **Unidad:** objetos; los puntos de severidad no son porcentajes ni probabilidades.
+- **Población:** objetos que cumplen los filtros de la vista, antes de paginar; los objetos sin puntaje se conservan en cobertura y en «No disponible».
+- **Corte:** `decisionAsOf`, según la publicación vigente o la fecha de cálculo explícitamente rotulada (§21).
+- **Cobertura:** perfil histórico fallido no invalida la severidad v1; falta de obligaciones, relaciones o corte evaluable produce «No disponible». Ningún objeto completo en banda alta → 0 observado.
+- **Decisión que apoya:** revisar los objetos de banda alta con el corte y los faltantes visibles.
+- **Compatibilidad:** comparte población con «críticos» ([KPI-55](#kpi-55)), [KPI-19](#kpi-19) y AG05. `riskAboveNinetyCases` (AG07b) sigue como compatibilidad interna, sin alimentar esta vista.
+- **Contrato:** [VP10][c79], [AG05][c78]; definición vigente en [§21](#analitica-align014).
 
 ### <a id="kpi-39"></a>KPI-39 · Personas con puntaje alto
 
@@ -1025,7 +1018,7 @@ Los datos del original conservan la semántica descrita arriba.
 
 ## 19. <a id="reportes-csv"></a>Reportes CSV de servidor (ALIGN-028)
 
-Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
+Los Route Handlers de `front/app/api/reports/` generan estos archivos en el servidor, con cliente de sesión y RLS. **Sin datos personales:** ningún reporte lleva nombre, documento, contacto, domicilio, `debtor.description`, texto libre de motivo (`reason_text`) ni identidad de quien decidió o aprobó, para ningún rol. Tampoco lleva crudo un campo que una persona pueda editar: ver [códigos editables](#codigos-editables). Ninguno reemplaza a una pantalla: una cifra de un reporte significa lo mismo que su entrada de este catálogo.
 
 | Reporte | Ruta | Archivo | Roles (permiso en `front/lib/server/dal.ts`) |
 |---|---|---|---|
@@ -1033,6 +1026,7 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | [Decisiones](#reporte-decisiones) | `/api/reports/decisions` | `equitas-decisiones.csv` | `consulta`, `operador`, `supervisor` (`decision:read`) |
 | [Supervisión](#reporte-supervision) | `/api/reports/supervision` | `equitas-supervision.csv` | `supervisor` (`supervision:read`) |
 | [Calidad de datos](#reporte-calidad) | `/api/reports/data-quality` | `equitas-calidad-de-datos.csv` | Igual que la cola (`portfolio:read`) |
+| [Accesos](#reporte-accesos) (ALIGN-069) | `/api/reports/access` | `equitas-accesos.csv` | `supervisor` (`audit:read`) |
 
 `importador` e `importador_sistema` no reciben ninguno, porque no leen cartera ([ADR-001][adr]).
 
@@ -1129,6 +1123,14 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 | `aprobaciones_vigentes` | `APRUEBA`, `OBJETA` | De las anteriores, por aprobación vigente | decisiones |
 | `motivos_objecion` | Cada `reason_code` de la lista cerrada de una objeción vigente, `CODIGO_NO_CATALOGADO` o `SIN_CODIGO` | Conteo | decisiones |
 
+### <a id="reporte-accesos"></a>Accesos
+
+- **Formato:** una fila `DETALLE` por registro de `access_audit`, con `registro_id`, `fecha` (UTC), `accion`, `objetivo`, `actor_id` y `rol_actor`, y una fila `TOTAL` con la cantidad en `registros`. `fecha_corte` y `version_reglas` valen `NO_APLICA`: no depende de un corte ni de reglas. Solo identificadores internos y códigos, sin nombres, correos ni documentos.
+- **Filtros:** `desde` y `hasta` (día UTC del registro, inclusive), `accion` (lista cerrada) y `actor` (`user.id`).
+- **Población:** registros del municipio activo. Bajar este reporte también deja un registro, que aparece en la descarga siguiente: se registra después de armar el archivo.
+- **Decisión que apoya:** detectar y explicar accesos indebidos: quién abrió un caso o exportó un reporte, y cuándo.
+- **No significa:** todo lo que se leyó. Una lectura directa por la Data API no queda registrada, ni los intentos denegados (contrato §15). HEAD consulta solo metadatos autorizados, sin descargar ni registrar una exportación, en los cinco reportes. Un registro indica que la ficha o el archivo se entregaron, no que alguien los haya mirado.
+
 ### <a id="reporte-calidad"></a>Calidad de datos
 
 - **Formato:** filas `AGREGADO`, con las mismas columnas que supervisión. Sin filtros. Solo conteos y códigos: los ids de obligación de `decisionIssues` no se copian.
@@ -1150,7 +1152,7 @@ Cuatro Route Handlers de `front/app/api/reports/` generan estos archivos en el s
 
 ## 20. <a id="adenda-revision-colas"></a>Adenda ALIGN-021: revisión humana y colas
 
-Cifras nuevas de la pestaña "Revisión" (`front/components/review/review-panel.tsx`) y de `/priority-cases` (`front/app/priority-cases/page.tsx`). Las de la pestaña salen de `getCaseReviewSnapshot`: usan el **corte publicado**, no la fecha de cálculo, y pueden diferir de las demás pestañas de la ficha ([KPI-61](#kpi-61)). No cambian ninguna entrada anterior.
+Cifras nuevas de la pestaña "Revisión" (`front/components/review/review-panel.tsx`) y de `/priority-cases` (`front/app/priority-cases/page.tsx`). Las de la pestaña salen de `getCaseReviewSnapshot`: usan el **corte publicado**, no la fecha de cálculo, y, desde ALIGN-014 (§21), comparten selección de corte con cartera y CSV ([KPI-61](#kpi-61)).
 
 | Entrada | Rótulo visible | Campo / fórmula | Unidad y población | Corte / cobertura | Decisión y límite |
 |---|---|---|---|---|---|
@@ -1164,3 +1166,53 @@ Cifras nuevas de la pestaña "Revisión" (`front/components/review/review-panel.
 | <a id="kpi-v1-contador-motivo"></a>KPI-V1-17 Contador del detalle | "n de 500 caracteres, contando los espacios" | `[...texto].length` | Puntos de código del texto escrito | Vacío → 0 y se envía `null` | Límite de `reason_text`. No es un dato de dominio |
 
 Campos de registro del historial (no son indicadores): fecha, rol, decisión, motivo, corte, versión de reglas y lista de control de `case_review` y `case_review_approval`. Las fechas de corte se muestran con `formatDate`; los instantes, en hora de Córdoba.
+
+## 21. <a id="analitica-align014"></a>Analítica vigente — ALIGN-014 (noche 5)
+
+Esta sección define el comportamiento vigente del tablero, `/risk-analysis`, `/debt-aging`, `/recommended-actions`, `/no-contact` y sus listados. Reemplaza las fórmulas y rótulos históricos incompatibles de las secciones anteriores; sus anclas se conservan como trazabilidad. Las reglas congeladas v1 y sus umbrales no cambian.
+
+### Población, corte y cobertura
+
+Cada vista muestra la población **antes de paginar**, la fecha del manifiesto cuando existe y, cuando falta, la fecha de cálculo del calendario de Córdoba (`America/Argentina/Cordoba`). El instante de cálculo sigue siendo UTC. Entre las 21:00 y 24:00 de Córdoba no se toma el día siguiente. Un manifiesto presente con fecha inválida bloquea la decisión; no se sustituye por el reloj.
+
+La leyenda distingue el corte de las decisiones del **saldo histórico**, cuyo corte de origen no está integrado y puede provenir de `debtor_profile`. Ningún monto afirma exigibilidad. El cargador común lee todos los eventos de `import_batch` del municipio autorizado, antes y después de la cartera. Usa `selectCurrentCutoff`, también usado por revisión y equivalente a `equitas_current_cutoff`: último evento vigente que afecta la cartera, solo si es PUBLICADO. VALIDADO/CONFIRMADO o FALLIDO con antecedente bloquean el corte; RECIBIDO, descartes y FALLIDO sin antecedente no sustituyen una publicación. Un estado desconocido, una cadena inválida, una página fallida o un cambio de publicación durante la carga bloquean la evaluación y los CSV (503), sin recurrir al reloj. Sin publicación ni indicios de escritura parcial se conserva la fecha de cálculo rotulada y `fecha_corte=NO_INTEGRADO`. Una cartera vacía conserva el corte publicado en pantalla y CSV. No se deduce fecha del perfil. La doble lectura detecta cambios de publicación; no constituye una transacción MVCC entre peticiones HTTP ni detecta escrituras directas de cartera sin un evento de importación. La escritura de revisión mantiene su comprobación transaccional en la base.
+
+`n de N objetos con dato` significa valores observados sobre la población pertinente de cada cifra. Se informa además cuántos valores son parciales; el desglose de `DataPresence` conserva los faltantes de obligaciones. Un mínimo parcial no prueba ausencia de otras vencidas ni una banda máxima. En la media de atraso, N incluye objetos con mora observada y objetos cuyo atraso es desconocido; excluye los objetos completos sin mora, para los cuales el atraso es `NO_APLICA`.
+
+Los parámetros repetidos usan su primer valor, igual que `URLSearchParams.get`; se normalizan antes de filtrar, paginar o construir enlaces. Una lista de valores vacía equivale a ausencia. Los filtros `q`, `risk` (banda de severidad), `type`, `contact`, `minAmount`, `status`, `personId` y `queue` acompañan los enlaces entre las siete vistas, el detalle y el regreso al listado. La página y el tamaño se conservan en su paginación; cambiar de vista reinicia la página. La cola elegida explícitamente se conserva; una cola seleccionada por defecto no restringe una búsqueda nueva. Cuando falta un dato necesario para filtrar se declara cuántos objetos no pueden evaluarse y se muestran coincidencias observadas. Cero coincidencias con objetos no evaluables se presenta como selección incompleta, no como vacío confirmado.
+
+### Definiciones aplicadas
+
+| Cifra o vista | Fórmula y población | Unidad y denominador | Corte y ausencias |
+|---|---|---|---|
+| Objetos con severidad alta (KPI-19/24/38, AG05) | Objetos de banda ALTA v1, desde 70 inclusive; KPI y tabla comparten selección | objetos; porcentaje sobre todos los objetos seleccionados, incluidos los sin puntaje | Corte v1; perfil histórico fallido no invalida severidad |
+| Críticos y deuda crítica (KPI-55/56, compatibilidad) | `criticalCasesToday` cuenta banda ALTA; `criticalDebtTotal` suma el saldo histórico **de esa misma población** | objetos / ARS | Contador al corte v1; saldo histórico sin corte integrado. `riskAboveNinetyCases` se retiene solo por compatibilidad y no alimenta el KPI visible |
+| Deuda total (KPI-01/20) | Una suma por objeto de saldo histórico observado, conservando la preferencia previa por perfil | ARS; cobertura de objetos con saldo sobre seleccionados | No se equipara a monto evaluable ni a deuda exigible |
+| Casos vencidos (KPI-21) | Objetos con al menos una obligación evaluable, importe positivo y vencimiento estrictamente anterior al corte | objetos, nunca cantidad de obligaciones | Datos parciales: mínimo observado; no usa estado de catálogo ni saldo vencido persistido |
+| Deuda vencida y atraso (KPI-40/41/42) | Suma de importes evaluables vencidos; media redondeada del máximo de días por objeto con mora; distribución por máximo | ARS / días calendario / objetos; la media no pondera por obligaciones ni por monto | Corte v1; completo sin vencidas → `NO_APLICA` en atraso; parcial sin vencidas conocidas → no disponible; faltantes en categoría propia |
+| Con/sin contacto (KPI-08/22/50) | Objetos con/sin un contacto cargado activo por relación activa; `null` nunca es sin contacto | objetos; proporción sobre todos los seleccionados | Estado leído, sin fecha de verificación integrada; no equivale a contacto verificado ni consentimiento |
+| Revisión requerida (KPI-23) | Decisiones que exigen revisión, incluidas R2 sin puntaje | objetos con decisión; cobertura explícita | No se condiciona a tener un puntaje numérico |
+| Severidad por banda y por tipo (KPI-28/29) | Objetos en cada categoría observada; sin puntaje en No disponible | objetos; porcentajes sobre suma de categorías, incluido No disponible | Corte v1 para banda; tipo leído sin fecha de origen |
+| Intervenciones, montos y medias (KPI-V1-04/05/06) | Cinco colas v1 y objetos sin cola conocida; cada monto suma obligaciones evaluables, vencidas o no; media de severidad observada | objetos / ARS / puntos 0–100; cobertura separada por monto y severidad | No disponible conserva conteo de objetos conocidos y motivos `INVALIDO`; una lectura fallida no crea cinco colas vacías |
+| Primeros casos de cada cola (reemplaza KPI-58 global) | Hasta tres por intervención, prioridad descendente → monto evaluable descendente → vencimiento más antiguo → ID por código | puntos 0–100 **solo dentro de esa cola** | Nunca se publica un orden comparativo de prioridad entre intervenciones; `topPriorityDebtors` queda vacío por compatibilidad |
+| Mayores saldos y concentración (KPI-25/30/44) | Top 5 o 10 de importes históricos observados; saldo descendente y empate ID por código; concentración top 5 / saldo observado seleccionado | ARS / % del subtotal observado | Nulos fuera del ranking y presentes en cobertura; subtotal parcial rotulado |
+| Monto evaluable por intervención (reemplaza KPI-43) | Misma suma por cola de KPI-V1-05 | ARS por intervención | Sustituye el gráfico de saldo por estado persistido; no cambia `byDebtStatus`, conteo de obligaciones de compatibilidad |
+| Panel de personas en análisis | Máximo del índice heredado entre perfiles vinculados; población completa de personas leídas, declarada junto al panel | personas / puntos; cobertura de personas | Corte del índice no integrado. Los filtros de objetos no se presentan como filtros de personas |
+
+`withMaturityMetrics` proyecta la mora al calendario v1 sin volver a ejecutar el motor ni mutar el DTO histórico del mapeador. La usan la ficha (resumen, tarjeta de deuda vencida y datos de respaldo de la pestaña Revisión), Casos prioritarios, Sin contacto y `buildDebtAgingSummary`; el CSV de cola toma esas mismas filas analíticas. El CSV de calidad calcula `presencia_deuda_vencida` y `presencia_atraso` sobre esa misma proyección, con estados observados, parciales o no disponibles según los vencimientos y el corte, sin usar el perfil histórico como respaldo. Por eso deuda vencida y atraso coinciden para el mismo objeto y corte, incluso si una carga parcial conservó su estado o perfil anterior. El saldo total sigue siendo histórico y el estado de catálogo se identifica como tal: no decide la mora por calendario. La conciliación de montos en acciones conserva separados saldo histórico, monto evaluable, importes sin vencimiento evaluable y resto de la diferencia.
+
+### Vacío, fallo y precisión
+
+Una selección completa vacía permite conteo y suma cero; la media es `NO_APLICA`. Una lectura fallida devuelve valores no disponibles y aviso, no "No hay objetos/personas/casos", paginación 0–0 ni 404. La ficha usa 404 solo cuando la lectura del objeto concluyó sin encontrarlo. Las vistas conservan los objetos conocidos aun cuando no puede determinarse su cola. Los datos parciales muestran cobertura y faltantes.
+
+Los importes se leen como texto decimal desde PostgREST en `debt` y `debtor_profile`, antes de convertir a `number`; se verifica el valor exacto en centavos. Un importe o suma que exceda el rango seguro o pierda centavos se declara `INVALIDO`, sin redondearlo silenciosamente (incluye el límite heredado LIM-027-01). Las sumas y diferencias monetarias usan enteros `BigInt` en centavos y validan el resultado representable. Esto también protege la exposición asociada de personas. No se modifica el esquema ni el núcleo de reglas.
+
+La proyección de `person` excluye `birth_date`; la de `debtor_profile_detail` excluye `reason`. Se mantienen columnas usadas por los mapeadores, claves escalares, uniones y filtros de alcance existentes. ALIGN-014 no cambia autenticación, permisos ni filtros por municipio/objeto; la corrección de privacidad coordinada pertenece a su dueño separado.
+
+### Comprobación reproducible
+
+`front/tests/integration/analytics-reference.integration.test.ts` contrasta 3.507 objetos sintéticos y sus obligaciones contra consultas SQLite independientes (`front/tests/fixtures/analytics-reference.py`), sin importar selectores ni motor de producción en la referencia. Fija corte y compara seis selecciones, totales, mora, bandas, tipos, distribución de atraso, top 10 y 5 y **todos** los IDs ordenados de cada cola. Se conserva además la regresión de lectura paginada de 3.507 filas.
+
+Las pruebas de `analytics-catalog` cubren el día civil de Córdoba, perfil fallido, población de críticos, `INVALIDO`, mora por calendario, precisión decimal, filtros conservados, fallos frente a vacío y asociaciones de las cuatro etiquetas con sus controles. La evidencia de comandos, SHA, UI local, E06, SMOKE-01, gates y campaña 022 se entrega fuera de git en la carpeta de ALIGN-014/noche-5. La revisión independiente y la decisión de integración corresponden al padre.
+
+La regresión `portfolio-cutoff.integration.test.ts` cubre el caso coordinado de ALIGN-029 (carga VALIDADO→PUBLICADO, corte 2026-09-30), aislamiento municipal, historial de más de 1000 eventos, error tardío, publicación intercalada, estados desconocidos/parciales/fallidos y cartera vacía. No sustituye la campaña 029: el padre repetirá ese flujo sobre la integración identificada por SHA.

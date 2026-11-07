@@ -69,6 +69,14 @@ export function createPaginatedSupabase(
     }
     const count = rows.length
     rows = rows.slice(request.offset, request.offset + Math.min(request.limit, serverMaxRows))
+    // import_batch solo usa columnas simples y esta proyección JSON. Respetarlas
+    // evita que una prueba pase por recibir counts cuando la DAL no lo pidió.
+    if (request.table === 'import_batch' && request.select && request.select !== '*') {
+      rows = rows.map(row => Object.fromEntries(request.select!.split(',').map(column =>
+        column === 'publicacion_atomica:counts->publicacion_atomica'
+          ? ['publicacion_atomica', (row.counts as Record<string, unknown> | undefined)?.publicacion_atomica ?? null]
+          : [column, row[column]])))
+    }
     return new Response(JSON.stringify(rows), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Content-Range': `0-${Math.max(0, rows.length - 1)}/${count}` },

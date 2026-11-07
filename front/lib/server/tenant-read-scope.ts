@@ -18,16 +18,18 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
     case 'debtor':
       return { select: '*', filters: [['tenant', tenantId]] }
     case 'debt':
+      return { select: `id,external_id,debtor,type,description,original_amount::text,current_amount::text,updated_amount::text,currency,issue_date,due_date,last_collection_date,period,status,${debtor}`, filters: [['__scope.tenant', tenantId]] }
     case 'debtor_person':
+      return { select: `id,debtor,person,priority,role,active,${debtor}`, filters: [['__scope.tenant', tenantId]] }
     case 'debtor_profile':
-      return { select: `*,${debtor}`, filters: [['__scope.tenant', tenantId]] }
+      return { select: `id,debtor,total_debt_amount::text,overdue_debt_amount::text,profile_generated_at,${debtor}`, filters: [['__scope.tenant', tenantId]] }
     case 'person':
-      return { select: `*,${links}`, filters: [['__links.active', true], ['__links.__debtor.tenant', tenantId]] }
+      return { select: `id,external_id,document_type,document_number,full_name,type,status,${links}`, filters: [['__links.active', true], ['__links.__debtor.tenant', tenantId]] }
     case 'debtor_contact':
       return { select: `*,${person}`, filters: personFilters }
     case 'debtor_profile_detail':
       return {
-        select: `*,__scope:debtor_profile!inner(__debtor:debtor!inner(tenant)),${person}`,
+        select: `id,debtor_profile,person,risk_value,active,__scope:debtor_profile!inner(__debtor:debtor!inner(tenant)),${person}`,
         filters: [['__scope.__debtor.tenant', tenantId], ...personFilters],
       }
     case 'debtor_type':
@@ -49,6 +51,8 @@ const DEBTOR_COLUMN = {
 
 export type DebtorScopedTable = keyof typeof DEBTOR_COLUMN
 
+// debtorId debe venir de una fila comprobada dentro del municipio. Validar solo
+// la forma de un ID de formulario no lo habilita como filtro: la URL se registra.
 export function debtorReadScope(table: DebtorScopedTable, tenantId: string, debtorId: string): TableReadScope {
   const scope = tenantReadScope(table, tenantId)!
   return { select: scope.select, filters: [...scope.filters, [DEBTOR_COLUMN[table], debtorId]] }

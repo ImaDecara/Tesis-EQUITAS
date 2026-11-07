@@ -89,14 +89,14 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error']; b
   return { rpc, created }
 }
 
-function session({ role = 'operador' as RoleName, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, database = {} as { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } } = {}) {
+function session({ role = 'operador' as RoleName, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, serverMaxRows = 1000, enforceFilters = true, database = {} as { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } } = {}) {
   const fixture = createPaginatedSupabase({
     user: [{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }],
     tenant_user: [{ id: 1, user: 42, tenant: memberTenant, role: ROLE_IDS[role], status: true }],
     tenant: [{ id: memberTenant, status: 'ACTIVE' }],
     role: Object.entries(ROLE_IDS).map(([name, id]) => ({ id, name })),
     ...tables,
-  }, { enforceFilters: true, fail })
+  }, { enforceFilters, fail, serverMaxRows })
   vi.spyOn(fixture.client.auth, 'getUser').mockResolvedValue(signedIn
     ? { data: { user: { id: 'auth-test' } }, error: null } as never
     : { data: { user: null }, error: null } as never)
@@ -603,10 +603,40 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const { rpc, tables } = await proposal()
     tables.case_review.push({ id: 700, tenant: OTHER_TENANT, debtor: FOREIGN_DEBTOR, supersedes: null, idempotency_key: 'x', rules_version: RULES_VERSION, as_of: '2026-10-30', inputs_hash: 'c'.repeat(64), decided_intensity: 3 })
     rpc.mockClear()
-    signInAs('supervisor', tables, rpc)
+    const { requests } = signInAs('supervisor', tables, rpc)
     await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     await expect(approveCaseDecision(approveInput('123456'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     expect(rpc).not.toHaveBeenCalled()
+    expect(requests.filter(request => request.table === 'case_review').every(request => request.filters.id === undefined && request.filters.tenant === `eq.${TENANT}`)).toBe(true)
+    expect(requests.every(request => !Object.values(request.filters).includes('eq.123456') && !Object.values(request.filters).includes('eq.700'))).toBe(true)
+  })
+
+  it('encuentra la revision autorizada despues de una pagina corta', async () => {
+    const { reviewId, tables } = await proposal()
+    tables.case_review.unshift({ id: 50, tenant: TENANT, debtor: DEBTOR, decided_intensity: 1 })
+    const { requests, rpc } = session({ role: 'supervisor', tables, serverMaxRows: 1 })
+    await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: true, caseReviewId: reviewId })
+    expect(rpc).toHaveBeenCalledOnce()
+    const selection = requests.filter(request => request.table === 'case_review' && request.filters.debtor === undefined)
+    expect(selection.map(request => request.after)).toEqual([null, '50', reviewId])
+    expect(selection.every(request => request.filters.id === undefined && request.filters.tenant === `eq.${TENANT}`)).toBe(true)
+  })
+
+  it('una pagina posterior fallida no permite aprobar desde un prefijo', async () => {
+    const { reviewId, tables } = await proposal()
+    const { rpc } = session({ role: 'supervisor', tables, serverMaxRows: 1,
+      fail: request => request.table === 'case_review' && request.after !== null ? { code: '42501', message: 'synthetic' } : null })
+    await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_UNAVAILABLE' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('una fila ajena no autoriza aunque el transporte ignore el filtro de tenant', async () => {
+    const tables = portfolio()
+    tables.case_review.push({ id: 700, tenant: OTHER_TENANT, debtor: FOREIGN_DEBTOR, decided_intensity: 3 })
+    const { requests, rpc } = session({ role: 'supervisor', tables, enforceFilters: false })
+    await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
+    expect(rpc).not.toHaveBeenCalled()
+    expect(requests.some(request => request.table === 'case_review_approval' || request.table === 'debtor')).toBe(false)
   })
 
   it('una decision menor a 3 no se aprueba', async () => {

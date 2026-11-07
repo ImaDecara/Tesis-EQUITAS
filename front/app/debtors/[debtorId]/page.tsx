@@ -1,3 +1,5 @@
+import { withMaturityMetrics } from '@/lib/analytics'
+import { portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
 import decisionRules from '../../../../contracts/decision-rules.v1.json'
 import Link from 'next/link'
@@ -11,6 +13,7 @@ import { AppShell } from '@/components/layout/app-shell'
 import { reviewDifferenceNotice, ReviewPanel } from '@/components/review/review-panel'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { auditCaseOpen } from '@/lib/server/audit'
 import {
   Table,
   TableBody,
@@ -36,20 +39,24 @@ export default async function DebtorDetailPage({
   searchParams,
 }: {
   params: Promise<{ debtorId: string }>
-  searchParams?: Promise<{ tab?: string }>
+  searchParams?: Promise<RawPortfolioSearchParams & { tab?: string | string[] }>
 }) {
   const { debtorId } = await params
-  const requestedTab = (await searchParams)?.tab
+  const rawParams = await searchParams ?? {}
+  const requestedTab = (Array.isArray(rawParams.tab) ? rawParams.tab[0] : rawParams.tab)?.trim()
+  const filters = normalizePortfolioSearchParams(rawParams)
   const { detail, warnings } = await getDebtorDetailData(debtorId)
 
   if (!detail) {
+    if (readingFailed(warnings, 'debtor')) return <AppShell><h1>Objeto no disponible</h1><DataWarnings warnings={warnings} /><p>No disponible: no se pudo leer el objeto. No se puede determinar si existe.</p><Link href={portfolioHref('/debtors', filters)}>Volver al listado</Link></AppShell>
     notFound()
   }
 
   const reviewScreen = await loadCaseReviewScreen(debtorId)
   const reviewNotice = reviewDifferenceNotice(detail.debtor, reviewScreen)
 
-  const { debtor, debts, people, contacts, profile } = detail
+  const { debtor: sourceDebtor, debts, people, contacts, profile } = detail
+  const debtor = withMaturityMetrics(sourceDebtor)
   const relationsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person')
   const personCatalogReadFailed = readingFailed(warnings, 'person')
   const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
@@ -61,11 +68,14 @@ export default async function DebtorDetailPage({
   const percentagesMismatch = percentageTotal !== null &&
     Math.abs(percentageTotal - 100) > decisionRules.banderas.tolerancia_porcentajes + Number.EPSILON * 100
 
+  // ALIGN-069: cada entrega de la ficha deja un registro. Si no se puede registrar, no se entrega.
+  await auditCaseOpen(debtor.id)
+
   return (
     <AppShell>
       <section className="mb-6 space-y-3">
         <Link
-          href="/debtors"
+          href={portfolioHref('/debtors', filters)}
           className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
         >
           <ArrowLeft className="size-3.5" />
@@ -102,6 +112,7 @@ export default async function DebtorDetailPage({
         {reviewNotice && <p role="status" className="text-sm text-amber-800">{reviewNotice}</p>}
         <p className="text-sm text-slate-700">Vulnerabilidad: no informada</p>
         <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>
+        <p className="text-xs text-slate-600">La deuda vencida y los días de atraso usan los importes y vencimientos evaluables al corte de la decisión. El estado de catálogo se conserva como dato histórico; no determina esa mora.</p>
         <p className="text-xs text-slate-600">{missingSummary(debtor.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -123,7 +134,7 @@ export default async function DebtorDetailPage({
           </Card>
           <Card className="border-[#d9dfe7] bg-[#f7f9fc] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Estado</CardTitle>
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Estado de catálogo</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <Badge variant="neutral">{debtor.status}</Badge>
@@ -191,7 +202,7 @@ export default async function DebtorDetailPage({
                     {formatCurrency(debtor.totalDebt)}
                   </p>
                   <p>
-                    <span className="font-medium text-slate-900">Deuda vencida:</span>{' '}
+                    <span className="font-medium text-slate-900">Deuda vencida al corte:</span>{' '}
                     {formatCurrency(debtor.overdueDebt)}
                   </p>
                   <p>
@@ -199,7 +210,7 @@ export default async function DebtorDetailPage({
                     {formatWithUnit(debtor.maxDaysOverdue, 'dias')}
                   </p>
                   <p>
-                    <span className="font-medium text-slate-900">Estado:</span> {debtor.status}
+                    <span className="font-medium text-slate-900">Estado de catálogo:</span> {debtor.status}
                   </p>
                   <p>
                     <span className="font-medium text-slate-900">Prioridad dentro de su cola (puntos de 0 a 100):</span>{' '}
@@ -351,10 +362,10 @@ export default async function DebtorDetailPage({
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Deuda vencida</CardTitle>
+                  <CardTitle className="text-sm">Deuda vencida al corte</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
-                  {formatCurrency(profile.overdueDebt)}
+                  {formatCurrency(debtor.overdueDebt)}
                 </CardContent>
               </Card>
               <Card>
@@ -415,7 +426,7 @@ export default async function DebtorDetailPage({
           </TabsContent>
 
           <TabsContent value="review" keepMounted>
-            <ReviewPanel screen={reviewScreen} detail={detail} warnings={warnings} />
+            <ReviewPanel screen={reviewScreen} detail={{ ...detail, debtor }} warnings={warnings} />
           </TabsContent>
         </Tabs>
       </div>

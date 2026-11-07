@@ -240,9 +240,9 @@ export default async function PeoplePage({
             <div>
               <CardTitle>Listado de personas</CardTitle>
               <p className="mt-2 text-sm text-slate-600">
-                Mostrando {currentStart.toLocaleString('es-AR')}-
+                {filterReadFailed ? 'No disponible: selección incompleta.' : <>Mostrando {currentStart.toLocaleString('es-AR')}-
                 {currentEnd.toLocaleString('es-AR')} de{' '}
-                {formatWithUnit(filterReadFailed ? null : filteredPeople.length, 'personas')}.
+                {formatWithUnit(filterReadFailed ? null : filteredPeople.length, 'personas')}.</>}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -284,7 +284,7 @@ export default async function PeoplePage({
                 {paginatedPeople.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-slate-500">
-                      No hay personas que coincidan con los filtros.
+                      {filterReadFailed ? 'No disponible: lectura incompleta de personas o del filtro.' : 'No hay personas que coincidan con los filtros.'}
                     </TableCell>
                   </TableRow>
                 )}

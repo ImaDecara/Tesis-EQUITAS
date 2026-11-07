@@ -6,10 +6,12 @@ import { csvReportResponse } from '@/lib/server/report-response'
 export const dynamic = 'force-dynamic'
 
 export function GET(request: Request) {
-  return csvReportResponse('calidad-de-datos', 'portfolio:read', async () => {
+  return csvReportResponse(request, 'calidad-de-datos', 'portfolio:read', async () => {
     parseDataQualityFilters(new URL(request.url).searchParams)
-    const { debtors, warnings } = await getDebtorsData()
+    const { debtors, warnings, batch } = await getDebtorsData()
     assertReadsComplete(warnings)
-    return buildDataQualityReport(debtors, new Date().toISOString())
+    return buildDataQualityReport(debtors, new Date().toISOString(), batch)
   })
 }
+
+export const HEAD = GET

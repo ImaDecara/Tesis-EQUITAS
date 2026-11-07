@@ -1,5 +1,5 @@
 import type { CsvValue } from '@/lib/reports/csv'
-import type { DataPresence, DataWarning, DebtorListItem, NumericData } from '@/types/equitas-domain'
+import type { DataPresence, DataWarning, DebtorListItem, NumericData, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // ALIGN-028. Columnas y reglas comunes a los cuatro reportes.
 export const META_COLUMNS = ['fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones', 'tipo_fila'] as const
@@ -67,7 +67,8 @@ export function absentState(presence: DataPresence): Exclude<DataPresence, 'OBSE
 
 // El corte no se toma del reloj. Sin manifiesto (`as_of` no integrado, contrato §5) las reglas
 // usan la fecha de calculo, que se informa aparte y rotulada, como en la pantalla.
-export function portfolioCutoff(universe: readonly DebtorListItem[]) {
+export function portfolioCutoff(universe: readonly DebtorListItem[], batch?: RawDebtorDataBundle['batch']) {
+  if (batch) return { fechaCorte: batch.as_of ?? 'NO_INFORMADO_EN_ORIGEN', fechaCalculoUsada: 'NO_APLICA' }
   const sample = universe[0]
   if (sample?.decisionAsOfSource !== 'MANIFIESTO_LOTE' || !sample.decisionAsOf) {
     return { fechaCorte: 'NO_INTEGRADO', fechaCalculoUsada: sample?.decisionAsOf?.valor ?? 'NO_APLICA' }

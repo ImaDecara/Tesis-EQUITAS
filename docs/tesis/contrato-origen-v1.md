@@ -556,13 +556,15 @@ los objetos publicables y, aparte, de los que quedan en cuarentena, hallazgos po
 importes en centavos. Un conteo no calculado se omite; no es 0. `PUBLICADO` agrega `filas_insertadas`,
 `filas_actualizadas`, `filas_sin_cambios` y su detalle por tabla en `escrituras` (ALIGN-027).
 
-**Lote completo (ALIGN-027):** V1 no admite delta ni bajas. Si un archivo no trae un objeto ya publicado, una obligación
-publicada de un objeto aceptado o una relación persona–objeto, el lote termina en `FALLIDO`, sin escribir, con
-`PARTIAL_LOAD_REJECTED` y `faltantes` en los conteos. Un objeto en cuarentena viene en el archivo: conserva su estado previo.
+**Lote incompleto (ALIGN-027, ALIGN-031):** por defecto se exige el lote completo. Si un archivo no trae un objeto ya publicado,
+una obligación publicada de un objeto aceptado o una relación persona–objeto, el lote termina en `FALLIDO`, sin escribir, con
+`PARTIAL_LOAD_REJECTED` y `faltantes` en los conteos. Quien carga puede pedir otra cosa con `--ausentes`: `conservar` (delta) o
+`dar-de-baja` (delta que desactiva relaciones y contactos ausentes de objetos aceptados). Lo ausente se informa en `ausentes` y lo
+desactivado en `bajas_relaciones` y `bajas_contactos`; nunca se borra ni se desactiva sin pedirlo. Una obligación ausente se
+conserva siempre. Un objeto en cuarentena viene en el archivo: conserva su estado previo.
 Recargar el mismo lote no inserta ni actualiza ninguna fila. Si la base rechaza `PUBLICADO` el lote termina en `FALLIDO` con
 antecedente; con resultado incierto no se registra nada más (`PUBLISH_OUTCOME_UNKNOWN`, ALIGN-032). Procedimiento en
 [`entorno-aislado.md` §8](entorno-aislado.md#8-carga-v1-verificada-align-027).
 
-Queda fuera de esta versión: la política de bajas y delta, incluidos contactos y direcciones que dejan de venir, y la
-paginación de la lectura de deudas existentes (ALIGN-031), transacción, recuperación y clave de idempotencia por lote
-(ALIGN-032), y el municipio obtenido del contexto autorizado (ALIGN-052/054): la CLI usa el tenant 1 fijo.
+Queda fuera de esta versión: la baja de obligaciones y de direcciones que dejan de venir, que se conservan, transacción,
+recuperación y clave de idempotencia por lote (ALIGN-032), y el municipio obtenido del contexto autorizado (ALIGN-052/054): la CLI usa el tenant 1 fijo.

@@ -1,0 +1,70 @@
+import { createElement, Fragment, type ReactNode } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildPresenceRawData, buildPresencePeopleData } from '@/tests/helpers/equitas-fixtures'
+import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
+import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
+import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
+
+const api = vi.hoisted(() => ({ getDebtorsData: vi.fn(), getPeopleData: vi.fn(), getDashboardData: vi.fn(), getDebtorDetailData: vi.fn() }))
+vi.mock('@/lib/equitas-data', () => api)
+vi.mock('next/navigation', () => ({ usePathname: () => '/debtors', useRouter: () => ({ replace: vi.fn() }), notFound: () => { throw new Error('notFound') } }))
+vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
+vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen: async () => ({ kind: 'restricted', message: 'Fuera de esta prueba' }) }))
+import HomePage from '@/app/page'
+import NoContactPage from '@/app/no-contact/page'
+import RecommendedActionsPage from '@/app/recommended-actions/page'
+import DebtorsPage from '@/app/debtors/page'
+import PeoplePage from '@/app/people/page'
+import DebtorDetailPage from '@/app/debtors/[debtorId]/page'
+
+const html = (node: ReactNode) => renderToStaticMarkup(createElement(Fragment, null, node))
+const text = (node: ReactNode) => html(node).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+function configure(table?: string) {
+  const raw = buildPresenceRawData(); raw.batch = { as_of: '2026-09-30' }
+  if (table) raw.warnings = [{ table, message: 'Fallo sintético', needsSelectPolicy: false }]
+  if (table === 'debtor') raw.debtors = []
+  if (table === 'debtor_contact') raw.debtorContacts = []
+  const mapped = mapDebtorObjectsFromRawData(raw)
+  const personsRaw = buildPresencePeopleData()
+  if (table === 'person') { personsRaw.people = []; personsRaw.warnings = raw.warnings }
+  const persons = mapPeopleFromRawData(personsRaw)
+  api.getDebtorsData.mockResolvedValue(mapped)
+  api.getDashboardData.mockResolvedValue({ dashboard: mapDashboardMetricsFromDebtorObjects(mapped), warnings: raw.warnings })
+  api.getPeopleData.mockResolvedValue({ people: persons.people, peopleDashboard: persons.dashboard, warnings: personsRaw.warnings })
+  api.getDebtorDetailData.mockResolvedValue({ detail: null, warnings: raw.warnings })
+}
+
+describe('ALIGN-014: lo que ve el operador', () => {
+  beforeEach(() => { vi.clearAllMocks(); configure() })
+  it('una lectura fallida no afirma ausencia ni contador cero', async () => {
+    configure('debtor')
+    for (const page of [await NoContactPage({ searchParams: Promise.resolve({}) }), await DebtorsPage({ searchParams: Promise.resolve({}) })]) {
+      expect(text(page)).not.toMatch(/No hay (casos|objetos)|Mostrando 0-0 de 0/)
+      expect(text(page)).toContain('No disponible')
+    }
+    expect(text(await RecommendedActionsPage())).not.toContain('Sin casos')
+    await expect(DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) })).resolves.toBeDefined()
+  })
+  it('el vacío real sigue siendo un vacío y el fallo de personas no lo es', async () => {
+    configure('person')
+    expect(text(await PeoplePage({ searchParams: Promise.resolve({}) }))).not.toContain('No hay personas')
+    configure()
+    expect(text(await DebtorsPage({ searchParams: Promise.resolve({ q: 'INEXISTENTE' }) }))).toContain('No hay objetos')
+    await expect(DebtorDetailPage({ params: Promise.resolve({ debtorId: 'inexistente' }) })).rejects.toThrow('notFound')
+  })
+  it('las etiquetas de los cuatro selectores tienen controles asociados', async () => {
+    const markup = html(await DebtorsPage({ searchParams: Promise.resolve({}) }))
+    for (const id of ['risk', 'status', 'type', 'contact']) {
+      expect(markup).toContain(`for="${id}"`)
+      expect(markup).toContain(`id="${id}"`)
+    }
+  })
+  it('muestra corte, cobertura y colas; no presenta un ranking entre intervenciones', async () => {
+    const markup = text(await HomePage())
+    expect(markup).toContain('2026-09-30')
+    expect(markup).toContain('1 de 1 objetos con dato')
+    expect(markup).not.toMatch(/Score|Riesgo|Recomendacion urgente|Top 5 operativo/)
+    expect(markup).toContain('Primeros casos de cada cola')
+  })
+})

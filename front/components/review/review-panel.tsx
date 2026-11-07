@@ -76,6 +76,7 @@ function ReviewFacts({ detail, warnings, snapshot, view }: { detail: DebtorDetai
       </CardHeader>
       <CardContent className="space-y-4 text-sm text-slate-700">
         <p className="font-medium text-slate-900">{snapshot ? `Corte: ${formatDate(snapshot.asOf)}` : 'Corte: no disponible'}</p>
+        {!snapshot && <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>}
         <p className="font-medium text-slate-900">Vulnerabilidad: no informada</p>
         <FactList facts={facts} />
         <div>

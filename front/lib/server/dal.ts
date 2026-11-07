@@ -22,6 +22,8 @@ const PERMISSIONS = {
   'decision:record': ['operador'],
   'decision:approve': ['supervisor'],
   'supervision:read': ['supervisor'],
+  // ALIGN-069: reporte de accesos. La politica de `access_audit` exige lo mismo.
+  'audit:read': ['supervisor'],
   'import:write': ['importador'],
 } as const satisfies Record<string, readonly ResolvedRoleName[]>
 export type DalPermission = keyof typeof PERMISSIONS
@@ -76,6 +78,15 @@ export async function createTenantReader() {
   const { supabase, context } = await requireTenantAccess()
   return {
     context,
+    // Metadatos mínimos del corte, con la misma sesión y municipio que la cartera.
+    // No amplía readTable ni los permisos del contexto.
+    async readImportBatches() {
+      const result = await loadAllTableRows('import_batch', supabase, {
+        select: 'id,as_of,source_updated_at,status,supersedes,publicacion_atomica:counts->publicacion_atomica', filters: [['tenant', context.tenantId]],
+      })
+      // Solo la marca JSON protegida de 032, sin el resto de los conteos del lote.
+      return { ...result, rows: result.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })) }
+    },
     async readTable(table: PortfolioTable) {
       const scope = tenantReadScope(table, context.tenantId)
       if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'La tabla no esta habilitada en la DAL.')

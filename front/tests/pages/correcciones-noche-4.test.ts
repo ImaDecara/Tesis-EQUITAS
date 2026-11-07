@@ -24,6 +24,8 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('notFound') },
 }))
 vi.mock('next/image', () => ({ default: () => null }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
 vi.mock('@/components/auth/login-form', () => ({ LoginForm: () => null }))
 
@@ -282,7 +284,7 @@ describe('(c) una unidad nunca acompaña a un valor faltante', () => {
     raw.debtStatuses = [{ id: 910001, key: 'PAID', value: 'Pagada' }]
     configureLists(raw)
     const text = textOf(await DebtAgingPage({ searchParams: Promise.resolve({}) }))
-    expect(text).toMatch(/Promedio de atraso\s+No aplica\s+Sobre objetos con mora/)
+    expect(text).toMatch(/Promedio de atraso\s+No aplica\s+Media del máximo por objeto con mora evaluable/)
   })
 
   it('el tablero arma sus oraciones solo con valores presentes', async () => {
@@ -291,14 +293,14 @@ describe('(c) una unidad nunca acompaña a un valor faltante', () => {
     raw.debtors = []; raw.debts = []; raw.debtorPeople = []; raw.people = []; raw.debtorContacts = []
     configureLists(raw)
     const text = textOf(await HomePage())
-    expect(text).toContain('Objetos en riesgo alto: No disponible')
+    expect(text).toContain('Objetos con severidad alta: No disponible')
     expect(text).toContain('Concentración de los 5 objetos con mayor deuda: No disponible')
     expect(text).toContain('Casos bloqueados por falta de contacto: No disponible')
     configureLists(e06Raw())
     const present = textOf(await HomePage())
     expect(present).toMatch(/1 casos bloqueados por falta de contacto|0 casos bloqueados por falta de contacto/)
-    expect(present).toContain('de los objetos estan en riesgo alto')
-    expect(present).toContain('del saldo total')
+    expect(present).toContain('de los objetos tienen severidad alta')
+    expect(present).toContain('del saldo observado')
   })
 
   it('/priority-cases no deja una banda vacía cuando falta la prioridad', async () => {
@@ -349,7 +351,7 @@ function handmadeRaw(): RawDebtorDataBundle {
 describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
   it('coincide con el caso armado a mano en pantalla, junto al resto de la página', async () => {
     configureLists(handmadeRaw())
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toContain('Acciones recomendadas')
     expect(text).toContain('Resumen por recomendacion')
     expect(text).toMatch(/Suma de las colas\s+\$\s*1\.500/)
@@ -362,7 +364,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(text).toContain('el tablero suma el total de cada objeto')
     expect(text).toContain('Cada cola suma el importe actual de las obligaciones evaluables')
     // Las tarjetas y la tabla vecinas siguen con el mismo cálculo de KPI-V1-05 y KPI-V1-06.
-    expect(text).toMatch(/Seguimiento\s+2\s+\$\s*1\.500\s+Revisión|Seguimiento\s+2\s+\$\s*1\.500\s+No disponible/)
+    expect(text).toMatch(/Seguimiento\s+2\s+ARS evaluables:\s+\$\s*1\.500\.\s+No disponible/)
     expect(text).toMatch(/Seguimiento\s+2\s+\$\s*1\.500\s+17\.5 \/ 100\s+OBJ-A\s+OBJ-B/)
     expect(text).toMatch(/Mejorar datos\s+4\s+No disponible\s+No disponible\s+OBJ-C\s+OBJ-D\s+OBJ-E/)
     expect(text).toMatch(/Revisión jurídica\s+0\s+\$\s*0\s+No aplica\s+Sin casos/)
@@ -378,7 +380,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
       { id: 14, debtor: 1, current_amount: null, status: 910001, due_date: null },
     ]
     configureLists(raw)
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toContain('1 objeto · 3 obligaciones')
     expect(text).toContain('2 de esas obligaciones no tienen importe observado')
     raw.debts = raw.debts.slice(0, 1)
@@ -420,7 +422,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     raw.debts = raw.debts.filter(debt => debt.id === 11 || debt.id === 21)
     raw.debtors = raw.debtors.slice(0, 2)
     configureLists(raw)
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Suma de las colas\s+\$\s*1\.500/)
     expect(text).toMatch(/Importe sin vencimiento evaluable\s+\$\s*0/)
     expect(text).toContain('0 objetos · 0 obligaciones')
@@ -439,7 +441,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(reconciliation.difference.value).toBeNull()
     expect(reconciliation.outsideAmount.value).toBe(1250)
     expect(reconciliation.otherDifference.value).toBeNull()
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Suma de las colas\s+No disponible/)
     expect(text).toMatch(/Diferencia con el tablero\s+No disponible/)
     expect(text).toMatch(/Importe sin vencimiento evaluable\s+\$\s*1\.250/)
@@ -466,7 +468,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     const reconciliation = buildQueueReconciliation(mapped.debtors, [])
     expect(reconciliation.outsideAmount).toMatchObject({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN' })
     expect(reconciliation.otherDifference.value).toBeNull()
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Importe sin vencimiento evaluable\s+No disponible/)
     expect(text).toContain('1 de esas obligaciones no tiene importe observado')
     expect(text).not.toMatch(/Importe sin vencimiento evaluable\s+\$\s*0/)
@@ -490,7 +492,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(reconciliation.outsideWithoutAmount).toBeNull()
     expect(reconciliation.difference.value).toBeNull()
     expect(reconciliation.otherDifference.value).toBeNull()
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Suma de las colas\s+No disponible/)
     expect(text).toMatch(/Importe sin vencimiento evaluable\s+No disponible/)
     expect(text).toMatch(/Diferencia con el tablero\s+No disponible/)
@@ -509,7 +511,7 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(reconciliation.outsideAmount.value).toBe(1200)
     expect(reconciliation.dashboardTotal.value).toBeNull()
     expect(reconciliation.otherDifference.value).toBeNull()
-    const text = textOf(await RecommendedActionsPage())
+    const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Suma de las colas\s+\$\s*1\.500/)
     expect(text).toMatch(/Deuda total del tablero\s+No disponible/)
     expect(text).toMatch(/Diferencia con el tablero\s+No disponible/)

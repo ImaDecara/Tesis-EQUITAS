@@ -36,7 +36,7 @@ const OPERATIVE_NAV_ITEMS: NavItem[] = [
 
 const ANALYSIS_NAV_ITEMS: NavItem[] = [
   { href: '/debt-aging', label: 'Deuda y mora', icon: WalletCards },
-  { href: '/risk-analysis', label: 'Analisis de riesgo', icon: ShieldAlert },
+  { href: '/risk-analysis', label: 'Análisis de severidad', icon: ShieldAlert },
   { href: '/recommended-actions', label: 'Acciones recomendadas', icon: ClipboardCheck },
 ]
 

@@ -226,6 +226,14 @@ Sin selección se exige exactamente una membresía activa. Con varias, se devuel
 `equitas_tenant_id`. Esa selección es entrada no confiable: se vuelve a comprobar
 contra las membresías del usuario en cada entrada, y nunca concede acceso sola.
 El conteo exacto evita que un límite de filas oculte una segunda membresía.
+La selección no se agrega como filtro a PostgREST: primero se leen, con la sesión
+y el ID de usuario resuelto, todas sus membresías visibles, paginadas por `id`
+hasta una página vacía. La comparación con la cookie ocurre en memoria. Solo
+después de comprobar la membresía activa se usan los IDs canónicos de municipio
+y rol devueltos por la base. Una página fallida invalida toda la resolución;
+una página corta no se interpreta como fin. Sin cookie se conserva la consulta
+limitada con conteo exacto. El motivo y los límites de privacidad están en
+[la nota de la frontera DAL](privacidad-frontera-dal.md).
 El ingreso deriva a `/select-tenant` cuando hace falta elegir. Esa pantalla carga
 las membresías propias paginadas, sin opción preseleccionada; vuelve a validar la
 elección antes de guardar la cookie. Ingresar o salir borra la selección anterior.
@@ -258,14 +266,25 @@ compartidos carecen de filtro de municipio; también requieren autorización pre
 RLS sigue siendo una segunda barrera, necesaria para las lecturas directas por la
 Data API. La DAL no reemplaza RLS ni audita accesos directos a PostgREST.
 
+El recálculo de decisiones (`case-review-snapshot.ts`) tampoco envía el `debtorId`
+del formulario como filtro antes de verificarlo. Lee los objetos del municipio
+autorizado, paginados hasta una respuesta vacía, busca el recibido en memoria
+y solo entonces usa el ID canónico para acotar deudas, personas y contactos.
+Una lectura incompleta detiene el recálculo. Conserva la verificación del corte,
+la sesión y RLS. Este paso cuesta O(N) objetos del municipio por recálculo;
+no acredita rendimiento a escala municipal.
+
 Una denegación produce `DataAccessError`, sin cartera ni métricas. Los errores de
 consulta conservan `DataWarning`: los indicadores dicen «No disponible» y hay aviso,
-sin convertir el fallo en un cero (ALIGN-011/012, contrato §4.1.6). Esa garantía no
-cubre todavía todas las pantallas. Con una lectura fallida, algunas listas muestran
-su texto de vacío («No hay casos sin contacto», «Mostrando 0-0 de 0 casos», «No hay
-objetos…») y, con `debtor` caído, el detalle dice «no encontrado» sin aviso. Ya
-pasaba antes de ALIGN-019, no entrega cartera y se traspasa a ALIGN-014. No hay caché
-de autorización entre solicitudes, clave de servicio ni secretos nuevos.
+sin convertir el fallo en un cero (ALIGN-011/012, contrato §4.1.6). ALIGN-014 cubre
+el traspaso de listas y detalle: una lectura fallida muestra aviso de no
+disponibilidad, sin texto de vacío ni paginación 0–0; `debtor` fallido no devuelve
+404. Solo una lectura correcta sin objeto produce «no encontrado». La analítica
+mantiene cobertura y población seleccionada antes de paginar. Las proyecciones
+excluyen `person.birth_date` y `debtor_profile_detail.reason`, y leen importes
+como texto para validar los centavos sin pérdida de precisión. Se conservan las
+uniones y filtros de alcance. No hay caché de autorización entre solicitudes,
+clave de servicio ni secretos nuevos.
 
 **Sin sesión** (cookie ausente o rechazada por Auth), `front/proxy.ts` responde 307 a
 `/login?next=<ruta>` en HTML y RSC, antes del streaming. Solo `/login`,
@@ -366,3 +385,5 @@ un mutante de la DAL comprobó que la sonda puede fallar. En los gates, el únic
 en falla es `audit`, por el aviso GHSA-g3hv-75wg-m249 (solo desarrollo, 0 hallazgos en
 producción), desvío declarado que autorizó el usuario. Falta la re-revisión
 independiente.
+
+ALIGN-014 integra el corte publicado para las lecturas de cartera mediante `createTenantReader.readImportBatches`: misma sesión y contexto municipal, proyección mínima y paginación completa. No cambia resolución de identidad, membresía, tabla de permisos ni filtros de objeto. `portfolio-cutoff.ts` reutiliza `selectCurrentCutoff` de revisión sin modificar su archivo; valida eventos y compara publicación antes/después de leer cartera. Un corte incierto bloquea cálculo y exportación. La lectura HTTP no promete un snapshot MVCC; revisión conserva la verificación transaccional de la base.

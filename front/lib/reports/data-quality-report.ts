@@ -1,9 +1,10 @@
 import contract from '../../../contracts/decision-rules.v1.json'
+import { withMaturityMetrics } from '@/lib/analytics'
 import { metric } from '@/lib/data-presence'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { serializeCsv } from '@/lib/reports/csv'
 import { AGGREGATE_COLUMNS, definitionsLink, NO_FILTERS, portfolioCutoff, readParams, shareRow, tally, totalRow, type ReportMeta } from '@/lib/reports/report-format'
-import { DATA_PRESENCE_STATES, type DebtorListItem, type NumericData } from '@/types/equitas-domain'
+import { DATA_PRESENCE_STATES, type DebtorListItem, type NumericData, type RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // ALIGN-028. Cuantas filas de cada indicador tienen el dato, por estado (contrato §4).
 // Solo conteos y codigos: `decisionIssues` lleva ids de obligacion, que no se copian.
@@ -27,12 +28,13 @@ function presenceCategory(data: NumericData) {
   return data.value !== null && Object.keys(data.missing).length ? PARTIAL : data.presence
 }
 
-export function buildDataQualityReport(debtors: readonly DebtorListItem[], generatedAt: string) {
+export function buildDataQualityReport(debtors: readonly DebtorListItem[], generatedAt: string, batch?: RawDebtorDataBundle['batch']) {
   const objects = debtors.length
+  const analytical = debtors.map(withMaturityMetrics)
   const decisions = debtors.flatMap(debtor => debtor.decision ? [debtor.decision] : [])
   const unevaluable = decisions.flatMap(decision => decision.severidad.motivos_no_evaluables)
   const issues = debtors.flatMap(debtor => debtor.decisionIssues ?? [])
-  const { fechaCorte } = portfolioCutoff(debtors)
+  const { fechaCorte } = portfolioCutoff(debtors, batch)
   const meta: ReportMeta = {
     fecha_corte: fechaCorte,
     version_reglas: RULES_VERSION,
@@ -43,7 +45,7 @@ export function buildDataQualityReport(debtors: readonly DebtorListItem[], gener
   const rows = [
     totalRow(meta, 'objetos_leidos', objects, 'objetos'),
     ...PRESENCE_INDICATORS.flatMap(([indicator, key]) => {
-      const categories = debtors.map(debtor => presenceCategory(metric(debtor, key)))
+      const categories = analytical.map(debtor => presenceCategory(metric(debtor, key)))
       return PRESENCE_CATEGORIES.map(category =>
         shareRow(meta, indicator, category, categories.filter(item => item === category).length, objects, 'objetos'))
     }),

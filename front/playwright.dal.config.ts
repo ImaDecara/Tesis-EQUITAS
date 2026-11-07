@@ -15,6 +15,6 @@ export default defineConfig({
     url: 'http://127.0.0.1:31019/login',
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { NEXT_PUBLIC_SUPABASE_URL: config.supabaseUrl, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: config.publishableKey, NEXT_TELEMETRY_DISABLED: '1' },
+    env: { NEXT_PUBLIC_SUPABASE_URL: config.supabaseUrl, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: config.publishableKey, EQUITAS_REVIEW_SERVER_JWT: config.reviewServerJwt, NEXT_TELEMETRY_DISABLED: '1' },
   },
 })

@@ -185,7 +185,7 @@ de seguir.
 - Para pruebas de aplicación y de RLS se usa la clave publicable o `anon`. La de
   servicio solo para cargas locales del ETL (`EQUITAS_TARGET_ENV=local`, ver §4) y
   siempre contra `http://127.0.0.1:54321`.
-- Las escrituras de revisión y de lote usan un JWT propio de los roles de servidor
+- Las escrituras de revisión, de lote y de auditoría (ALIGN-069) usan un JWT propio de los roles de servidor
   de ALIGN-018, no la clave de servicio. Se emite con
   `database/testing/case_review_local.py mint-jwt` en esta misma carpeta y con el mismo
   trato. Las contraseñas de las cuentas sintéticas tampoco salen de ella
@@ -352,18 +352,29 @@ al validar sea el que quede en `import_batch.file_hashes` en `VALIDADO` y en `PU
 - **Una persona se escribe una vez por carga**, con los datos de su última fila, y su dirección con la última fila que tenga
   domicilio. Sin esto, una persona con datos distintos en dos objetos iría y volvería en cada recarga.
 - **Una localidad sin código postal reutiliza la existente** y no le borra el suyo.
-- **V1 solo admite el lote completo.** Antes de registrar `VALIDADO` se lee lo publicado del municipio. Si el archivo ya no
-  trae un objeto, una obligación de un objeto aceptado o una relación persona–objeto, es un delta o una baja: `FALLIDO` sin
-  antecedente, `PARTIAL_LOAD_REJECTED`, y `counts.faltantes` dice cuántos. Un objeto en cuarentena sí viene en el archivo:
-  conserva su estado previo y no se compara. `--limit-objects` y `--priority-tipo-ingreso` se rechazan antes de leer.
+- **Un lote incompleto se rechaza salvo que se pida otra cosa.** Antes de registrar `VALIDADO` se lee lo publicado del municipio.
+  Por defecto, `--ausentes rechazar`: si el archivo ya no trae un objeto, una obligación de un objeto aceptado o una relación
+  persona–objeto, `FALLIDO` sin antecedente, `PARTIAL_LOAD_REJECTED`, y `counts.faltantes` dice cuántos. `conservar` publica el
+  delta sin desactivar nada; `dar-de-baja` además desactiva relaciones y contactos ausentes de los objetos aceptados. Lo ausente
+  se informa siempre en `counts.ausentes` y lo desactivado en `counts.bajas_*`: la tabla está en `back/ETL/README.md`
+  ("Política de ausentes"). Un objeto en cuarentena sí viene en el archivo: conserva su estado previo y no se compara.
+  `--limit-objects` y `--priority-tipo-ingreso` se rechazan antes de leer.
+- **El perfil se calcula desde lo persistido.** `recompute_debtor_profiles(object_ids, as_of, contact_columns_integrated)`,
+  migración `20261102180000`, solo para `service_role`. Antes de calcular, también escribe `debt.status`: reclasifica
+  `ACTIVE`/`OVERDUE` con vencimiento conocido según el corte, solo en los objetos pedidos. Conserva los demás estados
+  y las obligaciones sin fecha. Solo reescribe filas que cambiaron y devuelve un único objeto JSON con los conteos,
+  incluidas `deudas_reclasificadas`. La carga la llama con los objetos aceptados: un perfil ajeno no se toca.
+  **Esta RPC escribe cartera; no debe usarse para un preview** (ALIGN-032/054).
 
 ### 8.5 Límites
 
 R05, R13 y R28 quedan **parciales**, no cerrados:
 
-- **ALIGN-031:** política de bajas y delta. También la de contactos y direcciones que dejan de venir: hoy un contacto
-  ausente queda en `debtor_contact` como estaba, sin desactivarse, y no bloquea el lote. Paginación de
-  `fetch_existing_debts_by_key` y `recompute_debtor_profiles`.
+- **Obligaciones que dejan de venir (ALIGN-031):** se conservan y siguen sumando en su perfil con cualquier política, porque
+  `debt` no tiene baja y el archivo no dice que se pagaron. `counts.ausentes.obligaciones` las informa. Darlas de baja exige
+  cambiar esquema y lecturas, y queda sin ticket asignado. Direcciones: una persona conserva la suya si deja de venir.
+- **Perfil de un objeto ausente (ALIGN-031):** no se recalcula. Si cambian los contactos de una persona que también está en
+  un objeto ausente, su `available_contact_count` queda desactualizado hasta que ese objeto vuelva a venir.
 - **ALIGN-032:** transacción, recuperación, concurrencia y clave de idempotencia por lote. Hoy una falla a mitad de carga
   no revierte lo ya escrito, y cada ejecución agrega su propia cadena de eventos, también una recarga sin cambios. Si
   `PUBLICADO` tiene resultado incierto (respuesta perdida, 5xx, 200 ilegible), la CLI imprime `PUBLISH_OUTCOME_UNKNOWN`, sale
