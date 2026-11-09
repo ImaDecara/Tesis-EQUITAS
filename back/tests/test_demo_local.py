@@ -208,9 +208,7 @@ def test_a_run_file_pointing_to_another_process_is_not_treated_as_the_app(monkey
     assert not demo.run_file(home).exists()
 
 
-def test_cli_refuses_destructive_recreation_without_the_phrase(capsys):
-    assert demo.main(['recrear']) == 2
-    assert demo.RECREATE_PHRASE in capsys.readouterr().err
+def test_cli_rejects_out_of_range_credential_lifetimes():
     with pytest.raises(SystemExit):
         demo.main(['start', '--horas', '0'])
     with pytest.raises(SystemExit):
@@ -219,43 +217,22 @@ def test_cli_refuses_destructive_recreation_without_the_phrase(capsys):
 
 # ------------------------------------------------------------------ ciclo 1 de N6 (N6-R1 a N6-R4)
 
-def report(**tables):
-    base = {'tables': [{'t': name, 'rows': rows, 'foreign': foreign} for name, (rows, foreign) in tables.items()],
-            'databases': list(demo.KNOWN_DATABASES), 'largeobjects': 0}
-    return base
+def test_routine_inventory_treats_null_or_unknown_identifiers_as_foreign():
+    sql = demo.inventory_sql()
+    assert "'foreign_debtors_tenant1', (select count(*) from public.debtor where tenant = 1 and not coalesce(identifier in (" in sql
+    assert all(case['identificador'] in sql for case in MANIFEST['casos'])
+    assert ' like ' not in sql.lower()
 
 
-def test_recreate_needs_every_row_proven_own():
-    clean = report(**{'public.debtor': (15, 0), 'public.debt': (29, 0), 'auth.users': (6, 0), 'storage.migrations': (61, 0)})
-    assert demo.recreate_blockers(clean) == []
-    assert demo.recreate_blockers(report(**{'public.debtor': (0, 0)})) == []
-    blocked = demo.recreate_blockers(report(**{'public.debtor': (16, 1), 'public.data_source': (1, 1), 'storage.migrations': (62, 62)}))
-    assert any(item.startswith('public.debtor: 1 de 16') for item in blocked)
-    assert any(item.startswith('public.data_source: 1 de 1') for item in blocked)
-    assert any(item.startswith('storage.migrations: 62 de 62') for item in blocked)
-    assert any('la demo tiene 0 o 15' in item for item in blocked)
-    odd = report(**{'public.debtor': (15, 0)})
-    odd['databases'] = [*odd['databases'], 'otra']
-    odd['largeobjects'] = 2
-    assert len(demo.recreate_blockers(odd)) == 2
-
-
-def test_exhaustive_inventory_denies_unknown_tables_and_null_identifiers(monkeypatch, tmp_path):
-    monkeypatch.setenv('EQUITAS_DEMO_HOME', str(tmp_path / 'privado'))
-    home = demo.demo_home()
-    listing = 'public.debtor\nstorage.migrations\nalgo.desconocido\npublic."raro"'
-    queries = []
-    monkeypatch.setattr(demo, 'psql', lambda text, **kwargs: listing)
-    monkeypatch.setattr(demo, 'psql_json', lambda query, **kwargs: queries.append(query) or {'tables': [], 'databases': [], 'largeobjects': 0})
-    demo.exhaustive_inventory(home, HASHES)
-    query = queries[0]
-    assert 'from "algo"."desconocido")' in query and '"algo"."desconocido" where' not in query  # desconocida: todas sus filas son ajenas
-    assert 'case when count(*) = 61 then 0 else count(*) end from "storage"."migrations"' in query
-    assert 'from "public"."debtor" where not coalesce((tenant = 1 and identifier in (' in query  # NULL nunca es propio
-    rules = demo.ownership_rules(HASHES)
-    assert all(case['identificador'] in rules['public.debtor'] for case in MANIFEST['casos'])
-    assert 'like' not in rules['public.debtor'].lower()
-    assert 'not coalesce(identifier in (' in demo.inventory_sql()
+def test_there_is_no_destructive_recreation_command(capsys):
+    with pytest.raises(SystemExit):
+        demo.main(['recrear', '--confirmar', 'RECREAR-DEMO'])
+    assert 'invalid choice' in capsys.readouterr().err
+    for command in ('init', 'start', 'stop', 'status', 'renew'):
+        source = inspect.getsource({'init': demo.cmd_init, 'start': demo.cmd_start, 'stop': demo.cmd_stop,
+                                    'status': demo.cmd_status, 'renew': demo.cmd_renew}[command])
+        assert "'db', 'reset'" not in source and "'--no-backup'" not in source, command
+    assert "'db', 'reset'" not in inspect.getsource(demo) and "'--no-backup'" not in inspect.getsource(demo)
 
 
 def test_unexpected_memberships_are_reported_as_foreign():
@@ -322,14 +299,13 @@ def test_stop_stack_does_nothing_while_another_turn_holds_the_db(foreign_turn, m
     assert commands == [] and lock.exists()
 
 
-def test_init_recreate_and_stack_start_take_the_turn_first(foreign_turn, monkeypatch):
+def test_init_and_stack_start_take_the_turn_first(foreign_turn, monkeypatch):
     lock, commands = foreign_turn
     touched = []
     monkeypatch.setattr(demo, 'prepare', lambda home: touched.append('prepare'))
-    args = type('Args', (), {'rotar_claves': False, 'republicar': False, 'puerto': 3000, 'confirmar': demo.RECREATE_PHRASE})()
-    for command in (demo.cmd_init, demo.cmd_recreate):
-        with pytest.raises(demo.DemoError):
-            command(args)
+    args = type('Args', (), {'rotar_claves': False, 'republicar': False, 'puerto': 3000})()
+    with pytest.raises(demo.DemoError):
+        demo.cmd_init(args)
     monkeypatch.setattr(demo, 'stack_running', lambda: False)
     with pytest.raises(demo.DemoError):
         demo.ensure_stack(demo.demo_home())

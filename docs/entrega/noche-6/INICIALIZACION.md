@@ -52,9 +52,9 @@ back/.venv/bin/python scripts/demo/equitas_demo.py init
 
 Qué hace, en orden:
 
-1. Si Supabase local está detenido, lo inicia con la CLI fijada (no resetea).
+1. Toma el turno compartido de la base y, si Supabase local está detenido, lo inicia con la CLI fijada (no resetea).
 2. Lee las claves locales con `supabase status -o env` y las guarda en la carpeta privada (0600).
-3. Toma el turno de base compartido (`/tmp/equitas-local-db/lock`) **antes** de arrancar o tocar el stack,
+3. El turno de base compartido (`/tmp/equitas-local-db/lock`) se toma **antes** de arrancar o tocar el stack,
    para no chocar con una campaña; si está ocupado, termina sin cambios.
 4. Comprueba que las migraciones aplicadas sean exactamente las de `supabase/migrations/`. Si faltan,
    indica `npx --yes supabase@2.108.0 migration up --local`; si hay migraciones desconocidas, no toca nada.
@@ -74,27 +74,25 @@ Opciones:
 - `--republicar`: vuelve a ejecutar el ETL con el mismo lote. Sirve para comprobar su idempotencia: no crea
   eventos ni publicaciones nuevas.
 
-## 5. Recreación destructiva (solo si se pide)
+## 5. Empezar de cero: no hay recreación automática
+
+El lanzador no borra nada. Se evaluó y se descartó en N6 una recreación automática: en la CLI 2.108.0 con
+PostgreSQL 17, `db reset --local` elimina el contenedor y el volumen completos, es decir, todas las bases del
+clúster (también la telemetría de la plataforma en `_supabase`), roles, funciones y datos de cualquier
+origen. No se puede demostrar que todo eso pertenezca a la demo, así que una recreación «limitada a recursos
+propios» no es posible con ese comando.
+
+Si la base local no contiene nada que quieras conservar y querés empezar de cero, el procedimiento existente
+del proyecto (`docs/tesis/entorno-aislado.md` §3.3) es una decisión manual y explícita:
 
 ```sh
-back/.venv/bin/python scripts/demo/equitas_demo.py recrear --confirmar RECREAR-DEMO
+back/.venv/bin/python scripts/demo/equitas_demo.py stop
+npx --yes supabase@2.108.0 db reset --local     # borra TODA la base local, no solo la demo
+back/.venv/bin/python scripts/demo/equitas_demo.py init --rotar-claves
 ```
 
-Borra la base local con `db reset --local` y vuelve a ejecutar `init`. Antes cuenta **todas** las tablas de
-todos los esquemas (lo que borraría el reset), además de las bases del clúster y los objetos grandes, y aplica
-la regla «negar salvo prueba de pertenencia»:
-
-- cada fila de una tabla conocida debe vincularse a la demo por claves exactas (los 15 identificadores del
-  manifiesto, sus personas y obligaciones, las cuentas y membresías esperadas, los lotes con los hashes de la
-  cartera, los catálogos sembrados por el ETL);
-- las tablas internas de Supabase solo se aceptan con el conteo que trae un stack recién creado;
-- las migraciones aplicadas deben ser exactamente las del repositorio;
-- cualquier fila sin pertenencia demostrable (por ejemplo un objeto sin identificador o una persona suelta)
-  o cualquier tabla desconocida con filas detiene todo **sin borrar nada**.
-
-El resultado, sin secretos, queda en `~/.equitas-demo/recrear-inventario.json`. Se pierden las decisiones y
-aprobaciones de la demo y se generan contraseñas nuevas. Toma el turno compartido de la base antes de tocar el
-stack: si hay una campaña en curso, no hace nada.
+Antes de hacerlo, `status` muestra si hay recursos ajenos a la demo (otros municipios, cuentas, lotes u
+objetos); si los hay, no corresponde resetear.
 
 ## 6. Qué no hace
 

@@ -6,9 +6,9 @@ Comandos (desde la raíz del repositorio, con el Python del backend):
   back/.venv/bin/python scripts/demo/equitas_demo.py stop      detiene la app de la demo (--stack: también Supabase)
   back/.venv/bin/python scripts/demo/equitas_demo.py status    estado, solo lectura
   back/.venv/bin/python scripts/demo/equitas_demo.py renew     credencial de servidor nueva y reinicio de la app
-  back/.venv/bin/python scripts/demo/equitas_demo.py recrear --confirmar RECREAR-DEMO
-                                                               borra y recrea, solo si la base contiene únicamente
-                                                               recursos propios de la demo
+
+No hay recreación destructiva: un `db reset` de la CLI 2.108.0 elimina el volumen entero (todas las bases,
+roles y telemetría de la plataforma) y no se puede demostrar que todo eso sea de la demo. init no borra nada.
 
 Todo lo privado (claves locales, contraseñas, JWT, logs) vive en EQUITAS_DEMO_HOME (por defecto
 ~/.equitas-demo, modo 0700, archivos 0600), fuera del repositorio. Nada secreto se imprime.
@@ -56,19 +56,10 @@ TENANT_A = 'Municipio sintetico ETL'  # tenant 1 que exige el ETL (database/test
 TENANT_B = 'Municipio sintetico B (demo N6)'
 IMPORT_ACTOR_EMAIL = 'importador-etl@example.invalid'
 SHARED_LOCK = Path('/tmp/equitas-local-db/lock')  # turno de base que usan las campañas del plan
-RECREATE_PHRASE = 'RECREAR-DEMO'
 DEFAULT_PORT = 3000
 DEFAULT_JWT_HOURS = 24
 MAX_JWT_HOURS = 72
 RENEW_MARGIN = timedelta(hours=2)
-CRON_JOBS = ('equitas-import-staging-ttl', 'equitas-import-preview-ttl')  # de las migraciones del repositorio
-KNOWN_DATABASES = ('_supabase', 'postgres', 'storage_vectors', 'template0', 'template1')
-# Tablas internas que un stack recién creado con la CLI 2.108.0 y estas migraciones ya trae con filas
-# (contadas en una base prístina el 2026-11-09). Otro conteo significa que alguien las tocó: no se borra.
-PRISTINE_BOOKKEEPING = {
-    '_realtime.extensions': 1, '_realtime.schema_migrations': 31, '_realtime.tenants': 1, 'auth.schema_migrations': 76,
-    'realtime.schema_migrations': 75, 'storage.migrations': 61, 'supabase_functions.migrations': 2,
-}
 SECRET_PATTERNS = (
     re.compile(r'eyJ[\w-]+\.[\w-]+\.[\w-]+'),
     re.compile(r'sb_(?:secret|publishable)_[\w-]+'),
@@ -396,115 +387,6 @@ def classify(inv: dict, hashes: dict[str, str]) -> dict[str, list[str]]:
 def expected_memberships() -> set[tuple[str, str, str]]:
     own = {(email, tenant, role) for _, email, role, tenant in ACCOUNTS if role}
     return own | {(IMPORT_ACTOR_EMAIL, TENANT_A, 'importador_sistema')}
-
-
-def catalog_seeds() -> dict[str, tuple[str, list[tuple[int, str]]]]:
-    """(columna clave, [(id, clave)]) de cada catálogo que siembra etl-compat-catalogs.sql."""
-    text = (ROOT / 'database/testing/etl-compat-catalogs.sql').read_text(encoding='utf-8')
-    seeds = {}
-    for table, key, payload in re.findall(r"etl_seed\('(\w+)', '(\w+)', '\w+', '(\[.*?\])'\)", text, flags=re.DOTALL):
-        seeds[table] = (key, [(int(item['id']), item['key']) for item in json.loads(payload)])
-    if len(seeds) != 7:
-        raise DemoError('No se pudieron leer los catálogos del ETL para el inventario.')
-    return seeds
-
-
-def ownership_rules(hashes: dict[str, str]) -> dict[str, str]:
-    """Condición SQL que cumple una fila PROPIA de la demo, por tabla. Lo demás no se puede borrar."""
-    ids = in_list(demo_identifiers())
-    debtors = f"select id from public.debtor where tenant = 1 and identifier in {ids}"
-    persons = f"select person from public.debtor_person where debtor in ({debtors})"
-    own_emails = in_list(email for _, email, _, _ in ACCOUNTS)
-    users = f'select id from public."user" where email in {in_list([*(email for _, email, _, _ in ACCOUNTS), IMPORT_ACTOR_EMAIL])}'
-    auth_users = f"select id from auth.users where email in {own_emails}"
-    triples = in_list(f'{email}|{tenant}|{role}' for email, tenant, role in sorted(expected_memberships()))
-    batches = (f"select id from public.import_batch where tenant = 1 and file_hashes->>'cabecera' = {sql_literal(hashes['cabecera'])}"
-               f" and file_hashes->>'detalle' = {sql_literal(hashes['detalle'])}")
-    reviews = f"select id from public.case_review where tenant = 1 and debtor in ({debtors})"
-    cities = f"select city from public.address where person in ({persons})"
-    rules = {
-        'public.tenant': f"(id = 1 and name = {sql_literal(TENANT_A)}) or (id <> 1 and name = {sql_literal(TENANT_B)})",
-        'public.role': f"name in {in_list([*ROLE_DESCRIPTIONS, 'importador_sistema'])}",
-        'public.user': f"id in ({users})",
-        'public.tenant_user': ('status and (select u.email || \'|\' || t.name || \'|\' || r.name from public."user" u, public.tenant t, public.role r'
-                               f' where u.id = tenant_user."user" and t.id = tenant_user.tenant and r.id = tenant_user.role) in {triples}'),
-        'public.debtor': f"tenant = 1 and identifier in {ids}",
-        'public.debt': f"debtor in ({debtors})",
-        'public.debtor_person': f"debtor in ({debtors})",
-        'public.person': f"id in ({persons})",
-        'public.debtor_contact': f"person in ({persons})",
-        'public.address': f"person in ({persons})",
-        'public.city': f"id in ({cities})",
-        'public.province': f"id in (select province from public.city where id in ({cities}))",
-        'public.debtor_profile': f"debtor in ({debtors})",
-        'public.debtor_profile_detail': f"debtor_profile in (select id from public.debtor_profile where debtor in ({debtors}))",
-        'public.import_batch': f"id in ({batches})",
-        'public.import_publication': f"batch_id in ({batches})",
-        'public.case_review': f"id in ({reviews}) and reviewer in ({users})",
-        'public.case_review_approval': f"case_review in ({reviews}) and approver in ({users})",
-        'public.access_audit': f"tenant in (select id from public.tenant where name in {in_list([TENANT_A, TENANT_B])}) and actor in ({users})",
-        'equitas_import_private.object_version': f"(tenant, object_type, external_id) in (select tenant, type, external_id from public.debtor where tenant = 1 and identifier in {ids})",
-        'equitas_import_private.person_version': f"external_id in (select external_id from public.person where id in ({persons}))",
-        'auth.users': f"email in {own_emails}",
-        'auth.identities': f"user_id in ({auth_users})",
-        'auth.sessions': f"user_id in ({auth_users})",
-        'auth.refresh_tokens': f"user_id in (select id::text from auth.users where email in {own_emails})",
-        'auth.mfa_amr_claims': f"session_id in (select id from auth.sessions where user_id in ({auth_users}))",
-        'auth.audit_log_entries': f"payload->>'actor_id' in (select id::text from auth.users where email in {own_emails})",
-        'cron.job': f"jobname in {in_list(CRON_JOBS)}",
-        'cron.job_run_details': f"jobid in (select jobid from cron.job where jobname in {in_list(CRON_JOBS)})",
-        'supabase_migrations.schema_migrations': f"version in {in_list(repo_migrations())}",
-    }
-    for table, (key, pairs) in catalog_seeds().items():
-        rules[f'public.{table}'] = '(id, ' + key + ') in (' + ', '.join(f'({number}, {sql_literal(value)})' for number, value in pairs) + ')'
-    return rules
-
-
-# Tablas cuyo tamaño fija el manifiesto: 0 (sin demo) o exactamente lo esperado.
-def manifest_counts() -> dict[str, int]:
-    expected = manifest()['resultados_esperados']
-    return {'public.debtor': expected['objetos'], 'public.debt': expected['obligaciones'], 'public.person': expected['personas'],
-            'public.debtor_person': expected['relaciones_objeto_persona'], 'public.debtor_profile': expected['objetos']}
-
-
-def exhaustive_inventory(home: Path, hashes: dict[str, str]) -> dict:
-    """Cuenta cada tabla de cada esquema (lo que borraría db reset) y cuántas filas no son demostrablemente propias."""
-    listing = psql("select table_schema || '.' || table_name from information_schema.tables where table_type = 'BASE TABLE' "
-                   "and table_schema not in ('pg_catalog', 'information_schema') and table_schema not like 'pg\\_toast%' order by 1;",
-                   home=home, read_only=True).splitlines()
-    rules = ownership_rules(hashes)
-    parts = []
-    for name in listing:
-        schema, table = name.split('.', 1)
-        quoted = f'"{schema}"."{table}"'
-        if name in rules:
-            foreign = f'(select count(*) from {quoted} where not coalesce(({rules[name]}), false))'
-        elif name in PRISTINE_BOOKKEEPING:
-            foreign = f'(select case when count(*) = {PRISTINE_BOOKKEEPING[name]} then 0 else count(*) end from {quoted})'
-        else:
-            foreign = f'(select count(*) from {quoted})'
-        parts.append(f"json_build_object('t', {sql_literal(name)}, 'rows', (select count(*) from {quoted}), 'foreign', {foreign})")
-    query = ("select json_build_object('tables', json_build_array(" + ', '.join(parts) + "), "
-             "'databases', (select json_agg(datname order by datname) from pg_database), "
-             "'largeobjects', (select count(*) from pg_largeobject_metadata))")
-    report = psql_json(query, home=home, read_only=True, timeout=300)
-    report['reglas'] = sorted(rules)
-    return report
-
-
-def recreate_blockers(report: dict) -> list[str]:
-    """Todo lo que impide borrar: una sola fila sin pertenencia demostrada alcanza para no hacer nada."""
-    blockers = [f"{item['t']}: {item['foreign']} de {item['rows']} filas sin pertenencia demostrable"
-                for item in report['tables'] if item['foreign']]
-    counts = {item['t']: item['rows'] for item in report['tables']}
-    for table, expected in manifest_counts().items():
-        if counts.get(table, 0) not in (0, expected):
-            blockers.append(f'{table}: {counts.get(table)} filas; la demo tiene 0 o {expected}')
-    if sorted(report['databases']) != sorted(KNOWN_DATABASES):
-        blockers.append('el clúster tiene bases de datos que el stack no crea')
-    if report['largeobjects']:
-        blockers.append(f"{report['largeobjects']} objetos grandes (large objects)")
-    return blockers
 
 
 def repo_migrations() -> list[str]:
@@ -977,34 +859,6 @@ def cmd_renew(args) -> int:
     return cmd_start(args)
 
 
-def cmd_recreate(args) -> int:
-    if args.confirmar != RECREATE_PHRASE:
-        raise DemoError(f'Recrear borra la base local. Repetí con --confirmar {RECREATE_PHRASE} si es lo que querés.')
-    home = demo_home()
-    with db_turn('recrear'):
-        prepare(home)
-        hashes = fixture_hashes()
-        check_migrations(inventory(home))
-        report = exhaustive_inventory(home, hashes)
-        blockers = recreate_blockers(report)
-        write_private(home / 'recrear-inventario.json', json.dumps({**report, 'bloqueos': blockers, 'at_utc': utc_now().isoformat()},
-                                                                  ensure_ascii=False, indent=2) + '\n')
-        if blockers:
-            shown = '; '.join(blockers[:6]) + (f' y {len(blockers) - 6} más' if len(blockers) > 6 else '')
-            raise DemoError(f'No se borra nada: la base tiene datos cuya pertenencia a la demo no se puede demostrar ({shown}). '
-                            f'Detalle sin secretos en {home / "recrear-inventario.json"}.')
-        stop_next(home)
-        result = run([*CLI, 'db', 'reset', '--local'], env=cli_env(), timeout=1800, log=private_log(home, 'db-reset'))
-        if result.returncode != 0:
-            raise DemoError('db reset --local falló; ver el log saneado en logs/.')
-        with contextlib.suppress(FileNotFoundError):
-            (home / 'cuentas.json').unlink()
-        env = supabase_env(home)
-        wait_ready(env)
-        args.rotar_claves, args.republicar = False, False
-        return cmd_init(args)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -1022,14 +876,10 @@ def main(argv: list[str] | None = None) -> int:
     stop = commands.add_parser('stop', help='detiene la app de la demo')
     stop.add_argument('--stack', action='store_true', help='también detiene Supabase local (conserva los datos)')
     commands.add_parser('status', help='estado, solo lectura')
-    recreate = commands.add_parser('recrear', help='borra y recrea solo si todo es de la demo')
-    recreate.add_argument('--confirmar', default='')
-    recreate.add_argument('--puerto', type=int, default=DEFAULT_PORT)
     args = parser.parse_args(argv)
     if getattr(args, 'horas', 1) <= 0 or getattr(args, 'horas', 1) > MAX_JWT_HOURS:
         parser.error(f'--horas debe estar entre 0 y {MAX_JWT_HOURS}')
-    handlers = {'init': cmd_init, 'start': cmd_start, 'stop': cmd_stop, 'status': cmd_status, 'renew': cmd_renew,
-                'recrear': cmd_recreate}
+    handlers = {'init': cmd_init, 'start': cmd_start, 'stop': cmd_stop, 'status': cmd_status, 'renew': cmd_renew}
     try:
         return handlers[args.command](args)
     except DemoError as error:

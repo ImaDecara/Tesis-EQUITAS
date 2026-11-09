@@ -100,16 +100,17 @@ async function session(key, landing = '/') {
     return route.continue()
   })
   const page = await context.newPage()
-  page.on('console', message => { if (message.type() === 'error') report.console_errors.push(`${key} ${pathOf(page)}: ${clean(message.text())}`) })
-  page.on('pageerror', error => report.console_errors.push(`${key} ${pathOf(page)}: ${clean(error.message)}`))
+  const where = () => `${key} ${pathOf(page)}${key === 'importador' ? ` #${importerVisits.length - 1}` : ''}`
+  page.on('console', message => { if (message.type() === 'error') report.console_errors.push(`${where()}: ${clean(message.text())}`) })
+  page.on('pageerror', error => report.console_errors.push(`${where()}: ${clean(error.message)}`))
   const posts = []
   page.on('request', request => { if (request.method() === 'POST' && request.headers()['next-action']) posts.push(request.url()) })
   await page.goto(`${base}/login?next=${encodeURIComponent(landing)}`)
   await page.getByLabel('Email', { exact: true }).fill(accounts[key].email)
   await page.getByLabel('Password', { exact: true }).fill(accounts[key].password)
-  await page.getByRole('button', { name: 'Iniciar sesion', exact: true }).click()
   // El ingreso del importador ya renderiza la página de destino: cuenta como visita del escenario conocido.
   if (key === 'importador') importerVisits.push(new URL(landing, base).pathname)
+  await page.getByRole('button', { name: 'Iniciar sesion', exact: true }).click()
   return { key, context, page, posts }
 }
 
@@ -117,9 +118,11 @@ const pathOf = page => { try { return new URL(page.url()).pathname } catch { ret
 // Rutas de cartera que el importador abre a propósito (escenario negativo conocido, preexistente en efad967).
 const importerVisits = []
 async function visitAsImporter(actor, path) {
+  await actor.page.waitForLoadState('networkidle')
+  importerVisits.push(new URL(`${base}${path}`).pathname)
   await actor.page.goto(`${base}${path}`)
   await expect(actor.page.getByText('Datos no disponibles', { exact: true })).toBeVisible({ timeout: 45_000 })
-  importerVisits.push(new URL(`${base}${path}`).pathname)
+  await actor.page.waitForLoadState('networkidle')
 }
 
 async function signedIn(actor) {
@@ -469,16 +472,20 @@ async function run() {
       // de cartera recibe «Datos no disponibles» y React registra su error genérico de producción #441.
       // Solo el error genérico #441 del importador en las rutas de cartera que abrió a propósito,
       // y nunca más de una vez por visita. Cualquier otro error, de cualquier sesión, falla.
-      const allowed = new Set(['/', ...importerVisits])
+      // Cada visita del importador admite a lo sumo un #441, y solo en la ruta de esa visita.
       const known = message => {
-        const match = /^importador (\S+): Error: Minified React error #441;/.exec(message)
-        return Boolean(match && allowed.has(match[1]))
+        const match = /^importador (\S+) #(\d+): Error: Minified React error #441;/.exec(message)
+        return Boolean(match && importerVisits[Number(match[2])] === match[1])
       }
       report.known_preexisting_console_errors = report.console_errors.filter(known)
       assert.deepEqual(report.console_errors.filter(message => !known(message)), [])
-      assert(report.known_preexisting_console_errors.length <= importerVisits.length,
-        `#441 del importador: ${report.known_preexisting_console_errors.length} errores para ${importerVisits.length} visitas`)
-      return { errores: 0, preexistentes_importador: report.known_preexisting_console_errors.length, visitas_importador: importerVisits }
+      const perVisit = {}
+      for (const message of report.known_preexisting_console_errors) {
+        const visit = /#(\d+):/.exec(message)[1]
+        perVisit[visit] = (perVisit[visit] ?? 0) + 1
+      }
+      assert(Object.values(perVisit).every(count => count <= 1), `#441 repetido en una visita: ${JSON.stringify(perVisit)}`)
+      return { errores: 0, preexistentes_importador: report.known_preexisting_console_errors.length, visitas_importador: importerVisits, por_visita: perVisit }
     })
   } finally {
     clearTimeout(timer)

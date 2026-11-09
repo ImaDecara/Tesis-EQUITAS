@@ -43,9 +43,11 @@ vencimiento; `renew` (o `start`) lo renueva y reinicia la app. Los datos no se t
 1. Abrir Docker Desktop y esperar a que esté listo.
 2. `back/.venv/bin/python scripts/demo/equitas_demo.py start`.
 
-Los datos viven en el volumen Docker `supabase_db_equitas-tp-testing`: sobreviven a `stop`, `stop --stack`,
-reinicios de Docker y de la computadora. Se pierden solo con `db reset`, `stop --no-backup` o borrando el
-volumen. El lanzador nunca usa `--no-backup`; solo `recrear` ejecuta `db reset`, y exige confirmación.
+Los datos viven en el volumen Docker `supabase_db_equitas-tp-testing`. Sobreviven a `stop`, a `stop --stack`
+seguido de `start` (probado en N6) y, por cómo funciona un volumen de Docker, también deberían sobrevivir a un
+reinicio de Docker o de la computadora (no probado). Se pierden con `db reset`, `stop --no-backup` o borrando
+el volumen. El lanzador nunca ejecuta `db reset` ni `--no-backup`
+([INICIALIZACION.md §5](INICIALIZACION.md#5-empezar-de-cero-no-hay-recreación-automática)).
 
 ## Procesos que crea
 
