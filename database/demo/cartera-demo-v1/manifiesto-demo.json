@@ -1,0 +1,263 @@
+{
+  "version": "cartera-demo-v1",
+  "generador": "scripts/demo/cartera_demo.py",
+  "semilla": null,
+  "determinismo": "Sin azar: casos, importes y fechas escritos en el generador.",
+  "fecha_corte": "2026-09-30",
+  "municipio_etl": "tenant 1 (back/ETL/config.py DEFAULT_TENANT_ID)",
+  "perfil_mapeo": {
+    "ruta": "contracts/source-mapping.sintetico-v1.json",
+    "sha256": "f6139bd1735a79284723231e6b1e06cf344084b7bd65f1e3280729d99d35fe6a"
+  },
+  "contrato": {
+    "ruta": "contracts/source-contract.v1.json",
+    "sha256": "f5738584cbb2c2869adee4bfe6fb4a0e0ffdc0ab06d48abac5528bd6676ba7f8"
+  },
+  "archivos": {
+    "cabecera.tsv": {
+      "sha256": "8663ed7f78b2e5c86dd84917b730490ad37419300d804082830d50b36a9a3754",
+      "bytes": 4345
+    },
+    "detalle.tsv": {
+      "sha256": "931bceb287e5b52237bfdc429794dd233ad096a2a40806af46e68455fc91af3e",
+      "bytes": 3050
+    }
+  },
+  "dataset_sha256": "2a69af35af21417f2bc8d2320c10da83cd4e2393ed3ee0264989cbb5c28f48ee",
+  "casos": [
+    {
+      "identificador": "DEMO6-3-60001",
+      "clave": "3-60001",
+      "tipo": "RODADO",
+      "caso": "contacto-completo-mora-media",
+      "obligaciones": 3,
+      "personas": 1,
+      "importe_actualizado_ars": "654500.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-6-60002",
+      "clave": "6-60002",
+      "tipo": "AGUA",
+      "caso": "solo-email",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "105700.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-1-60003",
+      "clave": "1-60003",
+      "tipo": "INMUEBLE",
+      "caso": "importe-alto",
+      "obligaciones": 4,
+      "personas": 1,
+      "importe_actualizado_ars": "4600000.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-3-60004",
+      "clave": "3-60004",
+      "tipo": "RODADO",
+      "caso": "sin-contacto",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "824000.00",
+      "banderas_esperadas": [
+        "SIN_CONTACTO_UTILIZABLE"
+      ],
+      "notas": [
+        "sin teléfono, celular ni correo"
+      ]
+    },
+    {
+      "identificador": "DEMO6-6-60005",
+      "clave": "6-60005",
+      "tipo": "AGUA",
+      "caso": "contacto-no-utilizable",
+      "obligaciones": 1,
+      "personas": 1,
+      "importe_actualizado_ars": "41800.00",
+      "banderas_esperadas": [
+        "CONTACTO_NO_UTILIZABLE",
+        "SIN_CONTACTO_UTILIZABLE"
+      ],
+      "notas": [
+        "marcadores 0, - y NO POSEE: no cuentan como contacto"
+      ]
+    },
+    {
+      "identificador": "DEMO6-1-60006",
+      "clave": "1-60006",
+      "tipo": "INMUEBLE",
+      "caso": "dos-titulares",
+      "obligaciones": 2,
+      "personas": 2,
+      "importe_actualizado_ars": "1402000.00",
+      "banderas_esperadas": [
+        "MULTIPLES_PERSONAS"
+      ],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-3-60007",
+      "clave": "3-60007",
+      "tipo": "RODADO",
+      "caso": "persona-con-dos-objetos-1",
+      "obligaciones": 1,
+      "personas": 1,
+      "importe_actualizado_ars": "165000.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-6-60008",
+      "clave": "6-60008",
+      "tipo": "AGUA",
+      "caso": "persona-con-dos-objetos-2",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "113900.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-3-60009",
+      "clave": "3-60009",
+      "tipo": "RODADO",
+      "caso": "vencimiento-antiguo",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "752000.00",
+      "banderas_esperadas": [],
+      "notas": [
+        "más de cinco años de atraso al corte"
+      ]
+    },
+    {
+      "identificador": "DEMO6-6-60010",
+      "clave": "6-60010",
+      "tipo": "AGUA",
+      "caso": "mora-reciente-baja",
+      "obligaciones": 1,
+      "personas": 1,
+      "importe_actualizado_ars": "12000.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-3-60011",
+      "clave": "3-60011",
+      "tipo": "RODADO",
+      "caso": "vence-despues-del-corte",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "520000.00",
+      "banderas_esperadas": [],
+      "notas": [
+        "ninguna obligación vencida al corte"
+      ]
+    },
+    {
+      "identificador": "DEMO6-6-60012",
+      "clave": "6-60012",
+      "tipo": "AGUA",
+      "caso": "estados-de-origen",
+      "obligaciones": 3,
+      "personas": 1,
+      "importe_actualizado_ars": "141350.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-1-60013",
+      "clave": "1-60013",
+      "tipo": "INMUEBLE",
+      "caso": "persona-juridica",
+      "obligaciones": 1,
+      "personas": 1,
+      "importe_actualizado_ars": "1950000.00",
+      "banderas_esperadas": [],
+      "notas": []
+    },
+    {
+      "identificador": "DEMO6-3-60014",
+      "clave": "3-60014",
+      "tipo": "RODADO",
+      "caso": "datos-opcionales-faltantes",
+      "obligaciones": 2,
+      "personas": 1,
+      "importe_actualizado_ars": "350000.00",
+      "banderas_esperadas": [
+        "ESTADO_OBJETO_NO_INFORMADO",
+        "PORCENTAJE_FALTANTE"
+      ],
+      "notas": [
+        "sin estado, porcentaje, intereses, capital de cabecera, períodos, fecha de actualización ni domicilio"
+      ]
+    },
+    {
+      "identificador": "DEMO6-6-60015",
+      "clave": "6-60015",
+      "tipo": "AGUA",
+      "caso": "objeto-inactivo-en-origen",
+      "obligaciones": 1,
+      "personas": 1,
+      "importe_actualizado_ars": "33000.00",
+      "banderas_esperadas": [
+        "OBJETO_INACTIVO_EN_ORIGEN"
+      ],
+      "notas": []
+    }
+  ],
+  "resultados_esperados": {
+    "objetos": 15,
+    "obligaciones": 29,
+    "personas": 15,
+    "relaciones_objeto_persona": 16,
+    "objetos_por_tipo": {
+      "AGUA": 6,
+      "INMUEBLE": 3,
+      "RODADO": 6
+    },
+    "importe_total_actualizado_ars": "11665250.00",
+    "importe_por_estado_de_origen_ars": {
+      "PAGADA": "48000.00",
+      "PENDIENTE": "11570100.00",
+      "SUSPENDIDA": "47150.00"
+    },
+    "objetos_sin_contacto_utilizable": [
+      "DEMO6-3-60004",
+      "DEMO6-6-60005"
+    ],
+    "objetos_con_obligacion_pendiente_vencida_al_corte": [
+      "DEMO6-3-60001",
+      "DEMO6-6-60002",
+      "DEMO6-1-60003",
+      "DEMO6-3-60004",
+      "DEMO6-6-60005",
+      "DEMO6-1-60006",
+      "DEMO6-3-60007",
+      "DEMO6-6-60008",
+      "DEMO6-3-60009",
+      "DEMO6-6-60010",
+      "DEMO6-6-60012",
+      "DEMO6-1-60013",
+      "DEMO6-3-60014",
+      "DEMO6-6-60015"
+    ],
+    "objetos_sin_obligacion_vencida_al_corte": [
+      "DEMO6-3-60011"
+    ],
+    "validacion_esperada": {
+      "resultado_lote": "VALIDADO",
+      "publicacion_permitida": true,
+      "objetos_aceptados": 15,
+      "objetos_en_cuarentena": 0
+    }
+  },
+  "origen_de_los_datos": "Sintético. Ninguna persona, documento, teléfono ni correo pertenece a alguien."
+}
