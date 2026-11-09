@@ -50,8 +50,10 @@ Observado en esta versión con las reglas v1.0.0 (lo calcula la app, no el manif
 6. **Persistencia**: `stop --stack`, luego `start`. La cartera, la propuesta y la aprobación siguen.
    `init` repetido informa «ya publicada» y no cambia nada.
 
-El recorrido automatizado de cierre dejó una propuesta y su aprobación en un caso que se indica en el
-[README](README.md#estado-al-cierre); para la prueba propia conviene elegir otro caso.
+El recorrido automatizado de cierre dejó en `DEMO6-1-60003` una propuesta del operador (`MODIFICA`,
+intensidad 3, motivo `DATOS_INCOMPLETOS`) aprobada por el supervisor: sirve para ver una decisión ya aprobada.
+Para la prueba propia conviene elegir otro caso de «Contacto y plan», por ejemplo `DEMO6-1-60013` o
+`DEMO6-1-60006`.
 
 ## Recorrido automatizado
 

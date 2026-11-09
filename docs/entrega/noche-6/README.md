@@ -21,7 +21,8 @@ experimental, el canal ni la tesis, y no es una operación real: ver [PENDIENTES
 |---|---|
 | Rama | `delivery/noche-6-v1` (solo local; sin push) |
 | Base | `efad96793048a495c53869c0126e8b5250cfb916` = `delivery/2026-10-28-v2` (última integración aceptada, ALIGN-029) |
-| Código probado y SHA final | ver [§ Estado al cierre](#estado-al-cierre) |
+| Código probado | `f6e2a4d24306f2594c9606e5901026a3696d1841` |
+| Commit de entrega | el que agrega este estado: solo documentación sobre `f6e2a4d2` (ver [§ Estado al cierre](#estado-al-cierre)) |
 | `main` | sin cambios (`36f35b4`) |
 
 La rama conserva toda la integración anterior (`efad967` es ancestro) y agrega:
@@ -54,7 +55,7 @@ back/.venv/bin/python scripts/demo/equitas_demo.py start   # cada vez: abre http
 
 | Estado | Resultado |
 |---|---|
-| Funciona localmente | ver [§ Estado al cierre](#estado-al-cierre) |
+| Funciona localmente | **sí**: demo definitiva sobre `f6e2a4d2`, recorrido 12/12 y persistencia 7/7 (macOS + Docker Desktop) |
 | Compatibilidad de build/configuración con el Vercel existente | comprobada hasta el alcance descrito en [VERCEL.md](VERCEL.md); hay precondiciones del panel que no se pudieron verificar |
 | Despliegue Vercel de esta candidata probado | **no realizado**: N6 no autoriza push ni despliegue |
 
@@ -62,4 +63,28 @@ back/.venv/bin/python scripts/demo/equitas_demo.py start   # cada vez: abre http
 
 ## Estado al cierre
 
-Se completa al cerrar la noche con el SHA final, las pruebas ejecutadas y sus resultados.
+2026-11-09. Rama local `delivery/noche-6-v1` (sin push). Commits sobre `efad967`:
+
+| Commit | Contenido |
+|---|---|
+| `d606278` | Remediación GHSA-g3hv-75wg-m249 (`minimatch` 11.0.5 solo bajo `typescript-estree`) |
+| `772cef7` | Accesos visibles a los CSV existentes |
+| `5d8e175` | Demo local: cartera, lanzador, recorrido, pruebas y guías |
+| `7189171` | Correcciones de la revisión inicial (ciclo 1) |
+| `f6e2a4d` | Correcciones del ciclo 2: sin recreación destructiva; cupo #441 por visita — **código probado** |
+| siguiente | Solo documentación de cierre (este estado y la evidencia seleccionada) — **commit de entrega** |
+
+Resultados (detalle en [evidencia/EVIDENCIA.md](evidencia/EVIDENCIA.md)):
+
+- **Gates del repositorio sobre `f6e2a4d2`**: `passed=true`, sin excepción de auditoría (primer gate verde desde
+  el 31/10); frontend 1910/1910, backend 1967/1967.
+- **Campañas sobre `7189171`** (mismo código de app): 029 real 15/15, 022 75/75 con `validate --sha`, E06 local
+  12/12, SMOKE-01 local 5/5; 028 908/912 con 4 fallas **preexistentes** (iguales en `efad967`).
+- **Demo definitiva** preparada sobre la base vacía: `init` → recorrido 12/12 → `stop --stack` + `start` →
+  persistencia 7/7 → `init` e `init --republicar` sin cambios en la base. El recorrido dejó una propuesta del
+  operador (`MODIFICA`, intensidad 3) **aprobada** por el supervisor en `DEMO6-1-60003`.
+- **Revisión independiente** (Codex `gpt-6-astra`): aprobada en el ciclo 2 sobre `f6e2a4d2`; 2 de 2 ciclos
+  globales usados. Bloque excluido: recreación destructiva automática ([INICIALIZACION.md §5](INICIALIZACION.md#5-empezar-de-cero-no-hay-recreación-automática)).
+
+Límites: solo local y sintético; probado en macOS con Docker Desktop; sin publicación en Vercel ni bases remotas
+([VERCEL.md](VERCEL.md)); pendientes en [PENDIENTES.md](PENDIENTES.md).

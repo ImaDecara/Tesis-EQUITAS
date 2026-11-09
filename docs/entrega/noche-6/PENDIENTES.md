@@ -27,6 +27,8 @@ una foto fechada para quien solo tiene el repositorio y no se edita como plan.
 | Red local | Supabase CLI publica sus puertos en todas las interfaces con claves locales conocidas |
 | Reglas y costos | Versionados y sin validación municipal o académica (034/037) |
 | Identificador externo de obligación | La ficha muestra «No informado» aunque el archivo trae `DEUD_id` (comportamiento existente, no evaluado en N6) |
+| Empezar de cero | No hay recreación automática: el reset de la CLI borra toda la base local y no se puede limitar a la demo (INICIALIZACION.md §5) |
+| Prueba ALIGN-028 por HTTP | 4 fallas preexistentes en `efad967`: dos expectativas anteriores al corte integrado (014/029) y `?risk=ALTO` con pantalla «No disponible» frente a un CSV con 0 filas |
 
 ## Pendientes del plan que siguen abiertos (resumen)
 
