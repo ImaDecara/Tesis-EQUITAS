@@ -54,7 +54,8 @@ Qué hace, en orden:
 
 1. Si Supabase local está detenido, lo inicia con la CLI fijada (no resetea).
 2. Lee las claves locales con `supabase status -o env` y las guarda en la carpeta privada (0600).
-3. Toma el turno de base compartido (`/tmp/equitas-local-db/lock`) para no chocar con una campaña.
+3. Toma el turno de base compartido (`/tmp/equitas-local-db/lock`) **antes** de arrancar o tocar el stack,
+   para no chocar con una campaña; si está ocupado, termina sin cambios.
 4. Comprueba que las migraciones aplicadas sean exactamente las de `supabase/migrations/`. Si faltan,
    indica `npx --yes supabase@2.108.0 migration up --local`; si hay migraciones desconocidas, no toca nada.
 5. Inventario: lo que no reconoce como propio (otros municipios, cuentas, lotes u objetos) se **conserva**
@@ -79,9 +80,21 @@ Opciones:
 back/.venv/bin/python scripts/demo/equitas_demo.py recrear --confirmar RECREAR-DEMO
 ```
 
-Borra la base local con `db reset --local` y vuelve a ejecutar `init`. Solo procede si el inventario
-muestra **exclusivamente** recursos de la demo; si encuentra cualquier dato ajeno, no borra nada. Se
-pierden las decisiones y aprobaciones de la demo y se generan contraseñas nuevas.
+Borra la base local con `db reset --local` y vuelve a ejecutar `init`. Antes cuenta **todas** las tablas de
+todos los esquemas (lo que borraría el reset), además de las bases del clúster y los objetos grandes, y aplica
+la regla «negar salvo prueba de pertenencia»:
+
+- cada fila de una tabla conocida debe vincularse a la demo por claves exactas (los 15 identificadores del
+  manifiesto, sus personas y obligaciones, las cuentas y membresías esperadas, los lotes con los hashes de la
+  cartera, los catálogos sembrados por el ETL);
+- las tablas internas de Supabase solo se aceptan con el conteo que trae un stack recién creado;
+- las migraciones aplicadas deben ser exactamente las del repositorio;
+- cualquier fila sin pertenencia demostrable (por ejemplo un objeto sin identificador o una persona suelta)
+  o cualquier tabla desconocida con filas detiene todo **sin borrar nada**.
+
+El resultado, sin secretos, queda en `~/.equitas-demo/recrear-inventario.json`. Se pierden las decisiones y
+aprobaciones de la demo y se generan contraseñas nuevas. Toma el turno compartido de la base antes de tocar el
+stack: si hay una campaña en curso, no hace nada.
 
 ## 6. Qué no hace
 

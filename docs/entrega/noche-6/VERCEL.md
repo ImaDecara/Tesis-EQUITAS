@@ -18,8 +18,10 @@ y la documentación versionada de E07 (`CONFIGURACION_VERCEL_E07.md`, `REGISTRO_
 
 - Proyecto Vercel `tesis-equitas`, equipo `equitas`, con integración Git: el repositorio es **público**.
 - **Production** se publica desde `main`: el último despliegue registrado es de `36f35b4` (2026-10-23, estado `success`).
-- **Preview**: se crea uno por cada push de cualquier rama (por ejemplo `quality/*`). Los Preview están
-  protegidos por Vercel Authentication; el CI usa `VERCEL_AUTOMATION_BYPASS_SECRET` (secreto de GitHub).
+- **Preview**: el historial muestra un Preview por cada push de rama (por ejemplo `quality/*`), además del
+  Production de `main`. Es el comportamiento esperado de la integración Git, **sujeto a la configuración vigente
+  del panel**, que no se pudo verificar (§3). Los Preview están protegidos por Vercel Authentication; el CI usa
+  `VERCEL_AUTOMATION_BYPASS_SECRET` (secreto de GitHub).
 - Variables históricas documentadas en E07: `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
   **solo para Preview de `quality/tp-testing`**, apuntando a Supabase testing. Eso es Preview, no Production:
   la configuración actual de Production no consta en el repositorio.
@@ -108,9 +110,12 @@ autorizado (ALIGN-046/050). Sin cartera, la app publicada mostraría tableros va
 
 | Acción | Qué se dispara |
 |---|---|
-| Push de `delivery/noche-6-v1` (o cualquier rama) | `Calidad - CI y gates` (frontend y backend) en GitHub Actions; un **Preview** de Vercel con las variables de Preview vigentes |
-| Push o merge a `main` | el mismo CI **más** el job `Supabase - integracion real Auth y RLS` contra **Supabase testing** (secreto `SUPABASE_TEST_CONFIG`) y un despliegue de **Production** |
-| Push a `quality/tp-testing` | además `Preview - smoke posterior al despliegue` |
+| Push de `delivery/noche-6-v1` (o de otra rama que no sea `main` ni `quality/tp-testing`) | `Calidad - CI y gates` (jobs frontend y backend) en GitHub Actions; previsiblemente un **Preview** de Vercel con las variables de Preview vigentes |
+| Push o merge a `main` | el mismo CI **más** el job `Supabase - integracion real Auth y RLS` contra **Supabase testing** (secreto `SUPABASE_TEST_CONFIG`) y, según el historial, un despliegue de **Production** |
+| Push a `quality/tp-testing` | el mismo CI **más** el job contra **Supabase testing** (la condición del job incluye `main` y `quality/tp-testing`), un Preview y el workflow `Preview - smoke posterior al despliegue` |
+
+Fuente: `.github/workflows/quality-ci.yml` (disparadores `push` sin filtro de ramas y condición del job `supabase`),
+`.github/workflows/preview-smoke.yml` y el historial de despliegues. Lo de Vercel depende del panel (§3).
 
 Merge a `main` sin base preparada publicaría en Production una app que no encuentra sus tablas.
 

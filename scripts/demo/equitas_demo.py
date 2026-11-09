@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -60,6 +61,20 @@ DEFAULT_PORT = 3000
 DEFAULT_JWT_HOURS = 24
 MAX_JWT_HOURS = 72
 RENEW_MARGIN = timedelta(hours=2)
+CRON_JOBS = ('equitas-import-staging-ttl', 'equitas-import-preview-ttl')  # de las migraciones del repositorio
+KNOWN_DATABASES = ('_supabase', 'postgres', 'storage_vectors', 'template0', 'template1')
+# Tablas internas que un stack recién creado con la CLI 2.108.0 y estas migraciones ya trae con filas
+# (contadas en una base prístina el 2026-11-09). Otro conteo significa que alguien las tocó: no se borra.
+PRISTINE_BOOKKEEPING = {
+    '_realtime.extensions': 1, '_realtime.schema_migrations': 31, '_realtime.tenants': 1, 'auth.schema_migrations': 76,
+    'realtime.schema_migrations': 75, 'storage.migrations': 61, 'supabase_functions.migrations': 2,
+}
+SECRET_PATTERNS = (
+    re.compile(r'eyJ[\w-]+\.[\w-]+\.[\w-]+'),
+    re.compile(r'sb_(?:secret|publishable)_[\w-]+'),
+    re.compile(r'\b[0-9a-fA-F]{32,}\b'),
+)
+SECRET_ASSIGNMENT = re.compile(r'(?i)((?:secret|key|password|token)[^:=\n]{0,40}[:=][ \t]*)\S+')
 
 # Cuentas propias de la demo: (clave, correo, rol, municipio). Ninguna existe fuera de la base local.
 ACCOUNTS = (
@@ -155,19 +170,42 @@ def parse_env(text: str) -> dict[str, str]:
 def run(command: list[str] | tuple[str, ...], *, cwd: Path = ROOT, env: dict[str, str] | None = None,
         timeout: int = 120, log: Path | None = None, stdin: str | None = None) -> subprocess.CompletedProcess:
     """Ejecuta sin shell. Con log, la salida va solo a ese archivo privado. Mata el grupo si vence."""
-    with contextlib.ExitStack() as stack:
-        handle = stack.enter_context(open(log, 'a', encoding='utf-8')) if log else None
-        process = subprocess.Popen(command, cwd=cwd, env=env, text=True, start_new_session=True,
-                                   stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                                   stdout=handle or subprocess.PIPE, stderr=handle or subprocess.PIPE)
-        try:
-            out, err = process.communicate(stdin, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-            process.communicate()
-            raise DemoError(f'Tiempo máximo agotado ({timeout} s): {command[0]} {command[1] if len(command) > 1 else ""}'.strip())
-        return subprocess.CompletedProcess(command, process.returncode, out or '', err or '')
+    process = subprocess.Popen(command, cwd=cwd, env=env, text=True, start_new_session=True,
+                               stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        out, err = process.communicate(stdin, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
+        raise DemoError(f'Tiempo máximo agotado ({timeout} s): {command[0]} {command[1] if len(command) > 1 else ""}'.strip())
+    if log:
+        # Ningún log conserva salida cruda: la CLI de Supabase imprime claves al arrancar.
+        write_private(log, redact_text((out or '') + (err or ''), known_secrets()))
+        return subprocess.CompletedProcess(command, process.returncode, '', '')
+    return subprocess.CompletedProcess(command, process.returncode, out or '', err or '')
+
+
+def known_secrets() -> tuple[str, ...]:
+    """Valores privados ya conocidos (claves locales y contraseñas demo) para tacharlos de cualquier log."""
+    values: list[str] = []
+    with contextlib.suppress(Exception):
+        home = Path(os.environ.get('EQUITAS_DEMO_HOME') or Path.home() / '.equitas-demo').expanduser()
+        if (home / 'supabase-local.env').exists():
+            values += [value for key, value in parse_env((home / 'supabase-local.env').read_text()).items()
+                       if not value.startswith(('http://', 'postgresql://postgres:postgres@'))]
+        if (home / 'cuentas.json').exists():
+            values += [entry.get('password') or '' for entry in json.loads((home / 'cuentas.json').read_text()).values()]
+    return tuple(value for value in values if value)
+
+
+def redact_text(text: str, extra: tuple[str, ...] | list[str] = ()) -> str:
+    for value in sorted({value for value in extra if value and len(value) >= 6}, key=len, reverse=True):
+        text = text.replace(value, '[privado]')
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub('[privado]', text)
+    return SECRET_ASSIGNMENT.sub(r'\1[privado]', text)
 
 
 def cli_env() -> dict[str, str]:
@@ -190,15 +228,14 @@ def ensure_stack(home: Path) -> None:
         raise DemoError('Docker no responde. Abrí Docker Desktop (o el servicio de Docker) y repetí el comando.')
     if stack_running():
         return
-    say('Supabase local detenido: se inicia con la CLI fijada (conserva los datos; no resetea).')
-    log = private_log(home, 'supabase-start')
-    previous = os.umask(0o077)
-    try:
+    with db_turn('arranque-stack'):  # no se arranca ni se detiene el stack durante una campaña ajena
+        if stack_running():
+            return
+        say('Supabase local detenido: se inicia con la CLI fijada (conserva los datos; no resetea).')
+        log = private_log(home, 'supabase-start')
         result = run([*CLI, 'start'], env=cli_env(), timeout=1800, log=log)
-    finally:
-        os.umask(previous)
     if result.returncode != 0:
-        raise DemoError(f'supabase start falló (exit {result.returncode}); salida en el log privado {log}.')
+        raise DemoError(f'supabase start falló (exit {result.returncode}); salida saneada en {log}.')
 
 
 def supabase_env(home: Path) -> dict[str, str]:
@@ -248,16 +285,27 @@ def sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def psql(text: str, *, home: Path | None = None, read_only: bool = False, timeout: int = 180) -> str:
-    """psql del contenedor por stdin (nunca argv). Ante error no imprime la salida: puede citar el SQL."""
+PSQL_LEVEL = re.compile(r'^(?:psql:[^:]*:\d+: )?((?:ERROR|DETAIL|HINT):.*)$')
+
+
+def sanitize_psql_error(stderr: str, secrets_in_sql: tuple[str, ...] = ()) -> str:
+    """Solo niveles ERROR/DETAIL/HINT, sin líneas LINE/QUERY/CONTEXT (citan el SQL) ni literales."""
+    kept = [match.group(1) for line in stderr.splitlines() if (match := PSQL_LEVEL.match(line))]
+    text = '\n'.join(re.sub(r"'(?:[^']|'')*'", "'…'", line) for line in kept)
+    return redact_text(text, (*secrets_in_sql, *known_secrets())) or 'psql terminó con error (sin diagnóstico conservable)'
+
+
+def psql(text: str, *, home: Path | None = None, read_only: bool = False, timeout: int = 180,
+         secrets_in_sql: tuple[str, ...] = ()) -> str:
+    """psql del contenedor por stdin (nunca argv). Un error solo deja un diagnóstico saneado."""
     body = f'begin transaction read only;\n{text}\nrollback;\n' if read_only else text
     result = run(['docker', 'exec', '-i', DB_CONTAINER, 'psql', '-X', '-q', '-At', '-F', '|',
                   '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], stdin=body, timeout=timeout)
     if result.returncode != 0:
         if home is not None:
             log = private_log(home, 'psql-error')
-            write_private(log, result.stderr)
-            raise DemoError(f'Falló una consulta local; detalle solo en el log privado {log}.')
+            write_private(log, sanitize_psql_error(result.stderr, secrets_in_sql))
+            raise DemoError(f'Falló una consulta local; diagnóstico saneado en {log}.')
         raise DemoError('Falló una consulta local (detalle omitido por privacidad).')
     return result.stdout.strip()
 
@@ -267,7 +315,18 @@ def psql_json(query: str, **kwargs):
     return json.loads(raw.splitlines()[-1]) if raw else None
 
 
-INVENTORY_SQL = f"""
+def demo_identifiers() -> tuple[str, ...]:
+    return tuple(case['identificador'] for case in manifest()['casos'])
+
+
+def in_list(values) -> str:
+    return '(' + ', '.join(sql_literal(value) for value in values) + ')'
+
+
+def inventory_sql() -> str:
+    ids = in_list(demo_identifiers())
+    demo = f"tenant = 1 and identifier in {ids}"
+    return f"""
 select json_build_object(
   'migrations', (select coalesce(json_agg(version order by version), '[]') from supabase_migrations.schema_migrations),
   'tenants', (select coalesce(json_agg(json_build_object('id', id, 'name', name) order by id), '[]') from public.tenant),
@@ -278,12 +337,10 @@ select json_build_object(
                   from public.tenant_user tu join public."user" u on u.id = tu."user"
                   join public.tenant t on t.id = tu.tenant join public.role r on r.id = tu.role),
   'debtors_by_tenant', (select coalesce(json_object_agg(tenant, n), '{{}}') from (select tenant, count(*) n from public.debtor group by tenant) x),
-  'foreign_debtors_tenant1', (select count(*) from public.debtor where tenant = 1 and identifier not like {sql_literal(IDENTIFIER_PREFIX + '%')}),
-  'demo_debtors', (select count(*) from public.debtor where tenant = 1 and identifier like {sql_literal(IDENTIFIER_PREFIX + '%')}),
-  'demo_debts', (select count(*) from public.debt d join public.debtor o on o.id = d.debtor
-                 where o.tenant = 1 and o.identifier like {sql_literal(IDENTIFIER_PREFIX + '%')}),
-  'demo_amount', (select coalesce(sum(d.current_amount), 0)::text from public.debt d join public.debtor o on o.id = d.debtor
-                  where o.tenant = 1 and o.identifier like {sql_literal(IDENTIFIER_PREFIX + '%')}),
+  'foreign_debtors_tenant1', (select count(*) from public.debtor where tenant = 1 and not coalesce(identifier in {ids}, false)),
+  'demo_debtors', (select count(*) from public.debtor where {demo}),
+  'demo_debts', (select count(*) from public.debt d where d.debtor in (select id from public.debtor where {demo})),
+  'demo_amount', (select coalesce(sum(d.current_amount), 0)::text from public.debt d where d.debtor in (select id from public.debtor where {demo})),
   'batches', (select coalesce(json_agg(json_build_object('id', id, 'tenant', tenant, 'status', status, 'as_of', as_of,
                 'cabecera', file_hashes->>'cabecera', 'detalle', file_hashes->>'detalle',
                 'atomica', counts->'publicacion_atomica') order by id), '[]') from public.import_batch),
@@ -294,7 +351,7 @@ select json_build_object(
 
 
 def inventory(home: Path | None = None) -> dict:
-    return psql_json(INVENTORY_SQL, home=home, read_only=True)
+    return psql_json(inventory_sql(), home=home, read_only=True)
 
 
 def manifest() -> dict:
@@ -325,16 +382,137 @@ def classify(inv: dict, hashes: dict[str, str]) -> dict[str, list[str]]:
         'lotes': [str(b['id']) for b in inv['batches']
                   if b['tenant'] != 1 or b['cabecera'] != hashes['cabecera'] or b['detalle'] != hashes['detalle']],
     }
+    expected = expected_memberships()
+    foreign['membresias'] = [f"{m['email']}:{m['tenant']}:{m['role']}" for m in inv['memberships']
+                             if (m['email'], m['tenant'], m['role']) not in expected or not m['active']]
     if inv['foreign_debtors_tenant1']:
-        foreign['objetos_tenant_1'] = [f"{inv['foreign_debtors_tenant1']} objetos sin prefijo {IDENTIFIER_PREFIX}"]
+        foreign['objetos_tenant_1'] = [f"{inv['foreign_debtors_tenant1']} objetos fuera de los identificadores del manifiesto"]
     other = {str(k): v for k, v in inv['debtors_by_tenant'].items() if str(k) != '1'}
     if other:
         foreign['objetos_otros_municipios'] = [f'{k}:{v}' for k, v in sorted(other.items())]
     return {key: value for key, value in foreign.items() if value}
 
 
+def expected_memberships() -> set[tuple[str, str, str]]:
+    own = {(email, tenant, role) for _, email, role, tenant in ACCOUNTS if role}
+    return own | {(IMPORT_ACTOR_EMAIL, TENANT_A, 'importador_sistema')}
+
+
+def catalog_seeds() -> dict[str, tuple[str, list[tuple[int, str]]]]:
+    """(columna clave, [(id, clave)]) de cada catálogo que siembra etl-compat-catalogs.sql."""
+    text = (ROOT / 'database/testing/etl-compat-catalogs.sql').read_text(encoding='utf-8')
+    seeds = {}
+    for table, key, payload in re.findall(r"etl_seed\('(\w+)', '(\w+)', '\w+', '(\[.*?\])'\)", text, flags=re.DOTALL):
+        seeds[table] = (key, [(int(item['id']), item['key']) for item in json.loads(payload)])
+    if len(seeds) != 7:
+        raise DemoError('No se pudieron leer los catálogos del ETL para el inventario.')
+    return seeds
+
+
+def ownership_rules(hashes: dict[str, str]) -> dict[str, str]:
+    """Condición SQL que cumple una fila PROPIA de la demo, por tabla. Lo demás no se puede borrar."""
+    ids = in_list(demo_identifiers())
+    debtors = f"select id from public.debtor where tenant = 1 and identifier in {ids}"
+    persons = f"select person from public.debtor_person where debtor in ({debtors})"
+    own_emails = in_list(email for _, email, _, _ in ACCOUNTS)
+    users = f'select id from public."user" where email in {in_list([*(email for _, email, _, _ in ACCOUNTS), IMPORT_ACTOR_EMAIL])}'
+    auth_users = f"select id from auth.users where email in {own_emails}"
+    triples = in_list(f'{email}|{tenant}|{role}' for email, tenant, role in sorted(expected_memberships()))
+    batches = (f"select id from public.import_batch where tenant = 1 and file_hashes->>'cabecera' = {sql_literal(hashes['cabecera'])}"
+               f" and file_hashes->>'detalle' = {sql_literal(hashes['detalle'])}")
+    reviews = f"select id from public.case_review where tenant = 1 and debtor in ({debtors})"
+    cities = f"select city from public.address where person in ({persons})"
+    rules = {
+        'public.tenant': f"(id = 1 and name = {sql_literal(TENANT_A)}) or (id <> 1 and name = {sql_literal(TENANT_B)})",
+        'public.role': f"name in {in_list([*ROLE_DESCRIPTIONS, 'importador_sistema'])}",
+        'public.user': f"id in ({users})",
+        'public.tenant_user': ('status and (select u.email || \'|\' || t.name || \'|\' || r.name from public."user" u, public.tenant t, public.role r'
+                               f' where u.id = tenant_user."user" and t.id = tenant_user.tenant and r.id = tenant_user.role) in {triples}'),
+        'public.debtor': f"tenant = 1 and identifier in {ids}",
+        'public.debt': f"debtor in ({debtors})",
+        'public.debtor_person': f"debtor in ({debtors})",
+        'public.person': f"id in ({persons})",
+        'public.debtor_contact': f"person in ({persons})",
+        'public.address': f"person in ({persons})",
+        'public.city': f"id in ({cities})",
+        'public.province': f"id in (select province from public.city where id in ({cities}))",
+        'public.debtor_profile': f"debtor in ({debtors})",
+        'public.debtor_profile_detail': f"debtor_profile in (select id from public.debtor_profile where debtor in ({debtors}))",
+        'public.import_batch': f"id in ({batches})",
+        'public.import_publication': f"batch_id in ({batches})",
+        'public.case_review': f"id in ({reviews}) and reviewer in ({users})",
+        'public.case_review_approval': f"case_review in ({reviews}) and approver in ({users})",
+        'public.access_audit': f"tenant in (select id from public.tenant where name in {in_list([TENANT_A, TENANT_B])}) and actor in ({users})",
+        'equitas_import_private.object_version': f"(tenant, object_type, external_id) in (select tenant, type, external_id from public.debtor where tenant = 1 and identifier in {ids})",
+        'equitas_import_private.person_version': f"external_id in (select external_id from public.person where id in ({persons}))",
+        'auth.users': f"email in {own_emails}",
+        'auth.identities': f"user_id in ({auth_users})",
+        'auth.sessions': f"user_id in ({auth_users})",
+        'auth.refresh_tokens': f"user_id in (select id::text from auth.users where email in {own_emails})",
+        'auth.mfa_amr_claims': f"session_id in (select id from auth.sessions where user_id in ({auth_users}))",
+        'auth.audit_log_entries': f"payload->>'actor_id' in (select id::text from auth.users where email in {own_emails})",
+        'cron.job': f"jobname in {in_list(CRON_JOBS)}",
+        'cron.job_run_details': f"jobid in (select jobid from cron.job where jobname in {in_list(CRON_JOBS)})",
+        'supabase_migrations.schema_migrations': f"version in {in_list(repo_migrations())}",
+    }
+    for table, (key, pairs) in catalog_seeds().items():
+        rules[f'public.{table}'] = '(id, ' + key + ') in (' + ', '.join(f'({number}, {sql_literal(value)})' for number, value in pairs) + ')'
+    return rules
+
+
+# Tablas cuyo tamaño fija el manifiesto: 0 (sin demo) o exactamente lo esperado.
+def manifest_counts() -> dict[str, int]:
+    expected = manifest()['resultados_esperados']
+    return {'public.debtor': expected['objetos'], 'public.debt': expected['obligaciones'], 'public.person': expected['personas'],
+            'public.debtor_person': expected['relaciones_objeto_persona'], 'public.debtor_profile': expected['objetos']}
+
+
+def exhaustive_inventory(home: Path, hashes: dict[str, str]) -> dict:
+    """Cuenta cada tabla de cada esquema (lo que borraría db reset) y cuántas filas no son demostrablemente propias."""
+    listing = psql("select table_schema || '.' || table_name from information_schema.tables where table_type = 'BASE TABLE' "
+                   "and table_schema not in ('pg_catalog', 'information_schema') and table_schema not like 'pg\\_toast%' order by 1;",
+                   home=home, read_only=True).splitlines()
+    rules = ownership_rules(hashes)
+    parts = []
+    for name in listing:
+        schema, table = name.split('.', 1)
+        quoted = f'"{schema}"."{table}"'
+        if name in rules:
+            foreign = f'(select count(*) from {quoted} where not coalesce(({rules[name]}), false))'
+        elif name in PRISTINE_BOOKKEEPING:
+            foreign = f'(select case when count(*) = {PRISTINE_BOOKKEEPING[name]} then 0 else count(*) end from {quoted})'
+        else:
+            foreign = f'(select count(*) from {quoted})'
+        parts.append(f"json_build_object('t', {sql_literal(name)}, 'rows', (select count(*) from {quoted}), 'foreign', {foreign})")
+    query = ("select json_build_object('tables', json_build_array(" + ', '.join(parts) + "), "
+             "'databases', (select json_agg(datname order by datname) from pg_database), "
+             "'largeobjects', (select count(*) from pg_largeobject_metadata))")
+    report = psql_json(query, home=home, read_only=True, timeout=300)
+    report['reglas'] = sorted(rules)
+    return report
+
+
+def recreate_blockers(report: dict) -> list[str]:
+    """Todo lo que impide borrar: una sola fila sin pertenencia demostrada alcanza para no hacer nada."""
+    blockers = [f"{item['t']}: {item['foreign']} de {item['rows']} filas sin pertenencia demostrable"
+                for item in report['tables'] if item['foreign']]
+    counts = {item['t']: item['rows'] for item in report['tables']}
+    for table, expected in manifest_counts().items():
+        if counts.get(table, 0) not in (0, expected):
+            blockers.append(f'{table}: {counts.get(table)} filas; la demo tiene 0 o {expected}')
+    if sorted(report['databases']) != sorted(KNOWN_DATABASES):
+        blockers.append('el clúster tiene bases de datos que el stack no crea')
+    if report['largeobjects']:
+        blockers.append(f"{report['largeobjects']} objetos grandes (large objects)")
+    return blockers
+
+
+def repo_migrations() -> list[str]:
+    return sorted(path.name.split('_', 1)[0] for path in (ROOT / 'supabase/migrations').glob('*.sql'))
+
+
 def check_migrations(inv: dict) -> None:
-    expected = sorted(path.name.split('_', 1)[0] for path in (ROOT / 'supabase/migrations').glob('*.sql'))
+    expected = repo_migrations()
     applied = inv['migrations']
     if applied == expected:
         return
@@ -346,9 +524,15 @@ def check_migrations(inv: dict) -> None:
 
 # ------------------------------------------------------------------ turno compartido de la base
 
+_TURN: dict[str, str | None] = {'nonce': None}
+
+
 @contextlib.contextmanager
 def db_turn(purpose: str):
-    """El mismo turno que usan las campañas (mkdir atómico). Solo libera el turno propio."""
+    """El mismo turno que usan las campañas (mkdir atómico). Reentrante en este proceso; solo libera el propio."""
+    if _TURN['nonce'] is not None:
+        yield
+        return
     SHARED_LOCK.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         SHARED_LOCK.mkdir(mode=0o700)
@@ -358,9 +542,11 @@ def db_turn(purpose: str):
     owner = SHARED_LOCK / 'owner.json'
     write_private(owner, json.dumps({'tool': 'equitas-demo', 'purpose': purpose, 'pid': os.getpid(), 'nonce': nonce,
                                      'inode': SHARED_LOCK.stat().st_ino, 'at_utc': utc_now().isoformat()}))
+    _TURN['nonce'] = nonce
     try:
         yield
     finally:
+        _TURN['nonce'] = None
         with contextlib.suppress(FileNotFoundError, json.JSONDecodeError):
             if json.loads(owner.read_text()).get('nonce') == nonce:
                 owner.unlink()
@@ -543,8 +729,12 @@ def ensure_build(home: Path, env: dict[str, str], force: bool = False) -> None:
     stamp_path = FRONT / '.next/equitas-demo-build.json'
     stamp = build_stamp(env)
     current = json.loads(stamp_path.read_text(encoding='utf-8')) if stamp_path.exists() else None
-    if not force and current == stamp and (FRONT / '.next/BUILD_ID').exists():
+    # La huella no ve contenidos: con cambios sin confirmar en front/ o contracts/ se recompila siempre.
+    dirty = bool(git('status', '--porcelain', '--', 'front', 'contracts'))
+    if not force and not dirty and current == stamp and (FRONT / '.next/BUILD_ID').exists():
         return
+    if dirty:
+        say('Hay cambios sin confirmar en front/ o contracts/: se recompila.')
     say('Compilando la app (next build) con la configuración pública local; puede tardar unos minutos.')
     build_env = {'PATH': os.environ.get('PATH', ''), 'HOME': str(Path.home()), 'NEXT_TELEMETRY_DISABLED': '1',
                  'NEXT_PUBLIC_SUPABASE_URL': check_api_url(env['API_URL']),
@@ -662,9 +852,9 @@ def prepare(home: Path) -> dict[str, str]:
 
 def cmd_init(args) -> int:
     home = demo_home()
-    env = prepare(home)
-    hashes = fixture_hashes()
-    with db_turn('init'):
+    with db_turn('init'):  # antes de tocar el stack: con una campaña en curso no se arranca ni se escribe nada
+        env = prepare(home)
+        hashes = fixture_hashes()
         inv = inventory(home)
         check_migrations(inv)
         foreign = classify(inv, hashes)
@@ -682,7 +872,7 @@ def cmd_init(args) -> int:
         for key, email, role, tenant in ACCOUNTS:
             if email not in existing or key in rotate:
                 passwords[key] = new_password()
-        psql(accounts_sql(passwords, rotate), home=home)
+        psql(accounts_sql(passwords, rotate), home=home, secrets_in_sql=tuple(passwords.values()))
         for key, email, role, tenant in ACCOUNTS:
             entry = credentials.get(key, {})
             entry.update(email=email, rol=role, municipio=tenant)
@@ -747,9 +937,10 @@ def cmd_stop(args) -> int:
     if args.stack:
         guard_environment()
         if docker_ready() and stack_running():
-            result = run([*CLI, 'stop'], env=cli_env(), timeout=600, log=private_log(home, 'supabase-stop'))
+            with db_turn('stop-stack'):  # nunca se detiene el stack durante una campaña o un init ajenos
+                result = run([*CLI, 'stop'], env=cli_env(), timeout=600, log=private_log(home, 'supabase-stop'))
             if result.returncode != 0:
-                raise DemoError('supabase stop falló; ver el log privado en logs/.')
+                raise DemoError('supabase stop falló; ver el log saneado en logs/.')
             say('Supabase local detenido. Los datos quedan en el volumen de Docker (no se usó --no-backup).')
         else:
             say('Supabase local ya estaba detenido.')
@@ -790,23 +981,28 @@ def cmd_recreate(args) -> int:
     if args.confirmar != RECREATE_PHRASE:
         raise DemoError(f'Recrear borra la base local. Repetí con --confirmar {RECREATE_PHRASE} si es lo que querés.')
     home = demo_home()
-    prepare(home)
-    hashes = fixture_hashes()
     with db_turn('recrear'):
-        foreign = classify(inventory(home), hashes)
-        if foreign:
-            raise DemoError('La base local tiene recursos que no son de la demo; no se borra nada. '
-                            + ', '.join(f'{k}={len(v)}' for k, v in foreign.items()))
+        prepare(home)
+        hashes = fixture_hashes()
+        check_migrations(inventory(home))
+        report = exhaustive_inventory(home, hashes)
+        blockers = recreate_blockers(report)
+        write_private(home / 'recrear-inventario.json', json.dumps({**report, 'bloqueos': blockers, 'at_utc': utc_now().isoformat()},
+                                                                  ensure_ascii=False, indent=2) + '\n')
+        if blockers:
+            shown = '; '.join(blockers[:6]) + (f' y {len(blockers) - 6} más' if len(blockers) > 6 else '')
+            raise DemoError(f'No se borra nada: la base tiene datos cuya pertenencia a la demo no se puede demostrar ({shown}). '
+                            f'Detalle sin secretos en {home / "recrear-inventario.json"}.')
         stop_next(home)
         result = run([*CLI, 'db', 'reset', '--local'], env=cli_env(), timeout=1800, log=private_log(home, 'db-reset'))
         if result.returncode != 0:
-            raise DemoError('db reset --local falló; ver el log privado en logs/.')
-    with contextlib.suppress(FileNotFoundError):
-        (home / 'cuentas.json').unlink()
-    env = supabase_env(home)
-    wait_ready(env)
-    args.rotar_claves, args.republicar = False, False
-    return cmd_init(args)
+            raise DemoError('db reset --local falló; ver el log saneado en logs/.')
+        with contextlib.suppress(FileNotFoundError):
+            (home / 'cuentas.json').unlink()
+        env = supabase_env(home)
+        wait_ready(env)
+        args.rotar_claves, args.republicar = False, False
+        return cmd_init(args)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -67,6 +67,15 @@ describe('N6: accesos visibles a los CSV existentes', () => {
     expect(queueReportLink({ status: 'OVERDUE', personId: '9' })).toMatchObject({ available: true, screenOnlyFilters: ['estado', 'persona'] })
   })
 
+  it('no ofrece el CSV cuando la pantalla declara la selección no disponible', () => {
+    const unavailable = { available: false, reason: 'La pantalla no puede determinar esta selección (lectura incompleta o datos faltantes para los filtros): no se ofrece el CSV.' }
+    expect(queueReportLink({ risk: 'ALTO' }, { selectionAvailable: false })).toEqual(unavailable)
+    expect(queueReportLink({}, { selectionAvailable: false })).toEqual(unavailable)
+    expect(queueReportLink({ risk: 'ALTO' }, { selectionAvailable: true })).toMatchObject({ available: true, href: '/api/reports/queue?risk=ALTO' })
+    // El monto inválido conserva su mensaje propio aunque la pantalla también lo marque como no disponible.
+    expect(queueReportLink({ minAmount: '-1' }, { selectionAvailable: false })).toMatchObject({ available: false, reason: expect.stringContaining('monto mínimo') })
+  })
+
   it('no ofrece un CSV de otra selección cuando la pantalla rechaza el filtro', () => {
     for (const minAmount of ['-1', 'abc', 'Infinity']) {
       expect(queueReportLink({ minAmount })).toEqual({ available: false, reason: 'Corregí el monto mínimo para descargar el CSV de esta selección.' })

@@ -58,7 +58,9 @@ export type QueueReportLink =
 
 type ScreenFilters = Partial<Record<(typeof QUEUE_REPORT_FILTERS)[number] | keyof typeof SCREEN_ONLY_FILTERS, string>>
 
-export function queueReportLink(filters: ScreenFilters): QueueReportLink {
+// `selectionAvailable` es lo que la pantalla puede afirmar: si declara «No disponible» (lectura
+// incompleta o datos faltantes para evaluar un filtro), no se ofrece un CSV de esa misma selección.
+export function queueReportLink(filters: ScreenFilters, screen: { selectionAvailable: boolean } = { selectionAvailable: true }): QueueReportLink {
   const params = new URLSearchParams()
   for (const name of QUEUE_REPORT_FILTERS) {
     const value = filters[name]?.trim()
@@ -68,6 +70,9 @@ export function queueReportLink(filters: ScreenFilters): QueueReportLink {
   const minAmount = params.get('minAmount')
   if (minAmount !== null && !(Number.isFinite(Number(minAmount)) && Number(minAmount) >= 0)) {
     return { available: false, reason: 'Corregí el monto mínimo para descargar el CSV de esta selección.' }
+  }
+  if (!screen.selectionAvailable) {
+    return { available: false, reason: 'La pantalla no puede determinar esta selección (lectura incompleta o datos faltantes para los filtros): no se ofrece el CSV.' }
   }
   try {
     parseQueueFilters(params)

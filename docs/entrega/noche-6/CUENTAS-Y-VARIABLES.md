@@ -64,7 +64,8 @@ Reglas:
 | `cuentas.txt`, `cuentas.json` | contraseñas de las cuentas demo |
 | `estado-init.json` | resultado del último `init` (conteos, lotes, recursos ajenos conservados), sin secretos |
 | `run/next.json`, `run/next.log` | proceso de la app y su log |
-| `logs/`, `validacion/` | logs privados del ETL, de la CLI y de `next build`; reporte del validador |
+| `logs/`, `validacion/` | logs privados del ETL, de la CLI y de `next build`, guardados **saneados** (sin claves, JWT ni contraseñas; un error de `psql` conserva solo sus líneas ERROR/DETAIL sin literales); reporte del validador |
+| `recrear-inventario.json` | último inventario de `recrear`: conteos por tabla y bloqueos, sin valores |
 
 Para borrar todo lo privado de la demo: detener (`stop --stack`) y eliminar la carpeta `~/.equitas-demo`.
 Eso no borra la base; para eso existe `recrear`.

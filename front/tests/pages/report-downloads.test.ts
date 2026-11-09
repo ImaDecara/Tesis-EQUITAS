@@ -72,6 +72,16 @@ describe('N6: la cola ofrece su CSV con los filtros que el CSV aplica', () => {
     expect(textOf(markup)).toContain('El CSV no aplica el filtro de estado ni el de persona.')
   })
 
+  it('si la pantalla no puede determinar la selección, tampoco ofrece su CSV', async () => {
+    const raw = buildPresenceRawData()
+    raw.batch = { as_of: '2026-09-30' }
+    raw.warnings = [{ table: 'debtor', message: 'Fallo sintético', needsSelectPolicy: false }]
+    api.getDebtorsData.mockResolvedValue(mapDebtorObjectsFromRawData(raw))
+    const markup = markupOf(await PriorityCasesPage({ searchParams: Promise.resolve({ risk: 'ALTO' }) }))
+    expect(reportHrefs(markup)).toEqual([])
+    expect(textOf(markup)).toContain('La pantalla no puede determinar esta selección')
+  })
+
   it('con un monto inválido no ofrece un CSV de otra selección', async () => {
     const markup = markupOf(await PriorityCasesPage({ searchParams: Promise.resolve({ minAmount: '-5' }) }))
     expect(reportHrefs(markup)).toEqual([])

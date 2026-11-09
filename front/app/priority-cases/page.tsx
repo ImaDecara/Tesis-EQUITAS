@@ -101,7 +101,7 @@ export default async function PriorityCasesPage({
   // Solo una cola elegida a propósito acompaña a los filtros. La de la primera carga no:
   // si no, buscar un caso de otra cola no lo encontraría.
   const chosenQueue = selectedQueueParam === resolvedSearchParams.queue ? selectedQueueParam : ''
-  const queueCsv = queueReportLink(filters)
+  const queueCsv = queueReportLink(filters, { selectionAvailable: !selection.failed })
   const pagination = paginateItems(
     selectedQueue.cases,
     resolvedSearchParams.page,

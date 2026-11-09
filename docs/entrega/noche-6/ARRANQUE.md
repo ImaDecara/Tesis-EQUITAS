@@ -18,12 +18,15 @@ URL: **http://127.0.0.1:3000/login** (otro puerto: `start --puerto 3100`).
 ## Qué hace `start`
 
 1. Si Docker no responde, lo indica y termina (abrir Docker Desktop y repetir).
-2. Si Supabase local está detenido, lo inicia con `npx --yes supabase@2.108.0 start` (conserva el volumen).
+2. Si Supabase local está detenido, lo inicia con `npx --yes supabase@2.108.0 start` (conserva el volumen),
+   tomando antes el turno compartido de la base; `stop --stack` también lo toma. Con una campaña en curso, no
+   arranca ni detiene el stack.
 3. Espera a que Auth y la Data API respondan 200.
 4. Verifica, en solo lectura, que la cartera demo coincida con su manifiesto.
 5. Emite un JWT nuevo del rol `equitas_review_server` (24 h por defecto, `--horas` hasta 72), solo en
    memoria del proceso de la app. Nunca va al navegador ni a un archivo del repositorio.
-6. Compila la app (`next build`) si cambió el commit, el árbol de `front/` o `contracts/`, o la configuración pública.
+6. Compila la app (`next build`) si cambió el commit o la configuración pública, y **siempre** que haya cambios
+   sin confirmar en `front/` o `contracts/`.
 7. Inicia `next start` en 127.0.0.1 (no en todas las interfaces) y espera a que `/login` responda.
 
 Si la app ya está en marcha con una credencial vigente por más de 2 h y del mismo commit, `start` no hace

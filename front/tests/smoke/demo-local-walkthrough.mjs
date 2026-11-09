@@ -100,15 +100,40 @@ async function session(key, landing = '/') {
     return route.continue()
   })
   const page = await context.newPage()
-  page.on('console', message => { if (message.type() === 'error') report.console_errors.push(`${key}: ${clean(message.text())}`) })
-  page.on('pageerror', error => report.console_errors.push(`${key}: ${clean(error.message)}`))
+  page.on('console', message => { if (message.type() === 'error') report.console_errors.push(`${key} ${pathOf(page)}: ${clean(message.text())}`) })
+  page.on('pageerror', error => report.console_errors.push(`${key} ${pathOf(page)}: ${clean(error.message)}`))
   const posts = []
   page.on('request', request => { if (request.method() === 'POST' && request.headers()['next-action']) posts.push(request.url()) })
   await page.goto(`${base}/login?next=${encodeURIComponent(landing)}`)
   await page.getByLabel('Email', { exact: true }).fill(accounts[key].email)
   await page.getByLabel('Password', { exact: true }).fill(accounts[key].password)
   await page.getByRole('button', { name: 'Iniciar sesion', exact: true }).click()
+  // El ingreso del importador ya renderiza la página de destino: cuenta como visita del escenario conocido.
+  if (key === 'importador') importerVisits.push(new URL(landing, base).pathname)
   return { key, context, page, posts }
+}
+
+const pathOf = page => { try { return new URL(page.url()).pathname } catch { return '?' } }
+// Rutas de cartera que el importador abre a propósito (escenario negativo conocido, preexistente en efad967).
+const importerVisits = []
+async function visitAsImporter(actor, path) {
+  await actor.page.goto(`${base}${path}`)
+  await expect(actor.page.getByText('Datos no disponibles', { exact: true })).toBeVisible({ timeout: 45_000 })
+  importerVisits.push(new URL(`${base}${path}`).pathname)
+}
+
+async function signedIn(actor) {
+  await actor.page.waitForLoadState('networkidle')
+  const cookies = await actor.context.cookies(base)
+  assert(cookies.some(cookie => /^sb-.*-auth-token(?:\.\d+)?$/.test(cookie.name)), `${actor.key}: el ingreso no dejó una sesión Auth`)
+}
+
+async function forbidden(actor, path) {
+  const file = await csv(actor, path)
+  assert.equal(file.status, 403, `${actor.key} ${path}: se esperaba 403`)
+  assert.equal(JSON.parse(file.body).error, 'ROLE_FORBIDDEN', `${actor.key} ${path}: se esperaba ROLE_FORBIDDEN`)
+  assert.equal(identifiers(file.body).length, 0)
+  return file.status
 }
 
 async function landed(actor, heading) {
@@ -292,23 +317,18 @@ async function reportChecks(supervisor, consulta) {
   })
   await check('reports_denied_by_role', async () => {
     const statuses = {}
-    for (const path of ['/api/reports/supervision', '/api/reports/access']) {
-      const file = await csv(consulta, path)
-      assert.equal(file.status, 403, `consulta ${path}`)
-      statuses[`consulta ${path}`] = file.status
-    }
+    for (const path of ['/api/reports/supervision', '/api/reports/access']) statuses[`consulta ${path}`] = await forbidden(consulta, path)
     const importer = await session('importador')
-    await importer.page.waitForLoadState('networkidle')
+    await signedIn(importer)
+    await visitAsImporter(importer, '/')
     for (const path of ['/api/reports/queue', '/api/reports/data-quality', '/api/reports/decisions', '/api/reports/supervision', '/api/reports/access']) {
-      const file = await csv(importer, path)
-      assert.notEqual(file.status, 200, `importador ${path}`)
-      assert.equal(identifiers(file.body).length, 0)
-      statuses[`importador ${path}`] = file.status
+      statuses[`importador ${path}`] = await forbidden(importer, path)
     }
     await importer.context.close()
     const anonymous = await browser.newContext()
     const response = await anonymous.request.get(`${base}/api/reports/queue`, { maxRedirects: 0 })
-    assert.notEqual(response.status(), 200)
+    assert.equal(response.status(), 307)
+    assert.equal(new URL(response.headers().location, base).pathname, '/login')
     statuses['anonimo /api/reports/queue'] = response.status()
     await anonymous.close()
     return statuses
@@ -327,22 +347,43 @@ async function accessChecks(actors) {
   })
   await check('foreign_and_unassigned_identities_get_no_portfolio', async () => {
     const observed = {}
-    for (const key of ['ajeno', 'sin-membresia', 'importador']) {
-      const actor = await session(key)
-      await actor.page.waitForLoadState('networkidle')
-      for (const path of ['/', '/priority-cases', `/debtors/${caseRow.id}`]) {
-        const response = await actor.context.request.get(`${base}${path}`, { maxRedirects: 0 })
-        assert.equal(identifiers(await response.text()).length, 0, `${key} ${path} no debe ver la cartera del municipio 1`)
-        observed[`${key} ${path}`] = response.status()
-      }
-      const file = await csv(actor, '/api/reports/queue')
-      assert.equal(identifiers(file.body).length, 0)
-      observed[`${key} /api/reports/queue`] = file.status
-      if (key === 'ajeno' && file.status === 200) assert.equal(parseCsv(file.body).filter(row => row.tipo_fila === 'DETALLE').length, 0)
-      await actor.page.goto(`${base}/debtors/${caseRow.id}?tab=revision`)
-      await expect(actor.page.getByRole('button', { name: /Registrar (propuesta|respuesta)/ })).toHaveCount(0)
-      await actor.context.close()
+    const pages = ['/', '/priority-cases', `/debtors/${caseRow.id}`]
+    // ajeno: sesión válida en otro municipio; ve pantallas vacías y un CSV sin filas.
+    const foreignActor = await session('ajeno')
+    await signedIn(foreignActor)
+    for (const path of pages) {
+      const response = await foreignActor.context.request.get(`${base}${path}`, { maxRedirects: 0 })
+      assert.equal(response.status(), 200, `ajeno ${path}`)
+      assert.equal(identifiers(await response.text()).length, 0, `ajeno ${path} no debe ver la cartera del municipio 1`)
+      observed[`ajeno ${path}`] = response.status()
     }
+    const foreignCsv = await csv(foreignActor, '/api/reports/queue')
+    assert.equal(foreignCsv.status, 200)
+    assert.equal(parseCsv(foreignCsv.body).filter(row => row.tipo_fila === 'DETALLE').length, 0)
+    observed['ajeno /api/reports/queue'] = foreignCsv.status
+    await foreignActor.page.goto(`${base}/debtors/${caseRow.id}?tab=revision`)
+    await expect(foreignActor.page.getByRole('button', { name: /Registrar (propuesta|respuesta)/ })).toHaveCount(0)
+    await foreignActor.context.close()
+    // sin-membresia: la app no le abre sesión; todo vuelve a /login.
+    const unassigned = await session('sin-membresia')
+    await unassigned.page.waitForLoadState('networkidle')
+    for (const path of [...pages, '/api/reports/queue']) {
+      await deniedToLogin(unassigned, path)
+      observed[`sin-membresia ${path}`] = 307
+    }
+    await unassigned.context.close()
+    // importador: sesión válida sin lectura de cartera: «Datos no disponibles», CSV 403, sin formularios.
+    const importer = await session('importador')
+    await signedIn(importer)
+    for (const path of pages) {
+      const response = await importer.context.request.get(`${base}${path}`, { maxRedirects: 0 })
+      assert.equal(identifiers(await response.text()).length, 0, `importador ${path} no debe ver la cartera`)
+      observed[`importador ${path}`] = response.status()
+    }
+    observed['importador /api/reports/queue'] = await forbidden(importer, '/api/reports/queue')
+    await visitAsImporter(importer, `/debtors/${caseRow.id}?tab=revision`)
+    await expect(importer.page.getByRole('button', { name: /Registrar (propuesta|respuesta)/ })).toHaveCount(0)
+    await importer.context.close()
     return observed
   })
 }
@@ -426,10 +467,18 @@ async function run() {
     await check('console_clean', async () => {
       // Preexistente en efad967 (control negativo de N6): un rol sin portfolio:read que abre una página
       // de cartera recibe «Datos no disponibles» y React registra su error genérico de producción #441.
-      const known = /^importador: Error: Minified React error #441;/
-      report.known_preexisting_console_errors = report.console_errors.filter(message => known.test(message))
-      assert.deepEqual(report.console_errors.filter(message => !known.test(message)), [])
-      return { errores: 0, preexistentes_importador: report.known_preexisting_console_errors.length }
+      // Solo el error genérico #441 del importador en las rutas de cartera que abrió a propósito,
+      // y nunca más de una vez por visita. Cualquier otro error, de cualquier sesión, falla.
+      const allowed = new Set(['/', ...importerVisits])
+      const known = message => {
+        const match = /^importador (\S+): Error: Minified React error #441;/.exec(message)
+        return Boolean(match && allowed.has(match[1]))
+      }
+      report.known_preexisting_console_errors = report.console_errors.filter(known)
+      assert.deepEqual(report.console_errors.filter(message => !known(message)), [])
+      assert(report.known_preexisting_console_errors.length <= importerVisits.length,
+        `#441 del importador: ${report.known_preexisting_console_errors.length} errores para ${importerVisits.length} visitas`)
+      return { errores: 0, preexistentes_importador: report.known_preexisting_console_errors.length, visitas_importador: importerVisits }
     })
   } finally {
     clearTimeout(timer)
