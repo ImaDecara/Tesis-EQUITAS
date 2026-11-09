@@ -18,6 +18,7 @@ import {
 } from '@/components/dashboard/chart-cards'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { DataWarnings } from '@/components/equitas/data-warnings'
+import { ReportDownloads } from '@/components/equitas/report-downloads'
 import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +33,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getDashboardData } from '@/lib/equitas-data'
+import { availableReportLinks } from '@/lib/server/report-links'
 import {
   RECOMMENDATION_BADGE_VARIANT,
   RECOMMENDATION_KINDS,
@@ -42,7 +44,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function HomePage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
   const filters = normalizePortfolioSearchParams(await searchParams ?? {})
-  const { dashboard, warnings } = await getDashboardData(filters)
+  const [{ dashboard, warnings }, reportLinks] = await Promise.all([getDashboardData(filters), availableReportLinks()])
   const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
   const highRiskShare = percentageData(dashboard.byRisk.length && dashboard.metrics?.highSeverityCases?.value !== null ? riskMap.get('ALTO') ?? 0 : null, dashboard.totalDebtors)
   const chartEmpty = warnings.length ? 'No disponible: lectura incompleta; consulte los avisos y la cobertura.' : dashboard.totalDebtors === 0 ? 'No hay objetos en la selección.' : 'No hay valores observados para graficar; consulte la cobertura.'
@@ -114,6 +116,8 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
             tone="success"
           />
         </section>
+
+        <ReportDownloads links={reportLinks} />
 
         <Card className="border-[#d2dceb]">
           <CardHeader>

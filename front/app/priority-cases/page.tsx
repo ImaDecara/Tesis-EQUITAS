@@ -3,7 +3,7 @@ import { portfolioContext, withMaturityMetrics } from '@/lib/analytics'
 import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatWithUnit } from '@/lib/data-presence'
 import Link from 'next/link'
-import { Filter, ListChecks, Search, SlidersHorizontal } from 'lucide-react'
+import { Download, Filter, ListChecks, Search, SlidersHorizontal } from 'lucide-react'
 
 import { ContactAvailabilityBadge } from '@/components/debtors/contact-availability-badge'
 import { DataWarnings } from '@/components/equitas/data-warnings'
@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getDebtorsData } from '@/lib/equitas-data'
+import { queueReportLink } from '@/lib/server/report-links'
 import {
   buildRecommendationSummary,
   getPriorityCases,
@@ -100,6 +101,7 @@ export default async function PriorityCasesPage({
   // Solo una cola elegida a propósito acompaña a los filtros. La de la primera carga no:
   // si no, buscar un caso de otra cola no lo encontraría.
   const chosenQueue = selectedQueueParam === resolvedSearchParams.queue ? selectedQueueParam : ''
+  const queueCsv = queueReportLink(filters)
   const pagination = paginateItems(
     selectedQueue.cases,
     resolvedSearchParams.page,
@@ -222,6 +224,23 @@ export default async function PriorityCasesPage({
             </form>
           </CardContent>
         </Card>
+
+        <div className="flex flex-col gap-1 text-xs text-slate-600 md:flex-row md:items-center md:gap-3" data-queue-csv>
+          {queueCsv.available ? (
+            <>
+              <a href={queueCsv.href} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                <Download className="size-3.5" />
+                Descargar CSV de las colas con estos filtros
+              </a>
+              <span>
+                Incluye todas las colas, no solo la elegida, y queda registrado en la auditoría.
+                {queueCsv.screenOnlyFilters.length > 0 && ` El CSV no aplica el filtro de ${queueCsv.screenOnlyFilters.join(' ni el de ')}.`}
+              </span>
+            </>
+          ) : (
+            <span role="status">{queueCsv.reason}</span>
+          )}
+        </div>
 
         <nav aria-label="Colas por intervención">
           <ul className="flex flex-wrap gap-2">
