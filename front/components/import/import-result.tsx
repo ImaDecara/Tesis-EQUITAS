@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 import { buttonVariants } from '@/components/ui/button'
-import { FILE_ROLES, findingMessage, type FileKind, type Finding, type FindingGroup, type LoadOutcome } from '@/lib/domain/import-upload'
+import { FILE_ROLES, findingMessage, IMPORT_FORMAT, type FileKind, type Finding, type FindingGroup, type LoadOutcome } from '@/lib/domain/import-upload'
 import { cn, formatDate } from '@/lib/utils'
 
 // Resultado de una carga, sin estado propio: lo usa el formulario y se puede probar por separado.
@@ -25,19 +25,33 @@ function Summary({ outcome }: { outcome: LoadOutcome }) {
   const summary = outcome.body.resumen
   if (!summary) return null
   const quarantined = summary.objetos_en_cuarentena ?? 0
+  // Solo una carga completada (o una que ya estaba) incorporó objetos. En cualquier otro resultado la cifra es
+  // lo que el archivo trae sin errores: decir «incorporados» contradiría «el lote no se cargó».
+  const incorporated = outcome.kind === 'loaded' || outcome.kind === 'already'
   return (
     <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4" data-load-summary>
       <div><dt className="text-xs opacity-80">Fecha de corte</dt><dd className="font-semibold">{outcome.body.fecha_corte ? formatDate(outcome.body.fecha_corte) : 'No disponible'}</dd></div>
-      <div><dt className="text-xs opacity-80">Objetos incorporados</dt><dd className="font-semibold">{count(summary.objetos_aceptados)} de {count(summary.objetos)}</dd></div>
+      <div data-summary-objects={incorporated ? 'incorporados' : 'sin-errores'}>
+        <dt className="text-xs opacity-80">{incorporated ? 'Objetos incorporados' : 'Objetos sin errores en el archivo'}</dt>
+        <dd className="font-semibold">{count(summary.objetos_aceptados)} de {count(summary.objetos)}</dd>
+        {!incorporated && <dd className="text-xs">No se incorporó ninguno.</dd>}
+      </div>
       <div><dt className="text-xs opacity-80">Obligaciones en el archivo</dt><dd className="font-semibold">{count(summary.obligaciones)}</dd></div>
       <div><dt className="text-xs opacity-80">Personas en el archivo</dt><dd className="font-semibold">{count(summary.personas)}</dd></div>
       <div className="col-span-2 sm:col-span-4">
-        <dt className="text-xs opacity-80">En cuarentena</dt>
+        <dt className="text-xs opacity-80">{incorporated ? 'En cuarentena' : 'Con errores'}</dt>
         <dd>
-          {quarantined > 0
-            ? `${count(quarantined)} ${quarantined === 1 ? 'objeto quedó' : 'objetos quedaron'} fuera porque alguna de sus filas tiene un error; el detalle está abajo. No se incorporan hasta corregirlos en un lote nuevo.`
-            : 'Ningún objeto quedó en cuarentena.'}
+          {quarantined === 0
+            ? (incorporated ? 'Ningún objeto quedó en cuarentena.' : 'Ningún objeto tiene errores propios.')
+            : incorporated
+              ? `${count(quarantined)} ${quarantined === 1 ? 'objeto quedó' : 'objetos quedaron'} fuera porque alguna de sus filas tiene un error; el detalle está abajo. No se incorporan hasta corregirlos en un lote nuevo.`
+              : `${count(quarantined)} ${quarantined === 1 ? 'objeto tiene' : 'objetos tienen'} un error en alguna de sus filas; el detalle está abajo.`}
         </dd>
+        {quarantined > 0 && (
+          <dd className="text-xs" data-row-hint>
+            Para saber a qué caso corresponde una fila, mirá en tu archivo su columna «{IMPORT_FORMAT.groupingColumn}», que une las filas de un mismo objeto en los dos archivos. El identificador del caso es la columna «{IMPORT_FORMAT.identifierColumn}» de la fila de la cabecera que tiene esa misma clave.
+          </dd>
+        )}
       </div>
     </dl>
   )

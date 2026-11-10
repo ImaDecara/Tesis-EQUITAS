@@ -165,6 +165,8 @@ export function RiskDonutChart({
                 innerRadius="55%"
                 outerRadius="85%"
                 paddingAngle={4}
+                // Sin animación de entrada: el anillo está dibujado desde el primer cuadro.
+                isAnimationActive={false}
               >
                 {rows.map((row, index) => (
                   <Cell key={`${row.label}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
@@ -175,7 +177,7 @@ export function RiskDonutChart({
           </ResponsiveContainer>
         </div>
 
-        <div className={isBottomLegend ? 'grid grid-cols-1 gap-2' : isCompact ? 'space-y-2' : 'space-y-3'}>
+        <div className={isBottomLegend ? (isCompact ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-1 gap-2') : isCompact ? 'space-y-2' : 'space-y-3'}>
           {rows.map((row, index) => {
             const color = PIE_COLORS[index % PIE_COLORS.length]
             const percentage = total > 0 ? (row.value / total) * 100 : 0
@@ -185,7 +187,7 @@ export function RiskDonutChart({
                 key={`${row.label}-${index}-legend`}
                 className={
                   isBottomLegend
-                    ? 'flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2'
+                    ? (isCompact ? 'rounded-lg border border-slate-200 bg-slate-50 px-2 py-2' : 'flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2')
                     : isCompact
                       ? 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2'
                       : 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5'

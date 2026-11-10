@@ -42,6 +42,10 @@ export const IMPORT_FORMAT = {
   dateFormat: profile.formato.fecha,
   dateExample: DATE_EXAMPLES[profile.formato.fecha] ?? profile.formato.fecha,
   currency: profile.moneda,
+  // Columna que une cada fila con su objeto en los dos archivos (contrato de origen).
+  groupingColumn: contract.claves.enlace,
+  // Columna de la cabecera con el identificador visible del caso (el que muestran los listados).
+  identifierColumn: 'Identificador',
   catalogs: CATALOG_COLUMNS.map(item => ({
     ...item,
     codes: Object.entries(profile.catalogos[item.column] as Record<string, string>).map(([code, label]) => ({ code, label })),

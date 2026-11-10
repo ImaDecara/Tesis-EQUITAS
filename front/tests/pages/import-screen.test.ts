@@ -72,6 +72,57 @@ describe('resultado de la carga', () => {
     expect(markup).toContain('Ver el tablero')
   })
 
+  // Prueba final (F2): un rechazo decía «Objetos incorporados: 15 de 21» junto a «El lote no se cargó».
+  it('rechazado: el resumen no dice «incorporados»; dice cuántos objetos vienen sin errores y que no entró ninguno', () => {
+    const { markup, text } = render(200, { resultado: 'RECHAZADO', mensaje: 'No se cargó nada.', fecha_corte: '2026-10-31',
+      resumen: { objetos: 21, objetos_aceptados: 15, objetos_en_cuarentena: 6, personas: 21, obligaciones: 40 }, errores: ERRORS })
+    expect(markup).toContain('data-summary-objects="sin-errores"')
+    expect(text).toContain('Objetos sin errores en el archivo 15 de 21 No se incorporó ninguno.')
+    expect(text).not.toContain('Objetos incorporados')
+    expect(text).toContain('Con errores 6 objetos tienen un error en alguna de sus filas; el detalle está abajo.')
+    expect(text).not.toMatch(/quedaron fuera|cuarentena/i)
+  })
+
+  // Un rechazo por carga parcial llega con todos los objetos sin errores: tampoco entró ninguno.
+  it('rechazado sin objetos con errores: sigue sin decir «incorporados» y no habla de cuarentena', () => {
+    const { text } = render(200, { resultado: 'RECHAZADO', mensaje: 'Faltan objetos que ya estaban cargados.',
+      resumen: { objetos: 20, objetos_aceptados: 20, objetos_en_cuarentena: 0, personas: 20, obligaciones: 38 } })
+    expect(text).toContain('Objetos sin errores en el archivo 20 de 20 No se incorporó ninguno.')
+    expect(text).toContain('Con errores Ningún objeto tiene errores propios.')
+    expect(text).not.toMatch(/Objetos incorporados|cuarentena/i)
+  })
+
+  it.each([
+    ['REQUIERE_CONFIRMACION', 409], ['NO_CONFIRMADO', 503], ['NO_COMPLETADO', 503],
+  ])('%s: tampoco afirma que se incorporaron objetos', (resultado, status) => {
+    const { markup } = render(status, { resultado, mensaje: 'x', resumen: SUMMARY, revision: 'a'.repeat(64) } as LoadBody)
+    expect(markup).not.toContain('Objetos incorporados')
+  })
+
+  // Prueba final (F1): la cuarentena daba archivo, fila y columna, pero no cómo saber qué caso es.
+  it('con objetos en cuarentena o con errores dice cómo ubicar el caso de cada fila en el archivo', () => {
+    for (const body of [{ resultado: 'PUBLICADO', resumen: SUMMARY }, { resultado: 'RECHAZADO', resumen: SUMMARY }] as LoadBody[]) {
+      const { markup, text } = render(200, body)
+      expect(markup).toContain('data-row-hint')
+      expect(text).toContain(`su columna «${IMPORT_FORMAT.groupingColumn}», que une las filas de un mismo objeto en los dos archivos`)
+      expect(text).toContain(`El identificador del caso es la columna «${IMPORT_FORMAT.identifierColumn}» de la fila de la cabecera`)
+    }
+    expect(IMPORT_FORMAT.groupingColumn).toBe('ClaveAgrupacion')
+    expect(requiredColumns('cabecera')).toContain('ClaveAgrupacion')
+    expect(requiredColumns('detalle')).toContain('ClaveAgrupacion')
+    expect(requiredColumns('cabecera')).toContain(IMPORT_FORMAT.identifierColumn)
+    expect(render(200, { resultado: 'PUBLICADO', resumen: { ...SUMMARY, objetos_en_cuarentena: 0 } }).markup).not.toContain('data-row-hint')
+  })
+
+  it('cargado o ya cargado: ahí sí son objetos incorporados', () => {
+    for (const resultado of ['PUBLICADO', 'YA_CARGADO']) {
+      const { markup, text } = render(200, { resultado, resumen: SUMMARY } as LoadBody)
+      expect(markup).toContain('data-summary-objects="incorporados"')
+      expect(text).toContain('Objetos incorporados 11 de 12')
+      expect(text).not.toContain('No se incorporó ninguno')
+    }
+  })
+
   it('rechazado: errores con archivo, fila, columna y qué se esperaba; advertencias aparte; sin enlace al tablero', () => {
     const { markup, text } = render(200, { resultado: 'RECHAZADO', mensaje: 'No se cargó nada.', errores: ERRORS, advertencias: WARNINGS,
       motivos: [{ codigo: 'CUARENTENA_EXCEDE_OBJETOS', descripcion: 'técnico' }, { codigo: 'MOTIVO_NUEVO', descripcion: 'Motivo que envía el servicio.' }] })

@@ -11,7 +11,7 @@ import { casesLabel, daysLabel, filterLine, filterNotes, GROUP_CRITERIA, SCORE_L
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { withMaturityMetrics } from '@/lib/analytics'
 import { readingFailed } from '@/lib/data-presence'
 import { getDebtorsData } from '@/lib/equitas-data'
@@ -186,7 +186,8 @@ export default async function PriorityCasesPage({ searchParams }: { searchParams
             <DecisionsNotice decisions={decisions} />
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[36rem] md:min-w-[56rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[28%] md:w-[18%]">Identificador</TableHead>
@@ -195,8 +196,8 @@ export default async function PriorityCasesPage({ searchParams }: { searchParams
                   <TableHead className="hidden w-[9%] text-right md:table-cell">Atraso máximo</TableHead>
                   <TableHead className="w-[22%] text-right md:w-[11%]">Deuda pendiente</TableHead>
                   <TableHead className="hidden w-[11%] text-right md:table-cell">Deuda vencida</TableHead>
-                  <TableHead className="hidden w-[9%] md:table-cell">Contacto</TableHead>
-                  <TableHead className="w-[26%] md:w-[21%]">Decisión registrada</TableHead>
+                  <TableHead className="hidden w-[10%] md:table-cell">Contacto</TableHead>
+                  <TableHead className="w-[26%] md:w-[20%]">Decisión registrada</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

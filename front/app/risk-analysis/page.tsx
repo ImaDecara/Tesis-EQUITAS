@@ -9,7 +9,7 @@ import { PriorityScoreBadge } from '@/components/portfolio/case-cells'
 import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { bandLabel, casesLabel, filterLine, filterNotes, isEmptyLegacyIndexWarning, missingLines, SCORE_LABEL, SCORE_NOTE, SCORE_RECIPE } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { formatNumber, readingFailed } from '@/lib/data-presence'
 import { getDebtorsData, getPeopleData } from '@/lib/equitas-data'
 import { getHighRiskCases } from '@/lib/equitas-view-selectors'
@@ -74,7 +74,8 @@ export default async function RiskAnalysisPage({ searchParams }: { searchParams?
             <CardDescription>En el orden de su grupo de trabajo, no por un ranking entre grupos.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[30rem] md:min-w-[36rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[34%] md:w-[26%]">Identificador</TableHead>

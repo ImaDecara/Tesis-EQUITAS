@@ -9,7 +9,7 @@ import {
   buildPeopleDashboard,
 } from '@/tests/helpers/equitas-fixtures'
 import { panelOf } from '@/tests/helpers/case-page'
-import { decisionsFixture, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
+import { decisionsFixture, markupOf, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const {
   getDashboardDataMock,
@@ -170,6 +170,32 @@ describe('pantallas con datos de gestion simulados', () => {
     expect(text).toContain('Personas')
     expect(text).toContain('Ana Perez')
     expect(text).toContain('Índice anterior por persona')
+  })
+
+  // Prueba final (F3): «Sin contacto» quedaba con el total de la cartera aunque la búsqueda no encontrara a nadie.
+  it('en Personas, «Sin contacto» sale de la misma selección que los demás indicadores', async () => {
+    const without = (page: unknown) => markupOf(page as never).match(/data-people-without-contact[^>]*>([^<]*)</)?.[1]
+    const all = await PeoplePage({ searchParams: Promise.resolve({}) })
+    const none = await PeoplePage({ searchParams: Promise.resolve({ q: 'NO-EXISTE-PRUEBA' }) })
+    expect(renderedText(none)).toContain('Mostrando 0 de')
+    expect(without(none)).toBe('0')
+    // Sin filtros coincide con la cantidad de personas sin contacto de toda la cartera.
+    expect(Number(without(all))).toBe(buildPeople().filter(person => person.hasContact === false).length)
+    expect(Number(without(all))).toBeGreaterThan(0)
+  })
+
+  // Prueba final (F4): a 390 px los encabezados de las tablas de casos se pisaban.
+  it('las tablas de casos conservan un ancho mínimo en pantallas angostas e intermedias, y avisan que se desplazan', async () => {
+    const pages = [
+      await DebtorsPage({ searchParams: Promise.resolve({}) }), await PriorityCasesPage({ searchParams: Promise.resolve({}) }),
+      await NoContactPage({ searchParams: Promise.resolve({}) }), await DebtAgingPage({ searchParams: Promise.resolve({}) }), await RiskAnalysisPage(),
+    ]
+    for (const page of pages) {
+      const tables = markupOf(page as never).match(/<table class="[^"]*table-fixed[^"]*"/g) ?? []
+      expect(tables.length).toBeGreaterThan(0)
+      for (const table of tables) expect(table).toMatch(/min-w-\[\d+rem\][^"]*md:min-w-\[\d+rem\]/)
+      expect(markupOf(page as never)).toContain('data-table-scroll-hint')
+    }
   })
 
   it('presenta el puntaje de prioridad del caso y, aparte, el índice anterior por persona', async () => {

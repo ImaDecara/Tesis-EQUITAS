@@ -178,7 +178,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {scoreBuckets.some(item => item.value > 0)
-            ? <RiskDonutChart title={`Casos por banda de ${SCORE_LABEL.toLowerCase()}`} data={scoreBuckets} legendLayout="side" size="compact" />
+            ? <RiskDonutChart title={`Casos por banda de ${SCORE_LABEL.toLowerCase()}`} data={scoreBuckets} legendLayout="bottom" size="compact" />
             : readFailed && <RiskDonutChart title={`Casos por banda de ${SCORE_LABEL.toLowerCase()}`} data={[]} emptyMessage={unavailableChart} />}
           <BarDistributionChart emptyMessage={readFailed ? unavailableChart : 'No hay casos en la selección.'} title="Casos por tipo" data={dashboard.byDebtorType} size="compact" />
           <TopDebtHorizontalChart emptyMessage={readFailed ? unavailableChart : 'No hay importes registrados.'} title="Casos con mayor total registrado" data={dashboard.topDebtChart} size="compact" />

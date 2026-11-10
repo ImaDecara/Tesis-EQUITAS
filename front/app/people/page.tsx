@@ -53,7 +53,10 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const pagination = paginateItems(filteredPeople, params.page, params.pageSize)
   const summary = summarizePeople(filteredPeople, warnings, filterReadFailed)
   const active = Boolean(filters.q || filters.risk)
-  const withContactCount = filterReadFailed || readingFailed(warnings, 'person', 'debtor_contact') ? null : filteredPeople.filter(person => person.hasContact === true).length
+  const contactReadFailed = filterReadFailed || readingFailed(warnings, 'person', 'debtor_contact')
+  const withContactCount = contactReadFailed ? null : filteredPeople.filter(person => person.hasContact === true).length
+  // De la misma selección filtrada que los demás indicadores: con una búsqueda sin resultados es 0, no el total de la cartera.
+  const withoutContactCount = contactReadFailed ? null : filteredPeople.filter(person => person.hasContact === false).length
   const buildHref = (page: number, pageSize: number) => buildPeopleHref(filters, page, pageSize)
   const missing = missingLines([['Total registrado asociado', summary.totalDebtAssociated]])
 
@@ -79,7 +82,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
           <Card className="border-[#efd9b7] bg-[#f8f2e3] shadow-sm">
             <CardHeader className="pb-1"><CardTitle className="text-sm">Sin contacto</CardTitle></CardHeader>
             <CardContent className="space-y-0.5 pb-4">
-              <p className="text-2xl font-semibold text-[#8a6f2a]">{formatNumber(peopleDashboard.withoutContactCount)}</p>
+              <p className="text-2xl font-semibold text-[#8a6f2a]" data-people-without-contact>{formatNumber(withoutContactCount)}</p>
               <p className="text-xs text-slate-600">Con contacto: {formatNumber(withContactCount)}</p>
             </CardContent>
           </Card>

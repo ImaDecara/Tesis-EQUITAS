@@ -11,7 +11,7 @@ import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/component
 import { bandLabel, casesLabel, filterLine, filterNotes, SCORE_LABEL, SCORE_NOTE } from '@/components/portfolio/portfolio-text'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { readingFailed } from '@/lib/data-presence'
 import { getDebtorsData } from '@/lib/equitas-data'
 import { paginateItems } from '@/lib/pagination'
@@ -86,7 +86,8 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
             <DecisionsNotice decisions={decisions} />
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[36rem] md:min-w-[56rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[26%] md:w-[16%]">Identificador</TableHead>

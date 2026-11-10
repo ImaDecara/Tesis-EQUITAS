@@ -9,7 +9,7 @@ import { AppShell } from '@/components/layout/app-shell'
 import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { daysLabel, filterLine, filterNotes, missingLines } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { compareObjectIds, coverageText } from '@/lib/analytics'
 import { compareNullable, metric, readingFailed } from '@/lib/data-presence'
 import { getDebtorsData } from '@/lib/equitas-data'
@@ -103,7 +103,8 @@ export default async function DebtAgingPage({ searchParams }: { searchParams: Pr
             <CardDescription>Ordenados por total registrado; no es un orden de gestión.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[30rem] md:min-w-[44rem]">
               {header}
               <TableBody>
                 {summary.topDebtCases.length === 0 && (
@@ -125,7 +126,8 @@ export default async function DebtAgingPage({ searchParams }: { searchParams: Pr
             )}
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[30rem] md:min-w-[44rem]">
               {header}
               <TableBody>
                 {pagination.items.length === 0 && (

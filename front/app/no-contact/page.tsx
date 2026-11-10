@@ -9,7 +9,7 @@ import { DecisionsNotice, PriorityScoreBadge, RecordedDecisionCell } from '@/com
 import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { daysLabel, filterLine, filterNotes, missingLines, SCORE_LABEL } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { coverageText, sumMoney, withMaturityMetrics } from '@/lib/analytics'
 import { aggregateData, formatNumber, formatPercentage, metric, observed, percentageData, readingFailed } from '@/lib/data-presence'
 import { getDebtorsData } from '@/lib/equitas-data'
@@ -70,7 +70,8 @@ export default async function NoContactPage({ searchParams }: { searchParams: Pr
             <DecisionsNotice decisions={decisions} />
           </CardHeader>
           <CardContent>
-            <Table className="table-fixed">
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[36rem] md:min-w-[48rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[28%] md:w-[18%]">Identificador</TableHead>
