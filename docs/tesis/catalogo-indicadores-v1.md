@@ -1216,3 +1216,30 @@ La proyección de `person` excluye `birth_date`; la de `debtor_profile_detail` e
 Las pruebas de `analytics-catalog` cubren el día civil de Córdoba, perfil fallido, población de críticos, `INVALIDO`, mora por calendario, precisión decimal, filtros conservados, fallos frente a vacío y asociaciones de las cuatro etiquetas con sus controles. La evidencia de comandos, SHA, UI local, E06, SMOKE-01, gates y campaña 022 se entrega fuera de git en la carpeta de ALIGN-014/noche-5. La revisión independiente y la decisión de integración corresponden al padre.
 
 La regresión `portfolio-cutoff.integration.test.ts` cubre el caso coordinado de ALIGN-029 (carga VALIDADO→PUBLICADO, corte 2026-09-30), aislamiento municipal, historial de más de 1000 eventos, error tardío, publicación intercalada, estados desconocidos/parciales/fallidos y cartera vacía. No sustituye la campaña 029: el padre repetirá ese flujo sobre la integración identificada por SHA.
+
+## 22. <a id="adenda-noche-7"></a>Adenda noche 7 (10/11/2026): reportes y vocabulario
+
+Esta adenda actualiza [§19](#reportes-csv) sin reescribirla. Código: `front/lib/reports/`, `front/app/api/reports/`, `front/lib/server/report-response.ts`.
+
+**Quién descarga.** Los nombres de rol de §19 son históricos. Hoy: *Casos por grupo de trabajo*, *Calidad de datos* y *Decisiones registradas* los descarga cualquier cuenta activa del municipio (`ADMIN` o `USER`); *Supervisión de decisiones* y *Registro de accesos* requieren `ADMIN`. Un rol histórico guardado en una fila antigua se exporta con el rótulo «(rol anterior)».
+
+**Fecha y versión en cada fila.** Todos los reportes traen `fecha_cartera` y `version_reglas_vigente`, constantes en el archivo e iguales a las de la línea de contexto de la aplicación. La fecha de la cartera es la del último lote publicado; dejó de informarse como `NO_INTEGRADO`.
+
+**Columnas nuevas.** Su definición vigente está en `NEW_COLUMNS` (`front/lib/reports/report-definitions.ts`):
+
+| Columna | Reporte | Significado |
+|---|---|---|
+| `fecha_cartera`, `version_reglas_vigente` | todos | Fecha de la cartera y versión de reglas vigentes |
+| `deuda_pendiente_ars`, `presencia_deuda_pendiente` | cola | Total registrado menos pagadas, y el estado de ese dato |
+| `identificador` | decisiones, accesos | Identificador visible del caso; `NO_EN_CARTERA_VIGENTE` si ya no está |
+| `decision_rotulo`, `motivo_rotulo`, `accion_sugerida`, `accion_decidida`, `aprobacion_rotulo` | decisiones | Lo mismo que muestra la ficha, en palabras |
+| `datos_anteriores` | decisiones | `SI` cuando la decisión se registró con otra fecha de cartera u otras reglas |
+| `rol_rotulo`, `rol_actor_rotulo`, `accion_rotulo`, `quien` | decisiones, accesos | Rol y acción en palabras; `quien` es `PROPIO` u `OTRA_PERSONA`, sin nombres |
+
+`deuda_total_ars` conserva su nombre de columna por compatibilidad y contiene el **total registrado**.
+
+**Selección incompleta.** Cuando un filtro deja la selección vacía y hay casos sin el dato necesario para evaluarlo, la descarga responde 422 `SELECCION_INCOMPLETA` con una explicación, en lugar de entregar un archivo con cero filas.
+
+**Coincidencia con el tablero.** La fila `TOTAL` del reporte de cola sin filtros da las mismas cifras de deuda pendiente y deuda vencida que el tablero. Lo comprueba el recorrido en navegador (`front/tests/smoke/n7-local-walkthrough.mjs`).
+
+**Vocabulario.** En pantalla, «severidad», «riesgo» y «prioridad operativa» se muestran con un solo nombre: **puntaje de prioridad**. «Colas» se muestra como **grupos de trabajo**. Los identificadores de indicador (KPI-…) y los nombres de columna no cambiaron.

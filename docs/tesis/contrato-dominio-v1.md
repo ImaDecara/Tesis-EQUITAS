@@ -568,3 +568,30 @@ Una acción denegada, un objeto ajeno o inexistente, un filtro inválido y una l
 **Retención propuesta: 24 meses, pendiente de aprobación humana.** El volumen crece con cada apertura, por eso hay índices por `(tenant, id)` y `(tenant, created_at)`. **La purga no está automatizada ni autorizada por esta propuesta:** no hay programador en este ticket y el disparador rechaza `DELETE`, de modo que purgar requiere una decisión y una tarea de operación ([SUPABASE_TESTING_CALIDAD.md](../../SUPABASE_TESTING_CALIDAD.md)). El reporte recorre todos los registros del municipio y filtra en el servidor de la aplicación.
 
 **Sin claves foráneas, a propósito.** El rastro debe sobrevivir a la baja de un objeto, un usuario o un municipio, y una FK haría fallar la limpieza de fixtures. La función verifica actor y objeto al escribir, pero una fila puede quedar apuntando a algo que ya no existe.
+
+## 16. <a id="adenda-noche-7"></a>Adenda noche 7 (10/11/2026): acceso ADMIN/USER, totales y reglas 1.1.0
+
+Esta adenda no reescribe las secciones anteriores: dice qué filas dejaron de describir el código vigente y dónde está la definición actual. Lo que no se nombra acá sigue como estaba.
+
+**Acceso.** El catálogo de roles vigente es el de la base original: `ADMIN` y `USER`. Los nombres `consulta`, `operador`, `supervisor` e `importador` que aparecen en §13 y §15 son históricos: siguen admitidos como valor guardado en filas antiguas de `access_audit.actor_role` y la interfaz los rotula «(rol anterior)», pero ninguna cuenta nueva los usa y ningún permiso depende de ellos. `tp_operator` se conserva como compatibilidad de solo lectura e `importador_sistema` como identidad de máquina. Los permisos están en un solo lugar por capa: `PERMISSIONS` en `front/lib/server/dal.ts`, `PERMISSIONS` en `back/api/auth.py` y `public.equitas_role_allows` en `supabase/migrations/20261110100000_admin_user_access.sql`; `quality/tests/test_n7_access_parity.py` comprueba que coinciden. La política de lectura de `access_audit` pasó a llamarse `admin_read_access_audit`. La aprobación de una propuesta se sigue comprobando por identidad (quien propuso, en cualquier versión de la cadena, no aprueba).
+
+**Totales.** Rigen tres definiciones, las mismas en toda pantalla y reporte (`front/lib/domain/portfolio-totals.ts`, `docs/tesis/casos-chicos-v1.md`):
+
+| Total | Definición |
+|---|---|
+| Total registrado | Importe de todas las obligaciones, cualquiera sea su estado |
+| Deuda pendiente | Total registrado menos las obligaciones con clave de catálogo exactamente `PAID` |
+| Deuda vencida | Pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera |
+
+Filas que esta adenda reemplaza:
+
+| Fila | Qué cambió |
+|---|---|
+| FO01, AG02 | El rótulo «Deuda total» ya no existe. `totalDebt` es el **total registrado**; la deuda pendiente es un campo aparte (`pendingDebt`). |
+| FO02 | La deuda vencida excluye las pagadas y se decide por calendario contra la fecha de la cartera. |
+| FO04 | El conteo de vencidas ya no depende de la clave `OVERDUE` ni de la etiqueta: es por calendario sobre las no pagadas con importe mayor que cero. |
+| AG14, AG17, VP02, VP04, VP11 | Las pantallas se reescribieron en lenguaje claro: «riesgo» pasó a «puntaje de prioridad», «deuda asociada» a deuda pendiente, y las frases de concentración del tablero se quitaron. Las cifras que quedan usan las tres definiciones de arriba. |
+
+**Reglas.** La versión vigente es la 1.1.0 (`contracts/decision-rules.v1.1.json`, `docs/tesis/reglas-decision-v1.1.md`). Su único cambio respecto de la 1.0.0 es que una obligación pagada queda fuera del cálculo. La 1.0.0 no se editó y las decisiones guardadas conservan la versión con la que se tomaron. No hay regla nueva para suspendidas, plan de pago, judiciales, certificado ni canceladas: se computan por importe y vencimiento.
+
+**Carga.** Además de la herramienta de terminal, la cartera entra por la aplicación (`POST /imports/load`, `back/api/import_load.py`) con el mismo camino de validación y publicación atómica de §14. `access_audit.action = 'IMPORT_CONFIRM'` significa «confirmación de carga solicitada»: se registra antes de publicar, y el resultado está en el lote.
