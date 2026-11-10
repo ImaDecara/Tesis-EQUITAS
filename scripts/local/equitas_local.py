@@ -4,13 +4,16 @@ Comandos (desde la raíz del repositorio, con el Python del backend):
   back/.venv/bin/python scripts/local/equitas_local.py start    arranca todo; crea lo que falte y nunca borra
   back/.venv/bin/python scripts/local/equitas_local.py stop     detiene la app, el servicio de importación y Supabase
   back/.venv/bin/python scripts/local/equitas_local.py status   estado, solo lectura
+  back/.venv/bin/python scripts/local/equitas_local.py vaciar --confirmar equitas-n7-local
+                                                                borra SOLO la base de este entorno, para repetir la prueba
 
 QUIÉN AUTENTICA: el servicio de autenticación del Supabase LOCAL de este entorno, con cuentas sintéticas.
 QUÉ BASE RECIBE LOS ARCHIVOS: navegador -> aplicación en 127.0.0.1 -> servicio de importación local -> base LOCAL.
 Producción no interviene: el cargador rechaza cualquier destino que no sea local (back/ETL/config.py).
 
 Es un proyecto Supabase local PROPIO (otro identificador, otros puertos y otra carpeta privada que la demo de
-la noche 6). Este script se niega a operar sobre el proyecto o la carpeta de esa demo. No hay comando destructivo.
+la noche 6). Este script se niega a operar sobre el proyecto o la carpeta de esa demo. El único comando que borra
+es «vaciar», que exige escribir el identificador de este entorno y solo alcanza a su propia base sintética.
 
 Todo lo privado (claves locales, contraseñas, credenciales de servidor, logs) vive en EQUITAS_LOCAL_HOME
 (por defecto ~/.equitas-n7, modo 0700, archivos 0600), fuera del repositorio. Nada secreto se imprime.
@@ -781,6 +784,30 @@ def cmd_stop(args) -> int:
     return 0
 
 
+def cmd_vaciar(args) -> int:
+    """Borra la base de ESTE entorno (datos sintéticos) para repetir la prueba desde un municipio vacío."""
+    home = local_home()
+    guard_environment()
+    if args.confirmar != PROJECT_ID:
+        raise LocalError(f'Para borrar la base local de este entorno escribí: vaciar --confirmar {PROJECT_ID}')
+    if not docker_ready():
+        raise LocalError('Docker no está disponible.')
+    stop_process(home, 'app', FRONT, NEXT_MARKERS)
+    stop_process(home, 'importacion', BACK, API_MARKERS)
+    prepare_project(home)
+    result = run(cli(home, 'stop', '--no-backup'), env=cli_env(), timeout=600, log=private_log(home, 'supabase-vaciar'), home=home)
+    if result.returncode != 0:
+        raise LocalError('supabase stop --no-backup falló; ver el log saneado en logs/.')
+    left = run(['docker', 'volume', 'ls', '-q', '--filter', f'label=com.supabase.cli.project={PROJECT_ID}'], timeout=60).stdout.split()
+    if left:
+        raise LocalError('Quedaron volúmenes de este entorno sin borrar. Arrancalo con start y repetí vaciar.')
+    for path in (home / 'importaciones').iterdir():
+        shutil.rmtree(path) if path.is_dir() and not path.is_symlink() else path.unlink()
+    say(f'Base local «{PROJECT_ID}» borrada. Las cuentas sintéticas conservan sus contraseñas.')
+    say('Volver a crearla vacía: scripts/local/equitas_local.py start')
+    return 0
+
+
 def cmd_status(args) -> int:
     home = local_home()
     guard_environment()
@@ -810,11 +837,13 @@ def main(argv: list[str] | None = None) -> int:
     stop = commands.add_parser('stop', help='detiene la aplicación, el servicio de importación y Supabase')
     stop.add_argument('--solo-app', action='store_true', help='deja Supabase en marcha')
     commands.add_parser('status', help='estado, solo lectura')
+    vaciar = commands.add_parser('vaciar', help='borra SOLO la base sintética de este entorno, para repetir la prueba')
+    vaciar.add_argument('--confirmar', default='', help=f'debe ser exactamente {PROJECT_ID}')
     args = parser.parse_args(argv)
     if getattr(args, 'horas', 1) <= 0 or getattr(args, 'horas', 1) > MAX_JWT_HOURS:
         parser.error(f'--horas debe estar entre 0 y {MAX_JWT_HOURS}')
     try:
-        return {'start': cmd_start, 'stop': cmd_stop, 'status': cmd_status}[args.command](args)
+        return {'start': cmd_start, 'stop': cmd_stop, 'status': cmd_status, 'vaciar': cmd_vaciar}[args.command](args)
     except LocalError as error:
         print(f'ERROR: {error}', file=sys.stderr)
         return 2
