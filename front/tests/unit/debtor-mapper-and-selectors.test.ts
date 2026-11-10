@@ -387,7 +387,7 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(debtor.decision?.severidad).toMatchObject({ estado: 'PARCIAL', valor: 85, obligaciones_no_evaluables: 1 })
     expect(debtor.metrics?.priorityScore.missing).toEqual({ NO_INFORMADO_EN_ORIGEN: 1, INVALIDO: 1 })
     expect(debtor.decision?.revision.requiere_revision_humana).toBe(true)
-    expect(debtor.recommendationReason).toContain('Evaluar con supervisor')
+    expect(debtor.recommendationReason).toContain('Requiere revisión caso por caso')
   })
 
   it('no usa period, status, issue_date o last_collection_date como campos de origen integrados', () => {

@@ -17,7 +17,7 @@ describe('ALIGN-010: presentación de las intervenciones v1', () => {
     expect(result.summary).toBe(label)
     expect(result.reason).toContain(decision.explicacion.frase_contrastiva)
     expect(result.reason).not.toMatch(/deuda exigible|escalamiento|recordatorio formal/)
-    if (rule === 'R3') expect(result.reason).toContain('Evaluar con supervisor')
+    if (rule === 'R3') expect(result.reason).toContain('Requiere revisión caso por caso')
   })
 
   it.each(golden.casos)('$id conserva la explicación, sin porcentajes ni acciones intensas', sample => {
@@ -32,7 +32,7 @@ describe('ALIGN-010: presentación de las intervenciones v1', () => {
     }
     if (decision.revision.requiere_revision_humana) {
       expect(result.isUrgent).toBe(true)
-      expect(result.reason).toContain('Evaluar con supervisor')
+      expect(result.reason).toContain('Requiere revisión caso por caso')
     }
   })
 

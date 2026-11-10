@@ -24,7 +24,7 @@ export function generateDebtorRecommendation(decision: Decision | null): DebtorR
   return {
     type,
     summary: type,
-    reason: `${decision.explicacion.frase_contrastiva}${review ? ' Evaluar con supervisor antes de gestionar.' : ''}`,
+    reason: `${decision.explicacion.frase_contrastiva}${review ? ' Requiere revisión caso por caso antes de gestionar.' : ''}`,
     // Compatibilidad con el DTO previo: señala revisión, nunca urgencia legal.
     isUrgent: review,
   }
