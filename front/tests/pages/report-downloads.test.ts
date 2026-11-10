@@ -32,15 +32,15 @@ function configure() {
 describe('N6: el tablero muestra los CSV que permite el rol', () => {
   beforeEach(() => { vi.clearAllMocks(); configure() })
 
-  it('supervisor ve los cinco reportes, con la ruta existente de cada uno', async () => {
-    links.availableReportLinks.mockResolvedValue(reportLinksForRole('supervisor'))
+  it('ADMIN ve los cinco reportes, con la ruta existente de cada uno', async () => {
+    links.availableReportLinks.mockResolvedValue(reportLinksForRole('ADMIN'))
     const markup = markupOf(await HomePage())
     expect(textOf(markup)).toContain('Reportes CSV')
     expect(reportHrefs(markup)).toEqual(['/api/reports/queue', '/api/reports/data-quality', '/api/reports/decisions', '/api/reports/supervision', '/api/reports/access'])
   })
 
-  it('consulta no ve supervisión ni registro de accesos', async () => {
-    links.availableReportLinks.mockResolvedValue(reportLinksForRole('consulta'))
+  it('USER no ve supervisión ni registro de accesos', async () => {
+    links.availableReportLinks.mockResolvedValue(reportLinksForRole('USER'))
     const markup = markupOf(await HomePage())
     expect(reportHrefs(markup)).toEqual(['/api/reports/queue', '/api/reports/data-quality', '/api/reports/decisions'])
     expect(textOf(markup)).not.toMatch(/Supervisión|Registro de accesos/)

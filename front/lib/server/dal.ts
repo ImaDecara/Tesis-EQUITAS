@@ -7,24 +7,32 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-scope'
 
-// ALIGN-003 y funciones de ALIGN-018: `operador` registra, `supervisor` aprueba y
-// no importa. `importador_sistema` es de maquina y no entra por la web. La lectura
-// tambien admite la compatibilidad E06, que no aparece en ningun otro permiso.
-// ALIGN-021: la misma tabla gobierna la pantalla y la autorización de las acciones.
+// UNICO lugar de esta capa donde se decide que permite cada rol (noche 7, seccion 4.2 del encargo).
+// Cambiar una fila es cambiar una linea de esta tabla; la base tiene su equivalente en
+// `public.equitas_role_allows` y la API de Python en `back/api/auth.py::PERMISSIONS`.
+//
+// Lo que main ya ofrece (leer la cartera del propio municipio) lo usa cualquier miembro activo:
+// ADMIN y USER leen lo mismo. La compatibilidad E06 solo lee cartera y no aparece en otra fila.
+// Lo que main no tiene y escribe o supervisa requiere ADMIN. `importador_sistema` es una
+// identidad de maquina del cargador por terminal y no entra por la web.
+// ALIGN-021: la misma tabla gobierna la pantalla y la autorizacion de las acciones.
 const PERMISSIONS = {
-  'portfolio:read': ['consulta', 'operador', 'supervisor', E06_READ_ONLY_COMPAT_ROLE],
-  // ALIGN-028: leer decisiones sin texto libre ni identidades. La compatibilidad E06 no entra:
-  // solo lee cartera. La politica de `case_review` admite a todo miembro activo.
-  'review:read': ['consulta', 'operador', 'supervisor'],
-  'decision:read': ['consulta', 'operador', 'supervisor'],
-  // ALIGN-028: el identificador de origen es texto libre; solo lo exporta quien gestiona casos.
-  'report:object-identifier': ['operador', 'supervisor'],
-  'decision:record': ['operador'],
-  'decision:approve': ['supervisor'],
-  'supervision:read': ['supervisor'],
+  'portfolio:read': ['ADMIN', 'USER', E06_READ_ONLY_COMPAT_ROLE],
+  // Ver la decision registrada de un caso y su estado, sin texto libre ni identidades.
+  // La politica de `case_review` admite a todo miembro activo.
+  'review:read': ['ADMIN', 'USER'],
+  'decision:read': ['ADMIN', 'USER'],
+  // Exportar lo que ya se ve en pantalla no amplia el acceso: el identificador del objeto esta
+  // en los listados que lee cualquier miembro activo.
+  'report:object-identifier': ['ADMIN', 'USER'],
+  'decision:record': ['ADMIN'],
+  'decision:approve': ['ADMIN'],
+  // Reportes que muestran la actividad de otras personas.
+  'supervision:read': ['ADMIN'],
   // ALIGN-069: reporte de accesos. La politica de `access_audit` exige lo mismo.
-  'audit:read': ['supervisor'],
-  'import:write': ['importador'],
+  'audit:read': ['ADMIN'],
+  // Cargar CSV cambia la cartera de todo el municipio.
+  'import:write': ['ADMIN'],
 } as const satisfies Record<string, readonly ResolvedRoleName[]>
 export type DalPermission = keyof typeof PERMISSIONS
 

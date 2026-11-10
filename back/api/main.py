@@ -21,6 +21,7 @@ from api.auth import (
     UserClientDep,
     require_session,
 )
+from api.import_load import router as load_router
 from api.import_preview import router as preview_router
 from api.imports import (
     purge_interval_seconds,
@@ -89,6 +90,7 @@ app = FastAPI(
 )
 app.include_router(imports_router)
 app.include_router(preview_router)
+app.include_router(load_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOOPBACK_HOSTS)
 app.add_middleware(NoStoreMiddleware)
 

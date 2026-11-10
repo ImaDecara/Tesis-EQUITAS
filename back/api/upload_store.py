@@ -226,6 +226,21 @@ class UploadStore:
         )
         return os.fdopen(os.open(directory / kind, flags, 0o600), "wb")
 
+    def incoming_files(self, token: str) -> dict[str, Path]:
+        """Rutas de lo recibido que todavía no pertenece a un lote: la carga directa (noche 7) valida
+        y publica desde acá, sin instalar copia. Solo archivos regulares de las clases conocidas."""
+        directory = self._incoming_dir(token)
+        try:
+            with os.scandir(directory) as entries:
+                found = [
+                    (entry.name, Path(entry.path))
+                    for entry in entries
+                    if entry.name in FILE_KINDS and entry.is_file(follow_symlinks=False)
+                ]
+        except OSError:
+            raise UploadStoreError() from None
+        return dict(sorted(found))
+
     def prepare(self, tenant: int) -> None:
         """Se llama antes de registrar el lote: si el destino no sirve, no hay fila sin copia."""
         _private_directory(self._batches / _positive_id(tenant))

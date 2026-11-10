@@ -44,10 +44,18 @@ JWKS_TTL_SECONDS = 600.0
 JWKS_MIN_REFRESH_SECONDS = 30.0
 HTTP_TIMEOUT = httpx.Timeout(10.0)
 
-# ALIGN-003: `consulta`, `operador` y `supervisor` leen la cartera; `importador` opera
-# lotes. `importador_sistema` es una credencial de máquina (ALIGN-060), sin sesión.
-READ_ROLES = ("consulta", "operador", "supervisor")
-IMPORT_ROLES = ("importador",)
+# ÚNICO lugar de esta capa donde se decide qué permite cada rol (noche 7, sección 4.2 del
+# encargo). El catálogo es el de la base original: ADMIN y USER, comparados exactos. Leer la
+# cartera lo hace cualquier miembro activo, como en main; cargar CSV cambia la cartera de
+# todo el municipio y requiere ADMIN. `importador_sistema` es una credencial de máquina del
+# cargador por terminal (ALIGN-060), sin sesión: nunca pasa por esta API.
+# Equivalentes: `front/lib/server/dal.ts::PERMISSIONS` y `public.equitas_role_allows`.
+PERMISSIONS: dict[str, tuple[str, ...]] = {
+    "portfolio:read": ("ADMIN", "USER"),
+    "import:write": ("ADMIN",),
+}
+READ_ROLES = PERMISSIONS["portfolio:read"]
+IMPORT_ROLES = PERMISSIONS["import:write"]
 
 _CONTEXT_READ_ERRORS = (
     APIError,

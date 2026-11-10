@@ -25,6 +25,8 @@ function failure(status: number, detail: string): Response {
 function internalPath(method: string, segments: readonly string[]): string | null {
   const [id, action] = segments
   if (method === 'POST' && segments.length === 0) return '/imports'
+  // Noche 7: carga directa (recibe, valida y publica en un paso). Es la que usa la pantalla «Cargar CSV».
+  if (method === 'POST' && segments.length === 1 && id === 'load') return '/imports/load'
   if (method === 'GET' && segments.length === 1 && BATCH_ID.test(id)) return `/imports/${id}`
   if ((method === 'GET' || method === 'POST') && segments.length === 2 && BATCH_ID.test(id) && action === 'preview') {
     return `/imports/${id}/preview`
@@ -36,7 +38,7 @@ function internalPath(method: string, segments: readonly string[]): string | nul
 }
 
 // Esta version solo admite loopback (ALIGN-050 define otra red). Una URL que no lo sea no se usa.
-function internalBaseUrl(): string | null {
+export function internalBaseUrl(): string | null {
   try {
     const url = new URL(process.env[INTERNAL_URL_VARIABLE] ?? '')
     const plain = url.protocol === 'http:' && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash

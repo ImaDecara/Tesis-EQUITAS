@@ -27,10 +27,10 @@ describe('N6: accesos visibles a los CSV existentes', () => {
 
   it('cada rol ve solo los reportes que su permiso autoriza', () => {
     const visible = (role: ResolvedRoleName) => reportLinksForRole(role).map(link => link.id)
-    expect(visible('consulta')).toEqual(['queue', 'data-quality', 'decisions'])
-    expect(visible('operador')).toEqual(['queue', 'data-quality', 'decisions'])
-    expect(visible('supervisor')).toEqual(['queue', 'data-quality', 'decisions', 'supervision', 'access'])
-    expect(visible('importador')).toEqual([])
+    // Noche 7 (encargo §4.2): exportar lo que ya se ve es de cualquier miembro activo; los reportes que
+    // muestran la actividad de otras personas (supervisión y accesos) requieren ADMIN.
+    expect(visible('USER')).toEqual(['queue', 'data-quality', 'decisions'])
+    expect(visible('ADMIN')).toEqual(['queue', 'data-quality', 'decisions', 'supervision', 'access'])
     expect(visible(E06_READ_ONLY_COMPAT_ROLE)).toEqual(['queue', 'data-quality'])
     const roles: ResolvedRoleName[] = [...WEB_ROLES, E06_READ_ONLY_COMPAT_ROLE]
     for (const role of roles) {
@@ -41,9 +41,9 @@ describe('N6: accesos visibles a los CSV existentes', () => {
   })
 
   it('la sesión decide la lista; sin sesión verificable no se ofrece ningún enlace', async () => {
-    dal.requireTenantAccess.mockResolvedValueOnce({ supabase: {}, context: { roleName: 'supervisor' } })
+    dal.requireTenantAccess.mockResolvedValueOnce({ supabase: {}, context: { roleName: 'ADMIN' } })
     expect((await availableReportLinks())?.map(link => link.id)).toEqual(['queue', 'data-quality', 'decisions', 'supervision', 'access'])
-    dal.requireTenantAccess.mockResolvedValueOnce({ supabase: {}, context: { roleName: 'consulta' } })
+    dal.requireTenantAccess.mockResolvedValueOnce({ supabase: {}, context: { roleName: 'USER' } })
     expect((await availableReportLinks())?.map(link => link.id)).toEqual(['queue', 'data-quality', 'decisions'])
     dal.requireTenantAccess.mockRejectedValueOnce(new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.'))
     expect(await availableReportLinks()).toBeNull()

@@ -19,6 +19,21 @@ RESULT_BYTES = 64 * 1024**2
 class PreviewSourceError(ETLError):
     """A bounded reader/validator rejection, with a safe code and no source value."""
 
+    def __init__(self, code, location=None):
+        super().__init__(code)
+        # Archivo, línea y campo que informó el lector, si los hubo. Nunca un valor del archivo.
+        self.location = location
+
+
+def _location(value):
+    """Forma cerrada: lo que no sea exactamente archivo/línea/campo del contrato se descarta."""
+    if (isinstance(value, dict) and set(value) == {'archivo', 'linea', 'campo'}
+            and value['archivo'] in ('cabecera', 'detalle', 'libro')
+            and type(value['linea']) is int and 0 <= value['linea'] < 10**9
+            and isinstance(value['campo'], str) and re.fullmatch(r'[A-Za-z_*][A-Za-z0-9_]{0,63}', value['campo'])):
+        return value
+    return None
+
 
 def _stop(process):
     try:
@@ -73,7 +88,7 @@ def prepare_input(files, profile, tenant, policy, *, lock_fd=None):
             except (ValueError, RecursionError):
                 raise ETLError('PREVIEW_PROCESS_FAILED') from None
             if isinstance(result, dict) and isinstance(result.get('source_error'), str) and re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', result['source_error']):
-                raise PreviewSourceError(result['source_error'])
+                raise PreviewSourceError(result['source_error'], _location(result.get('location')))
             if not isinstance(result, dict) or not {'document','rows','source','publishable','validation'} <= result.keys():
                 raise ETLError('PREVIEW_PROCESS_FAILED')
             return result

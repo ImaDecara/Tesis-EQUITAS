@@ -17,6 +17,7 @@ from ETL.extract import canonical_records, extract_from_input_folder, read_sourc
 from ETL.validate_source import is_canonical_id, load_contract, validate_batch
 from ETL.validate_source import parse_amount as parse_source_amount
 from ETL.validate_source import parse_date as parse_source_date
+from services.decision_rules_v1 import RULES as DECISION_RULES
 
 # ============================================================
 # CATÁLOGOS: SIEMPRE POR CLAVE
@@ -52,6 +53,9 @@ CONTACT_TYPE_EMAIL = "EMAIL"
 DEBT_STATUS_OVERDUE = "OVERDUE"
 DEBT_STATUS_ACTIVE = "ACTIVE"
 DEBT_STATUS_UNKNOWN = "UNKNOWN"
+# Pagada y vencimiento plausible: los de las reglas activas, para que el perfil cuente igual que la decisión.
+DEBT_STATUS_PAID = DECISION_RULES["obligaciones_pagadas"]["clave_catalogo"]
+MINIMUM_PLAUSIBLE_DUE = DECISION_RULES["evaluabilidad"]["fecha_minima_plausible"]
 ORIGIN_STATE_PENDING = "PENDIENTE"
 ORIGIN_STATE_UNKNOWN = "UNKNOWN"
 
@@ -535,17 +539,25 @@ def _rounded_average(values: list[int]) -> int:
     return int((Decimal(sum(values)) / len(values)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
-# Oráculo Python de recompute_debtor_profiles (ALIGN-031): la carga ya calcula el perfil en SQL, desde lo persistido, y las
-# pruebas exigen paridad con esta función. Si cambia una regla, cambia en los dos lados.
-# Perfil del objeto: agregados de sus obligaciones respecto del corte. debt_rows lleva claves de catálogo.
-# Saber si una obligación está vencida exige su estado de origen (contrato de dominio §4.1):
-# - estados faltantes y ninguna vencida observada: importe y conteo vencidos son nulos. No es un cero legítimo
-#   (regla 2) y coincide con aggregate del contrato, que sin aportes observados no publica una suma;
-# - estados faltantes y alguna vencida observada: subtotal y conteo de lo observado, con
-#   debt_state_not_observed_count al lado (regla 3);
-# - todos los estados observados, o sin obligaciones: suma y conteo son completos, y cero si no hay vencidas.
-# Antigüedad: días de atraso de las vencidas al corte. Nula sin vencidas conocidas; el conteo anterior distingue
-# "no se sabe" de "no aplica". El índice heredado no se calcula: dependía del promedio del lote (ALIGN-008).
+def _evaluable_debt(row: dict[str, Any]) -> bool:
+    # Misma obligación evaluable que las reglas: importe ≥ 0 y vencimiento plausible, ambos presentes.
+    amount, due = row.get("current_amount"), row.get("due_date")
+    return amount is not None and Decimal(str(amount)) >= 0 and due is not None and due >= MINIMUM_PLAUSIBLE_DUE
+
+
+# Oráculo Python de recompute_debtor_profiles (ALIGN-031; reglas 1.1.0 en 20261110120000_debtor_profile_rules_1_1):
+# la carga calcula el perfil en SQL, desde lo persistido, y las pruebas exigen paridad con esta función. Si cambia una
+# regla, cambia en los dos lados. debt_rows lleva claves de catálogo (status None: sin estado).
+# - total_debt_amount es el total registrado: todas las obligaciones con importe, cualquiera sea su estado.
+# - La mora es por calendario sobre las NO pagadas (clave distinta de PAID o sin estado): importe > 0 y vencimiento
+#   anterior al corte, como en las reglas. Ni la clave OVERDUE ni el rótulo la deciden; las suspendidas y demás
+#   estados se computan por importe y vencimiento.
+# - Si alguna no pagada no es evaluable (sin importe o vencimiento, importe negativo o vencimiento anterior a
+#   1970-01-01) y no hay vencidas conocidas, importe y conteo vencidos son nulos: no es un cero legítimo (contrato de
+#   dominio §4.1 regla 2), igual que la severidad PARCIAL. Con alguna vencida, subtotal y conteo de lo evaluable.
+# - Sin corte no hay mora calculable: importe, conteo y antigüedad vencidos son nulos.
+# Antigüedad: días de atraso de las vencidas al corte. Nula sin vencidas conocidas. debt_state_not_observed_count
+# sigue contando las obligaciones sin estado o con estado UNKNOWN. El índice heredado no se calcula (ALIGN-008).
 # Las gestiones previas no tienen fuente (PR07): nulas, para que el valor por defecto no se lea como cero gestiones.
 def build_debtor_profile_payload(
     debtor_id: int,
@@ -555,11 +567,18 @@ def build_debtor_profile_payload(
     cut_off: date | None,
 ) -> dict[str, Any]:
 
-    overdue_rows = [row for row in debt_rows if row["status"] == DEBT_STATUS_OVERDUE]
-    not_observed = sum(row["status"] == DEBT_STATUS_UNKNOWN for row in debt_rows)
-    overdue_unknown = not_observed > 0 and not overdue_rows
+    unpaid = [row for row in debt_rows if row.get("status") != DEBT_STATUS_PAID]
+    not_evaluable = sum(not _evaluable_debt(row) for row in unpaid)
+    overdue_rows = [
+        row for row in unpaid
+        if cut_off and _evaluable_debt(row) and Decimal(str(row["current_amount"])) > 0
+        and date.fromisoformat(row["due_date"]) < cut_off
+    ]
+    not_observed = sum(row.get("status") in (None, DEBT_STATUS_UNKNOWN) for row in debt_rows)
+    overdue_unknown = cut_off is None or (not_evaluable > 0 and not overdue_rows)
     days_overdue = [(cut_off - date.fromisoformat(row["due_date"])).days for row in overdue_rows] if cut_off else []
-    total = sum((Decimal(str(row["current_amount"])) for row in debt_rows), Decimal(0))
+    total = sum((Decimal(str(row["current_amount"])) for row in debt_rows if row.get("current_amount") is not None),
+                Decimal(0))
     overdue = sum((Decimal(str(row["current_amount"])) for row in overdue_rows), Decimal(0))
 
     return {
@@ -650,10 +669,26 @@ class PreparedBatch:
 class StructuralRejection(Exception):
     """El archivo no se pudo leer como lote: no hay reporte, pero sí hashes para registrar el rechazo."""
 
-    def __init__(self, code: str, file_hashes: dict[str, str]) -> None:
+    def __init__(self, code: str, file_hashes: dict[str, str],
+                 location: dict[str, Any] | None = None) -> None:
         self.code = code
         self.file_hashes = file_hashes
+        # Dónde lo detectó el lector: archivo, línea y campo. Nombres del contrato, nunca valores.
+        self.location = location
         super().__init__(code)
+
+
+_READER_LOCATION = re.compile(
+    r"archivo=(cabecera|detalle|libro), linea=([0-9]{1,9}), campo=([A-Za-z_*][A-Za-z0-9_]{0,63})"
+)
+
+
+def reader_location(detail: str) -> dict[str, Any] | None:
+    """Solo la forma exacta que emite `source_error`: cualquier otro texto podría citar un valor y se descarta."""
+    match = _READER_LOCATION.fullmatch(detail.strip())
+    if match is None:
+        return None
+    return {"archivo": match[1], "linea": int(match[2]), "campo": match[3]}
 
 
 def canonical_json_hash(value: Any) -> str:
@@ -752,7 +787,8 @@ def prepare_batch(files: Mapping[str, Path], mapping: dict, contract: dict, cut_
     try:
         tables = read_source_tables(dict(files), mapping, contract=contract)
     except ValueError as error:
-        raise StructuralRejection(str(error).split(":", 1)[0], hashes) from None
+        code, _, detail = str(error).partition(":")
+        raise StructuralRejection(code, hashes, reader_location(detail)) from None
 
     if _sha256_of_files(files) != {name: hashes[name] for name in files}:
         raise ETLError("SOURCE_CHANGED_DURING_READ")

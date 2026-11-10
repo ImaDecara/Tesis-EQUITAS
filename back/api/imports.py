@@ -311,8 +311,11 @@ class _FormSink:
     """Decide qué hacer con cada parte. Los campos que no son del lote se ignoran:
     entre ellos, cualquier `tenant` del cuerpo."""
 
-    def __init__(self, store: UploadStore, token: str) -> None:
+    def __init__(
+        self, store: UploadStore, token: str, fields: frozenset[str] = FORM_FIELDS
+    ) -> None:
         self.store = store
+        self.fields = fields
         self.form = ReceivedForm(token)
         self._name: str | None = None
         self._hash: Any = None
@@ -326,7 +329,7 @@ class _FormSink:
         if part.filename is None:
             if part.name in FILE_KINDS:
                 raise _unprocessable("CAMPO_NO_ESPERADO")
-            if part.name in FORM_FIELDS:
+            if part.name in self.fields:
                 if part.name in self._seen_fields:
                     raise _unprocessable("CAMPO_DUPLICADO")
                 self._seen_fields.add(part.name)
@@ -352,7 +355,7 @@ class _FormSink:
 
     def end(self) -> None:
         if self._file is None:
-            if self._name in FORM_FIELDS:
+            if self._name in self.fields:
                 self.form.fields[self._name] = self._field.decode("latin-1")
             return
         self._file.close()
@@ -379,14 +382,17 @@ async def _consume(sink: _FormSink, request: Request, boundary: bytes) -> None:
 
 
 async def _receive_form(
-    request: Request, boundary: bytes, store: UploadStore
+    request: Request,
+    boundary: bytes,
+    store: UploadStore,
+    fields: frozenset[str] = FORM_FIELDS,
 ) -> ReceivedForm:
     """Si no termina bien, no queda nada en disco. Quien llama confirma o descarta."""
     try:
         token = store.begin()
     except STORE_ERRORS:
         raise _store_unavailable() from None
-    sink = _FormSink(store, token)
+    sink = _FormSink(store, token, fields)
     try:
         with anyio.fail_after(UPLOAD_SECONDS):
             await _consume(sink, request, boundary)

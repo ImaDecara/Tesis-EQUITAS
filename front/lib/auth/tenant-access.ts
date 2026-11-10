@@ -1,13 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 
-export const WEB_ROLES = ['consulta', 'operador', 'supervisor', 'importador'] as const
+// Noche 7: el catalogo de roles es el de la base original (ADMIN y USER) y los nombres se
+// comparan exactos. Como en main, leer la cartera no depende de cual de los dos sea; lo que
+// decide cada rol sobre las funciones nuevas esta en la tabla de `lib/server/dal.ts`.
+// Los nombres de la demo anterior (consulta, operador, supervisor, importador) ya no ingresan:
+// quedan solo como dato historico de registros guardados.
+export const WEB_ROLES = ['ADMIN', 'USER'] as const
 export type WebRole = (typeof WEB_ROLES)[number]
 
-// COMPATIBILIDAD CON LA CAMPANA E06: NO es un rol aprobado por ALIGN-003 ni un rol
-// del producto. `database/testing/fixtures.sql` lo asigna a las cuentas sinteticas
-// del proyecto de pruebas, y el plan prohibe tocar esa fixture y SMOKE-01. Da solo
-// lectura de cartera, igual que `consulta`, y ninguna otra capacidad (`lib/server/dal.ts`).
+// COMPATIBILIDAD CON LA CAMPANA E06: NO es un rol del producto. `database/testing/fixtures.sql`
+// lo asigna a las cuentas sinteticas del proyecto de pruebas, y el plan prohibe tocar esa
+// fixture y SMOKE-01. Da solo lectura de cartera y ninguna otra capacidad (`lib/server/dal.ts`).
 // Sin interruptor por entorno. Se retira con su fixture: ver ADR-001, seccion 9.
 export const E06_READ_ONLY_COMPAT_ROLE = 'tp_operator'
 export type ResolvedRoleName = WebRole | typeof E06_READ_ONLY_COMPAT_ROLE
@@ -15,6 +19,18 @@ export type ResolvedRoleName = WebRole | typeof E06_READ_ONLY_COMPAT_ROLE
 function isResolvedRoleName(name: unknown): name is ResolvedRoleName {
   return name === E06_READ_ONLY_COMPAT_ROLE || (WEB_ROLES as readonly unknown[]).includes(name)
 }
+
+// Mensajes de ingreso rechazado: dicen que pasa y cual es el proximo paso. El ingreso cierra la
+// sesion al mostrarlos, asi que ninguno deja a la persona en un bucle.
+export const ACCESS_NEXT_STEP = 'Pedile a quien administra las cuentas de tu municipio que lo revise.'
+export const ACCESS_MESSAGES = {
+  APP_USER_NOT_FOUND: `Tu cuenta existe, pero todavía no está dada de alta en la aplicación. ${ACCESS_NEXT_STEP}`,
+  APP_USER_INACTIVE: `Tu usuario de la aplicación está desactivado. ${ACCESS_NEXT_STEP}`,
+  TENANT_ACCESS_NOT_FOUND: `Tu cuenta no tiene acceso a ningún municipio. ${ACCESS_NEXT_STEP}`,
+  TENANT_ACCESS_INACTIVE: `Tu acceso al municipio está desactivado. ${ACCESS_NEXT_STEP}`,
+  TENANT_INACTIVE: `El municipio de tu cuenta no está activo. ${ACCESS_NEXT_STEP}`,
+  ROLE_FORBIDDEN: `Tu cuenta tiene un rol que esta aplicación no reconoce (admite ADMIN y USER). ${ACCESS_NEXT_STEP}`,
+} as const
 
 export const TENANT_COOKIE = 'equitas_tenant_id'
 
@@ -87,9 +103,9 @@ async function checkTenantAccess(
     const user = app.data[0]
     const appUserId = databaseId(user?.id)
     if ((app.count ?? app.data.length) !== 1 || app.data.length !== 1 || !appUserId || user.auth_user !== authUserId) {
-      return denied('APP_USER_NOT_FOUND', 'No se pudo resolver un usuario de aplicacion vinculado a Auth.')
+      return denied('APP_USER_NOT_FOUND', ACCESS_MESSAGES.APP_USER_NOT_FOUND)
     }
-    if (user.status !== 'ACTIVE') return denied('APP_USER_INACTIVE', 'El usuario de aplicacion esta inactivo.')
+    if (user.status !== 'ACTIVE') return denied('APP_USER_INACTIVE', ACCESS_MESSAGES.APP_USER_INACTIVE)
     if (selectedTenantId !== undefined && !databaseId(selectedTenantId)) {
       return denied('TENANT_ACCESS_NOT_FOUND', 'La seleccion de municipio no es valida.')
     }
@@ -116,8 +132,8 @@ async function checkTenantAccess(
       const anyStatus = matching ? { data: matching, error: null } : await memberships(false)
       if (anyStatus.error || !Array.isArray(anyStatus.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
       return anyStatus.data.length
-        ? denied('TENANT_ACCESS_INACTIVE', 'La membresia del municipio esta inactiva.')
-        : denied('TENANT_ACCESS_NOT_FOUND', 'No existe una membresia activa para este municipio.')
+        ? denied('TENANT_ACCESS_INACTIVE', ACCESS_MESSAGES.TENANT_ACCESS_INACTIVE)
+        : denied('TENANT_ACCESS_NOT_FOUND', ACCESS_MESSAGES.TENANT_ACCESS_NOT_FOUND)
     }
     if ((active.count ?? active.data.length) !== 1 || active.data.length !== 1) {
       const choices = await loadAllTableRows('tenant_user', supabase, {
@@ -134,7 +150,7 @@ async function checkTenantAccess(
     const membership = active.data[0]
     const tenantId = databaseId(membership.tenant)
     const roleId = databaseId(membership.role)
-    if (membership.status !== true) return denied('TENANT_ACCESS_INACTIVE', 'La membresia del municipio esta inactiva.')
+    if (membership.status !== true) return denied('TENANT_ACCESS_INACTIVE', ACCESS_MESSAGES.TENANT_ACCESS_INACTIVE)
     if (!tenantId || !roleId || databaseId(membership.user) !== appUserId ||
         (selectedTenantId !== undefined && tenantId !== selectedTenantId)) {
       return denied('TENANT_ACCESS_NOT_FOUND', 'No se pudo verificar la membresia seleccionada.')
@@ -142,13 +158,13 @@ async function checkTenantAccess(
     const tenant = await supabase.from('tenant').select('id,status').eq('id', tenantId).limit(1)
     if (tenant.error || !Array.isArray(tenant.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el municipio.')
     if (databaseId(tenant.data[0]?.id) !== tenantId || tenant.data[0]?.status !== 'ACTIVE') {
-      return denied('TENANT_INACTIVE', 'El municipio no esta disponible o esta inactivo.')
+      return denied('TENANT_INACTIVE', ACCESS_MESSAGES.TENANT_INACTIVE)
     }
     const role = await supabase.from('role').select('id,name').eq('id', roleId).limit(1)
     if (role.error || !Array.isArray(role.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el rol.')
     const name: unknown = role.data[0]?.name
     if (databaseId(role.data[0]?.id) !== roleId || !isResolvedRoleName(name)) {
-      return denied('ROLE_FORBIDDEN', 'El rol no tiene acceso a la aplicacion web.')
+      return denied('ROLE_FORBIDDEN', ACCESS_MESSAGES.ROLE_FORBIDDEN)
     }
     return { isAuthorized: true, requiresLogin: false, context: { authUserId, appUserId, tenantId, role: roleId }, roleName: name }
   } catch {
