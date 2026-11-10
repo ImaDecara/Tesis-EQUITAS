@@ -299,13 +299,14 @@ async function decisionPhase(admin) {
   })
 }
 
-async function parseCsv(text) {
+// Los reportes usan «;» como separador, comillas dobles y una fila TOTAL (columna tipo_fila).
+function parseCsv(text) {
   const rows = []; let row = [], cell = '', quoted = false
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i]
     if (quoted) { if (char === '"' && text[i + 1] === '"') { cell += '"'; i += 1 } else if (char === '"') quoted = false; else cell += char }
     else if (char === '"') quoted = true
-    else if (char === ',') { row.push(cell); cell = '' }
+    else if (char === ';') { row.push(cell); cell = '' }
     else if (char === '\n' || char === '\r') { if (char === '\r' && text[i + 1] === '\n') i += 1; row.push(cell); cell = ''; if (row.length > 1 || row[0] !== '') rows.push(row); row = [] }
     else cell += char
   }
@@ -316,25 +317,35 @@ async function parseCsv(text) {
 
 async function reportsPhase(admin) {
   const expected = manifest.lotes[LOTS.first]
+  const reference = expected.casos.find(item => item.identificador === CASE)
   const download = async (page, id) => {
     const response = await page.request.get(`${BASE}/api/reports/${id}`)
-    return { status: response.status(), rows: response.ok() ? await parseCsv(await response.text()) : [] }
+    return { status: response.status(), rows: response.ok() ? parseCsv(await response.text()) : [] }
   }
-  await check('reportes/ADMIN: la pantalla ofrece los cinco y el de cola coincide con el tablero', async () => {
+  await check('reportes/ADMIN: la pantalla ofrece los cinco y el de cola coincide con el tablero y con la ficha', async () => {
     await visit(admin, '/reports')
     for (const id of ['queue', 'data-quality', 'decisions', 'supervision', 'access']) assert.ok(await admin.locator(`a[href^="/api/reports/${id}"]`).count(), `Falta el enlace del reporte ${id}`)
     await shot(admin, 'reportes-admin')
     const queue = await download(admin, 'queue')
     assert.equal(queue.status, 200)
-    assert.equal(queue.rows.length, expected.objetos_publicados, 'El reporte de cola debe tener un caso por objeto del tablero')
-    const row = queue.rows.find(item => Object.values(item).includes(CASE))
+    const detail = queue.rows.filter(row => row.tipo_fila === 'DETALLE')
+    const total = queue.rows.find(row => row.tipo_fila === 'TOTAL')
+    assert.equal(detail.length, expected.objetos_publicados, 'El reporte de cola debe tener un caso por objeto del tablero')
+    assert.equal(detail[0].fecha_cartera, expected.fecha_corte)
+    // Mismo total que el tablero (que el recorrido ya comparó con el manifiesto calculado a mano).
+    assert.equal(Number(total.deuda_pendiente_ars), Number(expected.deuda_pendiente_ars))
+    assert.equal(Number(total.deuda_vencida_ars), Number(expected.deuda_vencida_ars))
+    assert.equal(Number(total.objetos), expected.objetos_publicados)
+    const row = detail.find(item => item.identificador === CASE)
     assert.ok(row, `El reporte de cola no trae ${CASE}`)
-    const numbers = Object.values(row).map(Number)
-    for (const amount of [141350, 93350, 263, 45]) assert.ok(numbers.includes(amount), `La fila de ${CASE} no trae ${amount}: ${JSON.stringify(row)}`)
+    assert.deepEqual([row.deuda_pendiente_ars, row.deuda_vencida_ars, row.dias_atraso_max, row.prioridad_puntos].map(Number),
+      [reference.deuda_pendiente_ars, reference.deuda_vencida_ars, reference.atraso_maximo_dias, 45].map(Number))
     const decisions = await download(admin, 'decisions')
-    assert.ok(decisions.rows.some(item => Object.values(item).includes(CASE)), 'El reporte de decisiones debe identificar el caso')
+    const recorded = decisions.rows.filter(item => item.tipo_fila === 'DETALLE')
+    assert.ok(recorded.some(item => item.identificador === CASE && item.aprobacion_rotulo === 'Decisión registrada'), 'El reporte de decisiones debe identificar el caso y su estado')
+    assert.ok(recorded.some(item => item.identificador === PROPOSAL_CASE && item.aprobacion_rotulo === 'Propuesta aprobada'), 'La propuesta aprobada debe figurar con su estado')
     for (const id of ['data-quality', 'supervision', 'access']) assert.equal((await download(admin, id)).status, 200, id)
-    return { cola: queue.rows.length, decisiones: decisions.rows.length }
+    return { cola: detail.length, deuda_pendiente: total.deuda_pendiente_ars, decisiones: recorded.length }
   })
   await check('reportes/USER: tres disponibles; supervisión y accesos explicados y rechazados', async () => {
     const { context, page } = await session('user'); await entered(page)
