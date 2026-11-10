@@ -11,7 +11,18 @@ Qué se ejecutó, sobre qué commit, en qué entorno y con qué resultado. Sin c
 - **Remoto:** ningún contacto. Las demás bases locales (`equitas-tp-testing`, `equitas-n7-local`, `equitas-n7-espejo`) no se tocaron y el script se niega a operar sobre ellas.
 - **Comando:** `back/.venv/bin/python scripts/campanas/equitas_campanas.py todas`. Hay un comando por campaña: `reportes`, `e06`, `decisiones`, `revision`, `importacion [--tandas …]`, `control-etl` y `detener`. Al terminar se detienen Next y el proyecto.
 
-## Resultados (corrida final, 10/11/2026, sobre `b086a72`)
+## Corridas posteriores, sobre los commits finales
+
+Después de la corrida de abajo se corrigieron los dos hallazgos que dejó (la cartera oculta sin lote publicado y las nueve fallas del cargador) y se volvió a correr:
+
+| Corrida | Commit | Resultado |
+| --- | --- | --- |
+| Todas las campañas (`equitas_campanas.py todas`) | `aa4884a` | Reportes 1235 comprobaciones y 0 fallas; E06 12 de 12; SMOKE-01 5 de 5 **con las fixtures intactas**; decisiones 393 y 161 sin fallas, 55 del ejecutor; revisión 75 de 75; importación 272 pruebas y 0 fallas (cargador y publicación: 92 de 92) |
+| Reportes y E06/SMOKE-01, después de las correcciones posteriores a la prueba final | `1923260` | Reportes 1235 comprobaciones y 0 fallas, 118 solicitudes; E06 12 de 12; SMOKE-01 5 de 5 |
+
+Evidencia: `20261110T183246Z-reportes`, `…183335Z-e06`, `…183413Z-decisiones`, `…183443Z-revision`, `…183541Z-importacion`, `20261110T195317Z-reportes` y `…195409Z-e06`.
+
+## Resultados (primera corrida completa, 10/11/2026, sobre `b086a72`)
 
 | Campaña | Resultado |
 | --- | --- |

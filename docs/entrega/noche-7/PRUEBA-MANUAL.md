@@ -55,7 +55,7 @@ Cada lote son **dos archivos** (`cabecera.csv` y `detalle.csv`) que se eligen ju
 3. En «Fecha de corte de los datos» poné **30/09/2026** y pulsá **Cargar CSV**.
 4. **Se debe ver «Carga completada»** con este resumen:
    - Fecha de corte 30/9/2026 · Objetos incorporados **19 de 20** · Obligaciones en el archivo 36 · Personas en el archivo 20.
-   - **1 objeto en cuarentena**, con el detalle: archivo Detalle, fila 35, columna `NOTD_vencimiento`, «Falta la fecha de vencimiento…».
+   - **1 objeto en cuarentena**, con el detalle: archivo Detalle, fila 35, columna `NOTD_vencimiento`, «Falta la fecha de vencimiento…». La pantalla no nombra el caso: explica cómo ubicarlo en el archivo (es `DEMO6-3-60019`).
    - 4 advertencias que no impiden la carga (marcadores de «no tiene» en contactos y una obligación sin estado).
 5. Pulsá **Ver el tablero**.
 
@@ -148,7 +148,7 @@ Cargá otra vez el lote válido con la misma fecha (30/09/2026). **Se debe ver �
 ## 11. Cargar un lote con errores — cuenta `admin-a`
 
 1. Cargá el lote `2-cartera-2026-10-31-con-errores` con fecha **31/10/2026**.
-2. **Se debe ver «El lote no se cargó»**, con la lista de errores, cada uno con archivo, fila, columna y qué se esperaba. Los cinco errores puestos a propósito:
+2. **Se debe ver «El lote no se cargó»**, con «Objetos sin errores en el archivo: 15 de 21. No se incorporó ninguno» y la lista de errores, cada uno con archivo, fila, columna y qué se esperaba. Los cinco errores puestos a propósito:
 
 | Archivo | Fila | Columna | Problema |
 |---|---|---|---|
