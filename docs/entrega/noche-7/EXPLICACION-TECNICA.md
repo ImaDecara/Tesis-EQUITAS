@@ -58,7 +58,7 @@ El mismo paso 3–4 lo ejecuta la herramienta de terminal de desarrollo (`back/E
 
 Un solo módulo las calcula para la web (`front/lib/domain/portfolio-totals.ts`); el perfil guardado en la base usa la misma definición (`supabase/migrations/20261110120000_debtor_profile_rules_1_1.sql`) y el servicio en Python también (`back/services/decision_rules_v1.py`, `back/ETL/transform.py`). Diez casos chicos con el resultado calculado a mano se afirman en cada uno de esos consumidores: `contracts/portfolio-small-cases.v1.json`, `docs/tesis/casos-chicos-v1.md`.
 
-**Estados de las obligaciones.** La única regla que distingue un estado es la de las **pagadas**: no cuentan como deuda pendiente, ni como vencidas, ni en el puntaje (decisión del 10/11/2026; reglas 1.1.0). Las suspendidas, en plan de pago, judiciales, con certificado o canceladas se computan por importe y vencimiento, igual que antes: **no hay ninguna regla definida para ellas**, y no se inventó una a partir del nombre. Tampoco se pudo observar qué estados tienen hoy las obligaciones de producción. Ver §9.
+**Estados de las obligaciones.** La única regla que distingue un estado es la de las **pagadas**: no cuentan como deuda pendiente, ni como vencidas, ni en el puntaje (decisión del 10/11/2026; reglas 1.1.0). Las suspendidas, en plan de pago, judiciales, con certificado o canceladas se computan por importe y vencimiento, igual que antes: **no hay ninguna regla definida para ellas**, y no se inventó una a partir del nombre. Tampoco se pudo observar qué estados tienen hoy las obligaciones de producción. Ver §10.
 
 ## 5. Segmentación: cinco grupos por reglas determinísticas
 
@@ -74,7 +74,7 @@ No es *clustering* ni aprendizaje automático. Son reglas explícitas, aplicadas
 | 6 | Banda baja con puntaje mayor que cero | Seguimiento |
 | 7 | Puntaje cero (sin deuda vencida) | Seguimiento, sin contacto |
 
-Contrato versionado de las reglas: `contracts/decision-rules.v1.1.json` (versión 1.1.0) y sus 54 casos de referencia `contracts/decision-rules.v1.1.golden.json`. La versión 1.0.0 se conserva sin editar (`contracts/decision-rules.v1.json`). Hay una implementación en TypeScript y otra en Python; cada una reproduce los casos de referencia de las dos versiones (`front/tests/unit/decision-rules-v1.test.ts`, `back/tests/test_decision_rules_v1.py`). Qué cambió entre versiones y por qué: `docs/tesis/reglas-decision-v1.1.md`.
+Contrato versionado de las reglas: `contracts/decision-rules.v1.1.json` (versión 1.1.0) y sus 54 casos de referencia `contracts/decision-rules.v1.1.golden.json`. El contrato llama «severidad» al puntaje; en pantalla se muestra siempre como «puntaje de prioridad» (`front/lib/domain/rule-phrase.ts`). La versión 1.0.0 se conserva sin editar (`contracts/decision-rules.v1.json`). Hay una implementación en TypeScript y otra en Python; cada una reproduce los casos de referencia de las dos versiones (`front/tests/unit/decision-rules-v1.test.ts`, `back/tests/test_decision_rules_v1.py`). Qué cambió entre versiones y por qué: `docs/tesis/reglas-decision-v1.1.md`.
 
 El umbral de 1.825 días es un parámetro de alerta provisional: no representa ni presume un plazo legal de prescripción.
 
@@ -125,7 +125,18 @@ Pesos, tramos y umbrales son valores por defecto **provisionales**: no tienen va
 - El permiso de cada función vive en **un lugar por capa**: `front/lib/server/dal.ts` (`PERMISSIONS`), `back/api/auth.py` (`PERMISSIONS`) y la función `public.equitas_role_allows` de la base (`supabase/migrations/20261110100000_admin_user_access.sql`). Una prueba compara las tres tablas (`quality/tests/test_n7_access_parity.py`).
 - **Diferencia deliberada respecto de `main`**: una cuenta cuyo rol no es ADMIN ni USER no entra y recibe un mensaje con el próximo paso. En `main` entraría, porque allí el rol no se mira.
 
-## 9. Límites e incertidumbres
+## 9. Compatibilidad con la base original, ensayada en un espejo local
+
+La base original no tiene las cuatro tablas que agregó este proyecto. Para saber qué pasaría ahí sin tocarla se armó un **espejo local**: otro proyecto local que reproduce lo comprobado de esa base y, donde no hay nada más reciente, una foto de su catálogo de octubre. No es idéntico a producción; qué reproduce con evidencia y qué asume: `docs/entrega/noche-7/anexos/espejo-comprobado-foto-desconocido.md`. Script: `scripts/espejo/equitas_espejo.py`.
+
+- **Nivel base.** La aplicación deduce, en el servidor y en cada pedido, si la base tiene el módulo de decisiones: es «nivel base» solo si las cuatro tablas responden que no existen (`front/lib/server/database-level.ts`). No hay ninguna bandera de configuración. En nivel base muestra la cartera, calcula con la fecha del día y lo dice, y no escribe nada; cargar, decidir, Pendientes y Reportes dicen «no disponible en esta base». Si falta solo una parte del módulo, o hay cualquier otra falla, no es nivel base y la auditoría sigue fallando cerrada. Pruebas: `front/tests/unit/database-level.test.ts`, `front/tests/integration/base-level.integration.test.ts`.
+- **Propuesta mínima de base** para registrar decisiones y obtener reportes: `database/espejo/paquete-minimo.sql`, con verificación de solo lectura y reversa. Se genera desde las definiciones vigentes del repositorio (`scripts/espejo/generar_paquete.py`) y se aplicó solo al espejo.
+- **Cartera ya cargada.** Una función registra una sola vez la cartera existente como lote `CARTERA_HEREDADA`: la base calcula la huella y los conteos, una persona responsable declara la fecha, y la aplicación la muestra como «fecha declarada» (`database/espejo/cartera-heredada.sql`).
+- **Políticas de lectura.** Cambiarlas no es aditivo y va en un script aparte (`database/espejo/politicas-lectura.sql`).
+
+Evidencia y detalle por objeto: `docs/entrega/noche-7/anexos/espejo-paquete-minimo.md`. Mediciones a escala: `docs/entrega/noche-7/anexos/rendimiento.md`. **Nada de esto se aplicó ni se comprobó en una base remota.**
+
+## 10. Límites e incertidumbres
 
 - **Datos sintéticos.** Toda la cartera usada es inventada. Ningún resultado describe a un municipio real.
 - **Estados de las obligaciones en producción: sin observar.** No se sabe qué estados existen hoy en el catálogo de producción, cuáles tienen sus obligaciones, ni quién define cómo se computa cada uno. El cargador de `main` solo asigna tres (vigente, vencida, desconocida) por fecha de vencimiento; «Suspendida» la agregó este proyecto a su catálogo local porque el formato de origen la distingue. Evidencia: `PlanToFinish/DeliveryPlan/2026-10-28-v2/execution/evidence/revision-fable-ux/estados-de-obligacion-evidencia-2026-11-09.md`.
@@ -134,7 +145,9 @@ Pesos, tramos y umbrales son valores por defecto **provisionales**: no tienen va
 - **Formato de carga**: solo el CSV del perfil sintético. **Previsto**: Excel/XLSX y perfiles de otros municipios.
 - **Sin canal con el contribuyente**: EQUITAS no envía mensajes. **Previsto.**
 - **Sin prueba de usabilidad con personas** y sin campaña remota contra una base alojada.
+- **Rendimiento medido solo en local.** Cada listado hace unas 95 consultas a la base. En una aplicación publicada hay que medirlo; no se agregó ninguna caché (`docs/entrega/noche-7/anexos/rendimiento.md`).
+- **La ficha lee solo su caso**; los listados y los reportes leen toda la cartera del municipio y calculan al leer.
 
-## 10. Pruebas
+## 11. Pruebas
 
-El detalle de qué se ejecutó, sobre qué commit, en qué entorno y con qué resultado está en `RESUMEN.md` (tabla de pruebas). En resumen, hay cuatro capas: pruebas unitarias y de integración con dobles (frontend y backend, entran en los *gates* del repositorio); casos de referencia de las reglas y casos chicos de cálculo; sondas contra la base local real (migraciones, permisos, carga); y el recorrido en navegador real sobre el entorno local.
+El detalle de qué se ejecutó, sobre qué commit, en qué entorno y con qué resultado está en `RESUMEN.md` (tabla de pruebas). En resumen, hay cinco capas: pruebas unitarias y de integración con dobles (frontend y backend, entran en los *gates* del repositorio); casos de referencia de las reglas y casos chicos de cálculo; campañas y sondas contra una base local real (migraciones, permisos, carga, reportes); el recorrido en navegador real sobre el entorno local (`front/tests/smoke/n7-local-walkthrough.mjs`); y una prueba final independiente, hecha por otro proveedor usando la aplicación como una persona.
