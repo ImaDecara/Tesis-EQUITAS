@@ -136,7 +136,7 @@ export function ChecklistFields({ prefix, values, errors, onChange }: {
   return (
     <fieldset className="min-w-0 space-y-3 rounded-md border border-slate-300 bg-slate-50 p-3">
       <legend className="px-1 text-sm font-semibold text-slate-800">Lista de control</legend>
-      <p className="text-xs text-slate-600">Solo casillas y códigos: aquí no se escribe nada sobre el hogar.</p>
+      <p className="text-xs text-slate-600">Solo casillas y códigos: acá no se escribe nada sobre el hogar.</p>
       <RadioGroupField
         id={`${prefix}-situacion_hogar`}
         legend="Situación del hogar"
@@ -183,7 +183,7 @@ function NoticeBody({ notice, outdatedHint, onReload }: { notice: ReviewNotice; 
       <>
         <p className="font-medium">{notice.message}</p>
         {changed.length > 0 && <p>Cambió: {changed.map(item => CHANGE_LABELS[item]).join(', ')}.</p>}
-        <p>Sugerencia vigente: {interventionLabel(current.suggestedIntervention)}, intensidad {current.suggestedIntensity}, reglas v{current.rulesVersion}.</p>
+        <p>Recomendación automática actual: {interventionLabel(current.suggestedIntervention)}, intensidad {current.suggestedIntensity}, reglas {current.rulesVersion}.</p>
         <p>{outdatedHint}</p>
       </>
     )
@@ -230,7 +230,7 @@ export function FormFeedback({ prefix, containerRef, notice, errors, outdatedHin
       )}
       {errorEntries.length > 0 && (
         <div id={`${prefix}-summary`} role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-950">
-          <p className="font-medium">Revisa estos datos antes de enviar:</p>
+          <p className="font-medium">Revisá estos datos antes de enviar:</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {errorEntries.map(([field, message]) => (
               <li key={field}><a className="underline" href={`#${prefix}-${FIELD_ANCHORS[field]}`}>{message}</a></li>

@@ -9,7 +9,7 @@ export type CaseReviewDecision = (typeof CASE_REVIEW_DECISIONS)[number]
 export const APPROVAL_DECISIONS = ['APRUEBA', 'OBJETA'] as const
 export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number]
 
-// ALIGN-003: desde 3 la acción es intensa y requiere aprobación de supervisor.
+// ALIGN-003: desde 3 la acción es intensa y requiere la aprobación de otra persona con rol ADMIN.
 export const INTENSE_FROM = 3
 export const REASON_TEXT_MAX_CHARS = 500
 export const REASON_TEXT_WARNING = 'No incluyas datos personales ni información del hogar.'
@@ -32,51 +32,54 @@ const UNSTORABLE = /\u0000|\p{Cs}/u
 
 export const CASE_REVIEW_MESSAGES = {
   SUPABASE_NOT_CONFIGURED: 'No disponible: el servicio de datos no está configurado.',
-  AUTH_REQUIRED: 'Debes iniciar sesión para continuar.',
+  AUTH_REQUIRED: 'Tenés que iniciar sesión para continuar.',
   AUTH_UNAVAILABLE: 'No disponible: no se pudo verificar la sesión.',
-  APP_USER_NOT_FOUND: 'No se pudo resolver un usuario de aplicación vinculado a la sesión.',
-  APP_USER_INACTIVE: 'El usuario de aplicación está inactivo.',
-  TENANT_ACCESS_NOT_FOUND: 'No existe una membresía activa para este municipio.',
-  TENANT_ACCESS_INACTIVE: 'La membresía del municipio está inactiva.',
-  TENANT_SELECTION_REQUIRED: 'Selecciona explícitamente un municipio para continuar.',
+  APP_USER_NOT_FOUND: 'Tu sesión no está vinculada a una cuenta de la aplicación. Pedí el alta a quien administra el sistema.',
+  APP_USER_INACTIVE: 'Tu cuenta de la aplicación está inactiva. Consultá con quien administra el sistema.',
+  TENANT_ACCESS_NOT_FOUND: 'Tu cuenta no tiene acceso activo a este municipio. Pedí el alta a quien administra el sistema.',
+  TENANT_ACCESS_INACTIVE: 'Tu acceso a este municipio está inactivo. Consultá con quien administra el sistema.',
+  TENANT_SELECTION_REQUIRED: 'Elegí un municipio para continuar.',
   TENANT_INACTIVE: 'El municipio no está disponible o está inactivo.',
-  ROLE_FORBIDDEN: 'Tu rol no permite esta operación.',
+  ROLE_FORBIDDEN: 'Tu cuenta no tiene permiso para esta operación: requiere una cuenta con rol ADMIN.',
   DATABASE_ERROR: 'No disponible: no se pudo verificar el acceso.',
   TABLE_FORBIDDEN: 'No disponible: esta consulta no está habilitada.',
-  ACTOR_NOT_ACTIVE_MEMBER: 'Tu membresía en este municipio ya no está activa. Vuelve a ingresar.',
-  INVALID_INPUT: 'Los datos enviados no son válidos. Recarga la página e intenta de nuevo.',
+  ACTOR_NOT_ACTIVE_MEMBER: 'Tu acceso a este municipio ya no está activo. Volvé a ingresar.',
+  INVALID_INPUT: 'Los datos enviados no son válidos. Recargá la página e intentá de nuevo.',
   DECISION_FIELDS_INVALID: 'La intervención y la intensidad no corresponden a la decisión elegida.',
-  MODIFICA_WITHOUT_CHANGE: 'Para modificar, elige una intervención o una intensidad distinta de la sugerida.',
-  REASON_REQUIRED: 'Indica un motivo: es obligatorio al discrepar y para intensidad 3 o mayor.',
-  REASON_TEXT_INVALID: 'El motivo contiene caracteres que no se pueden guardar. Vuelve a escribirlo.',
+  MODIFICA_WITHOUT_CHANGE: 'Para modificar, elegí una acción o una intensidad distinta de la recomendada.',
+  REASON_REQUIRED: 'Indicá un motivo: es obligatorio si no aceptás la recomendación y para intensidad 3 o mayor.',
+  REASON_TEXT_INVALID: 'El motivo contiene caracteres que no se pueden guardar. Volvé a escribirlo.',
   REASON_TEXT_TOO_LONG: `El motivo admite hasta ${REASON_TEXT_MAX_CHARS} caracteres, contando los espacios.`,
-  REASON_TEXT_BLANK: 'El motivo no puede quedar en blanco: escribe un texto o déjalo sin completar.',
-  CHECKLIST_REQUIRED: 'Completa la lista de control: es obligatoria para intensidad 3 o mayor y para aprobar.',
+  REASON_TEXT_BLANK: 'El motivo no puede quedar en blanco: escribí un texto o dejalo sin completar.',
+  CHECKLIST_REQUIRED: 'Completá la lista de control: es obligatoria para intensidad 3 o mayor y para aprobar.',
   CHECKLIST_INVALID: 'La lista de control solo admite sus casillas y códigos, sin texto libre.',
-  OBJECT_NOT_IN_TENANT: 'El objeto no existe en este municipio.',
+  OBJECT_NOT_IN_TENANT: 'El caso no existe en este municipio.',
   REVIEW_NOT_IN_TENANT: 'La decisión no existe en este municipio.',
-  CUTOFF_NOT_AVAILABLE: 'No hay un corte publicado y vigente, quizá por una carga en curso. Revisa el caso de nuevo cuando termine: sin corte no se puede registrar.',
-  SUGGESTION_UNAVAILABLE: 'No se pudo calcular la sugerencia con datos completos. Intenta de nuevo más tarde.',
-  SUGGESTION_OUTDATED: 'Los datos o las reglas cambiaron desde que abriste el caso. Revisa la sugerencia vigente antes de confirmar.',
-  REVIEW_CONFLICT: 'Ya hay otra decisión registrada sobre este objeto. Recarga el caso antes de continuar.',
-  SUPERSEDES_NOT_FOUND: 'La decisión que quieres reemplazar no existe en este caso. Recarga el historial.',
-  SUPERSEDES_CHAIN_INVALID: 'El historial de esta decisión es inconsistente y no se puede aprobar. Avisa a quien administra el sistema.',
-  APPROVER_IS_PROPONENT: 'Quien propuso la decisión no puede aprobarla: la aprueba otro supervisor.',
+  CUTOFF_NOT_AVAILABLE: 'No hay una cartera vigente, quizá por una carga en curso. Volvé a abrir el caso cuando termine: sin cartera vigente no se puede registrar ni aprobar.',
+  SUGGESTION_UNAVAILABLE: 'No se pudo calcular la recomendación automática con datos completos. Intentá de nuevo en unos minutos.',
+  SUGGESTION_OUTDATED: 'Los datos o las reglas cambiaron desde que abriste el caso. Revisá la recomendación actual antes de confirmar.',
+  REVIEW_CONFLICT: 'Ya hay otra decisión registrada sobre este caso. Recargá el caso antes de continuar.',
+  SUPERSEDES_NOT_FOUND: 'La decisión que querés reemplazar no existe en este caso. Recargá el caso.',
+  SUPERSEDES_CHAIN_INVALID: 'El historial de esta decisión es inconsistente y no se puede aprobar. Avisá a quien administra el sistema.',
+  APPROVER_IS_PROPONENT: 'Quien registró la propuesta no puede aprobarla: la tiene que aprobar otra persona con rol ADMIN.',
   APPROVAL_NOT_REQUIRED: 'Esta decisión es de intensidad menor a 3 y no requiere aprobación.',
-  REVIEW_SUPERSEDED: 'Esta propuesta fue reemplazada por una decisión posterior. Revisa la vigente.',
-  APPROVAL_CONFLICT: 'Ya hay otra aprobación u objeción registrada para esta decisión. Recarga el caso.',
+  REVIEW_SUPERSEDED: 'Esta propuesta fue reemplazada por una decisión posterior. Recargá el caso para ver la actual.',
+  APPROVAL_CONFLICT: 'Ya hay otra aprobación u objeción registrada para esta decisión. Recargá el caso.',
   WRITE_NOT_CONFIGURED: 'No disponible: el registro de decisiones no está configurado en este entorno.',
-  WRITE_REJECTED: 'La base rechazó el registro. Revisa los datos e intenta de nuevo.',
-  WRITE_UNAVAILABLE: 'No se pudo confirmar el registro. Reintenta: si ya había quedado guardado, no se duplica.',
+  WRITE_REJECTED: 'La base rechazó el registro. Revisá los datos e intentá de nuevo.',
+  WRITE_UNAVAILABLE: 'No se pudo confirmar el registro. Volvé a intentar: si ya había quedado guardado, no se duplica.',
 } as const
 export type CaseReviewErrorCode = keyof typeof CASE_REVIEW_MESSAGES
 
 // `PENDIENTE_SUPERVISOR` es `pending_supervisor` de ALIGN-018: falta una aprobación, no es una acción aprobada.
+// Las claves se conservan (otros módulos las usan); los rótulos son los de RECORDED_STATUS_LABELS
+// (`lib/domain/recorded-decision.ts`), copiados para no crear una importación circular. Una prueba
+// comprueba que sigan iguales.
 export const CASE_REVIEW_STATUS_LABELS = {
   REGISTRADA: 'Decisión registrada',
-  PENDIENTE_SUPERVISOR: 'Requiere aprobación de un supervisor',
-  APROBADA: 'Aprobada por un supervisor',
-  OBJETADA: 'Objetada por un supervisor',
+  PENDIENTE_SUPERVISOR: 'Propuesta pendiente de aprobación',
+  APROBADA: 'Propuesta aprobada',
+  OBJETADA: 'Propuesta objetada',
 } as const
 
 export type ExpectedSuggestion = Readonly<{ asOf: string; rulesVersion: string; inputsHash: string }>

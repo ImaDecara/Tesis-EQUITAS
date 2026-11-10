@@ -228,7 +228,7 @@ describe('qué se envía a la acción', () => {
   })
 })
 
-describe('respuesta del supervisor', () => {
+describe('respuesta a la propuesta', () => {
   const approval = (patch: Partial<typeof EMPTY_APPROVAL_FORM>) => ({ ...EMPTY_APPROVAL_FORM, ...patch })
 
   it('exige elegir', () => {
@@ -266,8 +266,8 @@ describe('interpretación del resultado', () => {
   it('éxito y doble envío se muestran como éxito', () => {
     expect(interpretResult(recorded)).toEqual({ kind: 'recorded', message: 'Decisión registrada.' })
     expect(interpretResult({ ...recorded, created: false })).toEqual({ kind: 'recorded', message: 'Decisión registrada. Ya estaba registrada: no se duplicó.' })
-    expect(interpretResult({ ...recorded, status: 'PENDIENTE_SUPERVISOR' }).message).toBe('Requiere aprobación de un supervisor.')
-    expect(interpretResult({ ok: true, approvalId: '2', caseReviewId: '1', debtorId: '99', created: true, status: 'OBJETADA' }).message).toBe('Objetada por un supervisor.')
+    expect(interpretResult({ ...recorded, status: 'PENDIENTE_SUPERVISOR' }).message).toBe('Propuesta pendiente de aprobación.')
+    expect(interpretResult({ ok: true, approvalId: '2', caseReviewId: '1', debtorId: '99', created: true, status: 'OBJETADA' }).message).toBe('Propuesta objetada.')
   })
 
   it('SUGGESTION_OUTDATED conserva qué cambió y la sugerencia vigente, también si solo cambió el corte', () => {
@@ -390,7 +390,7 @@ describe('envío', () => {
   it('una acción que lanza (por ejemplo, tras un despliegue nuevo) ofrece recargar', async () => {
     send.mockRejectedValue(new Error('Failed to find Server Action'))
     await run(() => ({}))
-    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'outcome', outcome: { kind: 'crash', message: expect.stringContaining('Recarga') } })
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'outcome', outcome: { kind: 'crash', message: expect.stringContaining('Recargá') } })
   })
 })
 

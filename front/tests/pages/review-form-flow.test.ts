@@ -177,7 +177,7 @@ describe('formulario de decisión', () => {
     await form.submit()
     expect(refresh).toHaveBeenCalledOnce()
     expect(form.byId('rv-notice').props.role).toBe('alert')
-    expect(form.text()).toContain('el corte publicado')
+    expect(form.text()).toContain('la fecha de la cartera')
     expect(form.text()).toContain('Contacto y plan')
     // Sin volver a elegir, no se confirma.
     await form.submit()
@@ -249,9 +249,9 @@ describe('formulario de decisión', () => {
   })
 })
 
-describe('respuesta del supervisor', () => {
+describe('respuesta a la propuesta', () => {
   const approvalForm = (patch: Partial<Parameters<typeof ReviewApprovalForm>[0]> = {}) =>
-    mount(() => ReviewApprovalForm({ caseReviewId: '7', supersedes: null, approveBlocked: false, ...patch }))
+    mount(() => ReviewApprovalForm({ caseReviewId: '7', supersedes: null, blockedReason: null, ...patch }))
 
   it('aprobar sin lista no llama a la acción; completa la envía', async () => {
     approveCaseDecision.mockResolvedValue({ ok: true, approvalId: '1', caseReviewId: '7', debtorId: '99', created: true, status: 'APROBADA' })
@@ -263,7 +263,7 @@ describe('respuesta del supervisor', () => {
     form.fillChecklist('ap')
     await form.submit()
     expect(approveCaseDecision).toHaveBeenCalledExactlyOnceWith({ caseReviewId: '7', decision: 'APRUEBA', reasonCode: null, checklist: COMPLETE, supersedes: null })
-    expect(form.text()).toContain('Aprobada por un supervisor')
+    expect(form.text()).toContain('Propuesta aprobada')
   })
 
   it('objetar exige motivo y usa la respuesta vigente como antecedente', async () => {
@@ -280,9 +280,10 @@ describe('respuesta del supervisor', () => {
 
   it('con una carga en curso: aprobar deshabilitado con aviso, objetar disponible', async () => {
     approveCaseDecision.mockResolvedValue({ ok: true, approvalId: '2', caseReviewId: '7', debtorId: '99', created: true, status: 'OBJETADA' })
-    const form = approvalForm({ approveBlocked: true })
+    const form = approvalForm({ blockedReason: 'Hoy no hay una cartera vigente: no se puede aprobar.' })
     expect(form.hosts().find(element => element.props.value === 'APRUEBA')?.props.disabled).toBe(true)
     expect(form.has('ap-blocked-note')).toBe(true)
+    expect(form.text()).toContain('Hoy no hay una cartera vigente: no se puede aprobar. Objetar sigue disponible.')
     form.choose('OBJETA')
     form.select('ap-reason', 'LISTA_DE_CONTROL_INSUFICIENTE')
     await form.submit()

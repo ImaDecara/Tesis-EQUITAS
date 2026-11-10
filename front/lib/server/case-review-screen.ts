@@ -13,31 +13,36 @@ import {
   type CaseReviewDecision,
   type CaseReviewSnapshot,
 } from '@/lib/domain/case-review-contract'
-import type {
-  CaseReviewApprovalEntry,
-  CaseReviewHistoryEntry,
-  CaseReviewHistoryResult,
-  CaseReviewScreen,
-  ReasonTextView,
+import {
+  chainParticipation,
+  type CaseReviewApprovalEntry,
+  type CaseReviewHistoryEntry,
+  type CaseReviewHistoryResult,
+  type CaseReviewScreen,
+  type ReasonTextView,
 } from '@/lib/domain/case-review-history'
 import { currentOf, getCaseReviewSnapshot } from '@/lib/server/case-review-service'
 import { createCaseReviewWriter } from '@/lib/server/case-review-writer'
 import { DataAccessError, requireTenantAccess, roleHasPermission, type DalContext } from '@/lib/server/dal'
 import type { RawRow } from '@/types/equitas-domain'
 
-// ALIGN-021. Qué ve cada rol en la pestaña "Revisión". La pantalla no decide permisos: los
+// ALIGN-021. Qué ve cada rol en la pestaña «Decisión». La pantalla no decide permisos: los
 // deriva de la tabla de la DAL, y la acción y la base los vuelven a comprobar al escribir.
 // `reason_text` no se pide nunca en estas lecturas: solo sale de `read_case_review_reason_text`.
+// `reviewer` y `approver` se leen solo para compararlos con quien mira: al navegador llega un
+// booleano, nunca el identificador de otra persona.
 
-const REVIEW_COLUMNS = 'id,decision,rules_version,as_of,inputs_hash,suggested_intervention,suggested_intensity,decided_intervention,decided_intensity,reason_code,checklist,reviewer_role,created_at,supersedes'
-const APPROVAL_COLUMNS = 'id,case_review,decision,reason_code,approver_role,created_at,supersedes'
-const RESTRICTED_MESSAGE = 'Tu rol permite leer la cartera, pero no las revisiones de este caso.'
-const HISTORY_UNAVAILABLE = 'Historial no disponible: no se pudo leer. Esto no significa que no haya decisiones.'
+const REVIEW_COLUMNS = 'id,decision,rules_version,as_of,inputs_hash,suggested_intervention,suggested_intensity,decided_intervention,decided_intensity,reason_code,checklist,reviewer,reviewer_role,created_at,supersedes'
+const APPROVAL_COLUMNS = 'id,case_review,decision,reason_code,approver,approver_role,created_at,supersedes'
+const RESTRICTED_MESSAGE = 'Tu cuenta puede leer la cartera, pero no las decisiones registradas de los casos.'
+const HISTORY_UNAVAILABLE = 'No se pudo leer el historial de decisiones. Esto no significa que no haya decisiones: recargá la página en unos minutos.'
 
 const asChain = (rows: readonly RawRow[]) => rows.map(row => ({ id: String(row.id), supersedes: databaseId(row.supersedes) }))
 const newestFirst = <T>(rows: readonly T[]) => [...rows].reverse()
 
-function approvalEntries(rows: readonly RawRow[]): { entries: CaseReviewApprovalEntry[]; currentId: string | null } {
+const isViewer = (value: unknown, viewerId: string) => databaseId(value) === viewerId
+
+function approvalEntries(rows: readonly RawRow[], viewerId: string): { entries: CaseReviewApprovalEntry[]; currentId: string | null } {
   const currentId = currentOf(asChain(rows))
   const entries = rows.map(row => ({
     id: String(row.id),
@@ -46,6 +51,7 @@ function approvalEntries(rows: readonly RawRow[]): { entries: CaseReviewApproval
     approverRole: String(row.approver_role),
     createdAt: String(row.created_at),
     isCurrent: String(row.id) === currentId,
+    mine: isViewer(row.approver, viewerId),
   }))
   return { entries: newestFirst(entries), currentId }
 }
@@ -81,6 +87,7 @@ async function loadHistory(supabase: SupabaseClient, context: DalContext, rawDeb
   if (reviews.warning) return { ok: false, message: HISTORY_UNAVAILABLE }
 
   const currentId = currentOf(asChain(reviews.rows))
+  const participation = chainParticipation(asChain(reviews.rows).map((link, index) => ({ ...link, mine: isViewer(reviews.rows[index].reviewer, context.appUserId) })))
   const entries = await Promise.all(reviews.rows.map(async (row): Promise<CaseReviewHistoryEntry | null> => {
     const id = String(row.id)
     const intensity = row.decided_intensity === null || row.decided_intensity === undefined ? null : Number(row.decided_intensity)
@@ -89,7 +96,7 @@ async function loadHistory(supabase: SupabaseClient, context: DalContext, rawDeb
       select: APPROVAL_COLUMNS, filters: [['tenant', context.tenantId], ['case_review', id]],
     })
     if (approvals?.warning) return null
-    const { entries: answers, currentId: currentApprovalId } = approvalEntries(approvals?.rows ?? [])
+    const { entries: answers, currentId: currentApprovalId } = approvalEntries(approvals?.rows ?? [], context.appUserId)
     return {
       id,
       decision: row.decision as CaseReviewDecision,
@@ -102,6 +109,8 @@ async function loadHistory(supabase: SupabaseClient, context: DalContext, rawDeb
       checklist: (row.checklist ?? {}) as CaseReviewChecklist,
       reviewerRole: String(row.reviewer_role),
       createdAt: String(row.created_at),
+      mine: isViewer(row.reviewer, context.appUserId),
+      participated: participation.get(id) ?? false,
       asOf: String(row.as_of),
       rulesVersion: String(row.rules_version),
       isCurrent: id === currentId,

@@ -4,6 +4,7 @@ import { cache } from 'react'
 
 import type { ResolvedRoleName } from '@/lib/auth/tenant-access'
 import { requireTenantAccess, roleHasPermission } from '@/lib/server/dal'
+import { ROLE_LABELS, roleLabel } from '@/lib/domain/role-labels'
 import { resolvePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 
@@ -36,12 +37,8 @@ export type ViewerContext = {
   capabilities: ViewerCapabilities
 }
 
-// Rótulos de los roles vigentes. Un nombre que no esté acá es un dato histórico de un registro guardado.
-export const ROLE_LABELS: Readonly<Record<string, string>> = { ADMIN: 'Administrador', USER: 'Usuario' }
-
-export function roleLabel(name: string): string {
-  return ROLE_LABELS[name] ?? `${name} (rol anterior)`
-}
+// Rótulos de los roles: viven en un módulo sin `server-only` porque también los usa la ficha.
+export { ROLE_LABELS, roleLabel }
 
 export function capabilitiesFor(roleName: ResolvedRoleName): ViewerCapabilities {
   return {

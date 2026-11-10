@@ -191,8 +191,11 @@ describe('ALIGN-020: mensajes de usuario', () => {
     }
   })
 
-  it('pendiente de supervisor se comunica como que requiere aprobacion', () => {
-    expect(CASE_REVIEW_STATUS_LABELS.PENDIENTE_SUPERVISOR).toMatch(/requiere aprobación/i)
+  it('una propuesta pendiente se comunica como pendiente de aprobación, sin «supervisor»', () => {
+    expect(CASE_REVIEW_STATUS_LABELS.PENDIENTE_SUPERVISOR).toMatch(/pendiente de aprobación/i)
+    for (const message of [...Object.values(CASE_REVIEW_MESSAGES), ...Object.values(CASE_REVIEW_STATUS_LABELS)]) {
+      expect(message).not.toMatch(/supervisor|operador/i)
+    }
     expect(CASE_REVIEW_MESSAGES.SUPERSEDES_NOT_FOUND).toMatch(/decisión/i)
     expect(CASE_REVIEW_MESSAGES.SUPERSEDES_CHAIN_INVALID).toMatch(/historial/i)
     expect(CASE_REVIEW_MESSAGES.REASON_TEXT_BLANK).toMatch(/motivo/i)

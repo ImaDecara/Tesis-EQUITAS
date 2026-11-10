@@ -1,132 +1,52 @@
-import { DebtsTable } from '@/components/debtors/debts-table'
+import type { ReactNode } from 'react'
+
+import { recordedDecisionText, whoText } from '@/components/case/case-explanation'
 import { ReviewApprovalForm } from '@/components/review/review-approval-form'
 import { ReviewDecisionForm } from '@/components/review/review-decision-form'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatNumber, formatWithUnit, missingSummary, readingFailed } from '@/lib/data-presence'
 import { CASE_REVIEW_STATUS_LABELS, INTENSE_FROM, type CaseReviewSnapshot } from '@/lib/domain/case-review-contract'
 import type { InterventionCode } from '@/lib/domain/decision-rules-v1'
 import type { CaseReviewApprovalEntry, CaseReviewHistoryEntry, CaseReviewScreen } from '@/lib/domain/case-review-history'
 import {
-  APPROVAL_LABELS,
   CHECKBOX_LABELS,
-  DECISION_LABELS,
-  flagLabel,
   HOUSEHOLD_LABELS,
   readExplanation,
   reasonLabel,
   reviewActionLabel,
-  type ExplanationView,
 } from '@/lib/domain/case-review-form'
+import { isStale, staleExplanation } from '@/lib/domain/recorded-decision'
+import { roleLabel } from '@/lib/domain/role-labels'
 import { INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
-import type { DataWarning, DebtorDetailData, DebtorListItem } from '@/types/equitas-domain'
+import { formatDate, formatDateTime } from '@/lib/utils'
+import type { DebtorListItem } from '@/types/equitas-domain'
 
 type ReadyScreen = Extract<CaseReviewScreen, { kind: 'ready' }>
 
 const interventionLabel = (code: string) => INTERVENTION_LABELS[code as InterventionCode] ?? code
-const FACTOR_LABELS: Readonly<Record<string, string>> = {
-  monto_actualizado_ars: 'Monto actualizado',
-  dias_atraso_maximo: 'Atraso máximo',
-  cantidad_vencidas: 'Obligaciones vencidas',
-}
-const ROLE_LABELS: Readonly<Record<string, string>> = { operador: 'Operador', supervisor: 'Supervisor' }
 
-function severityText({ severity }: ExplanationView) {
-  if (severity.value === null) return 'No disponible'
-  return `${severity.state === 'PARCIAL' ? 'al menos ' : ''}${formatNumber(severity.value)} puntos de 0 a 100`
+export const READ_ONLY_MESSAGE = 'Tu cuenta puede ver la decisión registrada y su estado. Registrar una decisión requiere una cuenta ADMIN.'
+export const OWN_PROPOSAL_MESSAGE = 'Esta propuesta la registraste vos: la tiene que aprobar otra persona con rol ADMIN. Si en tu municipio no hay otra cuenta ADMIN, queda pendiente.'
+export const PARTICIPATED_MESSAGE = 'Participaste de esta propuesta: la tiene que aprobar otra persona con rol ADMIN que no haya intervenido.'
+const NO_CUTOFF_MESSAGE = 'Hoy no hay una cartera vigente (quizá hay una carga en curso): no se puede aprobar.'
+
+const STATUS_VARIANT: Readonly<Record<CaseReviewHistoryEntry['status'], 'info' | 'warning' | 'success' | 'danger'>> = {
+  REGISTRADA: 'info', PENDIENTE_SUPERVISOR: 'warning', APROBADA: 'success', OBJETADA: 'danger',
 }
 
-function FactList({ facts }: { facts: readonly (readonly [string, string])[] }) {
-  return (
-    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {facts.map(([label, value]) => (
-        <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-          <dt className="text-xs font-semibold text-slate-600">{label}</dt>
-          <dd className="text-base font-semibold text-slate-900">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
-}
-
-function factsAtCutoff(view: ExplanationView): (readonly [string, string])[] {
-  const input = (factor: string) => view.factors.find(item => item.factor === factor)?.input ?? null
-  const overdue = input('cantidad_vencidas')
-  return [
-    ['Monto actualizado al corte', formatCurrency(input('monto_actualizado_ars'))],
-    ['Obligaciones vencidas al corte', formatNumber(overdue)],
-    // Sin vencidas el atraso no aplica: un cero se leería como "al día con atraso medido".
-    ['Atraso máximo al corte', overdue === 0 ? 'No aplica' : formatWithUnit(input('dias_atraso_maximo'), 'dias')],
-    ['Obligaciones no evaluables', formatNumber(view.severity.notEvaluable)],
-  ]
-}
-
-function ReviewFacts({ detail, warnings, snapshot, view }: { detail: DebtorDetailData; warnings: DataWarning[]; snapshot: CaseReviewSnapshot | null; view: ExplanationView | null }) {
-  const { debtor, debts } = detail
-  const missing = missingSummary(debtor.metrics)
-  const facts = view ? factsAtCutoff(view) : [
-    ['Total registrado', formatCurrency(debtor.totalDebt)] as const,
-    ['Deuda vencida', formatCurrency(debtor.overdueDebt)] as const,
-  ]
+// La recomendación que se decide es la de la instantánea: la cartera vigente y las reglas activas.
+function ReviewSuggestion({ snapshot }: { snapshot: CaseReviewSnapshot }) {
+  const view = readExplanation(snapshot.explanation)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Hechos del caso</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm text-slate-700">
-        <p className="font-medium text-slate-900">{snapshot ? `Corte: ${formatDate(snapshot.asOf)}` : 'Corte: no disponible'}</p>
-        {!snapshot && <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>}
-        <p className="font-medium text-slate-900">Vulnerabilidad: no informada</p>
-        <FactList facts={facts} />
-        <div>
-          <h3 className="font-semibold text-slate-900">Banderas</h3>
-          {!view && <p>No disponible sin un corte vigente.</p>}
-          {view && view.flags.length === 0 && <p>Sin banderas.</p>}
-          {view && view.flags.length > 0 && (
-            <ul className="list-disc pl-5">{view.flags.map(flag => <li key={flag}>{flagLabel(flag)}</li>)}</ul>
-          )}
-        </div>
-        <div>
-          <h3 className="font-semibold text-slate-900">Faltantes</h3>
-          <p>{missing || 'Sin faltantes informados en los importes y la severidad.'}</p>
-        </div>
-        <div>
-          <h3 className="mb-1 font-semibold text-slate-900">Obligaciones</h3>
-          <DebtsTable debts={debts} readFailed={readingFailed(warnings, 'debtor', 'debt')} />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function ReviewSuggestion({ debtor, snapshot, view }: { debtor: DebtorListItem; snapshot: CaseReviewSnapshot; view: ExplanationView }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sugerencia del sistema</CardTitle>
+        <CardTitle>Recomendación automática a revisar</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-slate-700">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="info">{interventionLabel(snapshot.suggestedIntervention)}</Badge>
-          <Badge variant="neutral">Intensidad {snapshot.suggestedIntensity}</Badge>
-          <Badge variant="neutral">Reglas v{snapshot.rulesVersion}</Badge>
-          <Badge variant="neutral">Corte: {formatDate(snapshot.asOf)}</Badge>
-        </div>
-        <p className="text-slate-900">{view.phrase ?? 'Explicación no disponible.'}</p>
+        <p className="text-base font-semibold text-slate-900">{reviewActionLabel(snapshot.suggestedIntervention, snapshot.suggestedIntensity)}</p>
+        <p>{view.phrase ?? 'Explicación no disponible.'}</p>
         {view.reviewRequired && <p className="font-medium text-amber-900">Requiere revisión caso por caso: no admite gestión masiva.</p>}
-        <FactList facts={[
-          ['Severidad del objeto (v1)', severityText(view)],
-          ...view.factors.map(item => [
-            FACTOR_LABELS[item.factor] ?? item.factor,
-            item.points === null ? 'No disponible' : `${formatNumber(item.points)} de ${formatNumber(item.maximum)} puntos`,
-          ] as const),
-        ]} />
-        {debtor.decisionAsOfSource === 'FECHA_CALCULO' && (
-          <p className="text-xs text-slate-600">
-            Las demás pestañas usan la fecha de cálculo del {formatDate(debtor.decisionAsOf?.valor)}; esta sugerencia usa el corte publicado.
-          </p>
-        )}
+        <p className="text-xs text-slate-600">Cartera al {formatDate(snapshot.asOf)} · reglas {snapshot.rulesVersion}</p>
       </CardContent>
     </Card>
   )
@@ -150,57 +70,87 @@ function ChecklistSummary({ checklist }: { checklist: CaseReviewHistoryEntry['ch
 function ReasonText({ entry }: { entry: CaseReviewHistoryEntry }) {
   const { reasonText } = entry
   if (reasonText.state === 'VISIBLE') return <p className="whitespace-pre-wrap break-words">Detalle: {reasonText.text}</p>
-  if (reasonText.state === 'HIDDEN') return <p className="text-xs text-slate-600">El detalle, si lo hay, solo lo ven quien decide y quien supervisa.</p>
+  if (reasonText.state === 'HIDDEN') return <p className="text-xs text-slate-600">El detalle escrito, si lo hay, solo lo ven las cuentas con rol ADMIN.</p>
   return reasonText.state === 'UNAVAILABLE' ? <p className="text-xs text-slate-600">Detalle no disponible: no se pudo leer.</p> : null
 }
 
+// En pasado: lo que pasó con la propuesta, no el verbo del botón.
 function ApprovalLine({ approval }: { approval: CaseReviewApprovalEntry }) {
   const reason = reasonLabel(approval.reasonCode)
+  const verb = approval.decision === 'APRUEBA' ? 'Aprobada' : 'Objetada'
   return (
     <li>
-      {formatDateTime(approval.createdAt)} · {ROLE_LABELS[approval.approverRole] ?? approval.approverRole} · {APPROVAL_LABELS[approval.decision]}
-      {reason && ` · Motivo: ${reason}`}
-      {!approval.isCurrent && ' · Reemplazada'}
+      {verb} por {whoText(approval.mine)} ({roleLabel(approval.approverRole)}) el {formatDateTime(approval.createdAt)}
+      {reason && `; motivo: ${reason}`}
+      {!approval.isCurrent && ' · reemplazada por una respuesta posterior'}
     </li>
   )
 }
 
-function HistoryItem({ entry, screen }: { entry: CaseReviewHistoryEntry; screen: ReadyScreen }) {
+type Basis = { asOf: string; rulesVersion: string } | null
+
+function approveBlockedReason(entry: CaseReviewHistoryEntry, basis: Basis): string | null {
+  if (!basis) return NO_CUTOFF_MESSAGE
+  return isStale(entry, basis) ? `${staleExplanation(entry, basis, formatDate)} Ya no se puede aprobar.` : null
+}
+
+// Quién puede responder una propuesta se decide por identidad, con la misma regla que la base:
+// nadie que haya registrado esta versión o una anterior de su cadena.
+function ApprovalArea({ entry, screen, basis }: { entry: CaseReviewHistoryEntry; screen: ReadyScreen; basis: Basis }) {
+  const pending = entry.status === 'PENDIENTE_SUPERVISOR'
+  if (!screen.capabilities.canApprove) {
+    return pending ? <p className="text-sm text-slate-700">Espera la aprobación de otra persona con rol ADMIN.</p> : null
+  }
+  if (entry.mine || entry.participated) {
+    return <p role="status" className="text-sm font-medium text-slate-800">{entry.mine ? OWN_PROPOSAL_MESSAGE : PARTICIPATED_MESSAGE}</p>
+  }
+  const form = <ReviewApprovalForm caseReviewId={entry.id} supersedes={entry.currentApprovalId} blockedReason={approveBlockedReason(entry, basis)} />
+  if (pending) return form
+  return (
+    <details>
+      <summary className="inline-flex h-9 cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-[#163a63] hover:bg-slate-50">
+        Cambiar respuesta
+      </summary>
+      <div className="mt-3">{form}</div>
+    </details>
+  )
+}
+
+function HistoryItem({ entry, screen, basis }: { entry: CaseReviewHistoryEntry; screen: ReadyScreen; basis: Basis }) {
   const reason = reasonLabel(entry.reasonCode)
   const proposalOpen = entry.isCurrent && (entry.decidedIntensity ?? 0) >= INTENSE_FROM
+  const stale = basis !== null && isStale(entry, basis)
   return (
     <li className="space-y-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold text-slate-900">{DECISION_LABELS[entry.decision]}</span>
-        <Badge variant={entry.status === 'PENDIENTE_SUPERVISOR' ? 'warning' : entry.status === 'OBJETADA' ? 'danger' : 'success'}>{CASE_REVIEW_STATUS_LABELS[entry.status]}</Badge>
-        <Badge variant="neutral">{entry.isCurrent ? 'Vigente' : 'Reemplazada por una decisión posterior'}</Badge>
+        <span className="font-semibold break-words text-slate-900">{recordedDecisionText(entry.decision, entry.decidedIntervention, entry.decidedIntensity)}</span>
+        <Badge variant={STATUS_VARIANT[entry.status]}>{CASE_REVIEW_STATUS_LABELS[entry.status]}</Badge>
+        {!entry.isCurrent && <Badge variant="neutral">Reemplazada por una decisión posterior</Badge>}
       </div>
-      <p>{formatDateTime(entry.createdAt)} · {ROLE_LABELS[entry.reviewerRole] ?? entry.reviewerRole}</p>
-      <p>Sugerencia de ese momento: {reviewActionLabel(entry.suggestedIntervention, entry.suggestedIntensity)}</p>
-      {entry.decidedIntervention !== null && entry.decidedIntensity !== null && (
-        <p>Acción: {reviewActionLabel(entry.decidedIntervention, entry.decidedIntensity)}</p>
-      )}
+      <p>Registrada por {whoText(entry.mine)} ({roleLabel(entry.reviewerRole)}) el {formatDateTime(entry.createdAt)}</p>
+      <p>Recomendación automática de ese momento: {reviewActionLabel(entry.suggestedIntervention, entry.suggestedIntensity)}</p>
       {reason && <p>Motivo: {reason}</p>}
       <ReasonText entry={entry} />
       <ChecklistSummary checklist={entry.checklist} />
-      <p>Corte: {formatDate(entry.asOf)} · Reglas v{entry.rulesVersion}</p>
-      {entry.isCurrent && entry.basisChanged && <p className="font-medium text-amber-900">Los datos o las reglas cambiaron desde esta decisión.</p>}
+      <p className="text-xs text-slate-600">Cartera al {formatDate(entry.asOf)} · reglas {entry.rulesVersion}</p>
+      {entry.isCurrent && stale && <p className="font-medium text-amber-900">{staleExplanation(entry, basis, formatDate)}</p>}
+      {entry.isCurrent && !stale && entry.basisChanged && <p className="font-medium text-amber-900">Los datos del caso cambiaron desde esta decisión. Conviene revisarla.</p>}
       {entry.approvals.length > 0 && (
         <div>
-          <p className="font-medium text-slate-900">Respuestas de supervisión</p>
+          <p className="font-medium text-slate-900">Respuestas a la propuesta</p>
           <ul className="list-disc pl-5">{entry.approvals.map(approval => <ApprovalLine key={approval.id} approval={approval} />)}</ul>
         </div>
       )}
-      {proposalOpen && screen.capabilities.canApprove && (
+      {proposalOpen && (
         <div className="border-t border-slate-200 pt-3">
-          <ReviewApprovalForm caseReviewId={entry.id} supersedes={entry.currentApprovalId} approveBlocked={!screen.snapshot.ok} />
+          <ApprovalArea entry={entry} screen={screen} basis={basis} />
         </div>
       )}
     </li>
   )
 }
 
-function ReviewHistory({ screen }: { screen: ReadyScreen }) {
+function ReviewHistory({ screen, basis }: { screen: ReadyScreen; basis: Basis }) {
   const { history } = screen
   return (
     <Card>
@@ -209,46 +159,49 @@ function ReviewHistory({ screen }: { screen: ReadyScreen }) {
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-slate-700">
         {!history.ok && <p role="status" className="text-amber-900">{history.message}</p>}
-        {history.ok && history.entries.length === 0 && <p>Todavía no hay decisiones registradas para este objeto.</p>}
+        {history.ok && history.entries.length === 0 && <p>Todavía no hay decisiones registradas para este caso.</p>}
         {history.ok && history.entries.length > 0 && (
-          <ol className="space-y-3">{history.entries.map(entry => <HistoryItem key={entry.id} entry={entry} screen={screen} />)}</ol>
+          <ol className="space-y-3">{history.entries.map(entry => <HistoryItem key={entry.id} entry={entry} screen={screen} basis={basis} />)}</ol>
         )}
       </CardContent>
     </Card>
   )
 }
 
-// La ficha usa la fecha de cálculo y la revisión, el corte publicado: nunca se presentan como si
-// fueran lo mismo. La cabecera dice "corte no integrado" solo sobre el cálculo de la ficha.
+// El encabezado y el resumen usan la decisión calculada con los datos del caso; la pestaña
+// «Decisión», la instantánea de la cartera vigente. Si no coinciden, se dice: nunca se presentan
+// como si fueran lo mismo.
 export function reviewDifferenceNotice(debtor: DebtorListItem, screen: CaseReviewScreen): string | null {
   if (screen.kind !== 'ready' || !screen.snapshot.ok) return null
   const { snapshot } = screen.snapshot
   const cutoff = formatDate(snapshot.asOf)
   const intervention = debtor.decision?.intervencion
   if (intervention && (intervention.codigo !== snapshot.suggestedIntervention || intervention.intensidad !== snapshot.suggestedIntensity)) {
-    return `La sugerencia a revisar usa el corte publicado del ${cutoff} y difiere de la recomendación de esta ficha (${interventionLabel(intervention.codigo)}), calculada con otra fecha. Para decidir vale la de la pestaña Revisión.`
+    return `La recomendación a revisar en la pestaña Decisión usa la cartera al ${cutoff} y no coincide con la del encabezado (${interventionLabel(intervention.codigo)}), calculada con otra fecha. Para decidir vale la de la pestaña Decisión.`
   }
   return debtor.decisionAsOfSource === 'FECHA_CALCULO'
-    ? `Hay un corte publicado del ${cutoff}: la pestaña Revisión lo usa, y el resto de esta ficha usa la fecha de cálculo.`
+    ? `El encabezado y el resumen usan la fecha de cálculo del ${formatDate(debtor.decisionAsOf?.valor)}; la pestaña Decisión usa la cartera al ${cutoff}.`
     : null
 }
 
-// El orden es la decisión de diseño: hechos, sugerencia, decisión e historial `[P0219]`.
-export function ReviewPanel({ screen, detail, warnings }: { screen: CaseReviewScreen; detail: DebtorDetailData; warnings: DataWarning[] }) {
-  if (screen.kind !== 'ready') {
-    return <p role="status" className="text-sm text-slate-700">{screen.message}</p>
-  }
+function Notice({ children }: { children: ReactNode }) {
+  return <p role="status" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{children}</p>
+}
+
+// El orden es la decisión de diseño: recomendación, decisión e historial `[P0219]`. Los hechos
+// del caso (puntaje, desglose y totales) están en el encabezado y en «Resumen».
+export function ReviewPanel({ screen }: { screen: CaseReviewScreen }) {
+  if (screen.kind !== 'ready') return <Notice>{screen.message}</Notice>
   const snapshot = screen.snapshot.ok ? screen.snapshot.snapshot : null
-  const view = snapshot ? readExplanation(snapshot.explanation) : null
+  const basis = snapshot ? { asOf: snapshot.asOf, rulesVersion: snapshot.rulesVersion } : null
   return (
     <div className="space-y-4">
-      <ReviewFacts detail={detail} warnings={warnings} snapshot={snapshot} view={view} />
-      {snapshot && view ? (
-        <ReviewSuggestion debtor={detail.debtor} snapshot={snapshot} view={view} />
+      {snapshot ? (
+        <ReviewSuggestion snapshot={snapshot} />
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Sugerencia no disponible</CardTitle>
+            <CardTitle>Recomendación automática no disponible</CardTitle>
           </CardHeader>
           <CardContent>
             <p role="status" className="text-sm text-slate-700">{!screen.snapshot.ok && screen.snapshot.message}</p>
@@ -262,10 +215,8 @@ export function ReviewPanel({ screen, detail, warnings }: { screen: CaseReviewSc
           </CardContent>
         </Card>
       )}
-      {!screen.capabilities.canRecord && !screen.capabilities.canApprove && (
-        <p className="text-sm text-slate-700">Solo lectura: tu rol no registra decisiones.</p>
-      )}
-      <ReviewHistory screen={screen} />
+      {!screen.capabilities.canRecord && <Notice>{READ_ONLY_MESSAGE}</Notice>}
+      <ReviewHistory screen={screen} basis={basis} />
     </div>
   )
 }

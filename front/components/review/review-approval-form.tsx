@@ -17,12 +17,14 @@ import {
 
 const REASON_OPTIONS = OBJECTION_REASONS.map(reason => ({ value: reason.code, label: reason.label }))
 
-// Objetar frena la propuesta y no confirma nada: sigue disponible con una carga en curso.
-export function ReviewApprovalForm({ caseReviewId, supersedes, approveBlocked }: {
+// Objetar frena la propuesta y no confirma nada: sigue disponible con una carga en curso y sobre
+// datos anteriores. `blockedReason` dice por qué no se puede aprobar; sin él, aprobar está habilitado.
+export function ReviewApprovalForm({ caseReviewId, supersedes, blockedReason }: {
   caseReviewId: string
   supersedes: string | null
-  approveBlocked: boolean
+  blockedReason?: string | null
 }) {
+  const approveBlocked = (blockedReason ?? null) !== null
   const form = useReviewForm<ApprovalFormValues>({
     empty: EMPTY_APPROVAL_FORM,
     validate: values => validateApprovalForm(values, { approveBlocked }),
@@ -32,11 +34,11 @@ export function ReviewApprovalForm({ caseReviewId, supersedes, approveBlocked }:
   const options = APPROVAL_DECISIONS.map(value => ({ value, label: APPROVAL_LABELS[value], disabled: value === 'APRUEBA' && approveBlocked }))
 
   return (
-    <ReviewFormShell title="Respuesta del supervisor" formLabelId="ap-title" pending={form.pending} onSubmit={form.submit}>
+    <ReviewFormShell title="Tu respuesta a la propuesta" formLabelId="ap-title" pending={form.pending} onSubmit={form.submit}>
       {supersedes !== null && <p className="text-sm text-slate-700">Reemplaza la respuesta vigente: la anterior queda en el historial.</p>}
       {approveBlocked && (
         <p id="ap-blocked-note" className="text-sm text-slate-700">
-          Sin un corte publicado y vigente no se puede aprobar. Objetar sigue disponible.
+          {blockedReason} Objetar sigue disponible.
         </p>
       )}
       <FormFeedback
@@ -44,7 +46,7 @@ export function ReviewApprovalForm({ caseReviewId, supersedes, approveBlocked }:
         containerRef={form.feedbackRef}
         notice={notice}
         errors={errors}
-        outdatedHint="La propuesta se hizo con otros datos: ya no se puede aprobar. Puedes objetarla, o quien propuso puede registrar una nueva."
+        outdatedHint="La propuesta se hizo con otros datos: ya no se puede aprobar. Podés objetarla, o quien la registró puede registrar una decisión nueva."
         onReload={form.reload}
       />
       <RadioGroupField
@@ -63,7 +65,7 @@ export function ReviewApprovalForm({ caseReviewId, supersedes, approveBlocked }:
         <SelectField
           id="ap-reason"
           label="Motivo de la objeción"
-          placeholder="Elige un motivo"
+          placeholder="Elegí un motivo"
           help={PROVISIONAL_REASONS_NOTICE}
           options={REASON_OPTIONS}
           value={values.reasonCode}

@@ -17,13 +17,21 @@ import type { FlagCode } from '@/lib/domain/decision-rules-v1'
 // La autoridad sigue en el servidor: esto evita un envío inútil y explica qué falta.
 
 export const DECISION_LABELS: Readonly<Record<CaseReviewDecision, string>> = {
-  ACEPTA: 'Aceptar la sugerencia',
+  ACEPTA: 'Aceptar la recomendación',
   MODIFICA: 'Modificar la acción',
-  RECHAZA: 'Rechazar la sugerencia',
+  RECHAZA: 'Rechazar la recomendación',
   POSPONE: 'Posponer',
   DERIVA: 'Derivar',
 }
 export const APPROVAL_LABELS: Readonly<Record<ApprovalDecision, string>> = { APRUEBA: 'Aprobar la propuesta', OBJETA: 'Objetar la propuesta' }
+// La misma decisión, ya registrada (encabezado de la ficha e historial).
+export const RECORDED_DECISION_LABELS: Readonly<Record<CaseReviewDecision, string>> = {
+  ACEPTA: 'Recomendación aceptada',
+  MODIFICA: 'Acción modificada',
+  RECHAZA: 'Recomendación rechazada',
+  POSPONE: 'Decisión pospuesta',
+  DERIVA: 'Caso derivado',
+}
 
 // Intervención e intensidad son un solo control. Niveles 0 a 2: `contracts/decision-rules.v1.json`.
 // Niveles 3 y 4: nombres de ALIGN-003; sus códigos son técnicos y no tienen contrato aprobado.
@@ -38,8 +46,8 @@ export const REVIEW_ACTIONS: readonly ReviewAction[] = [
   action('SEGUIMIENTO', 1, 'Seguimiento con comunicación informativa (intensidad 1)'),
   action('RECORDATORIO_INFORMATIVO', 1, 'Recordatorio (intensidad 1)'),
   action('CONTACTO_PERSONAL_Y_PLAN', 2, 'Contacto y plan (intensidad 2)'),
-  action('INTIMACION_ADMINISTRATIVA', 3, 'Intimación administrativa formal (intensidad 3, requiere supervisor)'),
-  action('DERIVACION_PROCURACION', 4, 'Derivación a procuración o vía judicial (intensidad 4, requiere supervisor)'),
+  action('INTIMACION_ADMINISTRATIVA', 3, 'Intimación administrativa formal (intensidad 3, requiere aprobación)'),
+  action('DERIVACION_PROCURACION', 4, 'Derivación a procuración o vía judicial (intensidad 4, requiere aprobación)'),
 ]
 
 export function reviewActionLabel(intervention: string, intensity: number): string {
@@ -63,7 +71,7 @@ export const OBJECTION_REASONS: readonly ReviewReason[] = [
   { code: 'VERIFICACION_JURIDICA', label: 'Falta verificación jurídica' },
   { code: 'ALTERNATIVA_NO_OFRECIDA', label: 'No se ofreció una alternativa asistida' },
   { code: 'DATOS_CAMBIARON', label: 'Los datos cambiaron desde la propuesta' },
-  { code: 'CRITERIO_DE_SUPERVISION', label: 'Otro criterio de supervisión' },
+  { code: 'CRITERIO_DE_SUPERVISION', label: 'Otro criterio de quien aprueba' },
 ]
 export const PROVISIONAL_REASONS_NOTICE = 'Lista provisional de esta versión: todavía no tiene aprobación del municipio.'
 
@@ -86,7 +94,7 @@ export function flagLabel(code: string): string {
 }
 
 export const CHANGE_LABELS: Readonly<Record<SnapshotChange, string>> = {
-  INSUMOS: 'los datos del caso', VERSION: 'la versión de las reglas', CORTE: 'el corte publicado',
+  INSUMOS: 'los datos del caso', VERSION: 'la versión de las reglas', CORTE: 'la fecha de la cartera',
 }
 
 // Lista de control de ALIGN-003: casillas y códigos, sin texto libre.
@@ -144,7 +152,7 @@ export const reasonCharCount = (text: string) => [...text].length
 
 function checklistErrors(checklist: ChecklistValues): FormErrors {
   const errors: FormErrors = {}
-  if (checklist.situacion_hogar === '') errors.situacion_hogar = 'Indica si la situación del hogar se consultó o no está disponible.'
+  if (checklist.situacion_hogar === '') errors.situacion_hogar = 'Indicá si la situación del hogar se consultó o no está disponible.'
   for (const key of CHECKBOX_KEYS) {
     if (!checklist[key]) errors[key] = `Falta confirmar: ${CHECKBOX_LABELS[key].toLowerCase()}.`
   }
@@ -152,12 +160,12 @@ function checklistErrors(checklist: ChecklistValues): FormErrors {
 }
 
 export function validateDecisionForm(values: DecisionFormValues, snapshot: CaseReviewSnapshot): FormErrors {
-  if (values.decision === '') return { decision: 'Elige una decisión.' }
+  if (values.decision === '') return { decision: 'Elegí una decisión.' }
   const fields = decisionFields(values)
   const errors: FormErrors = {}
   if (fields.showAction) {
     if (values.action === '') {
-      if (fields.actionRequired) errors.action = 'Elige la acción que propones.'
+      if (fields.actionRequired) errors.action = 'Elegí la acción que proponés.'
     } else if (!findAction(values.action)) {
       errors.action = CASE_REVIEW_MESSAGES.DECISION_FIELDS_INVALID
     } else if (values.decision === 'MODIFICA' && values.action === suggestedKey(snapshot)) {
@@ -190,7 +198,7 @@ export function buildRecordInput(values: DecisionFormValues, snapshot: CaseRevie
 }
 
 export function validateApprovalForm(values: ApprovalFormValues, { approveBlocked }: { approveBlocked: boolean }): FormErrors {
-  if (values.decision === '') return { decision: 'Elige aprobar u objetar.' }
+  if (values.decision === '') return { decision: 'Elegí aprobar u objetar.' }
   if (values.decision === 'OBJETA') return values.reasonCode === '' ? { reasonCode: CASE_REVIEW_MESSAGES.REASON_REQUIRED } : {}
   if (approveBlocked) return { decision: CASE_REVIEW_MESSAGES.CUTOFF_NOT_AVAILABLE }
   return checklistErrors(values.checklist)
@@ -294,7 +302,7 @@ export function reviewFormReducer<V extends { decision: string; checklist: Check
   }
 }
 
-export const SUBMIT_CRASH_MESSAGE = 'No se pudo enviar: la conexión falló o la aplicación se actualizó. Recarga la página para continuar. Si ya había quedado guardado, no se duplica.'
+export const SUBMIT_CRASH_MESSAGE = 'No se pudo enviar: la conexión falló o la aplicación se actualizó. Recargá la página para continuar. Si ya había quedado guardado, no se duplica.'
 
 export function submitReview<V>({ values, validate, send, dispatch, startTransition, refresh }: {
   values: V

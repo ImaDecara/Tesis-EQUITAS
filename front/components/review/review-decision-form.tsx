@@ -39,12 +39,13 @@ export function ReviewDecisionForm({ snapshot }: { snapshot: CaseReviewSnapshot 
         containerRef={form.feedbackRef}
         notice={notice}
         errors={errors}
-        outdatedHint="Nada quedó confirmado. Revisa los datos y vuelve a elegir tu decisión."
+        outdatedHint="Nada quedó confirmado. Revisá los datos y volvé a elegir tu decisión."
         onReload={form.reload}
       />
       {(current ?? snapshot).currentReviewId !== null && (
-        <p className="text-sm text-slate-700">Ya hay una decisión vigente: registrar otra la reemplaza, y la anterior queda en el historial.</p>
+        <p className="text-sm text-slate-700">Ya hay una decisión registrada: registrar otra la reemplaza, y la anterior queda en el historial.</p>
       )}
+      <p className="text-sm text-slate-700">Una decisión de intensidad 0 a 2 queda completa al registrarse. Las de intensidad 3 y 4 quedan como propuesta hasta que otra persona con rol ADMIN las apruebe.</p>
       <RadioGroupField
         id="rv-decision"
         legend="Decisión"
@@ -58,7 +59,7 @@ export function ReviewDecisionForm({ snapshot }: { snapshot: CaseReviewSnapshot 
         <SelectField
           id="rv-action"
           label={fields.actionRequired ? 'Acción propuesta' : 'Acción propuesta (opcional)'}
-          placeholder={fields.actionRequired ? 'Elige una acción' : 'Sin indicar una acción'}
+          placeholder={fields.actionRequired ? 'Elegí una acción' : 'Sin indicar una acción'}
           options={actionOptions}
           value={values.action}
           error={errors.action}
@@ -71,7 +72,7 @@ export function ReviewDecisionForm({ snapshot }: { snapshot: CaseReviewSnapshot 
           <SelectField
             id="rv-reason"
             label="Motivo"
-            placeholder="Elige un motivo"
+            placeholder="Elegí un motivo"
             help={PROVISIONAL_REASONS_NOTICE}
             options={REASON_OPTIONS}
             value={values.reasonCode}
@@ -85,7 +86,7 @@ export function ReviewDecisionForm({ snapshot }: { snapshot: CaseReviewSnapshot 
         <>
           <ChecklistFields prefix="rv" values={values.checklist} errors={errors} onChange={checklist => form.change({ checklist })} />
           <p id="rv-intense-note" className="text-sm text-slate-700">
-            Es una propuesta: no se ejecuta hasta que la apruebe otra persona con rol de supervisor.
+            Requiere que otra persona con rol ADMIN la apruebe: queda como propuesta.
           </p>
         </>
       )}
