@@ -49,7 +49,10 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     const csv = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
     expect(csv.rows.length).toBeGreaterThan(1)
     expect(csv.rows.every(row => row.fecha_corte === '2026-09-30' && row.fecha_calculo_usada === 'NO_APLICA')).toBe(true)
-    const reads = requests.filter(request => request.table === 'import_batch')
+    // Noche 7: antes de armar un reporte se comprueba el nivel de la base con una consulta que no pide filas.
+    const probes = requests.filter(request => request.table === 'import_batch' && request.limit === 0)
+    expect(probes.map(probe => [probe.select, probe.filters])).toEqual([['id', {}]])
+    const reads = requests.filter(request => request.table === 'import_batch' && request.limit !== 0)
     expect(reads.some(read => read.after === '1000')).toBe(true)
     for (const read of reads) {
       expect(read.filters).toEqual({ tenant: 'eq.7' })

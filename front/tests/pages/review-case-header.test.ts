@@ -116,7 +116,10 @@ describe('encabezado y resumen: prioridad', () => {
     expect(summary).toMatch(/Importe pendiente \$\s*93\.350 20 de 50 puntos/)
     expect(summary).toMatch(/Atraso máximo 263 días 20 de 30 puntos/)
     expect(summary).toMatch(/Obligaciones vencidas 1 5 de 20 puntos/)
-    expect(summary).toContain(`Regla aplicada ${decision.explicacion.frase_contrastiva}`)
+    // La frase del contrato dice «severidad»; en pantalla va con el nombre que usa toda la aplicación.
+    expect(decision.explicacion.frase_contrastiva).toContain('la severidad (45)')
+    expect(summary).toContain(`Regla aplicada ${decision.explicacion.frase_contrastiva.replace('la severidad', 'el puntaje de prioridad')}`)
+    expect(summary).not.toMatch(/severidad/i)
   })
 
   it('un puntaje parcial es un mínimo', async () => {
@@ -140,7 +143,7 @@ describe('encabezado y resumen: prioridad', () => {
 
   it('H07: los avisos que no integra la carga van en una sola nota de cobertura', async () => {
     const { summary } = await open(withDecision())
-    expect(summary).toContain('Nota de cobertura: esta versión no integra el estado de origen de las obligaciones, el período fiscal y el tipo de persona de la cartera cargada.')
+    expect(summary).toContain('Nota de cobertura: las reglas de esta versión no usan el estado de las obligaciones (salvo «Pagada», que sí las excluye), el período fiscal y el tipo de persona.')
     expect(summary).not.toContain('Avisos de este caso')
     expect(summary).not.toContain('Período fiscal no informado')
   })

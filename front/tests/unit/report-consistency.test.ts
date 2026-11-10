@@ -86,7 +86,8 @@ describe('H16: seleccion incompleta', () => {
 describe('roles historicos y rotulos de pantalla', () => {
   it.each(HISTORICAL_ROLES)('%s se exporta con su nombre y la marca de rol anterior', role => {
     expect(exportableRole(role)).toBe(role)
-    expect(roleText(role)).toBe(`${role} (rol anterior)`)
+    // `tp_operator` no es histórico: es una compatibilidad vigente de solo lectura y lleva su propio rótulo.
+    expect(roleText(role)).toBe(role === 'tp_operator' ? 'Cuenta de prueba de solo lectura' : `${role} (rol anterior)`)
   })
 
   it('ADMIN y USER con su rotulo; un rol fuera de lista no se copia', () => {

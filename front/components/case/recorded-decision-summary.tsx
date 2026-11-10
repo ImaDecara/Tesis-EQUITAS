@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { recordedDecisionText, whoText } from '@/components/case/case-explanation'
 import { RECORDED_STATUS_LABELS, staleExplanation, type RecordedDecision, type RecordedStatus } from '@/lib/domain/recorded-decision'
+import { UNAVAILABLE_ON_THIS_DATABASE } from '@/lib/domain/database-level-text'
 import { roleLabel } from '@/lib/domain/role-labels'
 import { formatDate, formatDateTime } from '@/lib/utils'
 
@@ -12,15 +13,16 @@ type Basis = { asOf: string | null; rulesVersion: string }
 export type RecordedDecisionView =
   | Readonly<{ kind: 'unavailable' }>
   | Readonly<{ kind: 'forbidden' }>
+  | Readonly<{ kind: 'no-module' }>
   | Readonly<{ kind: 'none' }>
   | Readonly<{ kind: 'recorded'; decision: RecordedDecision; current: Basis }>
 
 type RecordedDecisionsResult =
   | { ok: true; current: Basis; byDebtor: ReadonlyMap<string, RecordedDecision> }
-  | { ok: false; reason: 'FORBIDDEN' | 'UNAVAILABLE' }
+  | { ok: false; reason: 'FORBIDDEN' | 'UNAVAILABLE' | 'NO_MODULE' }
 
 export function recordedDecisionView(result: RecordedDecisionsResult, debtorId: string): RecordedDecisionView {
-  if (!result.ok) return result.reason === 'FORBIDDEN' ? { kind: 'forbidden' } : { kind: 'unavailable' }
+  if (!result.ok) return result.reason === 'NO_MODULE' ? { kind: 'no-module' } : result.reason === 'FORBIDDEN' ? { kind: 'forbidden' } : { kind: 'unavailable' }
   const decision = result.byDebtor.get(debtorId)
   return decision ? { kind: 'recorded', decision, current: result.current } : { kind: 'none' }
 }
@@ -42,6 +44,7 @@ export function RecordedDecisionSummary({ view }: { view: RecordedDecisionView }
     )
   }
   if (view.kind === 'forbidden') return <p className="text-sm text-slate-700">Tu cuenta no puede ver las decisiones registradas.</p>
+  if (view.kind === 'no-module') return <p className="text-sm text-slate-700">{UNAVAILABLE_ON_THIS_DATABASE}: no tiene el módulo de decisiones.</p>
   if (view.kind === 'none') return <p className="text-sm text-slate-700">Todavía no hay una decisión registrada.</p>
   const { decision, current } = view
   return (

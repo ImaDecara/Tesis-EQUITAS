@@ -9,6 +9,7 @@ import {
   getCurrentAuthUser, mapAuthErrorMessage, selectCurrentTenant, signInWithPassword, signOutCurrentSession,
   validateAuthUserTenantAccess, validateCurrentUserTenantAccess,
 } from '@/lib/services/auth-service'
+import { ACCESS_MESSAGES } from '@/lib/auth/tenant-access'
 
 type Reply = { data: unknown; error: { message: string; code?: string } | null }
 const ok = (data: unknown): Reply => ({ data, error: null })
@@ -93,7 +94,7 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   })
 
   it('AUTH-06: usa el usuario validado por Auth y la pertenencia activa', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: '42', auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
+    const { client, queries } = clientWithReplies([ok([{ id: '42', auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'USER' }])])
     expect(await validateCurrentUserTenantAccess()).toEqual({ isAuthorized: true, requiresLogin: false,
       context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' } })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
@@ -106,13 +107,24 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   })
 
   it('AUTH-06 / E06: conserva el cliente y su sesion al validar pertenencia', async () => {
-    const { client, queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])])
+    const { client, queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'USER' }])])
     browserClient.mockClear()
     expect(await validateAuthUserTenantAccess('auth-test', client as unknown as SupabaseClient)).toMatchObject({
       isAuthorized: true, context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' },
     })
     expect(browserClient).not.toHaveBeenCalled()
     expect(queries.map(query => query.table)).toEqual(['user', 'tenant_user', 'tenant', 'role'])
+  })
+
+  it.each(['ADMIN', 'USER'])('noche 7: el rol %s ingresa con el mismo resultado', async name => {
+    clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name }])])
+    expect(await validateAuthUserTenantAccess('auth-test')).toEqual({ isAuthorized: true, requiresLogin: false,
+      context: { authUserId: 'auth-test', appUserId: '42', tenantId: '7', role: '3' } })
+  })
+
+  it.each(['consulta', 'operador', 'supervisor', 'importador', 'importador_sistema', 'admin'])('noche 7: el rol no reconocido %s no ingresa y recibe el mensaje vigente', async name => {
+    clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name }])])
+    expect(await validateAuthUserTenantAccess('auth-test')).toEqual({ isAuthorized: false, requiresLogin: false, code: 'ROLE_FORBIDDEN', message: ACCESS_MESSAGES.ROLE_FORBIDDEN })
   })
 
   it('SUP-AUTH-01: el resultado publico lleva el ID del rol y ningun campo mas, tambien con la fixture E06', async () => {
@@ -137,7 +149,7 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
 
   it('AUTH-08: error leyendo pertenencia no autoriza ni consulta estados adicionales', async () => {
     const { queries } = clientWithReplies([ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]), { data: null, error: { message: 'permission denied' } }])
-    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'No disponible: no se pudo verificar la membresia.' })
+    expect(await validateAuthUserTenantAccess('auth-test')).toMatchObject({ isAuthorized: false, code: 'DATABASE_ERROR', message: 'No disponible: no se pudo verificar la membresía.' })
     expect(queries).toHaveLength(2)
   })
 
@@ -151,7 +163,7 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
 describe('ALIGN-019: la seleccion de municipio es explicita y no confiere permisos', () => {
   beforeEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
   const authorized = () => [ok([{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }]),
-    ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'consulta' }])]
+    ok([{ user: 42, tenant: 7, role: 3, status: true }]), ok([{ id: 7, status: 'ACTIVE' }]), ok([{ id: 3, name: 'USER' }])]
   const selected = () => [authorized()[0], ok([{ id: 1, user: 42, tenant: 7, role: 3, status: true }]), ok([]), ...authorized().slice(2)]
 
   it.each(['https:', 'http:'])('guarda la eleccion solo despues de validarla (%s)', async protocol => {

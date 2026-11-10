@@ -32,7 +32,7 @@ function configureClient(results: { appUser: QueryResult; tenantUser: QueryResul
   const appUserQuery = buildQuery(results.appUser)
   const tenantUserQuery = buildQuery(results.tenantUser)
   const tenantQuery = buildQuery({ data: [{ id: 7, status: 'ACTIVE' }], error: null })
-  const roleQuery = buildQuery({ data: [{ id: 3, name: 'operador' }], error: null })
+  const roleQuery = buildQuery({ data: [{ id: 3, name: 'ADMIN' }], error: null })
   const from = vi.fn((table: string) => {
     if (table === 'user') {
       return appUserQuery

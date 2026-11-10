@@ -106,7 +106,7 @@ export function createAuthorizedPaginatedSupabase(tables: Record<string, RawRow[
   const fixture = createPaginatedSupabase({
     user: [{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }],
     tenant_user: [{ id: 1, user: 42, tenant: 7, role: 3, status: true }],
-    tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: 'consulta' }],
+    tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: 'USER' }],
     ...tables,
   }, options)
   vi.spyOn(fixture.client.auth, 'getUser').mockResolvedValue({ data: { user: { id: 'auth-test' } }, error: null } as never)

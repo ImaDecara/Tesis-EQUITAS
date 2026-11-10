@@ -24,6 +24,7 @@ import {
 import { computeCaseReviewSnapshot, type ComputedSnapshot } from '@/lib/server/case-review-snapshot'
 import { createCaseReviewWriter } from '@/lib/server/case-review-writer'
 import { DataAccessError, requireTenantAccess, type DalContext } from '@/lib/server/dal'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 
 // ALIGN-020. Verifica con la sesión (DAL), recalcula en servidor y escribe solo por las
 // funciones de ALIGN-018 con la credencial server-only. Devuelve códigos, nunca excepciones:
@@ -187,7 +188,21 @@ async function insertDecision(supabase: SupabaseClient, context: DalContext, inp
   }
 }
 
+// Noche 7 (encargo 10.2). En una base sin el módulo de decisiones la acción ya falla sin escribir (no hay
+// tablas ni funciones). Acá solo se le pone nombre a esa falla, comprobando el nivel en el servidor: la
+// pantalla no ofrece el formulario, pero la acción no depende de eso.
+const MAYBE_NO_MODULE: ReadonlySet<CaseReviewErrorCode> = new Set(['SUGGESTION_UNAVAILABLE', 'CUTOFF_NOT_AVAILABLE', 'WRITE_NOT_CONFIGURED', 'WRITE_UNAVAILABLE'])
+
+async function namedByLevel<T extends CaseReviewFailure | { ok: true }>(result: T): Promise<T | CaseReviewFailure> {
+  if (result.ok || !MAYBE_NO_MODULE.has(result.code)) return result
+  return await loadDatabaseLevel() === 'BASE' ? caseReviewFailure('MODULE_NOT_AVAILABLE') : result
+}
+
 export async function recordCaseDecisionInSession(raw: unknown): Promise<RecordCaseDecisionResult> {
+  return namedByLevel(await recordDecision(raw))
+}
+
+async function recordDecision(raw: unknown): Promise<RecordCaseDecisionResult> {
   return failClosed<RecordCaseDecisionResult>(async () => {
     const { supabase, context } = await requireTenantAccess({ permission: 'decision:record' })
     const parsed = parseRecordCaseDecisionInput(raw)
@@ -244,6 +259,10 @@ async function insertApproval(supabase: SupabaseClient, context: DalContext, inp
 }
 
 export async function approveCaseDecisionInSession(raw: unknown): Promise<ApproveCaseDecisionResult> {
+  return namedByLevel(await approveDecision(raw))
+}
+
+async function approveDecision(raw: unknown): Promise<ApproveCaseDecisionResult> {
   return failClosed<ApproveCaseDecisionResult>(async () => {
     const { supabase, context } = await requireTenantAccess({ permission: 'decision:approve' })
     const parsed = parseApproveCaseDecisionInput(raw)

@@ -5,6 +5,7 @@ import { AlertTriangle, Inbox, Lock, Upload } from 'lucide-react'
 import { AppShell } from '@/components/layout/app-shell'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { MODULE_MISSING_EXPLANATION, UNAVAILABLE_ON_THIS_DATABASE } from '@/lib/domain/database-level-text'
 import { loadViewerContext } from '@/lib/server/viewer-context'
 import { cn } from '@/lib/utils'
 
@@ -42,6 +43,15 @@ export function NoPortfolioCard({ canImport }: { canImport: boolean }) {
       {canImport
         ? <Link href="/import" className={buttonVariants({ variant: 'default' })}><Upload className="size-4" />Cargar CSV</Link>
         : <p className="font-medium">Pedile a una persona administradora que la cargue: cargar un CSV requiere una cuenta con rol ADMIN.</p>}
+    </StateCard>
+  )
+}
+
+/** La base no tiene el módulo de decisiones, cargas y registro de accesos (encargo 10.2): no es un error. */
+export function ModuleUnavailableCard({ what }: { what: string }) {
+  return (
+    <StateCard state="module-unavailable" title={`${what}: ${UNAVAILABLE_ON_THIS_DATABASE.toLowerCase()}`} icon={Lock}>
+      <p>{MODULE_MISSING_EXPLANATION}</p>
     </StateCard>
   )
 }

@@ -29,7 +29,8 @@ function actionLabel(decision: RecordedDecision) {
 
 /** Qué se muestra de la decisión registrada de un caso. Una lectura fallida nunca es «sin decisión». */
 export function decisionView(decisions: RecordedDecisions, debtorId: string): DecisionView {
-  if (!decisions.ok) return { kind: 'UNAVAILABLE' }
+  // Sin el módulo de decisiones no puede haber ninguna: es «sin decisión», no una lectura fallida.
+  if (!decisions.ok) return decisions.reason === 'NO_MODULE' ? { kind: 'NONE' } : { kind: 'UNAVAILABLE' }
   const decision = decisions.byDebtor.get(debtorId)
   if (!decision) return { kind: 'NONE' }
   return { kind: 'RECORDED', status: RECORDED_STATUS_LABELS[decision.status], action: actionLabel(decision), when: formatDateTime(decision.decidedAt), stale: decision.stale }
@@ -53,7 +54,9 @@ export function DecisionsNotice({ decisions }: { decisions: RecordedDecisions })
   if (decisions.ok) return null
   return (
     <p role="status" data-decisions-notice={decisions.reason} className="text-sm text-amber-800">
-      {decisions.reason === 'FORBIDDEN'
+      {decisions.reason === 'NO_MODULE'
+        ? 'Esta base no tiene instalado el módulo de decisiones: ningún caso tiene una decisión registrada.'
+        : decisions.reason === 'FORBIDDEN'
         ? 'Tu cuenta no puede ver las decisiones registradas: la columna «Decisión registrada» muestra «No disponible».'
         : 'No se pudieron leer las decisiones registradas: la columna «Decisión registrada» muestra «No disponible». Recargá la página; esto no significa que no haya decisiones.'}
     </p>

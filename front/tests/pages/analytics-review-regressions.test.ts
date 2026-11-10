@@ -11,7 +11,7 @@ import { buildQueueReport } from '@/lib/reports/queue-report'
 import { csvCents, parseCsvBytes } from '@/tests/helpers/independent-csv-parser'
 import { textFromReactTree } from '@/tests/helpers/react-tree'
 import type { RawDebtorDataBundle } from '@/types/equitas-domain'
-import { decisionsFixture, viewerFixture } from '@/tests/helpers/viewer-fixtures'
+import { decisionsFixture, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const api = vi.hoisted(() => ({ getDebtorsData: vi.fn(), getPeopleData: vi.fn(), getDashboardData: vi.fn(), getDebtorDetailData: vi.fn(), loadRawDebtorData: vi.fn() }))
 vi.mock('@/lib/equitas-data', () => api)
@@ -38,6 +38,8 @@ import DebtorDetailPage from '@/app/debtors/[debtorId]/page'
 const pages = [['/', HomePage], ['/risk-analysis', RiskAnalysisPage], ['/debt-aging', DebtAgingPage], ['/no-contact', NoContactPage], ['/recommended-actions', RecommendedActionsPage], ['/debtors', DebtorsPage], ['/priority-cases', PriorityCasesPage]] as const
 const html = (node: ReactNode) => renderToStaticMarkup(createElement(Fragment, null, node))
 const text = (node: ReactNode) => textFromReactTree(node).replace(/\s+/g, ' ')
+const OVERDUE_ROW = 'Deuda vencida Pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera.'
+const detailText = async () => renderedText(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) })).replace(/\u00a0/g, ' ')
 
 function fixture() {
   const raw = buildPresenceRawData()
@@ -108,11 +110,11 @@ describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => 
     for (const page of [DebtAgingPage, PriorityCasesPage, NoContactPage]) {
       expect(text(await page({ searchParams: Promise.resolve({}) }))).toContain('183 días')
     }
-    const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
-    expect(detail).toMatch(/Deuda vencida(?: al corte)?: \$\s?310\.000/)
-    expect(detail).toContain('183 dias')
-    expect(detail).not.toMatch(/Deuda vencida(?: al corte)?\s*:?[\s]*\$\s?0(?:\s|,)/)
-    expect(detail).toContain('1 obligación vencida')
+    // N7: la ficha se renderiza con sus componentes; los totales están en «Resumen» con las definiciones únicas.
+    const detail = await detailText()
+    expect(detail).toContain(`${OVERDUE_ROW} 1 obligación por $ 310.000`)
+    expect(detail).toContain('Atraso máximo 183 días')
+    expect(detail).not.toMatch(/Deuda vencida Pendientes[^$]*\$ 0(?:\s|,)/)
   })
 
   it('reglas 1.1.0: con estado 3 (PAID) no hay mora en ficha, listados ni CSV, y el total registrado la conserva', async () => {
@@ -126,18 +128,19 @@ describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => 
     for (const page of [DebtAgingPage, PriorityCasesPage, NoContactPage]) {
       expect(text(await page({ searchParams: Promise.resolve({}) }))).not.toMatch(/183 d[ií]as/)
     }
-    const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
-    expect(detail).toMatch(/Total registrado: \$\s?310\.000/)
-    expect(detail).toMatch(/Deuda vencida al corte: \$\s?0/)
-    expect(detail).not.toContain('1 obligación vencida')
+    const detail = await detailText()
+    expect(detail).toContain('Total registrado Todas las obligaciones, cualquiera sea su estado. $ 310.000')
+    expect(detail).toContain('Deuda pendiente El total registrado sin las obligaciones pagadas. $ 0')
+    expect(detail).toContain(`${OVERDUE_ROW} Sin obligaciones vencidas`)
+    expect(detail).not.toContain('1 obligación por')
   })
 
   it('si el corte no es evaluable no muestra mora histórica como si fuera actual', async () => {
     const raw = fixture(); raw.batch = { as_of: null }
     raw.debtorProfiles[0].overdue_debt_amount = 310000
     await configure(raw)
-    const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
-    expect(detail).toMatch(/Deuda vencida(?: al corte)?: No disponible/)
-    expect(detail).not.toContain('183 dias')
+    const detail = await detailText()
+    expect(detail).toContain(`${OVERDUE_ROW} No disponible`)
+    expect(detail).not.toMatch(/183 d[ií]as/)
   })
 })

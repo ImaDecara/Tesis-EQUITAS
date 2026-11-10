@@ -45,11 +45,13 @@ const DEBTOR_COLUMN = {
   debtor: 'id',
   debt: 'debtor',
   debtor_person: 'debtor',
+  debtor_profile: 'debtor',
   person: '__links.debtor',
   debtor_contact: '__person.__links.debtor',
 } as const
 
 export type DebtorScopedTable = keyof typeof DEBTOR_COLUMN
+export const isDebtorScoped = (table: string): table is DebtorScopedTable => Object.hasOwn(DEBTOR_COLUMN, table)
 
 // debtorId debe venir de una fila comprobada dentro del municipio. Validar solo
 // la forma de un ID de formulario no lo habilita como filtro: la URL se registra.

@@ -1,3 +1,4 @@
+import { plainRulePhrase } from '@/lib/domain/rule-phrase'
 import {
   CASE_REVIEW_MESSAGES,
   CASE_REVIEW_STATUS_LABELS,
@@ -350,7 +351,8 @@ export function readExplanation(explanation: Readonly<Record<string, unknown>>):
   const review = isRecord(explanation.revision) ? explanation.revision : {}
   const factors = Array.isArray(explanation.factores) ? explanation.factores.filter(isRecord) : []
   return {
-    phrase: text(explanation.frase_contrastiva),
+    // En palabras de la aplicación; ver `plainRulePhrase`.
+    phrase: typeof explanation.frase_contrastiva === 'string' ? plainRulePhrase(explanation.frase_contrastiva) : null,
     rule: text(explanation.regla),
     flags: Array.isArray(explanation.banderas) ? explanation.banderas.filter((flag): flag is string => typeof flag === 'string') : [],
     severity: { value: num(severity.valor), band: text(severity.banda), state: text(severity.estado), notEvaluable: num(severity.obligaciones_no_evaluables) },

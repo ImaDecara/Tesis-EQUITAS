@@ -65,6 +65,7 @@ export const CASE_REVIEW_MESSAGES = {
   APPROVAL_NOT_REQUIRED: 'Esta decisión es de intensidad menor a 3 y no requiere aprobación.',
   REVIEW_SUPERSEDED: 'Esta propuesta fue reemplazada por una decisión posterior. Recargá el caso para ver la actual.',
   APPROVAL_CONFLICT: 'Ya hay otra aprobación u objeción registrada para esta decisión. Recargá el caso.',
+  MODULE_NOT_AVAILABLE: 'No disponible en esta base: no tiene instalado el módulo de decisiones. No se registró nada.',
   WRITE_NOT_CONFIGURED: 'No disponible: el registro de decisiones no está configurado en este entorno.',
   WRITE_REJECTED: 'La base rechazó el registro. Revisá los datos e intentá de nuevo.',
   WRITE_UNAVAILABLE: 'No se pudo confirmar el registro. Volvé a intentar: si ya había quedado guardado, no se duplica.',

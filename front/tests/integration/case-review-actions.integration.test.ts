@@ -24,7 +24,12 @@ const TENANT = 7
 const OTHER_TENANT = 8
 const DEBTOR = 99
 const FOREIGN_DEBTOR = 199
-const ROLE_IDS = { consulta: 1, operador: 2, supervisor: 3, importador: 4, tp_operator: 5, importador_sistema: 6 }
+// Noche 7: ADMIN y USER son los roles del producto; tp_operator es compatibilidad de solo lectura.
+// Los nombres de la demo anterior siguen en la tabla `role` como dato historico y ya no ingresan.
+const ROLE_IDS = { ADMIN: 1, USER: 2, tp_operator: 5, importador_sistema: 6, consulta: 7, operador: 8, supervisor: 9, importador: 10 }
+// Dos cuentas ADMIN distintas: la separacion entre quien propone y quien aprueba es por identidad.
+const PROPONENT = 42
+const APPROVER = 43
 type RoleName = keyof typeof ROLE_IDS
 const READY_CHECKLIST = { situacion_hogar: 'NO_DISPONIBLE', estado_juridico_verificado: true, canal_valido: true, alternativa_asistida_ofrecida: true }
 const LINK = { active: true, debtor: DEBTOR, __debtor: { tenant: TENANT } }
@@ -63,6 +68,13 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error']; b
     // La ventana de la revision: otro proceso importa entre el recalculo de la accion y la funcion.
     overrides.beforeWrite?.(tables)
     const replay = created[table].some(item => item.idempotency_key === args.p_idempotency_key)
+    if (table === 'case_review_approval') {
+      // Como `record_case_review_approval`: distinto de quien propuso esta version o una anterior de la cadena.
+      const reviewers: unknown[] = []
+      for (let link = tables.case_review.find(item => String(item.id) === String(args.p_case_review)); link;
+        link = link.supersedes === null ? undefined : tables.case_review.find(item => item.id === link!.supersedes)) reviewers.push(link.reviewer)
+      if (reviewers.some(reviewer => String(reviewer) === String(args.p_approver_user))) return { data: null, error: { message: 'APPROVER_IS_PROPONENT', code: 'P0001' } }
+    }
     if (!replay && (table === 'case_review' || args.p_decision === 'APRUEBA')) {
       const current = selectCurrentCutoff(tables.import_batch.filter(row => row.tenant === Number(args.p_tenant)) as unknown as BatchEvent[])
       if (String(current?.id) !== String(args.p_cutoff_batch)) return { data: null, error: { message: 'CUTOFF_CHANGED', code: 'P0001' } }
@@ -80,7 +92,7 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error']; b
     const id = nextId++
     created[table].push({ id, ...row })
     tables[table].push({
-      id, tenant: Number(args.p_tenant), debtor: Number(args.p_debtor), case_review: args.p_case_review ?? null,
+      id, tenant: Number(args.p_tenant), debtor: Number(args.p_debtor), case_review: args.p_case_review ?? null, reviewer: args.p_reviewer_user ?? null,
       supersedes: args.p_supersedes === null || args.p_supersedes === undefined ? null : Number(args.p_supersedes),
       idempotency_key: args.p_idempotency_key, rules_version: args.p_rules_version, as_of: args.p_as_of, inputs_hash: args.p_inputs_hash,
       decided_intensity: args.p_decided_intensity ?? null,
@@ -90,10 +102,10 @@ function fakeDatabase(tables: Rows, overrides: { failWith?: RpcReply['error']; b
   return { rpc, created }
 }
 
-function session({ role = 'operador' as RoleName, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, serverMaxRows = 1000, enforceFilters = true, database = {} as { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } } = {}) {
+function session({ role = 'ADMIN' as RoleName, userId = PROPONENT, signedIn = true, tables = portfolio(), memberTenant = TENANT, cookie = undefined as string | undefined, fail = undefined as FailRule | undefined, serverMaxRows = 1000, enforceFilters = true, database = {} as { failWith?: RpcReply['error']; beforeWrite?: (tables: Rows) => void } } = {}) {
   const fixture = createPaginatedSupabase({
-    user: [{ id: 42, auth_user: 'auth-test', status: 'ACTIVE' }],
-    tenant_user: [{ id: 1, user: 42, tenant: memberTenant, role: ROLE_IDS[role], status: true }],
+    user: [{ id: userId, auth_user: 'auth-test', status: 'ACTIVE' }],
+    tenant_user: [{ id: 1, user: userId, tenant: memberTenant, role: ROLE_IDS[role], status: true }],
     tenant: [{ id: memberTenant, status: 'ACTIVE' }],
     role: Object.entries(ROLE_IDS).map(([name, id]) => ({ id, name })),
     ...tables,
@@ -109,7 +121,7 @@ function session({ role = 'operador' as RoleName, signedIn = true, tables = port
 }
 
 // La misma base, con la sesion de otra persona o de otro rol.
-function signInAs(role: RoleName, tables: Rows, rpc: ReturnType<typeof vi.fn>, userId = 42) {
+function signInAs(role: RoleName, tables: Rows, rpc: ReturnType<typeof vi.fn>, userId = APPROVER) {
   const authUser = `auth-${userId}`
   const fixture = createPaginatedSupabase({
     user: [{ id: userId, auth_user: authUser, status: 'ACTIVE' }],
@@ -153,7 +165,7 @@ describe('ALIGN-020: recordCaseDecision', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it.each(['consulta', 'supervisor', 'importador', 'tp_operator'] as const)('%s no registra y no llega a escribir', async role => {
+  it.each(['USER', 'tp_operator', 'consulta', 'operador', 'supervisor', 'importador', 'importador_sistema'] as const)('%s no registra y no llega a escribir', async role => {
     const { rpc } = session({ role })
     const input = { debtorId: String(DEBTOR), decision: 'ACEPTA', expected: { asOf: '2026-10-30', rulesVersion: '1.0.0', inputsHash: 'a'.repeat(64) } }
     await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
@@ -282,7 +294,7 @@ describe('ALIGN-020: recordCaseDecision', () => {
       const { created, tables, rpc } = session()
       const input = await acceptInput()
       await recordCaseDecision(input)
-      signInAs('operador', tables, rpc, 43)
+      signInAs('ADMIN', tables, rpc, APPROVER)
       await expect(recordCaseDecision(input)).resolves.toMatchObject({ ok: false, code: 'REVIEW_CONFLICT' })
       expect(created.case_review).toHaveLength(1)
       expect(created.case_review[0].p_reviewer_user).toBe('42')
@@ -564,7 +576,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
 
   const approveInput = (reviewId: string, overrides: Record<string, unknown> = {}) => ({ caseReviewId: reviewId, decision: 'APRUEBA', checklist: READY_CHECKLIST, ...overrides })
 
-  it.each(['operador', 'consulta', 'importador', 'tp_operator'] as const)('%s no aprueba: rechazado sin escribir', async role => {
+  it.each(['USER', 'tp_operator', 'consulta', 'operador', 'supervisor', 'importador'] as const)('%s no aprueba: rechazado sin escribir', async role => {
     const { rpc } = session({ role })
     await expect(approveCaseDecision(approveInput('5'))).resolves.toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
     expect(rpc).not.toHaveBeenCalled()
@@ -577,21 +589,58 @@ describe('ALIGN-020: approveCaseDecision', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('supervisor aprueba una vez; el doble envio no crea otra fila', async () => {
+  it('otra cuenta ADMIN aprueba una vez; el doble envio no crea otra fila', async () => {
     const { reviewId, tables, rpc, created } = await proposal()
-    signInAs('supervisor', tables, rpc)
+    signInAs('ADMIN', tables, rpc)
     const first = await approveCaseDecision(approveInput(reviewId))
     expect(first).toEqual({ ok: true, approvalId: '101', caseReviewId: reviewId, debtorId: String(DEBTOR), created: true, status: 'APROBADA' })
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: true, created: false, approvalId: '101' })
     expect(created.case_review_approval).toHaveLength(1)
     const call = rpc.mock.calls.find(item => item[0] === 'record_case_review_approval')!
-    expect(call[1]).toMatchObject({ p_approver_user: '42', p_tenant: String(TENANT), p_case_review: reviewId, p_decision: 'APRUEBA', p_reason_code: null, p_checklist: READY_CHECKLIST, p_supersedes: null })
+    expect(call[1]).toMatchObject({ p_approver_user: String(APPROVER), p_tenant: String(TENANT), p_case_review: reviewId, p_decision: 'APRUEBA', p_reason_code: null, p_checklist: READY_CHECKLIST, p_supersedes: null })
     expect(revalidatePath).toHaveBeenCalledWith(`/debtors/${DEBTOR}`)
+  })
+
+  describe('quien propone no aprueba: se comprueba por identidad, no por rol', () => {
+    it('la misma cuenta ADMIN que propuso no aprueba su propuesta y no queda fila', async () => {
+      const { reviewId, tables, rpc, created } = await proposal()
+      signInAs('ADMIN', tables, rpc, PROPONENT)
+      await expect(approveCaseDecision(approveInput(reviewId))).resolves.toEqual({
+        ok: false, code: 'APPROVER_IS_PROPONENT', message: CASE_REVIEW_MESSAGES.APPROVER_IS_PROPONENT,
+      })
+      expect(created.case_review_approval).toHaveLength(0)
+      expect(rpc.mock.calls.find(item => item[0] === 'record_case_review_approval')?.[1]).toMatchObject({ p_approver_user: String(PROPONENT) })
+    })
+
+    it('cadena de reemplazos: A propone, B reemplaza; ni A ni B aprueban la version de B, una tercera cuenta ADMIN si', async () => {
+      const { reviewId: first, tables, rpc, created } = await proposal()
+      signInAs('ADMIN', tables, rpc, APPROVER)
+      const replaced = await recordCaseDecision(await acceptInput({ ...intense, reasonCode: 'OTRO_MOTIVO_SINTETICO' }))
+      if (!replaced.ok) throw new Error(`Reemplazo rechazado: ${replaced.code}`)
+      expect(created.case_review.map(row => [row.p_reviewer_user, row.p_supersedes ?? null])).toEqual([[String(PROPONENT), null], [String(APPROVER), first]])
+      for (const account of [PROPONENT, APPROVER]) {
+        signInAs('ADMIN', tables, rpc, account)
+        await expect(approveCaseDecision(approveInput(replaced.reviewId)), `cuenta ${account}`).resolves.toMatchObject({ ok: false, code: 'APPROVER_IS_PROPONENT' })
+      }
+      expect(created.case_review_approval).toHaveLength(0)
+      signInAs('ADMIN', tables, rpc, 44)
+      await expect(approveCaseDecision(approveInput(replaced.reviewId))).resolves.toMatchObject({ ok: true, status: 'APROBADA', caseReviewId: replaced.reviewId })
+      expect(created.case_review_approval).toHaveLength(1)
+    })
+
+    it('la version anterior, ya reemplazada, tampoco se aprueba', async () => {
+      const { reviewId: first, tables, rpc } = await proposal()
+      signInAs('ADMIN', tables, rpc, APPROVER)
+      const replaced = await recordCaseDecision(await acceptInput({ ...intense, reasonCode: 'OTRO_MOTIVO_SINTETICO' }))
+      if (!replaced.ok) throw new Error(replaced.code)
+      signInAs('ADMIN', tables, rpc, 44)
+      await expect(approveCaseDecision(approveInput(first))).resolves.toMatchObject({ ok: false, code: 'REVIEW_SUPERSEDED' })
+    })
   })
 
   it('otra aprobacion distinta sin declarar la vigente se rechaza; declarandola, se reemplaza', async () => {
     const { reviewId, tables, rpc, created } = await proposal()
-    signInAs('supervisor', tables, rpc)
+    signInAs('ADMIN', tables, rpc)
     const first = await approveCaseDecision(approveInput(reviewId))
     if (!first.ok) throw new Error(first.code)
     const objection = approveInput(reviewId, { decision: 'OBJETA', reasonCode: 'MOTIVO_SINTETICO' })
@@ -605,7 +654,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const { rpc, tables } = await proposal()
     tables.case_review.push({ id: 700, tenant: OTHER_TENANT, debtor: FOREIGN_DEBTOR, supersedes: null, idempotency_key: 'x', rules_version: RULES_VERSION, as_of: '2026-10-30', inputs_hash: 'c'.repeat(64), decided_intensity: 3 })
     rpc.mockClear()
-    const { requests } = signInAs('supervisor', tables, rpc)
+    const { requests } = signInAs('ADMIN', tables, rpc)
     await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     await expect(approveCaseDecision(approveInput('123456'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     expect(rpc).not.toHaveBeenCalled()
@@ -616,7 +665,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
   it('encuentra la revision autorizada despues de una pagina corta', async () => {
     const { reviewId, tables } = await proposal()
     tables.case_review.unshift({ id: 50, tenant: TENANT, debtor: DEBTOR, decided_intensity: 1 })
-    const { requests, rpc } = session({ role: 'supervisor', tables, serverMaxRows: 1 })
+    const { requests, rpc } = session({ role: 'ADMIN', userId: APPROVER, tables, serverMaxRows: 1 })
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: true, caseReviewId: reviewId })
     expect(rpc).toHaveBeenCalledOnce()
     const selection = requests.filter(request => request.table === 'case_review' && request.filters.debtor === undefined)
@@ -626,7 +675,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
 
   it('una pagina posterior fallida no permite aprobar desde un prefijo', async () => {
     const { reviewId, tables } = await proposal()
-    const { rpc } = session({ role: 'supervisor', tables, serverMaxRows: 1,
+    const { rpc } = session({ role: 'ADMIN', userId: APPROVER, tables, serverMaxRows: 1,
       fail: request => request.table === 'case_review' && request.after !== null ? { code: '42501', message: 'synthetic' } : null })
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_UNAVAILABLE' })
     expect(rpc).not.toHaveBeenCalled()
@@ -635,7 +684,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
   it('una fila ajena no autoriza aunque el transporte ignore el filtro de tenant', async () => {
     const tables = portfolio()
     tables.case_review.push({ id: 700, tenant: OTHER_TENANT, debtor: FOREIGN_DEBTOR, decided_intensity: 3 })
-    const { requests, rpc } = session({ role: 'supervisor', tables, enforceFilters: false })
+    const { requests, rpc } = session({ role: 'ADMIN', userId: APPROVER, tables, enforceFilters: false })
     await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     expect(rpc).not.toHaveBeenCalled()
     expect(requests.some(request => request.table === 'case_review_approval' || request.table === 'debtor')).toBe(false)
@@ -646,7 +695,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const accepted = await recordCaseDecision(await acceptInput())
     if (!accepted.ok) throw new Error(accepted.code)
     fixture.rpc.mockClear()
-    signInAs('supervisor', fixture.tables, fixture.rpc)
+    signInAs('ADMIN', fixture.tables, fixture.rpc)
     await expect(approveCaseDecision(approveInput(accepted.reviewId))).resolves.toMatchObject({ ok: false, code: 'APPROVAL_NOT_REQUIRED' })
     expect(fixture.rpc).not.toHaveBeenCalled()
   })
@@ -655,7 +704,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const { reviewId, tables, rpc } = await proposal()
     tables.case_review.push({ id: 900, tenant: TENANT, debtor: DEBTOR, supersedes: Number(reviewId), idempotency_key: 'y', rules_version: RULES_VERSION, as_of: '2026-10-30', inputs_hash: 'c'.repeat(64), decided_intensity: 1 })
     rpc.mockClear()
-    signInAs('supervisor', tables, rpc)
+    signInAs('ADMIN', tables, rpc)
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'REVIEW_SUPERSEDED' })
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -663,7 +712,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
   describe('importacion entre el recalculo y la aprobacion', () => {
     function intercalated(reviewId: string, tables: Rows, created: Record<string, RawRow[]>, change: (tables: Rows) => void) {
       const database = fakeDatabase(tables, { beforeWrite: change })
-      signInAs('supervisor', tables, database.rpc)
+      signInAs('ADMIN', tables, database.rpc)
       return { reviewId, approvals: () => database.created.case_review_approval, created }
     }
 
@@ -691,7 +740,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
       const database = fakeDatabase(tables, { beforeWrite: current => {
         current.import_batch.push({ id: 3, tenant: TENANT, as_of: '2026-11-15', source_updated_at: null, status: 'VALIDADO', supersedes: null })
       } })
-      signInAs('supervisor', tables, database.rpc)
+      signInAs('ADMIN', tables, database.rpc)
       await expect(approveCaseDecision({ caseReviewId: reviewId, decision: 'OBJETA', reasonCode: 'MOTIVO_SINTETICO' })).resolves.toMatchObject({ ok: true, status: 'OBJETADA' })
       expect(database.rpc.mock.calls[0][1].p_cutoff_batch).toBeNull()
       expect(created.case_review).toHaveLength(1)
@@ -703,7 +752,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
       const { reviewId, tables, rpc } = await proposal()
       tables.debt[0].current_amount = 90001
       rpc.mockClear()
-      signInAs('supervisor', tables, rpc)
+      signInAs('ADMIN', tables, rpc)
       await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', changed: ['INSUMOS'], current: { asOf: '2026-10-30' } })
       expect(rpc).not.toHaveBeenCalled()
     })
@@ -713,7 +762,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
       const stored = tables.case_review.find(row => String(row.id) === reviewId)!
       stored.rules_version = '0.9.0'
       rpc.mockClear()
-      signInAs('supervisor', tables, rpc)
+      signInAs('ADMIN', tables, rpc)
       await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED', changed: ['VERSION'] })
       expect(rpc).not.toHaveBeenCalled()
     })
@@ -721,7 +770,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     it('OBJETA sigue disponible: frena la propuesta, no la confirma', async () => {
       const { reviewId, tables, rpc } = await proposal()
       tables.debt[0].current_amount = 90001
-      signInAs('supervisor', tables, rpc)
+      signInAs('ADMIN', tables, rpc)
       await expect(approveCaseDecision({ caseReviewId: reviewId, decision: 'OBJETA', reasonCode: 'MOTIVO_SINTETICO' })).resolves.toMatchObject({ ok: true, status: 'OBJETADA' })
     })
 
@@ -729,7 +778,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
       const { reviewId, tables, rpc } = await proposal()
       tables.import_batch.push({ id: 9, tenant: TENANT, as_of: '2026-11-15', source_updated_at: null, status: 'VALIDADO', supersedes: null })
       rpc.mockClear()
-      signInAs('supervisor', tables, rpc)
+      signInAs('ADMIN', tables, rpc)
       await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'CUTOFF_NOT_AVAILABLE' })
       expect(rpc).not.toHaveBeenCalled()
     })
@@ -753,20 +802,20 @@ describe('ALIGN-020: approveCaseDecision', () => {
   ])('%s -> %s', async (message, code) => {
     const { reviewId, tables } = await proposal()
     const rpc = vi.fn(async () => ({ data: null, error: { message, code: 'P0001' } }))
-    signInAs('supervisor', tables, rpc)
+    signInAs('ADMIN', tables, rpc)
     const result = await approveCaseDecision(approveInput(reviewId))
     expect(result).toMatchObject({ ok: false, code, message: CASE_REVIEW_MESSAGES[code as CaseReviewErrorCode] })
   })
 
   it('respuesta inesperada de la funcion: no se informa como aprobada', async () => {
     const { reviewId, tables } = await proposal()
-    signInAs('supervisor', tables, vi.fn(async () => ({ data: { approval_id: null, created: true }, error: null })))
+    signInAs('ADMIN', tables, vi.fn(async () => ({ data: { approval_id: null, created: true }, error: null })))
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'WRITE_UNAVAILABLE' })
   })
 
   it('sin credencial configurada: rechaza sin escribir', async () => {
     const { reviewId, tables, rpc } = await proposal()
-    signInAs('supervisor', tables, rpc)
+    signInAs('ADMIN', tables, rpc)
     writerFactory.mockReturnValue(null)
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: false, code: 'WRITE_NOT_CONFIGURED' })
   })
@@ -799,8 +848,8 @@ describe('ALIGN-020: instantanea para la pantalla', () => {
     expect(requests.some(item => item.table === 'debtor')).toBe(false)
   })
 
-  it('consulta y tp_operator pueden ver la sugerencia', async () => {
-    for (const role of ['consulta', 'tp_operator'] as const) {
+  it('USER y tp_operator pueden ver la sugerencia', async () => {
+    for (const role of ['USER', 'tp_operator'] as const) {
       session({ role })
       await expect(getCaseReviewSnapshot(String(DEBTOR))).resolves.toMatchObject({ ok: true, snapshot: { debtorId: String(DEBTOR), asOf: '2026-10-30', currentReviewId: null } })
     }

@@ -23,6 +23,7 @@ import { AuthGuard } from '@/components/auth/auth-guard'
 import { LogoutButton } from '@/components/layout/logout-button'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { undatedPortfolioText } from '@/lib/domain/database-level-text'
 import type { ViewerContext } from '@/lib/server/viewer-context'
 
 type NavItem = { href: string; label: string; icon: ComponentType<{ className?: string }> }
@@ -66,7 +67,8 @@ function isActive(pathname: string, href: string) {
 
 export function portfolioLabel(viewer: ViewerContext | null): string {
   if (!viewer) return 'Cartera: no disponible'
-  if (viewer.portfolio.kind === 'LOADED') return `Cartera al ${formatDate(viewer.portfolio.asOf)}`
+  if (viewer.portfolio.kind === 'LOADED') return `Cartera al ${formatDate(viewer.portfolio.asOf)}${viewer.portfolio.declared ? ' (fecha declarada)' : ''}`
+  if (viewer.portfolio.kind === 'UNDATED') return undatedPortfolioText(formatDate(viewer.portfolio.today))
   return viewer.portfolio.kind === 'EMPTY' ? 'Sin cartera cargada' : 'Fecha de la cartera no disponible'
 }
 

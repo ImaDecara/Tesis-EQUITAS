@@ -59,7 +59,7 @@ export const whoText = (mine: boolean) => (mine ? 'vos' : 'otra persona')
 type CoverageFlag = 'ESTADO_ORIGEN_NO_INFORMADO' | 'PERIODO_NO_INFORMADO' | 'TIPO_PERSONA_DESCONOCIDO'
 
 export const COVERAGE_LABELS: Readonly<Record<CoverageFlag, string>> = {
-  ESTADO_ORIGEN_NO_INFORMADO: 'el estado de origen de las obligaciones',
+  ESTADO_ORIGEN_NO_INFORMADO: 'el estado de las obligaciones (salvo «Pagada», que sí las excluye)',
   PERIODO_NO_INFORMADO: 'el período fiscal',
   TIPO_PERSONA_DESCONOCIDO: 'el tipo de persona',
 }

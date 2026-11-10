@@ -12,7 +12,7 @@ function fixture(members: RawRow[] = [member], options: Parameters<typeof create
     user: [{ id: 42, auth_user: 'synthetic-auth', status: 'ACTIVE' }],
     tenant_user: members,
     tenant: [{ id: 7, status: 'ACTIVE' }, { id: 8, status: 'ACTIVE' }],
-    role: [{ id: 3, name: 'consulta' }, { id: 4, name: 'operador' }],
+    role: [{ id: 3, name: 'USER' }, { id: 4, name: 'ADMIN' }],
     ...tables,
   }, { enforceFilters: true, ...options })
 }
@@ -30,7 +30,7 @@ describe('privacidad: la seleccion no sale al transporte antes de verificar memb
   it('una seleccion legitima usa el municipio y rol devueltos por el servidor', async () => {
     const { client, requests } = fixture([member, { ...member, id: 2, tenant: 8, role: 4 }])
     expect(await resolveTenantAccessWithRoleName('synthetic-auth', client, '8')).toMatchObject({
-      access: { isAuthorized: true, context: { tenantId: '8', role: '4' } }, roleName: 'operador',
+      access: { isAuthorized: true, context: { tenantId: '8', role: '4' } }, roleName: 'ADMIN',
     })
     const reads = requests.filter(request => request.table === 'tenant_user')
     expect(reads.length).toBeGreaterThan(0)
@@ -77,6 +77,7 @@ describe('privacidad: la seleccion no sale al transporte antes de verificar memb
   it.each([
     ['tenant', [{ id: 8, status: 'INACTIVE' }], 'TENANT_INACTIVE'],
     ['role', [{ id: 4, name: 'importador_sistema' }], 'ROLE_FORBIDDEN'],
+    ['role', [{ id: 4, name: 'supervisor' }], 'ROLE_FORBIDDEN'],
   ] as const)('no omite validar %s despues de resolver la seleccion', async (table, rows, code) => {
     const { client } = fixture([{ ...member, tenant: 8, role: 4 }], {}, { [table]: [...rows] })
     expect((await resolveTenantAccessWithRoleName('synthetic-auth', client, '8')).access.code).toBe(code)

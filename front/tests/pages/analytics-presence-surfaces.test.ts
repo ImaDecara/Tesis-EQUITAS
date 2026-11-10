@@ -1,5 +1,5 @@
-import { createElement, Fragment, type ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
+import { markupOf, panelOf, textOf } from '@/tests/helpers/case-page'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
@@ -33,14 +33,15 @@ async function renderDetail(raw: RawDebtorDataBundle) {
   const source = await getDebtorDetailDataFromService('901')
   const before = JSON.stringify(source)
   api.detail.mockResolvedValue(source)
-  // Se ejecutan ReviewPanel y sus componentes, incluido el contenido keepMounted.
+  // Se ejecutan los componentes de la ficha, incluido el panel de Decisión (keepMounted).
   const page = await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) })
-  const markup = renderToStaticMarkup(createElement(Fragment, null, page))
+  const text = textOf(markupOf(page)).replace(/\u00a0/g, ' ')
   expect(JSON.stringify(source)).toBe(before)
-  const text = markup.replace(/<[^>]+>/g, ' ').replace(/&nbsp;|\u00a0/g, ' ').replace(/\s+/g, ' ')
-  const start = text.indexOf('Hechos del caso')
-  expect(start).toBeGreaterThan(-1)
-  return { text, review: text.slice(start, text.indexOf('Banderas', start)) }
+  // Noche 7: los hechos del caso (totales y atraso) están en «Resumen»; la pestaña Decisión ya no los repite.
+  const summary = panelOf(page, 'summary').text.replace(/\u00a0/g, ' ')
+  const review = panelOf(page, 'review').text.replace(/\u00a0/g, ' ')
+  expect(summary).toContain('Totales del caso')
+  return { text, summary, review }
 }
 
 beforeEach(() => {
@@ -50,25 +51,30 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers() })
 
 describe('MEN-3: panel real de Revisión sin snapshot', () => {
-  it.each(['consulta', 'operador'])('%s conserva la mora de la ficha calculada y no la histórica', async role => {
-    api.screen.mockResolvedValue({ kind: 'ready', capabilities: { canRecord: role === 'operador', canApprove: false, canReadReasonText: false }, snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE'), history: { ok: true, entries: [] } })
+  const screenFor = (role: 'ADMIN' | 'USER') => ({ kind: 'ready', capabilities: { canRecord: role === 'ADMIN', canApprove: role === 'ADMIN', canReadReasonText: role === 'ADMIN' }, snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE'), history: { ok: true, entries: [] } })
+
+  it.each(['USER', 'ADMIN'] as const)('%s conserva la mora de la ficha calculada y no la histórica', async role => {
+    api.screen.mockResolvedValue(screenFor(role))
     // Estado OVERDUE: la mora calculada (310 000) no es la del perfil persistido (0).
     const raw = fixture(); delete raw.batch; raw.debts[0].status = 2
-    const { text, review } = await renderDetail(raw)
-    expect(text).toContain('Deuda vencida al corte: $ 310.000')
-    expect(review).toContain('Deuda vencida $ 310.000')
-    expect(review).toContain('Corte: no disponible')
-    expect(text).toContain('189 dias')
+    const { summary, review } = await renderDetail(raw)
+    expect(summary).toContain('Deuda vencida Pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera. 1 obligación por $ 310.000')
+    expect(summary).toContain('Atraso máximo 189 días')
+    expect(summary).not.toContain('$ 0')
+    // La pestaña Decisión ya no repite los hechos: dice que sin cartera vigente no hay recomendación a revisar.
+    expect(review).toContain('Recomendación automática no disponible')
+    expect(review).not.toContain('Deuda vencida')
   })
 
-  it.each(['consulta', 'operador'])('%s: reglas 1.1.0, la obligación pagada no es mora aunque su vencimiento pasó', async role => {
-    api.screen.mockResolvedValue({ kind: 'ready', capabilities: { canRecord: role === 'operador', canApprove: false, canReadReasonText: false }, snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE'), history: { ok: true, entries: [] } })
+  it.each(['USER', 'ADMIN'] as const)('%s: reglas 1.1.0, la obligación pagada no es mora aunque su vencimiento pasó', async role => {
+    api.screen.mockResolvedValue(screenFor(role))
     const raw = fixture(); delete raw.batch
-    const { text, review } = await renderDetail(raw)
-    expect(text).toContain('Total registrado: $ 310.000')
-    expect(text).toContain('Deuda vencida al corte: $ 0')
-    expect(review).toContain('Deuda vencida $ 0')
-    // Sin vencidas el atraso no aplica (la página hoy lo rotula como no disponible).
+    const { summary, review } = await renderDetail(raw)
+    expect(summary).toContain('Total registrado Todas las obligaciones, cualquiera sea su estado. $ 310.000')
+    expect(summary).toContain('Deuda pendiente El total registrado sin las obligaciones pagadas. $ 0')
+    expect(summary).toContain('Deuda vencida Pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera. Sin obligaciones vencidas')
+    expect(summary).toContain('Atraso máximo No aplica: no hay obligaciones vencidas')
+    expect(review).not.toContain('Deuda vencida')
     expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.maxDaysOverdue.presence).toBe('NO_APLICA')
   })
 
@@ -77,9 +83,10 @@ describe('MEN-3: panel real de Revisión sin snapshot', () => {
     const raw = fixture(); raw.batch = { as_of: null }
     raw.debtorProfiles[0].overdue_debt_amount = 310000
     raw.warnings = [{ table: 'import_batch', code, message: 'Corte no disponible', needsSelectPolicy: false }]
-    const { text, review } = await renderDetail(raw)
-    expect(text).toContain('Deuda vencida al corte: No disponible')
-    expect(review).toContain('Deuda vencida No disponible')
+    const { text, summary, review } = await renderDetail(raw)
+    expect(summary).toContain('Deuda vencida Pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera. No disponible')
+    expect(summary).not.toContain('obligación por $')
+    expect(review).toContain('Recomendación automática no disponible')
     expect(review).not.toContain('Deuda vencida $')
     expect(text).not.toContain('Casos vencidos:')
   })

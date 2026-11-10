@@ -3,9 +3,11 @@ import Link from 'next/link'
 
 import { ImportForm } from '@/components/import/import-form'
 import { AppShell } from '@/components/layout/app-shell'
+import { ModuleUnavailableCard } from '@/components/portfolio/portfolio-state'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FILE_KINDS, FILE_ROLES, IMPORT_FORMAT, optionalColumns, requiredColumns } from '@/lib/domain/import-upload'
 import { importAvailability } from '@/lib/server/import-availability'
+import { moduleAvailable } from '@/lib/domain/database-level-text'
 import { loadViewerContext } from '@/lib/server/viewer-context'
 import { formatDate } from '@/lib/utils'
 
@@ -125,7 +127,9 @@ export default async function ImportPage() {
           </Notice>
         )}
 
-        {viewer && !viewer.capabilities.canImport && (
+        {viewer && !moduleAvailable(viewer) && <ModuleUnavailableCard what="Cargar CSV" />}
+
+        {viewer && moduleAvailable(viewer) && !viewer.capabilities.canImport && (
           <Notice title="Tu cuenta no puede cargar CSV">
             <p>Cargar un lote cambia la cartera de todo el municipio, y por eso en esta versión solo lo hace una cuenta con rol ADMIN. Tu cuenta es {viewer.roleLabel}: podés ver la cartera, buscar casos y descargar los reportes de lo que ves.</p>
             <p>Si necesitás cargar datos, pedile a una persona administradora de tu municipio que lo haga o que revise tu rol.</p>

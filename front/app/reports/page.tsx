@@ -3,10 +3,11 @@ import { AlertTriangle } from 'lucide-react'
 
 import { ReportDownloads } from '@/components/equitas/report-downloads'
 import { AppShell } from '@/components/layout/app-shell'
-import { NoPortfolioCard, StateCard } from '@/components/portfolio/portfolio-state'
+import { ModuleUnavailableCard, NoPortfolioCard, StateCard } from '@/components/portfolio/portfolio-state'
 import { DefinitionList } from '@/components/reports/definition-list'
 import { PORTFOLIO_TOTALS } from '@/lib/reports/report-definitions'
 import { availableReportLinks, reportOffers } from '@/lib/server/report-links'
+import { moduleAvailable } from '@/lib/domain/database-level-text'
 import { loadViewerContext } from '@/lib/server/viewer-context'
 
 export const dynamic = 'force-dynamic'
@@ -36,9 +37,11 @@ export default async function ReportsPage() {
           </StateCard>
         )}
 
+        {verified && !moduleAvailable(viewer) && <ModuleUnavailableCard what="Reportes" />}
+
         {verified && viewer.portfolio.kind === 'EMPTY' && <NoPortfolioCard canImport={viewer.capabilities.canImport} />}
 
-        {verified && <ReportDownloads offers={reportOffers(links)} portfolio={viewer.portfolio} />}
+        {verified && moduleAvailable(viewer) && <ReportDownloads offers={reportOffers(links)} portfolio={viewer.portfolio} />}
 
         <section aria-labelledby="definiciones-importes" className="rounded-lg border border-[#d2dceb] bg-white p-4 text-sm text-slate-700">
           <h2 id="definiciones-importes" className="mb-2 font-semibold text-[#163a63]">Cómo se definen los importes</h2>

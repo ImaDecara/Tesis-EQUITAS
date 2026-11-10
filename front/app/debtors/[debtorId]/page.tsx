@@ -14,6 +14,7 @@ import { recordedDecisionView } from '@/components/case/recorded-decision-summar
 import { DebtsTable } from '@/components/debtors/debts-table'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { AppShell } from '@/components/layout/app-shell'
+import { ModuleUnavailableCard } from '@/components/portfolio/portfolio-state'
 import { reviewDifferenceNotice, ReviewPanel } from '@/components/review/review-panel'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -205,11 +206,11 @@ export default async function DebtorDetailPage({
 
   // Si no se puede leer la decisión registrada, el encabezado lo dice («No se pudo leer…»): la ficha
   // se entrega igual y nunca muestra «sin decisión» en su lugar.
-  const [reviewScreen, recordedDecisions] = await Promise.all([
-    loadCaseReviewScreen(debtorId),
-    loadRecordedDecisions().catch(() => ({ ok: false as const, reason: 'UNAVAILABLE' as const })),
-  ])
-  const reviewNotice = reviewDifferenceNotice(detail.debtor, reviewScreen)
+  const recordedDecisions = await loadRecordedDecisions().catch(() => ({ ok: false as const, reason: 'UNAVAILABLE' as const }))
+  // Noche 7 (encargo 10.2): en una base sin el módulo de decisiones la pestaña lo dice y no se lee nada más.
+  const moduleMissing = !recordedDecisions.ok && recordedDecisions.reason === 'NO_MODULE'
+  const reviewScreen = moduleMissing ? null : await loadCaseReviewScreen(debtorId)
+  const reviewNotice = reviewScreen ? reviewDifferenceNotice(detail.debtor, reviewScreen) : null
 
   const { debtor: sourceDebtor, debts, people, contacts } = detail
   const debtor = withMaturityMetrics(sourceDebtor)
@@ -280,7 +281,7 @@ export default async function DebtorDetailPage({
           </TabsContent>
 
           <TabsContent value="review" keepMounted>
-            <ReviewPanel screen={reviewScreen} />
+            {reviewScreen ? <ReviewPanel screen={reviewScreen} /> : <ModuleUnavailableCard what="Decisión" />}
           </TabsContent>
         </Tabs>
       </div>

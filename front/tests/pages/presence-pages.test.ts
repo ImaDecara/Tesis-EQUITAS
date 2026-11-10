@@ -68,8 +68,8 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
   it('N7 (H10): sin índice anterior para nadie se quitan columna, filtro, tarjetas y gráfico, y queda una nota', async () => {
     const raw = buildPresencePeopleData()
     raw.debtorProfilesDetail = []
-    // Mismo aviso que agrega el servicio de personas cuando la lectura no devuelve filas.
-    raw.warnings = [{ table: 'debtor_profile_detail', message: 'No devolvió filas para esta sesión.', needsSelectPolicy: true }]
+    // Mismo aviso que agrega el servicio de personas cuando la lectura no devuelve filas (código propio, N7).
+    raw.warnings = [{ table: 'debtor_profile_detail', code: 'EMPTY_LEGACY_INDEX', message: 'El índice anterior por persona no tiene filas.', needsSelectPolicy: false }]
     configure(raw)
     const page = await PeoplePage({ searchParams: Promise.resolve({ risk: 'ALTO' }) })
     const markup = markupOf(page)

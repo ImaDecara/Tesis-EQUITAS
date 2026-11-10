@@ -55,7 +55,7 @@ function tabsOf(node: ReactNode): React.ReactElement<NodeProps>[] {
   return [...(node.type === TabsContent ? [node] : []), ...tabsOf(node.props.children)]
 }
 const tabText = (page: ReactNode, value: string) => textOf(tabsOf(page).find(node => node.props.value === value)?.props.children)
-// Toda la página: encabezado, tarjetas y las seis pestañas, no solo la pestaña del defecto.
+// Toda la página: encabezado, tarjetas y las cuatro pestañas (N7), no solo la pestaña del defecto.
 const wholeDetail = (page: ReactNode) => [textOf(page), ...tabsOf(page).map(node => textOf(node.props.children))].join(' ')
 
 const warning = (table: string): DataWarning => ({ table, message: 'Fallo sintético de lectura', needsSelectPolicy: false })
@@ -124,7 +124,7 @@ describe('(a) vencimiento en la pestaña Deudas', () => {
 describe('(b) canal de contacto por catálogo', () => {
   it('muestra la etiqueta y ningún ID de catálogo en toda la página', async () => {
     const page = await detailPage(e06Raw())
-    expect(tabText(page, 'contacts')).toMatch(/Persona sintetica A\s+Email\s+persona-a@example\.test\s+Activo/)
+    expect(tabText(page, 'people')).toMatch(/Persona sintetica A\s+Email\s+persona-a@example\.test\s+Activo/)
     const whole = wholeDetail(page)
     // Tarjetas y pestañas vecinas siguen resolviendo sus catálogos.
     expect(textOf(page)).toContain('Objeto de prueba')
@@ -135,7 +135,7 @@ describe('(b) canal de contacto por catálogo', () => {
 
   it('con la lectura del catálogo fallida: No disponible y aviso, sin ID ni inferencia', async () => {
     const page = await detailPage(e06Raw(), { rows: [], warning: warning('contact_type') })
-    const contacts = tabText(page, 'contacts')
+    const contacts = tabText(page, 'people')
     expect(contacts).toMatch(/Persona sintetica A\s+No disponible\s+persona-a@example\.test/)
     expect(contacts).toContain('no se pudo leer el catálogo de tipos de contacto')
     expect(textOf(page)).toContain('contact_type: Fallo sintético de lectura')
@@ -149,7 +149,7 @@ describe('(b) canal de contacto por catálogo', () => {
     const raw = e06Raw()
     raw.debtorContacts[0].type = 910099
     const page = await detailPage(raw)
-    const contacts = tabText(page, 'contacts')
+    const contacts = tabText(page, 'people')
     expect(contacts).toMatch(/Persona sintetica A\s+No disponible\s+persona-a@example\.test/)
     expect(contacts).toContain('no figura en el catálogo')
     expect(wholeDetail(page)).not.toContain('910099')
@@ -157,7 +157,7 @@ describe('(b) canal de contacto por catálogo', () => {
 
   it('un catálogo sin etiqueta legible no muestra el dato crudo', async () => {
     const page = await detailPage(e06Raw(), { rows: [{ id: 910001, key: 'EMAIL', value: '12345' }], warning: null })
-    expect(tabText(page, 'contacts')).toMatch(/Persona sintetica A\s+No disponible/)
+    expect(tabText(page, 'people')).toMatch(/Persona sintetica A\s+No disponible/)
   })
 
   it('sin tipo conserva la inferencia por @, aunque el catálogo haya fallado', async () => {
@@ -167,7 +167,7 @@ describe('(b) canal de contacto por catálogo', () => {
       { id: 2, person: 910001, value: '3510000000', active: true },
     ]
     for (const catalog of [{ rows: CONTACT_CATALOG, warning: null }, { rows: [], warning: warning('contact_type') }]) {
-      const contacts = tabText(await detailPage(raw, catalog), 'contacts')
+      const contacts = tabText(await detailPage(raw, catalog), 'people')
       expect(contacts).toMatch(/Email\s+sin-tipo@example\.test/)
       expect(contacts).toMatch(/Telefono\s+3510000000/)
     }
@@ -179,7 +179,7 @@ describe('(b) canal de contacto por catálogo', () => {
       { id: 1, person: 910001, channel: 'WhatsApp', value: '3510000001', active: true },
       { id: 2, person: 910001, channel: 910001, value: '3510000002', active: true },
     ]
-    const contacts = tabText(await detailPage(raw), 'contacts')
+    const contacts = tabText(await detailPage(raw), 'people')
     expect(contacts).toMatch(/WhatsApp\s+3510000001/)
     expect(contacts).toMatch(/Email\s+3510000002/)
   })
@@ -210,24 +210,31 @@ const UNIT_ON_MISSING = /No (?:disponible|aplica)\s*(?:dias|días|casos|personas
 const unitOnMissing = (text: string) => text.match(UNIT_ON_MISSING)?.[0] ?? null
 
 describe('(c) una unidad nunca acompaña a un valor faltante', () => {
-  it('sin vencimiento: "No disponible" en días de atraso, antigüedad y lectura operativa', async () => {
+  // N7: la ficha tiene cuatro pestañas. El atraso está en el desglose del puntaje y en «Totales del caso»;
+  // la antigüedad (pestaña Riesgo) y la lectura operativa (pestaña Recomendación) ya no se muestran.
+  const TABS = ['summary', 'debts', 'people', 'review']
+
+  it('sin vencimiento: "No disponible" en el atraso del desglose y de los totales', async () => {
     const raw = e06Raw()
     raw.debts[0].due_date = null
     const page = await detailPage(raw)
-    expect(tabText(page, 'summary')).toMatch(/Dias de atraso:\s+No disponible\s+Estado/)
-    expect(tabText(page, 'risk')).toMatch(/Antiguedad\s+No disponible/)
-    const reading = tabText(page, 'recommendation')
-    expect(reading).toContain('atraso: No disponible')
+    expect(tabsOf(page).map(node => node.props.value)).toEqual(TABS)
+    const summary = tabText(page, 'summary')
+    expect(summary).toContain('Atraso máximo No disponible No disponible Obligaciones vencidas')
+    expect(summary).toContain('Atraso máximo No disponible Contacto activo cargado')
+    expect(wholeDetail(page)).not.toMatch(/Antig[uü]edad|atraso: /)
     expect(unitOnMissing(wholeDetail(page))).toBeNull()
   })
 
   it('con dato conserva la unidad en la misma pantalla', async () => {
     const page = await detailPage(e06Raw())
-    expect(tabText(page, 'summary')).toMatch(/Dias de atraso:\s+121 dias/)
-    expect(tabText(page, 'recommendation')).toContain('atraso: 121 dias')
-    expect(tabText(page, 'recommendation')).toMatch(/deuda pendiente: \$\s*1\.250/)
-    expect(tabText(page, 'risk')).toMatch(/Antiguedad\s+\d+ dias/)
-    expect(textOf(page)).toContain('1 persona(s) asociada(s)')
+    const summary = tabText(page, 'summary')
+    expect(summary).toContain('Atraso máximo 121 días 15 de 30 puntos')
+    expect(summary).toContain('Atraso máximo 121 días Contacto activo cargado')
+    expect(summary).toMatch(/Deuda pendiente El total registrado sin las obligaciones pagadas\. \$\s*1\.250/)
+    // Antes: «1 persona(s) asociada(s)». Hoy las personas se listan en «Personas y contactos».
+    expect(tabText(page, 'people')).toMatch(/Persona sintetica A\s+Sin documento\s+100\s+Titular/)
+    expect(wholeDetail(page)).not.toMatch(/Antig[uü]edad/)
   })
 
   it('una lectura fallida tampoco arma la oración del caso con unidades ni ceros', async () => {
@@ -236,12 +243,31 @@ describe('(c) una unidad nunca acompaña a un valor faltante', () => {
     raw.debts = []
     raw.debtorPeople = []
     const page = await detailPage(raw)
-    const reading = tabText(page, 'recommendation')
-    expect(reading).toContain('deuda pendiente: No disponible')
-    expect(reading).toContain('atraso: No disponible')
-    expect(reading).toContain('contacto: no disponible')
+    const summary = tabText(page, 'summary')
+    expect(summary).toContain('Deuda pendiente El total registrado sin las obligaciones pagadas. No disponible')
+    expect(summary).toContain('Atraso máximo No disponible')
+    expect(summary).toContain('Contacto activo cargado No disponible')
+    expect(summary).not.toMatch(/\$\s*0\b/)
     expect(textOf(page)).not.toContain('persona(s) asociada(s)')
     expect(unitOnMissing(wholeDetail(page))).toBeNull()
+  })
+
+  // Corregido en N7: sin importe ni vencimiento evaluables decía «Puntaje de prioridad: No disponible de 100».
+  it('sin puntaje calculable, el Resumen no dice «No disponible de 100» ni le pone banda', async () => {
+    const raw = e06Raw()
+    raw.debts[0].due_date = null
+    const summary = tabText(await detailPage(raw), 'summary')
+    expect(summary).not.toMatch(/No disponible de 100/)
+    expect(summary).toMatch(/Puntaje de prioridad: No disponible ?\. Se suma por reglas/)
+  })
+
+  // Corregido en N7: la regla aplicada mostraba un código interno («vencimiento NO_INFORMADO_EN_ORIGEN: 1»).
+  it('la regla aplicada no muestra códigos internos de presencia: dice el motivo en palabras', async () => {
+    const raw = e06Raw()
+    raw.debts[0].due_date = null
+    const detail = wholeDetail(await detailPage(raw))
+    expect(detail).not.toMatch(/NO_INFORMADO_EN_ORIGEN|NO_INTEGRADO|OBSERVADO_PARCIAL/)
+    expect(detail).toContain('vencimiento no informado en el archivo de origen: 1')
   })
 
   const listPages: [string, () => Promise<ReactNode>][] = [

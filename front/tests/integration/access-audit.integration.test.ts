@@ -41,7 +41,7 @@ const REPORTS = [
 ] as const
 const request = (name: string, query = '') => new Request(`http://127.0.0.1/api/reports/${name}${query}`)
 
-function session(role = 'supervisor', signedIn = true, tables: Record<string, RawRow[]> = {}, options: Parameters<typeof createPaginatedSupabase>[1] = {}) {
+function session(role = 'ADMIN', signedIn = true, tables: Record<string, RawRow[]> = {}, options: Parameters<typeof createPaginatedSupabase>[1] = {}) {
   const fixture = createPaginatedSupabase({
     user: [appUser], tenant_user: [membership], tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: role }],
     ...portfolioTables(), ...reviewTables(), access_audit: stored, ...tables,
@@ -84,7 +84,10 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
     expect(rpc).not.toHaveBeenCalled()
     expect(createWriter).not.toHaveBeenCalled()
     expect(requests.length).toBeGreaterThan(0)
-    expect(requests.every(read => ['user', 'tenant_user', 'tenant', 'role'].includes(read.table))).toBe(true)
+    // Noche 7: además de la identidad, una sola consulta SIN filas para saber si la base tiene el módulo.
+    const probes = requests.filter(read => read.table === 'import_batch')
+    expect(probes.map(probe => [probe.select, probe.limit])).toEqual([['id', 0]])
+    expect(requests.every(read => ['user', 'tenant_user', 'tenant', 'role', 'import_batch'].includes(read.table))).toBe(true)
   })
 
   it.each(REPORTS)('%s: HEAD no requiere la credencial de escritura de auditoria', async (name, get) => {
@@ -98,8 +101,9 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
 
   it.each(REPORTS)('%s: HEAD conserva el rechazo sin sesion o permiso', async (name, get) => {
     const rpc = writer()
-    session('supervisor', false)
+    session('ADMIN', false)
     expect((await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))).status).toBe(401)
+    // Noche 7: un nombre de rol de la demo anterior ya no ingresa; ningun reporte se autoriza.
     session('importador')
     expect((await get(new Request(`http://127.0.0.1/api/reports/${name}`, { method: 'HEAD' }))).status).toBe(403)
     expect(rpc).not.toHaveBeenCalled()
@@ -132,16 +136,25 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
 
   it.each(REPORTS)('%s sin sesion: 401 y ningun registro', async (name, get) => {
     const rpc = writer()
-    session('supervisor', false)
+    session('ADMIN', false)
     expect((await get(request(name))).status).toBe(401)
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it.each([['importador', 'queue', getQueue], ['consulta', 'supervision', getSupervision]] as const)('%s en %s: 403 y ningun registro', async (role, name, get) => {
+  it.each([
+    ['operador', 'queue', getQueue], ['USER', 'supervision', getSupervision], ['USER', 'access', getAccess], ['tp_operator', 'decisions', getDecisions],
+  ] as const)('%s en %s: 403 y ningun registro', async (role, name, get) => {
     const rpc = writer()
     session(role)
     expect((await get(request(name))).status).toBe(403)
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it.each(REPORTS.filter(([name]) => !['supervision', 'access'].includes(name)))('USER descarga %s, que ya ve en pantalla, y queda registrado', async (name, get, code) => {
+    const rpc = writer()
+    session('USER')
+    expect((await get(request(name))).status).toBe(200)
+    expect(rpcArguments(rpc)).toEqual([expect.objectContaining({ p_action: 'REPORT_EXPORT', p_target: code })])
   })
 
   it.each(REPORTS)('%s con filtro invalido: 400 y ningun registro', async (name, get) => {
@@ -153,7 +166,7 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
 
   it('con una lectura fallida no hay archivo ni registro', async () => {
     const rpc = writer()
-    session('supervisor', true, {}, { fail: read => read.table === 'access_audit' ? { message: 'caida', code: '57014' } : null })
+    session('ADMIN', true, {}, { fail: read => read.table === 'access_audit' ? { message: 'caida', code: '57014' } : null })
     const response = await getAccess(request('access'))
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ error: 'LECTURA_FALLIDA', tablas: ['access_audit'] })
@@ -211,7 +224,7 @@ describe('ALIGN-069: falla cerrada', () => {
 describe('ALIGN-069: apertura de la ficha', () => {
   it('abrirla deja un registro con el id interno y sin ningun otro dato', async () => {
     const rpc = writer()
-    session('consulta')
+    session('USER')
     const detail = buildDebtorDetail()
     await openCase(detail.debtor.id)
     expect(rpc).toHaveBeenCalledTimes(1)
@@ -230,7 +243,7 @@ describe('ALIGN-069: apertura de la ficha', () => {
 
   it('un objeto inexistente o de otro municipio no deja registro', async () => {
     const rpc = writer()
-    session('consulta')
+    session('USER')
     getDebtorDetailData.mockResolvedValue({ detail: null, warnings: [] })
     await expect(openCase('999999')).rejects.toThrow('NEXT_NOT_FOUND')
     expect(rpc).not.toHaveBeenCalled()
@@ -238,7 +251,7 @@ describe('ALIGN-069: apertura de la ficha', () => {
 
   it('una lectura denegada no deja registro', async () => {
     const rpc = writer()
-    session('consulta')
+    session('USER')
     getDebtorDetailData.mockRejectedValue(new Error('denegado'))
     await expect(openCase()).rejects.toThrow('denegado')
     expect(rpc).not.toHaveBeenCalled()
@@ -256,7 +269,7 @@ describe('ALIGN-069: reporte de accesos', () => {
   const details = (rows: Record<string, string>[]) => rows.filter(row => row.tipo_fila === 'DETALLE')
   const total = (rows: Record<string, string>[]) => rows.filter(row => row.tipo_fila === 'TOTAL')
 
-  it.each(['consulta', 'operador', 'importador', 'tp_operator'])('%s no lo recibe', async role => {
+  it.each(['USER', 'tp_operator', 'consulta', 'operador', 'supervisor', 'importador'])('%s no lo recibe', async role => {
     const rpc = writer()
     const { requests } = session(role)
     expect((await getAccess(request('access'))).status).toBe(403)
@@ -276,7 +289,7 @@ describe('ALIGN-069: reporte de accesos', () => {
 
   it('sin registros: solo el total en cero', async () => {
     writer()
-    session('supervisor', true, { access_audit: [] })
+    session('ADMIN', true, { access_audit: [] })
     const response = await getAccess(request('access'))
     const rows = parseCsvBytes(new Uint8Array(await response.arrayBuffer())).rows
     expect(details(rows)).toEqual([])

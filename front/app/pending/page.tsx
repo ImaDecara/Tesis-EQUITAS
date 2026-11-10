@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 
 import { AppShell } from '@/components/layout/app-shell'
+import { ModuleUnavailableCard } from '@/components/portfolio/portfolio-state'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -17,6 +18,7 @@ import {
 } from '@/lib/domain/recorded-decision'
 import { getDebtorsData } from '@/lib/equitas-data'
 import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
+import { moduleAvailable } from '@/lib/domain/database-level-text'
 import { loadViewerContext } from '@/lib/server/viewer-context'
 import { formatDate, formatDateTime } from '@/lib/utils'
 
@@ -101,13 +103,15 @@ export default async function PendingPage() {
           <p className="text-sm text-slate-700">Los casos que esperan algo de vos: propuestas para aprobar u objetar, tus propuestas en espera y decisiones tuyas que conviene revisar.</p>
         </header>
 
+        {viewer && !moduleAvailable(viewer) && <ModuleUnavailableCard what="Pendientes" />}
+
         {!decisions.ok && decisions.reason === 'UNAVAILABLE' && (
           <Notice title="No se pudieron leer las decisiones">
             <p>Esto no significa que no haya pendientes. Recargá la página; si sigue igual, avisá a quien administra el sistema.</p>
           </Notice>
         )}
 
-        {viewer && !capabilities.canRecord && !capabilities.canApprove && (
+        {viewer && moduleAvailable(viewer) && !capabilities.canRecord && !capabilities.canApprove && (
           <Notice title="Tu cuenta no tiene tareas pendientes">
             <p>Registrar una decisión sobre un caso y aprobar la propuesta de otra persona requieren una cuenta con rol ADMIN. Tu cuenta es {viewer.roleLabel}: podés ver la decisión registrada de cada caso y su estado en <Link href="/debtors" className="underline">Casos</Link>.</p>
           </Notice>

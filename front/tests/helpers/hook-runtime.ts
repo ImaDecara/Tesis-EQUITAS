@@ -20,6 +20,11 @@ export const hookRuntime = {
     if (!(index in slots)) slots[index] = init ? init(initialArg) : initialArg
     return [slots[index], (event: unknown) => { slots[index] = reducer(slots[index], event) }]
   },
+  useState(initial: unknown) {
+    const index = cursor++
+    if (!(index in slots)) slots[index] = typeof initial === 'function' ? (initial as () => unknown)() : initial
+    return [slots[index], (next: unknown) => { slots[index] = typeof next === 'function' ? (next as (value: unknown) => unknown)(slots[index]) : next }]
+  },
   useRef(current: unknown) {
     const index = cursor++
     if (!(index in slots)) slots[index] = { current }

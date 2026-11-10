@@ -254,6 +254,103 @@ describe('ALIGN-052: reenvio de lotes desde Next a FastAPI', () => {
   })
 })
 
+describe('Noche 7: carga directa desde «Cargar CSV»', () => {
+  it('POST /api/imports/load se reenvia a /imports/load en flujo, con el token y sin cookies ni municipio', async () => {
+    const fetchMock = upstreamReturns(200, { resultado: 'PUBLICADO', lote: 3 })
+    const response = await batchAction(request('/api/imports/load', {
+      method: 'POST', body: 'contenido-multipart',
+      headers: { ...sameOrigin, 'content-type': 'multipart/form-data; boundary=x', cookie: 'sb-127-auth-token=cookie', 'x-tenant': '999' },
+    }), context('load'))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ resultado: 'PUBLICADO', lote: 3 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${INTERNAL}/imports/load`)
+    const headers = init?.headers as Headers
+    expect(headers.get('authorization')).toBe(`Bearer ${TOKEN}`)
+    expect(headers.get('content-type')).toBe('multipart/form-data; boundary=x')
+    expect(headers.get('cookie')).toBeNull()
+    expect(headers.get('x-tenant')).toBeNull()
+    expect(init?.body).toBeInstanceOf(ReadableStream)
+    expect(init).toMatchObject({ method: 'POST', duplex: 'half', redirect: 'manual', cache: 'no-store' })
+  })
+
+  it.each([['RECHAZADO', 422], ['NO_COMPLETADO', 503], ['REQUIERE_CONFIRMACION', 409]])(
+    'un desenlace atendido (%s) llega como respuesta 200 con su cuerpo', async (resultado, status) => {
+      upstreamReturns(status, { resultado, mensaje: 'Mensaje sintetico.' })
+      const response = await batchAction(request('/api/imports/load', { method: 'POST', headers: sameOrigin }), context('load'))
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ resultado, mensaje: 'Mensaje sintetico.' })
+    })
+
+  it('sin `resultado` conserva el codigo del servicio (sesion, permiso, entrada)', async () => {
+    upstreamReturns(403, { detail: 'ROLE_FORBIDDEN' })
+    expect((await batchAction(request('/api/imports/load', { method: 'POST', headers: sameOrigin }), context('load'))).status).toBe(403)
+  })
+
+  it('un corte a mitad de la carga no afirma que nada cambio: 504 IMPORT_RESULT_UNKNOWN', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('terminated') }))
+    const response = await batchAction(request('/api/imports/load', { method: 'POST', body: 'x', headers: sameOrigin }), context('load'))
+    expect(response.status).toBe(504)
+    expect(await response.json()).toEqual({ detail: 'IMPORT_RESULT_UNKNOWN' })
+  })
+
+  it('con la conexion rechazada el servicio no recibio nada: 503', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }) }))
+    const response = await batchAction(request('/api/imports/load', { method: 'POST', body: 'x', headers: sameOrigin }), context('load'))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ detail: 'IMPORT_SERVICE_UNAVAILABLE' })
+  })
+
+  it('otro origen no llega al servicio', async () => {
+    const fetchMock = upstreamReturns()
+    const response = await batchAction(request('/api/imports/load', { method: 'POST', headers: { origin: 'http://malicioso.example.test' } }), context('load'))
+    expect(response.status).toBe(403)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['GET /api/imports/load', 'GET', ['load']],
+    ['POST /api/imports/load/x', 'POST', ['load', 'x']],
+    ['POST /api/imports/LOAD', 'POST', ['LOAD']],
+  ] as const)('%s: 404 sin llegar al servicio', async (_name, method, segments) => {
+    const fetchMock = upstreamReturns()
+    const handler = method === 'GET' ? readBatch : batchAction
+    const response = await handler(request(`/api/imports/${segments.join('/')}`, { method, headers: sameOrigin }), context(...segments))
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({ detail: 'NOT_FOUND' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('Noche 7: disponibilidad de la carga', () => {
+  it.each(['http://127.0.0.1:54321', 'http://localhost:54321', 'http://[::1]:54321'])('%s es la base local', async url => {
+    const { isLocalDatabaseUrl } = await import('@/lib/server/import-availability')
+    expect(isLocalDatabaseUrl(url)).toBe(true)
+  })
+
+  it.each(['https://proyecto.supabase.co', 'http://127.0.0.2:54321', 'http://127.0.0.1.example.test', '', 'no-es-url'])('%j no es la base local', async url => {
+    const { isLocalDatabaseUrl } = await import('@/lib/server/import-availability')
+    expect(isLocalDatabaseUrl(url)).toBe(false)
+  })
+
+  it('base local y servicio configurado: disponible', async () => {
+    const { importAvailability } = await import('@/lib/server/import-availability')
+    expect(importAvailability('http://127.0.0.1:54321')).toEqual({ available: true })
+  })
+
+  it('base no local: deshabilitada aunque el servicio este configurado', async () => {
+    const { importAvailability } = await import('@/lib/server/import-availability')
+    expect(importAvailability('https://proyecto.supabase.co')).toMatchObject({ available: false, reason: 'NOT_LOCAL_DATABASE', explanation: expect.stringContaining('base local') })
+    expect(importAvailability('ilegible')).toMatchObject({ available: false, reason: 'NOT_LOCAL_DATABASE' })
+  })
+
+  it.each(['', 'http://servicio.example.test:8010'])('servicio sin configurar o no local (%j): deshabilitada', async value => {
+    vi.stubEnv('EQUITAS_IMPORT_API_URL', value)
+    const { importAvailability } = await import('@/lib/server/import-availability')
+    expect(importAvailability('http://127.0.0.1:54321')).toMatchObject({ available: false, reason: 'SERVICE_NOT_CONFIGURED', explanation: expect.stringContaining('no está configurado') })
+  })
+})
+
 describe('ALIGN-052: el proxy no toca esta ruta', () => {
   const matcher = new RegExp(`^${proxyConfig.matcher[0]}$`)
 

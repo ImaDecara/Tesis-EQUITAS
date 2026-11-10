@@ -60,7 +60,8 @@ export async function getDebtorsDataFromService() {
 
 // Caso de uso del detalle de un objeto de deuda.
 export async function getDebtorDetailDataFromService(debtorId: string) {
-  const rawData = await loadRawDebtorData()
+  // Solo los datos de ese caso: la ficha no necesita el resto de la cartera.
+  const rawData = await loadRawDebtorData(debtorId)
   const contactTypes = await loadContactTypeCatalog()
   const mapped = mapDebtorObjectsFromRawData({
     ...rawData,

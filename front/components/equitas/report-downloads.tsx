@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 // navegación del cliente: la ruta responde un archivo adjunto y vuelve a autorizar cada descarga.
 
 function portfolioLine(portfolio: PortfolioState) {
-  if (portfolio.kind === 'LOADED') return `Cartera al ${formatDate(portfolio.asOf)}`
+  if (portfolio.kind === 'LOADED') return `Cartera al ${formatDate(portfolio.asOf)}${portfolio.declared ? ' (fecha declarada)' : ''}`
   return portfolio.kind === 'EMPTY' ? 'Sin cartera cargada' : 'Fecha de la cartera no disponible'
 }
 

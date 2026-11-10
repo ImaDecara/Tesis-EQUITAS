@@ -7,6 +7,7 @@ import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { isStale, recordedStatus, type RecordedDecision } from '@/lib/domain/recorded-decision'
 import { DataAccessError, requireTenantAccess } from '@/lib/server/dal'
+import { levelAfter } from '@/lib/server/database-level'
 import { resolvePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import type { RawRow } from '@/types/equitas-domain'
 
@@ -21,7 +22,8 @@ const BATCH_COLUMNS = 'id,as_of,source_updated_at,status,supersedes,publicacion_
 export type RecordedDecisions =
   | { ok: true; current: { asOf: string | null; rulesVersion: string }; byDebtor: ReadonlyMap<string, RecordedDecision> }
   // FORBIDDEN: el rol no lee decisiones. UNAVAILABLE: no se pudo leer; nunca significa «sin decisiones».
-  | { ok: false; reason: 'FORBIDDEN' | 'UNAVAILABLE' }
+  // NO_MODULE: la base no tiene el módulo de decisiones (encargo 10.2): no hay nada que leer.
+  | { ok: false; reason: 'FORBIDDEN' | 'UNAVAILABLE' | 'NO_MODULE' }
 
 function heads(rows: readonly RawRow[]): RawRow[] {
   const replaced = new Set(rows.map(row => databaseId(row.supersedes)).filter(Boolean))
@@ -82,6 +84,7 @@ async function readRecordedDecisions(): Promise<RecordedDecisions> {
       loadAllTableRows('case_review_approval', supabase, { select: APPROVAL_COLUMNS, filters }),
       loadAllTableRows('import_batch', supabase, { select: BATCH_COLUMNS, filters }),
     ])
+    if (await levelAfter(reviews.warning) === 'BASE') return { ok: false, reason: 'NO_MODULE' }
     if (reviews.warning || approvals.warning) return { ok: false, reason: 'UNAVAILABLE' }
     const cutoff = resolvePortfolioCutoff(
       batches.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })), batches.warning)

@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('next/headers', () => ({ cookies: cookieStore }))
 
 import { requireTenantAccess, createTenantReader, type DalPermission } from '@/lib/server/dal'
+import { ACCESS_MESSAGES } from '@/lib/auth/tenant-access'
 import type { RawRow } from '@/types/equitas-domain'
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { getPeopleDataFromService } from '@/lib/services/person-data-service'
@@ -28,7 +29,7 @@ const loaders = [
 function clientFor(tables: Record<string, RawRow[]> = {}, signedIn = true, options: Parameters<typeof createPaginatedSupabase>[1] = {}) {
   const fixture = createPaginatedSupabase({
     user: [appUser], tenant_user: [membership],
-    tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: 'consulta' }],
+    tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: 'USER' }],
     debtor: [{ id: 99, tenant: 7, identifier: 'CARTERA-SINTETICA' }],
     ...tables,
   }, { enforceFilters: true, ...options })
@@ -79,30 +80,36 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
     vi.spyOn(client.auth, 'getSession').mockResolvedValue({ data: { session: { user: { id: 'forged-identity' }, access_token: 'synthetic-token' } }, error: null } as never)
     const result = await requireTenantAccess()
     expect(result.supabase).toBe(client)
-    expect(result.context).toEqual({ authUserId: 'auth-test', appUserId: '42', tenantId: '7', roleId: '3', roleName: 'consulta' })
+    expect(result.context).toEqual({ authUserId: 'auth-test', appUserId: '42', tenantId: '7', roleId: '3', roleName: 'USER' })
     expect(client.auth.getUser).toHaveBeenCalledOnce()
   })
 
-  it.each(['consulta', 'operador', 'supervisor'])('permite lectura al rol aprobado %s', async name => {
+  // Noche 7: ADMIN y USER leen la cartera igual que en main; tp_operator es compatibilidad de lectura.
+  it.each(['ADMIN', 'USER', 'tp_operator'])('permite lectura al rol %s', async name => {
     clientFor({ role: [{ id: 3, name }] })
     expect((await loadRawDebtorData()).debtors.map(row => row.id)).toEqual([99])
   })
 
-  // Matriz completa: ALIGN-003 y las funciones de ALIGN-018@76863d7. Lo que no figura se deniega.
+  // Los nombres de la demo anterior y la identidad de maquina ya no ingresan por la web.
+  it.each(['consulta', 'operador', 'supervisor', 'importador', 'importador_sistema'])('el rol no reconocido %s no ingresa ni lee cartera', async name => {
+    const { requests } = clientFor({ role: [{ id: 3, name }] })
+    await expect(loadRawDebtorData()).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN', status: 403, message: ACCESS_MESSAGES.ROLE_FORBIDDEN })
+    expect(requests.some(request => request.table === 'debtor')).toBe(false)
+  })
+
+  // Matriz completa (seccion 4.2 del encargo de la noche 7). Lo que no figura se deniega.
   const CAPABILITIES: Record<string, readonly DalPermission[]> = {
-    consulta: ['portfolio:read', 'review:read', 'decision:read'],
-    operador: ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier', 'decision:record'],
-    supervisor: ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier', 'decision:approve', 'supervision:read'],
-    importador: ['import:write'],
+    ADMIN: ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier', 'decision:record', 'decision:approve', 'supervision:read', 'audit:read', 'import:write'],
+    USER: ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier'],
     tp_operator: ['portfolio:read'],
   }
-  const PERMISSIONS: readonly DalPermission[] = ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier', 'decision:record', 'decision:approve', 'supervision:read', 'import:write']
+  const PERMISSIONS: readonly DalPermission[] = ['portfolio:read', 'review:read', 'decision:read', 'report:object-identifier', 'decision:record', 'decision:approve', 'supervision:read', 'audit:read', 'import:write']
   it.each(Object.entries(CAPABILITIES).flatMap(([name, allowed]) =>
     PERMISSIONS.map(permission => [name, permission, allowed.includes(permission)] as const)))('%s / %s: permitido=%s', async (name, permission, allowed) => {
     const { requests } = clientFor({ role: [{ id: 3, name }] })
     const result = requireTenantAccess({ permission })
     if (allowed) expect((await result).context.roleName).toBe(name)
-    else await expect(result).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN', status: 403 })
+    else await expect(result).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN', status: 403, message: 'Tu cuenta no tiene permiso para esta función.' })
     expect(requests.every(request => ['user', 'tenant_user', 'tenant', 'role'].includes(request.table))).toBe(true)
   })
 
@@ -117,14 +124,14 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
   })
 
   it.each([
-    'TP_OPERATOR', 'tp_operator ', ' tp_operator', 'tp-operator', 'operator', 'tp_operator2', 'admin', '910001', '3', 'importador_sistema', '', null,
+    'TP_OPERATOR', 'tp_operator ', ' tp_operator', 'tp-operator', 'operator', 'tp_operator2', 'admin', 'Admin', 'ADMIN ', ' USER', 'user', 'USUARIO', '910001', '3', 'importador_sistema', '', null,
   ])('el nombre de rol debe coincidir exactamente; %j se deniega', async name => {
     clientFor({ role: [{ id: 3, name }] })
     await expect(requireTenantAccess()).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
   })
 
   it('un permiso desconocido en tiempo de ejecucion se deniega', async () => {
-    clientFor({ role: [{ id: 3, name: 'supervisor' }] })
+    clientFor({ role: [{ id: 3, name: 'ADMIN' }] })
     await expect(requireTenantAccess({ permission: 'export:all' as DalPermission })).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
   })
 
@@ -132,9 +139,11 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
     const { requests } = clientFor({
       tenant_user: [membership, { ...membership, id: 2, tenant: 8, role: 4 }],
       tenant: [{ id: 7, status: 'ACTIVE' }, { id: 8, status: 'ACTIVE' }],
-      role: [{ id: 3, name: 'consulta' }, { id: 4, name: 'operador' }],
+      role: [{ id: 3, name: 'USER' }, { id: 4, name: 'ADMIN' }],
     })
-    expect((await requireTenantAccess({ tenantId: '8', permission: 'decision:record' })).context).toMatchObject({ tenantId: '8', roleId: '4', roleName: 'operador' })
+    expect((await requireTenantAccess({ tenantId: '8', permission: 'decision:record' })).context).toMatchObject({ tenantId: '8', roleId: '4', roleName: 'ADMIN' })
+    // En el otro municipio la misma cuenta es USER: no registra.
+    await expect(requireTenantAccess({ tenantId: '7', permission: 'decision:record' })).rejects.toMatchObject({ code: 'ROLE_FORBIDDEN' })
     expect(requests.filter(request => request.table === 'tenant_user').every(request =>
       request.filters.user === 'eq.42' && request.filters.tenant === undefined)).toBe(true)
   })

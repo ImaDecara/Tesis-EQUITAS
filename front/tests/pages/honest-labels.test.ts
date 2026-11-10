@@ -139,6 +139,19 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(text).not.toMatch(/riesgo|\bscore\b|seguimiento individual|severidad/i)
   })
 
+  it('N7 (H10): una lectura fallida del índice anterior sigue siendo un error, no «esta cartera no lo trae»', async () => {
+    const peopleRaw = buildPresencePeopleData()
+    peopleRaw.debtorProfilesDetail = []
+    configureLists(rawObject(), peopleRaw)
+    const people = mapPeopleFromRawData(peopleRaw)
+    getPeopleData.mockResolvedValue({ people: people.people, peopleDashboard: people.dashboard,
+      warnings: [{ table: 'debtor_profile_detail', message: 'Fallo sintético de lectura', needsSelectPolicy: true }] })
+    const text = renderedText(await peoplePage())
+    expect(text).toContain('No se pudieron leer algunos datos')
+    expect(text).toContain('No se pudo leer el índice anterior por persona')
+    expect(text).not.toContain('Esta cartera no trae el índice anterior por persona')
+  })
+
   it('el filtro de personas usa el rótulo de la columna y nombra su selector', async () => {
     const markup = markupOf(await peoplePage())
     expect(markup).toMatch(/<label for="risk"[^>]*>\s*Índice anterior\s*<\/label>/)
@@ -146,22 +159,21 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(textOfMarkup(markup)).not.toContain('Riesgo individual')
   })
 
-  it('separa severidad v1, índice heredado no disponible y vulnerabilidad no informada', async () => {
+  // N7: la «severidad v1» se llama «puntaje de prioridad» y el índice heredado ya no se muestra en la ficha.
+  it('separa puntaje de prioridad, índice heredado retirado y vulnerabilidad no informada', async () => {
     const raw = rawObject()
     raw.debtorProfiles = [{ debtor: 901, socioeconomic_risk_level: 99 }]
     const page = await detailPage(raw)
     const text = allTabsText(page)
-    expect(text).toContain('Severidad del objeto (v1)')
-    expect(text).toContain('puntos de 0 a 100; no son porcentajes ni probabilidades de pago')
+    expect(text).toContain('Puntaje de prioridad: 0 de 100 (banda baja). Se suma por reglas con tres factores; no es una probabilidad de pago.')
+    expect(text).toContain('Por reglas, no es una probabilidad de pago.')
     expect(text).toContain('Vulnerabilidad: no informada')
-    expect(text).toContain('Prioridad dentro de su cola (puntos de 0 a 100)')
     expect(text).toContain('Porcentaje declarado en origen')
-    expect(text).toContain('ID externo de la obligación')
+    expect(text).not.toMatch(/Severidad del objeto|Índice heredado|Prioridad dentro de su cola|ID externo de la obligación/)
     expect(text).not.toMatch(/Nivel socioeconomico|Prioridad de contacto|\bPeriodo\b|\bscore\b|Perfil\/Riesgo|\briesgo\b/i)
-    const legacy = nodesOfType(page, Card).find(card => renderedText(card).includes('Índice heredado de severidad (no social)'))!
-    expect(renderedText(legacy)).toContain('No disponible')
-    // El DTO ya no trae el índice v0: no etiquetar la severidad v1 como índice heredado.
-    expect(nodesOfType(legacy, RiskBadge)).toHaveLength(0)
+    // El nivel socioeconómico del perfil no se muestra ni como dato ni como insignia de riesgo.
+    expect(text).not.toContain('99')
+    expect(nodesOfType(page, RiskBadge)).toHaveLength(0)
   })
 
   it.each([80, 120])('avisa que los porcentajes declarados suman %s sin normalizarlos', async total => {
@@ -241,22 +253,24 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       expect(tabText(page, 'people')).not.toContain('suman 0%')
     }
     if (table === 'debtor_person' || table === 'debtor_contact') {
-      expect(tabText(page, 'summary')).toContain('Contacto disponible: No disponible')
-      expect(tabText(page, 'contacts')).toContain('No disponible')
-      expect(tabText(page, 'contacts')).not.toContain('Sin contactos registrados')
+      expect(tabText(page, 'summary')).toContain('Contacto activo cargado No disponible')
+      expect(tabText(page, 'people')).toContain('No disponible: no se pudo leer la lista de contactos.')
+      expect(tabText(page, 'people')).not.toContain('Sin contactos registrados')
       expect(tabText(page, 'people')).not.toContain('Sin contacto')
     }
     if (table === 'debt') {
-      expect(tabText(page, 'debts')).toContain('No disponible')
-      expect(tabText(page, 'debts')).not.toContain('Sin deudas visibles')
+      expect(tabText(page, 'debts')).toContain('No disponible: no se pudo leer la lista de obligaciones.')
+      expect(tabText(page, 'debts')).not.toContain('Este caso no tiene obligaciones cargadas.')
+      expect(tabText(page, 'summary')).toContain('Total registrado Todas las obligaciones, cualquiera sea su estado. No disponible')
     }
     const text = renderedText(page)
     if (table === 'debt' || table === 'debtor_person') {
-      expect(text).toContain('Decisión no disponible: no se pudieron leer los datos necesarios para evaluar este objeto')
+      expect(text).toContain('No se pudieron leer los datos necesarios para evaluar este caso')
       expect(text).not.toContain('LECTURA_FALLIDA')
     } else {
       // La regla v1 sigue evaluando cuando falla sólo el contacto.
-      expect(text).not.toContain('Decisión no disponible:')
+      expect(text).not.toContain('No se pudieron leer los datos necesarios para evaluar este caso')
+      expect(text).toMatch(/Puntaje de prioridad \d+ de 100/)
     }
   })
 
@@ -305,16 +319,16 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     const raw = rawObject()
     raw.debtorPeople = []; raw.debtorContacts = []; raw.debts = []
     const page = await detailPage(raw)
-    expect(tabText(page, 'summary')).toMatch(/Contacto disponible:\s+No\s*$/)
+    expect(tabText(page, 'summary')).toContain('Contacto activo cargado No Las obligaciones pagadas')
     expect(tabText(page, 'people')).toContain('Sin personas asociadas visibles.')
     expect(tabText(page, 'people')).not.toContain('No se puede verificar la suma')
-    expect(tabText(page, 'contacts')).toContain('Sin contactos registrados para este objeto.')
-    expect(tabText(page, 'debts')).toContain('Sin deudas visibles.')
-    expect(renderedText(page)).not.toContain('Decisión no disponible:')
+    expect(tabText(page, 'people')).toContain('Sin contactos registrados para este caso.')
+    expect(tabText(page, 'debts')).toContain('Este caso no tiene obligaciones cargadas.')
+    expect(renderedText(page)).not.toContain('No se pudieron leer los datos necesarios para evaluar este caso')
   })
 
   it('conserva el contacto observado disponible', async () => {
-    expect(tabText(await detailPage(), 'summary')).toContain('Contacto disponible: Si')
+    expect(tabText(await detailPage(), 'summary')).toContain('Contacto activo cargado Sí')
   })
 
   it('comparte la banda inclusiva desde 70 puntos entre tarjeta y tabla', async () => {
@@ -394,7 +408,10 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     failedDebt.warnings = [{ table: 'debt', message: 'Fallo sintético de lectura', needsSelectPolicy: false }]
     failedDebt.debts = []
     const detail = renderedText(await detailPage(failedDebt))
-    expect(detail).toContain('Severidad: 1 NO_INTEGRADO')
+    // N7: el faltante se dice en palabras (antes «Severidad: 1 NO_INTEGRADO»), sin el código interno.
+    expect(detail).toContain('Puntaje de prioridad No disponible No se pudieron leer los datos necesarios para evaluar este caso')
+    expect(detail).toContain('Falta leer las obligaciones.')
+    expect(detail).not.toMatch(/NO_INTEGRADO|Severidad:/)
     expect(detail).not.toMatch(/\briesgo\b/i)
 
   })
@@ -422,8 +439,9 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       warning: null,
     }))
     const data = await getPeopleDataFromService()
+    // N7: aviso propio, sin pedir permisos (el índice no existe en una cartera cargada por CSV).
     expect(data.warnings).toEqual([{
-      table: 'debtor_profile_detail', message: 'No devolvió filas para esta sesión.', needsSelectPolicy: true,
+      table: 'debtor_profile_detail', code: 'EMPTY_LEGACY_INDEX', message: 'El índice anterior por persona no tiene filas.', needsSelectPolicy: false,
     }])
     getPeopleData.mockResolvedValue(data)
     // N7 (H10): «no devolvió filas» es lo que pasa con una cartera cargada por CSV, que no trae el índice:

@@ -5,7 +5,7 @@ import { E06_READ_ONLY_COMPAT_ROLE, resolveTenantAccessWithRoleName, TENANT_COOK
 import { isAuthServiceUnavailable } from '@/lib/auth/session-routing'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
-import { tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-scope'
+import { debtorReadScope, isDebtorScoped, tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-scope'
 
 // UNICO lugar de esta capa donde se decide que permite cada rol (noche 7, seccion 4.2 del encargo).
 // Cambiar una fila es cambiar una linea de esta tabla; la base tiene su equivalente en
@@ -95,8 +95,11 @@ export async function createTenantReader() {
       // Solo la marca JSON protegida de 032, sin el resto de los conteos del lote.
       return { ...result, rows: result.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })) }
     },
-    async readTable(table: PortfolioTable) {
-      const scope = tenantReadScope(table, context.tenantId)
+    // Con `debtorId`, la misma lectura reducida a un caso (noche 7, rendimiento): no abre tablas ni columnas
+    // nuevas. Ese identificador tiene que salir de una fila ya leída del municipio, nunca directo de la URL.
+    async readTable(table: PortfolioTable, debtorId?: string) {
+      const scope = debtorId !== undefined && isDebtorScoped(table)
+        ? debtorReadScope(table, context.tenantId, debtorId) : tenantReadScope(table, context.tenantId)
       if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'Esa lectura no está habilitada.')
       return loadAllTableRows(table, supabase, scope)
     },

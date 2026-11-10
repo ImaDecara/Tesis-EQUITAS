@@ -7,6 +7,7 @@ import type { AccessAuditRow } from '@/lib/reports/access-audit-report'
 import { assertReadsComplete } from '@/lib/reports/report-format'
 import { createCaseReviewWriter } from '@/lib/server/case-review-writer'
 import { requireTenantAccess, type DalContext } from '@/lib/server/dal'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 import type { ReportAccess } from '@/lib/server/report-response'
 import type { DataWarning } from '@/types/equitas-domain'
 
@@ -19,6 +20,9 @@ export type AccessAuditEvent =
   | { action: 'CASE_OPEN' | 'CHANNEL_LINK'; target: string; idempotencyKey?: string }
   | { action: 'IMPORT_CONFIRM'; target: string; idempotencyKey: string }
   | { action: 'REPORT_EXPORT' | 'ANALYTICS_VIEW'; target: string; idempotencyKey?: string }
+
+// Lista cerrada de acciones que una base SIN el módulo entrega sin registro. No agregar descargas ni escrituras.
+const UNAUDITED_WITHOUT_MODULE: ReadonlySet<AccessAuditEvent['action']> = new Set(['CASE_OPEN'])
 
 export class AccessAuditError extends Error {
   constructor() {
@@ -47,6 +51,11 @@ export async function recordAccessAudit(context: Pick<DalContext, 'appUserId' | 
     }
   }
   if (failure) {
+    // Noche 7 (encargo 10.2). Única excepción a «sin registro no hay entrega»: la base no tiene el módulo
+    // (faltan sus cuatro tablas, comprobado en esta misma solicitud) y la acción es abrir un caso, que en
+    // esa base tampoco se registraba antes. Una descarga de reporte nunca entra acá. Ante cualquier otra
+    // causa (credencial, red, función, una sola tabla ausente) el nivel no es BASE y se sigue fallando cerrado.
+    if (UNAUDITED_WITHOUT_MODULE.has(event.action) && await loadDatabaseLevel() === 'BASE') return
     // Sin el mensaje de la base ni el destino: solo accion y codigo.
     console.error(`Auditoria no registrada: ${event.action} ${failure}`)
     throw new AccessAuditError()

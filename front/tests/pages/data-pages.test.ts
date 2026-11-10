@@ -8,7 +8,7 @@ import {
   buildPeople,
   buildPeopleDashboard,
 } from '@/tests/helpers/equitas-fixtures'
-import { textFromReactTree } from '@/tests/helpers/react-tree'
+import { panelOf } from '@/tests/helpers/case-page'
 import { decisionsFixture, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const {
@@ -191,10 +191,11 @@ describe('pantallas con datos de gestion simulados', () => {
 
   it('muestra el detalle completo de un objeto y deriva a notFound cuando falta', async () => {
     const detailPage = await DebtorDetailPage({ params: Promise.resolve({ debtorId: '1' }) })
-    const detailText = textFromReactTree(detailPage)
+    // N7: el contenido está en componentes; se renderiza la ficha y cada pestaña (helpers/case-page).
+    const detailText = renderedText(detailPage)
 
-    expect(detailText).toContain('Resumen del objeto')
-    expect(detailText).toContain('Contactos de personas asociadas')
+    expect(detailText).toContain('Totales del caso')
+    expect(panelOf(detailPage, 'people').text).toContain('Contactos de las personas asociadas')
     expect(detailText).toContain('AG-1001')
 
     getDebtorDetailDataMock.mockResolvedValueOnce({ detail: null, warnings: [] })

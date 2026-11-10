@@ -70,8 +70,8 @@ export function PriorityBreakdown({ debtor, readFailed }: { debtor: DebtorListIt
       <CardHeader><CardTitle>Por qué tiene esta prioridad</CardTitle></CardHeader>
       <CardContent className="space-y-4 text-sm text-slate-700">
         <p>
-          Puntaje de prioridad: <span className="font-semibold text-slate-900">{scoreText(view.severity.value, view.severity.state)} de 100</span>
-          {band && <> (banda {band.toLowerCase()})</>}. Se suma por reglas con tres factores; no es una probabilidad de pago.
+          Puntaje de prioridad: <span className="font-semibold text-slate-900">{scoreText(view.severity.value, view.severity.state)}{view.severity.value !== null && ' de 100'}</span>
+          {view.severity.value !== null && band && <> (banda {band.toLowerCase()})</>}. Se suma por reglas con tres factores; no es una probabilidad de pago.
         </p>
         <dl aria-label="Desglose del puntaje">
           {view.factors.map(item => (
@@ -97,7 +97,7 @@ export function PriorityBreakdown({ debtor, readFailed }: { debtor: DebtorListIt
         )}
         {coverage.length > 0 && (
           <p className="text-xs text-slate-600" data-coverage-note>
-            Nota de cobertura: esta versión no integra {joinList(coverage.map(flag => COVERAGE_LABELS[flag]))} de la cartera cargada.
+            Nota de cobertura: las reglas de esta versión no usan {joinList(coverage.map(flag => COVERAGE_LABELS[flag]))}.
             No cambia el puntaje ni la recomendación.
           </p>
         )}

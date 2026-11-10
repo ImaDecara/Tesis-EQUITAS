@@ -6,7 +6,7 @@ import { MetricCard } from '@/components/dashboard/metric-card'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { AppShell } from '@/components/layout/app-shell'
 import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
-import { bandLabel, casesLabel, daysLabel, filterLine, GROUP_CRITERIA, missingLines, SCORE_LABEL, SCORE_NOTE, SCORE_RECIPE, scoreText, scoreView } from '@/components/portfolio/portfolio-text'
+import { bandLabel, casesLabel, daysLabel, filterLine, GROUP_CRITERIA, isEmptyLegacyIndexWarning, missingLines, SCORE_LABEL, SCORE_NOTE, SCORE_RECIPE, scoreText, scoreView } from '@/components/portfolio/portfolio-text'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -33,7 +33,9 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
   const empty = await emptyPortfolioScreen(TITLE)
   if (empty) return empty
   const filters = normalizePortfolioSearchParams(await searchParams ?? {})
-  const { dashboard, warnings } = await getDashboardData(filters)
+  const { dashboard, warnings: readWarnings } = await getDashboardData(filters)
+  // Que la cartera no traiga el índice anterior por persona no es un error de lectura: el tablero no lo muestra.
+  const warnings = readWarnings.filter(warning => !isEmptyLegacyIndexWarning(warning))
   const metrics = dashboard.metrics ?? {}
   const total = dashboard.totalDebtors
   const highRiskShare = percentageData(dashboard.priorityCases, total)
