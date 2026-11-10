@@ -6,11 +6,17 @@ import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
 import { buildRecommendationSummary, RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
+import { decisionsFixture, markupOf, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const { getPeopleData, getDebtorsData, getDashboardData } = vi.hoisted(() => ({
   getPeopleData: vi.fn(), getDebtorsData: vi.fn(), getDashboardData: vi.fn(),
 }))
 vi.mock('@/lib/equitas-data', () => ({ getPeopleData, getDebtorsData, getDashboardData }))
+const session = vi.hoisted(() => ({ viewer: vi.fn(), decisions: vi.fn() }))
+vi.mock('@/lib/server/viewer-context', async original => ({ ...(await original<typeof import('@/lib/server/viewer-context')>()), loadViewerContext: session.viewer }))
+vi.mock('@/lib/server/recorded-decisions', async original => ({ ...(await original<typeof import('@/lib/server/recorded-decisions')>()), loadRecordedDecisions: session.decisions }))
+vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
+vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ replace: vi.fn() }) }))
 
 import PeoplePage from '@/app/people/page'
 import HomePage from '@/app/page'
@@ -33,6 +39,8 @@ function configure(peopleRaw = buildPresencePeopleData(), debtorRaw = buildPrese
   getPeopleData.mockResolvedValue({ people: personResult.people, peopleDashboard: personResult.dashboard, warnings: peopleRaw.warnings })
   getDebtorsData.mockResolvedValue({ debtors: objects.debtors, warnings: debtorRaw.warnings })
   getDashboardData.mockResolvedValue({ dashboard: mapDashboardMetricsFromDebtorObjects(objects), warnings: debtorRaw.warnings })
+  session.viewer.mockResolvedValue(viewerFixture())
+  session.decisions.mockResolvedValue(decisionsFixture())
   return objects
 }
 
@@ -43,15 +51,36 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     const raw = buildPresencePeopleData()
     raw.debts[0].current_amount = 125
     configure(raw)
-    let text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({}) }))
-    expect(text).toContain('Personas / Deudores')
-    expect(text).toMatch(/Deuda asociada\s*\$\s*125/)
+    let text = renderedText(await PeoplePage({ searchParams: Promise.resolve({}) }))
+    expect(text).toContain('Personas')
+    expect(text).toMatch(/Total registrado asociado\s*\$\s*125/)
     expect(text).not.toMatch(/\$\s*250/)
     expect(text).toContain('Exposición asociada (no aditiva)')
-    expect(text).toContain('No disponible')
-    text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ q: 'sintética A', risk: 'BAJO' }) }))
-    expect(text).toMatch(/Deuda asociada\s*\$\s*125/)
+    // N7 (H10): el índice anterior existe para una de las dos personas: se muestra, rotulado y con cobertura.
+    expect(text).toContain('Índice anterior por persona')
+    expect(text).toContain('1 de 2 personas con dato')
+    expect(text).not.toMatch(/NO_INFORMADO_EN_ORIGEN|severidad heredada/i)
+    text = renderedText(await PeoplePage({ searchParams: Promise.resolve({ q: 'sintética A', risk: 'BAJO' }) }))
+    expect(text).toMatch(/Total registrado asociado\s*\$\s*125/)
     expect(text).not.toContain('Persona sintética B')
+  })
+
+  it('N7 (H10): sin índice anterior para nadie se quitan columna, filtro, tarjetas y gráfico, y queda una nota', async () => {
+    const raw = buildPresencePeopleData()
+    raw.debtorProfilesDetail = []
+    // Mismo aviso que agrega el servicio de personas cuando la lectura no devuelve filas.
+    raw.warnings = [{ table: 'debtor_profile_detail', message: 'No devolvió filas para esta sesión.', needsSelectPolicy: true }]
+    configure(raw)
+    const page = await PeoplePage({ searchParams: Promise.resolve({ risk: 'ALTO' }) })
+    const markup = markupOf(page)
+    const text = renderedText(page)
+    expect(text).toContain('Esta cartera no trae el índice anterior por persona')
+    expect(markup.match(/data-legacy-index=/g)).toHaveLength(1)
+    expect(text).not.toMatch(/Índice anterior por persona|No se pudieron leer algunos datos/)
+    expect(markup).not.toContain('id="risk"')
+    // El filtro por índice se ignora: las dos personas siguen en el listado.
+    expect(text).toContain('Persona sintética A')
+    expect(text).toContain('Persona sintética B')
   })
 
   it('calcula sobre todas las personas filtradas antes de paginar', async () => {
@@ -63,32 +92,36 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     }
     configure(raw)
     for (const page of ['1', '2']) {
-      const text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ page }) }))
-      expect(text).toMatch(/Deuda asociada\s*\$\s*125/)
+      const text = renderedText(await PeoplePage({ searchParams: Promise.resolve({ page }) }))
+      expect(text).toMatch(/Total registrado asociado\s*\$\s*125/)
     }
   })
 
-  it('muestra suma cero y promedio no aplica en un filtro vacío', async () => {
-    const text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ q: 'no existe' }) }))
-    expect(text).toMatch(/Deuda asociada\s*\$\s*0/)
-    expect(text).toContain('No aplica')
+  // N7: el promedio del índice anterior se retiró (no existe en la cartera); el vacío válido ofrece limpiar.
+  it('muestra suma cero y un vacío válido en un filtro sin coincidencias', async () => {
+    const text = renderedText(await PeoplePage({ searchParams: Promise.resolve({ q: 'no existe' }) }))
+    expect(text).toMatch(/Total registrado asociado\s*\$\s*0/)
+    expect(text).toContain('No hay personas que cumplan los filtros elegidos. Limpiar filtros')
+    expect(text).toContain('Mostrando 0 de 2 personas según los filtros.')
   })
 
-  it('muestra etiqueta Vencida del catálogo en la lista de objetos', async () => {
-    const text = textFromReactTree(await DebtorsPage({ searchParams: Promise.resolve({}) }))
-    expect(text).toContain('Vencida')
+  // N7: la columna de estado de catálogo se reemplazó por las definiciones únicas; sin jerga de corte.
+  it('el listado muestra grupo, deuda pendiente y vencida, sin jerga de corte', async () => {
+    const text = renderedText(await DebtorsPage({ searchParams: Promise.resolve({}) }))
     expect(text).toContain('Seguimiento')
-    expect(text).toContain('corte de origen no informado')
+    expect(text).toContain('Deuda pendiente')
+    expect(text).toContain('Deuda vencida')
+    expect(text).not.toMatch(/corte de origen|corte no integrado|NO_INFORMADO|Estado de catálogo/i)
   })
 
   it('muestra los $50 vencidos observados y el estado faltante, sin fabricar KPI cero', async () => {
     configure(buildPresencePeopleData(), buildIncompleteStatusRawData())
     const home = await HomePage()
     const aging = await DebtAgingPage({ searchParams: Promise.resolve({}) })
-    expect(cardValues(home)['Casos vencidos']).toBe('1')
-    expect(textFromReactTree(home)).toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(cardValues(home)['Casos con deuda vencida']).toBe('1')
+    expect(textFromReactTree(home)).toContain('Casos con deuda vencida: 1 dato no informado en el archivo de origen')
     expect(cardValues(aging)['Deuda vencida']).toMatch(/\$\s*50/)
-    expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(aging)).toContain('Deuda vencida: 1 dato no informado en el archivo de origen')
   })
 
   it('la mora v1 por calendario no depende del estado de catálogo desconocido', async () => {
@@ -98,10 +131,10 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     configure(buildPresencePeopleData(), raw)
     const home = await HomePage()
     const aging = await DebtAgingPage({ searchParams: Promise.resolve({}) })
-    expect(cardValues(home)['Casos vencidos']).toBe('1')
+    expect(cardValues(home)['Casos con deuda vencida']).toBe('1')
     expect(cardValues(aging)['Deuda vencida']).toMatch(/\$\s*70/)
-    expect(textFromReactTree(home)).not.toContain('Casos vencidos: 1 NO_INFORMADO_EN_ORIGEN')
-    expect(textFromReactTree(aging)).not.toContain('Deuda vencida: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(home)).not.toContain('Casos con deuda vencida: 1 dato no informado en el archivo de origen')
+    expect(textFromReactTree(aging)).not.toContain('Deuda vencida: 1 dato no informado en el archivo de origen')
   })
 
   it('las intervenciones v1 reemplazan las del perfil y conservan los faltantes del objeto parcial', async () => {
@@ -109,10 +142,10 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
     configure(buildPresencePeopleData(), raw)
     const text = textFromReactTree(await HomePage())
-    expect(text).toContain('Empate: Revisión jurídica, Seguimiento concentra 50%')
-    expect(text).not.toContain('Revisión jurídica, No disponible')
-    expect(text).toContain('Prioridad: 1 NO_INFORMADO_EN_ORIGEN')
-    expect(text).toContain('Revisión requerida: 1 NO_INFORMADO_EN_ORIGEN')
+    // N7: la frase de «recomendación dominante» se retiró; cada grupo dice su cantidad y su porcentaje.
+    expect(text).toMatch(/Revisión jurídica\s+1 caso\s*\(\s*50%\s*\)/)
+    expect(text).toMatch(/Seguimiento\s+1 caso\s*\(\s*50%\s*\)/)
+    expect(text).toContain('Puntaje de prioridad: 1 dato no informado en el archivo de origen')
   })
 
   it('una cola v1 vacía del tablero muestra 0 casos (0%) y no hay etiquetas heredadas', async () => {
@@ -157,7 +190,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
       expect(group.metrics.totalDebt.presence).toBe('NO_INTEGRADO')
       expect(group.metrics.riskScore.presence).toBe('NO_INTEGRADO')
       expect(cards[group.recommendation]).toBe('No disponible')
-      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s+No disponible: lectura incompleta\\.`))
+      expect(text).toMatch(new RegExp(`${group.recommendation}\\s+No disponible\\s+No disponible\\s+No disponible\\s+No disponible: no se pudieron leer los datos\\.`))
     }
     const unavailable = summary.find(group => group.interventionCode === null)!
     expect(unavailable.count).toBe(failure === 'debtor' ? null : mapped.debtors.length)
@@ -184,8 +217,8 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(summary.every(group => group.count === group.cases.length)).toBe(true)
     const page = await RecommendedActionsPage()
     expect(cardValues(page)).toMatchObject({ Seguimiento: '1', 'No disponible': '1', 'Mejorar datos': '0' })
-    expect(textFromReactTree(page).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0\s*\/\s*100/)
-    expect(textFromReactTree(page)).toContain('Total registrado: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(page).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0 de 100/)
+    expect(textFromReactTree(page)).toMatch(/Total registrado\s+\$\s*[\d.]+\s+Faltantes: 1 dato no informado en el archivo de origen/)
     expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
   })
 
@@ -206,7 +239,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     expect(summary.every(group => group.count === group.cases.length)).toBe(true)
     expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
     expect(cardValues(await RecommendedActionsPage())).toMatchObject({ Seguimiento: '1', 'Mejorar datos': '0' })
-    expect(textFromReactTree(await HomePage())).toMatch(/Seguimiento\s+1\s+casos\s*\(\s*100%\s*\)/)
+    expect(textFromReactTree(await HomePage())).toMatch(/Seguimiento\s+1 caso\s*\(\s*100%\s*\)/)
   })
 
   it('una cartera R2 conserva conteos de colas aunque no tenga puntajes', async () => {
@@ -218,17 +251,21 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     const buckets = mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation
     expect(buckets.map(bucket => bucket.label)).toEqual(RECOMMENDATION_KINDS)
     expect(buckets.find(bucket => bucket.label === 'Mejorar datos')?.value).toBe(1)
-    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+1\s+casos\s*\(\s*100%\s*\)/)
+    expect(textFromReactTree(await HomePage())).toMatch(/Mejorar datos\s+1 caso\s*\(\s*100%\s*\)/)
     expect(cardValues(await RecommendedActionsPage())['Mejorar datos']).toBe('1')
   })
 
-  it('declara un empate real solamente entre categorías de recomendación', async () => {
+  // N7: reemplaza a la prueba del empate (la frase dominante se retiró). El grupo «No disponible»
+  // solo aparece si tiene casos; los rótulos del DTO anterior no se muestran como grupos.
+  it('el grupo «No disponible» solo aparece con casos, y no hay grupos con rótulos anteriores', async () => {
     const dashboard = buildDashboard()
-    dashboard.byRecommendation.push({ label: 'No disponible', value: 1 })
     getDashboardData.mockResolvedValue({ dashboard, warnings: [] })
-    const text = textFromReactTree(await HomePage())
-    expect(text).toContain('Empate: Llamado prioritario, Mensaje recordatorio, Seguimiento posterior concentra')
-    expect(text).not.toContain('Seguimiento posterior, No disponible')
+    let markup = renderedText(await HomePage())
+    expect(markup).not.toMatch(/No disponible\s+\d+ casos?\s*\(/)
+    expect(markup).not.toMatch(/Llamado prioritario|Mensaje recordatorio|Seguimiento posterior/)
+    dashboard.byRecommendation.push({ label: 'No disponible', value: 1 })
+    markup = renderedText(await HomePage())
+    expect(markup).toMatch(/No disponible\s+1 caso\s*\(\s*33%\s*\)/)
   })
 
   it('no muestra una deuda cero cuando falla su lectura, incluso en personas filtradas sin resultados', async () => {
@@ -239,10 +276,13 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     configure(peopleRaw, debtorRaw)
     const cards = cardValues(await HomePage())
     expect(cards['Total registrado']).toBe('No disponible')
-    expect(cards['Casos vencidos']).toBe('No disponible')
-    const text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ q: 'no existe' }) }))
-    expect(text).toMatch(/Deuda asociada\s*No disponible/)
-    expect(text).not.toMatch(/Deuda asociada\s*\$\s*0/)
+    expect(cards['Deuda pendiente']).toBe('No disponible')
+    expect(cards['Deuda vencida']).toBe('No disponible')
+    expect(cards['Casos con deuda vencida']).toBe('No disponible')
+    const text = renderedText(await PeoplePage({ searchParams: Promise.resolve({ q: 'no existe' }) }))
+    expect(text).toMatch(/Total registrado asociado\s*No disponible/)
+    expect(text).not.toMatch(/Total registrado asociado\s*\$\s*0/)
+    expect(text).toContain('No se pudieron leer algunos datos')
   })
 
   it('mantiene no disponible en KPI dependientes ante un error de universo', async () => {
@@ -263,30 +303,32 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
   it('no inventa porcentajes ni recomendación dominante en un universo vacío', async () => {
     const raw = buildPresenceRawData(); raw.debtors = []
     configure(buildPresencePeopleData(), raw)
-    const text = textFromReactTree(await HomePage())
-    expect(text).toContain('No aplica')
-    expect(text).toContain('Sin datos suficientes')
-    expect(text).not.toContain('concentra 0%')
+    const text = renderedText(await HomePage())
+    expect(text).toContain('Sin casos en la selección.')
+    expect(text).not.toMatch(/\b0% de los casos|concentra/)
   })
 
   it('puede contar cero objetos de severidad alta sin perfil cuando las obligaciones son evaluables', async () => {
-    const text = textFromReactTree(await HomePage())
-    expect(text).toMatch(/(?:^|\s)0%\s*de los objetos/)
+    const home = await HomePage()
+    expect(cardValues(home)['Casos con puntaje alto']).toBe('0')
+    expect(renderedText(home)).toMatch(/(?:^|\s)0%\s*de los casos/)
     const raw = buildPresenceRawData()
     raw.debts[0].current_amount = null
     configure(buildPresencePeopleData(), raw)
-    const unavailable = textFromReactTree(await HomePage())
-    expect(unavailable).toMatch(/Objetos con severidad alta:\s*No disponible/)
-    expect(unavailable).not.toMatch(/(?:^|\s)0%\s*de los objetos/)
+    const unavailable = await HomePage()
+    expect(cardValues(unavailable)['Casos con puntaje alto']).toBe('No disponible')
+    expect(renderedText(unavailable)).toContain('Porcentaje no disponible.')
+    expect(renderedText(unavailable)).not.toMatch(/(?:^|\s)0%\s*de los casos/)
   })
 
   it('un filtro de riesgo cuya lectura falla no produce deuda cero', async () => {
     const raw = buildPresencePeopleData()
     raw.warnings = [{ table: 'debtor_profile_detail', message: 'Fallo sintético', needsSelectPolicy: false }]
     configure(raw)
-    const text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ risk: 'ALTO' }) }))
-    expect(text).toMatch(/Deuda asociada\s*No disponible/)
-    expect(text).not.toMatch(/Deuda asociada\s*\$\s*0/)
+    const text = renderedText(await PeoplePage({ searchParams: Promise.resolve({ risk: 'ALTO' }) }))
+    expect(text).toMatch(/Total registrado asociado\s*No disponible/)
+    expect(text).not.toMatch(/Total registrado asociado\s*\$\s*0/)
+    expect(text).toContain('No se pudo leer el índice anterior por persona')
   })
 
   it('informa un monto mínimo inválido sin atribuirlo a los datos', async () => {

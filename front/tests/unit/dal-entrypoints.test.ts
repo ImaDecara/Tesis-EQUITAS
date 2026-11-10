@@ -46,10 +46,12 @@ describe('ALIGN-019: fronteras de entrada y prueba local segura', () => {
     // Next le pasa estas props; la pantalla no las usa, asi que el mensaje no puede salir.
     const asNextRendersIt = DataError as ComponentType<{ error: unknown; retry: () => void }>
     const markup = renderToStaticMarkup(createElement(asNextRendersIt, { error: new Error('DATO_PRIVADO'), retry: vi.fn() }))
-    expect(markup).toContain('Datos no disponibles')
+    expect(markup).toContain('No se pudo mostrar esta pantalla')
     expect(markup).not.toContain('DATO_PRIVADO')
     expect(markup).not.toContain('$0')
-    expect(markup).toContain('Volver al ingreso')
+    // N7: «Volver al ingreso» con la sesión abierta devolvía a esta pantalla (bucle): ya no se ofrece.
+    expect(markup).not.toContain('Volver al ingreso')
+    expect(markup).toContain('Intentar de nuevo')
     expect(markup).toContain('Cerrar sesión')
   })
 
@@ -66,10 +68,10 @@ describe('ALIGN-019: fronteras de entrada y prueba local segura', () => {
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2))
   })
 
-  it('M3: Intentar nuevamente recarga el documento, sin depender del estado de Auth del navegador', () => {
+  it('M3: Intentar de nuevo recarga el documento, sin depender del estado de Auth del navegador', () => {
     const reload = vi.fn()
     vi.stubGlobal('window', { location: { reload } })
-    button(DataError(), 'Intentar nuevamente')?.props.onClick?.()
+    button(DataError(), 'Intentar de nuevo')?.props.onClick?.()
     expect(reload).toHaveBeenCalledOnce()
     expect(signOutCurrentSession).not.toHaveBeenCalled()
   })

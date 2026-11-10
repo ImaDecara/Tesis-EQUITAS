@@ -66,7 +66,7 @@ export function MetricCard({
   return (
     <Card
       className={cn(
-        'overflow-hidden bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md',
+        'overflow-hidden bg-white shadow-sm',
         toneStyles.border
       )}
     >

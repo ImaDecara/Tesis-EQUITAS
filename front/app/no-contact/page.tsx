@@ -1,185 +1,122 @@
-import { PortfolioScope } from '@/components/equitas/portfolio-scope'
-import { coverageText, portfolioContext, sumMoney, withMaturityMetrics } from '@/lib/analytics'
-import { filterPortfolio, portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
-import { formatNumber, formatWithUnit, aggregateData, metric, missingSummary, observed, percentageData, formatPercentage, readingFailed } from '@/lib/data-presence'
 import Link from 'next/link'
-import { AlertCircle, CircleDollarSign, Eye, Percent, ShieldAlert } from 'lucide-react'
+import { AlertCircle, Percent, ShieldAlert, WalletCards } from 'lucide-react'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { PaginationControls, PaginationSummary } from '@/components/equitas/pagination-controls'
-import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
-import { buttonVariants } from '@/components/ui/button'
+import { DecisionsNotice, PriorityScoreBadge, RecordedDecisionCell } from '@/components/portfolio/case-cells'
+import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
+import { daysLabel, filterLine, filterNotes, missingLines, SCORE_LABEL } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { coverageText, sumMoney, withMaturityMetrics } from '@/lib/analytics'
+import { aggregateData, formatNumber, formatPercentage, metric, observed, percentageData, readingFailed } from '@/lib/data-presence'
 import { getDebtorsData } from '@/lib/equitas-data'
 import { getNoContactCases } from '@/lib/equitas-view-selectors'
 import { paginateItems } from '@/lib/pagination'
+import { filterPortfolio, normalizePortfolioSearchParams, portfolioHref, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
+import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
 import { formatCurrency } from '@/lib/utils'
 
-export default async function NoContactPage({
-  searchParams,
-}: {
-  searchParams: Promise<RawPortfolioSearchParams>
-}) {
-  const source = await getDebtorsData()
-  const resolvedSearchParams = normalizePortfolioSearchParams(await searchParams)
-  const filters = { ...resolvedSearchParams, page: undefined, pageSize: undefined }
-  const { items: debtors, warnings } = filterPortfolio(source.debtors, filters, source.warnings)
-  const buildNoContactHref = (page: number, pageSize: number) => portfolioHref('/no-contact', filters, { page: String(page), pageSize: String(pageSize) })
+const TITLE = 'Casos sin contacto'
+
+export default async function NoContactPage({ searchParams }: { searchParams: Promise<RawPortfolioSearchParams> }) {
+  const empty = await emptyPortfolioScreen(TITLE)
+  if (empty) return empty
+  const [source, decisions] = await Promise.all([getDebtorsData(), loadRecordedDecisions()])
+  const params = normalizePortfolioSearchParams(await searchParams)
+  const filters = { ...params, page: undefined, pageSize: undefined }
+  const active = Object.values(filters).some(Boolean)
+  const { items: debtors, warnings, failed } = filterPortfolio(source.debtors, filters, source.warnings)
+  const buildHref = (page: number, pageSize: number) => portfolioHref('/no-contact', filters, { page: String(page), pageSize: String(pageSize) })
   const noContactCases = getNoContactCases(debtors).map(withMaturityMetrics)
-  const associatedDebt = sumMoney(noContactCases.map(debtor => metric(debtor, 'totalDebt')), readingFailed(warnings, 'debtor', 'debt', 'debtor_profile', 'debtor_contact', 'debtor_person')).value
   const contactsFailed = readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person')
-  const highRiskMetric = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))
-  const highRiskNoContact = highRiskMetric.value
-  const totalShare =
-    percentageData(readingFailed(warnings, 'debtor', 'debtor_contact', 'debtor_person') ? null : noContactCases.length, debtors.length)
-  const pagination = paginateItems(
-    noContactCases,
-    resolvedSearchParams.page,
-    resolvedSearchParams.pageSize
-  )
+  const pendingMetric = sumMoney(noContactCases.map(debtor => metric(debtor, 'pendingDebt')), contactsFailed || readingFailed(warnings, 'debt', 'debt_status'))
+  const highRiskNoContact = aggregateData(noContactCases.map(debtor => debtor.risk === null ? metric(debtor, 'riskScore') : observed(debtor.risk === 'ALTO' ? 1 : 0)), 'sum', contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))
+  const totalShare = percentageData(contactsFailed ? null : noContactCases.length, debtors.length)
+  const pagination = paginateItems(noContactCases, params.page, params.pageSize)
+  const missing = missingLines([['Deuda pendiente', pendingMetric], [SCORE_LABEL, highRiskNoContact]])
 
   return (
     <AppShell>
-      <section className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
-          Casos sin contacto
-        </h1>
-        <p className="text-sm text-slate-600">
-          Casos bloqueados por falta de canal activo para gestion directa.
-        </p>
-      </section>
+      <PageHeading title={TITLE} description="Casos sin un contacto activo cargado: antes de gestionarlos hay que conseguir o validar un teléfono o correo." />
 
-      <div className="space-y-6">
-        <DataWarnings warnings={warnings} />
-        <PortfolioScope context={portfolioContext(source.debtors, source.warnings, source.batch)} filters={filters} />
-        <p className="text-xs text-slate-600">{missingSummary({ riskScore: highRiskMetric })}</p>
+      <div className="space-y-5">
+        <DataWarnings warnings={source.warnings} />
+        {filterNotes(warnings, source.warnings).map(note => <p key={note.message} role="status" className="text-sm text-amber-800">{note.message}</p>)}
+        {active && <p className="text-sm text-slate-700">{filterLine(failed ? null : debtors.length, readingFailed(source.warnings, 'debtor') ? null : source.debtors.length)}</p>}
+        {missing && <p className="text-xs text-slate-600">Datos faltantes que afectan los cálculos. {missing}.</p>}
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="Total sin contacto"
-            value={formatNumber(contactsFailed ? null : noContactCases.length)}
-            hint={`Objetos sin contacto cargado. ${coverageText(debtors.map(item => metric(item, 'contactCount')), contactsFailed)}`}
-            icon={AlertCircle}
-            tone="warning"
-          />
-          <MetricCard
-            label="Deuda asociada"
-            value={formatCurrency(associatedDebt)}
-            hint={`ARS históricos de los objetos sin contacto. ${coverageText(noContactCases.map(item => metric(item, 'totalDebt')), contactsFailed || readingFailed(warnings, 'debt', 'debtor_profile'))}`}
-            icon={CircleDollarSign}
-            tone="primary"
-          />
-          <MetricCard
-            label="Severidad alta sin contacto"
-            value={formatNumber(highRiskNoContact)}
-            hint={`Desde 70 puntos. ${coverageText(noContactCases.map(item => metric(item, 'riskScore')), contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'))}`}
-            icon={ShieldAlert}
-            tone="danger"
-          />
-          <MetricCard
-            label="Sobre el total"
-            value={`${formatPercentage(totalShare)}`}
-            hint={`Denominador: ${formatWithUnit(contactsFailed ? null : debtors.length, 'objetos filtrados')}, incluidos los sin dato de contacto.`}
-            icon={Percent}
-            tone="accent"
-          />
+          <MetricCard label="Total sin contacto" value={formatNumber(contactsFailed ? null : noContactCases.length)}
+            hint={`Casos sin contacto activo cargado. ${coverageText(debtors.map(item => metric(item, 'contactCount')), contactsFailed, 'casos')}`} icon={AlertCircle} tone="warning" />
+          <MetricCard label="Deuda pendiente sin contacto" value={formatCurrency(pendingMetric.value)}
+            hint={`Total registrado sin las obligaciones pagadas, de estos casos. ${coverageText(noContactCases.map(item => metric(item, 'pendingDebt')), contactsFailed, 'casos')}`} icon={WalletCards} tone="primary" />
+          <MetricCard label="Con puntaje alto" value={formatNumber(highRiskNoContact.value)}
+            hint={`${SCORE_LABEL} desde 70. ${coverageText(noContactCases.map(item => metric(item, 'riskScore')), contactsFailed || readingFailed(warnings, 'debt', 'debtor_person'), 'casos')}`} icon={ShieldAlert} tone="danger" />
+          <MetricCard label="Sobre el total" value={formatPercentage(totalShare)}
+            hint={`Sobre ${contactsFailed ? 'los casos' : `los ${formatNumber(debtors.length)} casos`}${active ? ' que cumplen los filtros' : ' de la cartera'}, incluidos los que no tienen dato de contacto.`} icon={Percent} tone="accent" />
         </section>
 
-        <Card className="border-[#d2dceb] bg-[#f8f2e3]">
-          <CardContent className="p-4 text-sm text-[#5f4a19]">
-            Estos casos requieren validacion o enriquecimiento de datos antes de iniciar gestion
-            directa.
-          </CardContent>
-        </Card>
-
         <Card className="border-[#d2dceb]">
-          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
-            <div>
-              <CardTitle>Listado de casos sin contacto</CardTitle>
-              <CardDescription>Orden de cola: prioridad, monto evaluable, vencimiento e identificador interno. Las prioridades de colas distintas no se comparan.</CardDescription>
-              {!contactsFailed && <PaginationSummary
-                currentStart={pagination.currentStart}
-                currentEnd={pagination.currentEnd}
-                totalItems={noContactCases.length}
-                itemLabel="casos"
-                pageSize={pagination.pageSize}
-                buildHref={buildNoContactHref}
-              />}
-            </div>
+          <CardHeader className="space-y-2">
+            <CardTitle>Listado</CardTitle>
+            <CardDescription>En el orden de su grupo de trabajo; los puntajes de grupos distintos no se comparan.</CardDescription>
+            {!contactsFailed && (
+              <PaginationSummary currentStart={pagination.currentStart} currentEnd={pagination.currentEnd} totalItems={noContactCases.length}
+                itemLabel={['caso', 'casos']} pageSize={pagination.pageSize} buildHref={buildHref} />
+            )}
+            <DecisionsNotice decisions={decisions} />
           </CardHeader>
           <CardContent>
-            <Table className="min-w-[1080px]">
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Objeto</TableHead>
-                  <TableHead>Personas asociadas</TableHead>
-                  <TableHead>Severidad (puntos de 0 a 100)</TableHead>
-                  <TableHead className="text-right">Deuda</TableHead>
-                  <TableHead className="text-right">Atraso</TableHead>
-                  <TableHead>Motivo</TableHead>
-                  <TableHead className="text-right">Accion</TableHead>
+                  <TableHead className="w-[28%] md:w-[18%]">Identificador</TableHead>
+                  <TableHead className="hidden w-[20%] md:table-cell">Personas vinculadas</TableHead>
+                  <TableHead className="w-[24%] md:w-[13%]">{SCORE_LABEL}</TableHead>
+                  <TableHead className="w-[22%] text-right md:w-[13%]">Deuda pendiente</TableHead>
+                  <TableHead className="hidden w-[11%] text-right md:table-cell">Atraso máximo</TableHead>
+                  <TableHead className="w-[26%] md:w-[25%]">Decisión registrada</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pagination.items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500">
-                      {contactsFailed ? 'No disponible: lectura incompleta de objetos o contactos.' : 'No hay casos sin contacto.'}
+                    <TableCell colSpan={6} className="text-center text-slate-500">
+                      {contactsFailed
+                        ? 'No disponible: no se pudieron leer los casos o sus contactos.'
+                        : active ? <EmptyFilterState clearHref="/no-contact" /> : 'Todos los casos tienen un contacto cargado.'}
                     </TableCell>
                   </TableRow>
                 )}
-                {pagination.items.map((debtor) => (
+                {pagination.items.map(debtor => (
                   <TableRow key={debtor.id}>
-                    <TableCell>
-                      <div className="font-medium text-slate-900">{debtor.identifier}</div>
+                    <TableCell className="align-top">
+                      <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
                       <p className="text-xs text-slate-500">{debtor.type}</p>
                     </TableCell>
-                    <TableCell>
-                      <p className="max-w-[260px] truncate text-sm text-slate-700">
+                    <TableCell className="hidden align-top md:table-cell">
+                      <p className="truncate text-sm text-slate-700">
                         {debtor.peopleNames.length > 0
                           ? debtor.peopleNames.join(', ')
-                          : readingFailed(warnings, 'person', 'debtor_person') ? 'No disponible: lectura de personas fallida.' : 'Sin personas informadas'}
+                          : readingFailed(warnings, 'person', 'debtor_person') ? 'No disponible: no se pudieron leer las personas.' : 'Sin personas vinculadas'}
                       </p>
                     </TableCell>
-                    <TableCell>
-                      <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
-                    <TableCell className="text-right">{formatWithUnit(debtor.maxDaysOverdue, 'dias')}</TableCell>
-                    <TableCell>Sin telefono/email activo</TableCell>
-                    <TableCell className="text-right">
-                      <Link
-                        href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)}
-                        className={buttonVariants({ variant: 'default', size: 'sm' })}
-                      >
-                        <Eye className="size-3.5" />
-                        Detalle
-                      </Link>
-                    </TableCell>
+                    <TableCell className="align-top"><PriorityScoreBadge debtor={debtor} /></TableCell>
+                    <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
+                    <TableCell className="hidden text-right align-top md:table-cell">{daysLabel(debtor.maxDaysOverdue)}</TableCell>
+                    <TableCell className="align-top"><RecordedDecisionCell decisions={decisions} debtorId={debtor.id} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            {!contactsFailed && <PaginationControls
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              pageSize={pagination.pageSize}
-              currentStart={pagination.currentStart}
-              currentEnd={pagination.currentEnd}
-              totalItems={noContactCases.length}
-              itemLabel="casos"
-              buildHref={buildNoContactHref}
-            />}
+            {!contactsFailed && (
+              <PaginationControls currentPage={pagination.currentPage} totalPages={pagination.totalPages} pageSize={pagination.pageSize}
+                currentStart={pagination.currentStart} currentEnd={pagination.currentEnd} totalItems={noContactCases.length}
+                itemLabel={['caso', 'casos']} buildHref={buildHref} />
+            )}
           </CardContent>
         </Card>
       </div>

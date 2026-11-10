@@ -161,8 +161,9 @@ export function RiskDonutChart({
                 nameKey="label"
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={95}
+                // Radios relativos al contenedor: la dona entra entera en la tarjeta compacta (H15).
+                innerRadius="55%"
+                outerRadius="85%"
                 paddingAngle={4}
               >
                 {rows.map((row, index) => (

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -8,6 +9,7 @@ import {
   buildPeopleDashboard,
 } from '@/tests/helpers/equitas-fixtures'
 import { textFromReactTree } from '@/tests/helpers/react-tree'
+import { decisionsFixture, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const {
   getDashboardDataMock,
@@ -15,7 +17,9 @@ const {
   getPeopleDataMock,
   getDebtorDetailDataMock,
   notFoundMock,
+  session,
 } = vi.hoisted(() => ({
+  session: { viewer: vi.fn(), decisions: vi.fn() },
   getDashboardDataMock: vi.fn(),
   getDebtorsDataMock: vi.fn(),
   getPeopleDataMock: vi.fn(),
@@ -35,8 +39,13 @@ vi.mock('@/lib/equitas-data', () => ({
 }))
 
 vi.mock('next/navigation', () => ({
-  notFound: notFoundMock,
+  notFound: notFoundMock, usePathname: () => '/', useRouter: () => ({ replace: vi.fn() }),
 }))
+vi.mock('next/image', () => ({ default: () => null }))
+vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
+// N7: el marco y la sesión se simulan; las pantallas leen la fecha de la cartera y las decisiones.
+vi.mock('@/lib/server/viewer-context', async original => ({ ...(await original<typeof import('@/lib/server/viewer-context')>()), loadViewerContext: session.viewer }))
+vi.mock('@/lib/server/recorded-decisions', async original => ({ ...(await original<typeof import('@/lib/server/recorded-decisions')>()), loadRecordedDecisions: session.decisions }))
 // ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
 vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 
@@ -53,6 +62,8 @@ import RiskAnalysisPage from '@/app/risk-analysis/page'
 describe('pantallas con datos de gestion simulados', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    session.viewer.mockResolvedValue(viewerFixture())
+    session.decisions.mockResolvedValue(decisionsFixture())
     getDashboardDataMock.mockResolvedValue({
       dashboard: buildDashboard(),
       peopleDashboard: buildPeopleDashboard(),
@@ -67,14 +78,18 @@ describe('pantallas con datos de gestion simulados', () => {
     getDebtorDetailDataMock.mockResolvedValue({ detail: buildDebtorDetail(), warnings: [] })
   })
 
-  it('calcula y presenta el resumen ejecutivo del dashboard', async () => {
-    const page = await HomePage()
-    const text = textFromReactTree(page)
+  // N7: «Tablero» reemplaza a «Dashboard ejecutivo»; las cifras usan las tres definiciones únicas.
+  it('calcula y presenta el resumen del tablero', async () => {
+    const text = renderedText(await HomePage())
 
     expect(getDashboardDataMock).toHaveBeenCalledOnce()
-    expect(text).toContain('Dashboard ejecutivo')
-    expect(text).toMatch(/33\s*%\s*de los objetos tienen severidad alta/)
-    expect(text).toContain('Llamado prioritario')
+    expect(text).toContain('Tablero')
+    expect(text).not.toContain('Dashboard')
+    // 1 de 3 casos con puntaje alto: 33 %.
+    expect(text).toMatch(/Puntaje de prioridad desde 70\.\s*33%\s*de los casos/)
+    expect(text).toMatch(/Total registrado\s*\$\s*1\.700/)
+    expect(text).toMatch(/Deuda pendiente\s*\$\s*1\.700/)
+    expect(text).toMatch(/Deuda vencida\s*\$\s*1\.300/)
     expect(text).toContain('AG-1001')
   })
 
@@ -82,11 +97,14 @@ describe('pantallas con datos de gestion simulados', () => {
     const page = await DebtAgingPage({
       searchParams: Promise.resolve({ page: '2', pageSize: '1' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
     expect(text).toContain('Deuda y mora')
-    expect(text).toContain('Top 10 mayor deuda')
-    expect(text).toContain('Listado economico')
+    expect(text).toContain('Los 10 casos con mayor total registrado')
+    expect(text).toContain('Casos por deuda vencida')
+    // pageSize=1 no es una opción: vale el tamaño por omisión (10) y la página 2 cae en la única.
+    expect(text).toContain('1–3 de 3 casos.')
+    expect(text).toContain('Página 1 de 1')
     expect(getDebtorsDataMock).toHaveBeenCalledOnce()
   })
 
@@ -94,14 +112,15 @@ describe('pantallas con datos de gestion simulados', () => {
     const page = await NoContactPage({
       searchParams: Promise.resolve({ page: '1', pageSize: '10' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
     expect(text).toContain('Casos sin contacto')
-    expect(text).toContain('Estos casos requieren validacion')
+    expect(text).toContain('antes de gestionarlos hay que conseguir o validar')
     expect(text).toContain('AG-1001')
+    expect(text).not.toContain('IN-2001')
   })
 
-  it('aplica filtros operativos para casos prioritarios', async () => {
+  it('aplica los filtros en los grupos de trabajo', async () => {
     const page = await PriorityCasesPage({
       searchParams: Promise.resolve({
         q: 'ana',
@@ -113,14 +132,15 @@ describe('pantallas con datos de gestion simulados', () => {
         pageSize: '10',
       }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Casos prioritarios')
+    expect(text).toContain('Grupos de trabajo')
     expect(text).toContain('AG-1001')
-    expect(text).toContain('Filtros operativos')
+    expect(text).not.toContain('IN-2001')
+    expect(text).toContain('Mostrando 1 de 3 casos según los filtros.')
   })
 
-  it('procesa filtros y estadisticas del listado de objetos', async () => {
+  it('procesa filtros y estadisticas del listado de casos', async () => {
     const page = await DebtorsPage({
       searchParams: Promise.resolve({
         q: 'agua',
@@ -133,44 +153,40 @@ describe('pantallas con datos de gestion simulados', () => {
         pageSize: '20',
       }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Objetos de deuda')
-    expect(text).toMatch(/Busqueda:\s*agua/)
-    expect(text).toMatch(/Prioridad\s+ALTA/)
+    expect(text).toContain('Casos')
+    expect(text).toMatch(/Búsqueda:\s*agua/)
+    expect(text).toContain('Persona vinculada: Ana Perez')
+    expect(text).toContain('Mostrando 1 de 3 casos según los filtros.')
   })
 
   it('procesa filtros y resumen de personas', async () => {
     const page = await PeoplePage({
       searchParams: Promise.resolve({ q: 'ana', risk: 'ALTO', page: '1', pageSize: '20' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Personas / Deudores')
+    expect(text).toContain('Personas')
     expect(text).toContain('Ana Perez')
-    expect(text).toContain('Severidad heredada alta')
+    expect(text).toContain('Índice anterior por persona')
   })
 
-  it('presenta severidad v1 del objeto y severidad heredada entre objetos de una persona', async () => {
-    const page = await RiskAnalysisPage()
-    const text = textFromReactTree(page)
+  it('presenta el puntaje de prioridad del caso y, aparte, el índice anterior por persona', async () => {
+    const text = renderedText(await RiskAnalysisPage())
 
-    expect(text).toContain('Análisis de severidad')
-    expect(text).toContain('Objetos en banda alta, desde 70 puntos')
-    expect(text).toContain('Personas con severidad heredada alta')
+    expect(text).toContain('Puntaje de prioridad')
+    expect(text).toContain('Casos en banda alta')
+    expect(text).toContain('Índice anterior por persona')
+    expect(text).not.toMatch(/severidad/i)
   })
 
   it('agrupa las acciones recomendadas existentes', async () => {
-    const page = await RecommendedActionsPage()
-    const text = textFromReactTree(page)
+    const text = renderedText(await RecommendedActionsPage())
 
     expect(text).toContain('Acciones recomendadas')
-    expect(text).toContain('Resumen por recomendacion')
-    expect(text).toContain('Seguimiento')
-    expect(text).toContain('Mejorar datos')
-    expect(text).toContain('Revisión jurídica')
-    expect(text).toContain('Contacto y plan')
-    expect(text).toContain('Recordatorio')
+    expect(text).toContain('Resumen por grupo de trabajo')
+    for (const group of ['Seguimiento', 'Mejorar datos', 'Revisión jurídica', 'Contacto y plan', 'Recordatorio']) expect(text).toContain(group)
   })
 
   it('muestra el detalle completo de un objeto y deriva a notFound cuando falta', async () => {

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthState } from '@/components/auth/auth-provider'
+import { LogoutButton } from '@/components/layout/logout-button'
+import { buttonVariants } from '@/components/ui/button'
 import { selectCurrentTenant, validateCurrentUserTenantAccess, type TenantChoice } from '@/lib/services/auth-service'
 
 export function TenantSelectionForm() {
@@ -10,7 +12,7 @@ export function TenantSelectionForm() {
   const { refreshAuthState } = useAuthState()
   const [choices, setChoices] = useState<TenantChoice[]>([])
   const [tenantId, setTenantId] = useState('')
-  const [message, setMessage] = useState('Verificando acceso...')
+  const [message, setMessage] = useState('Verificando acceso…')
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
@@ -18,9 +20,9 @@ export function TenantSelectionForm() {
     // null pide las opciones actuales, sin reutilizar una cookie de otra sesion.
     validateCurrentUserTenantAccess(null).then(result => {
       if (!active) return
-      setChoices(result.tenantChoices ?? (result.context ? [{ id: result.context.tenantId, name: `Municipio ${result.context.tenantId}` }] : []))
+      setChoices(result.tenantChoices ?? (result.context ? [{ id: result.context.tenantId, name: 'Tu municipio' }] : []))
       setMessage(result.message ?? 'Seleccioná un municipio para continuar.')
-    }).catch(() => { if (active) setMessage('No disponible: no se pudo verificar el acceso.') })
+    }).catch(() => { if (active) setMessage('No se pudo verificar tu acceso. Recargá la página; si sigue igual, avisá a quien administra el sistema.') })
     return () => { active = false }
   }, [])
 
@@ -33,9 +35,9 @@ export function TenantSelectionForm() {
         await refreshAuthState()
         router.replace('/')
         router.refresh()
-      } else setMessage(access.message ?? 'No disponible: no se pudo verificar el acceso.')
+      } else setMessage(access.message ?? 'No se pudo verificar tu acceso. Recargá la página; si sigue igual, avisá a quien administra el sistema.')
     } catch {
-      setMessage('No disponible: no se pudo verificar el acceso.')
+      setMessage('No se pudo verificar tu acceso. Recargá la página; si sigue igual, avisá a quien administra el sistema.')
     } finally {
       setPending(false)
     }
@@ -43,16 +45,17 @@ export function TenantSelectionForm() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <p role="status">{message}</p>
+      <p role="status" className="text-sm text-slate-700">{message}</p>
       {choices.length > 0 && <>
-        <label htmlFor="tenant">Municipio</label>
-        <select id="tenant" value={tenantId} onChange={event => setTenantId(event.target.value)} required className="block w-full rounded border p-2">
+        <label htmlFor="tenant" className="block text-sm font-medium text-slate-700">Municipio</label>
+        <select id="tenant" value={tenantId} onChange={event => setTenantId(event.target.value)} required className="h-10 block w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
           <option value="" disabled>Seleccioná un municipio</option>
           {choices.map(choice => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
         </select>
-        <button type="submit" disabled={pending || !tenantId} className="rounded bg-slate-800 px-4 py-2 text-white">Continuar</button>
+        <button type="submit" disabled={pending || !tenantId} className={buttonVariants({ variant: 'default' })}>{pending ? 'Verificando…' : 'Continuar'}</button>
       </>}
-      <a href="/login" className="block underline">Volver al ingreso</a>
+      {/* «Volver al ingreso» con la sesión abierta volvía acá: la salida es cerrar la sesión. */}
+      <LogoutButton />
     </form>
   )
 }

@@ -1,179 +1,139 @@
-import { PortfolioScope } from '@/components/equitas/portfolio-scope'
-import { portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
-import { sumMoney, formatNumber, formatPercentage, formatWithUnit, numericData, missingSummary, percentageData } from '@/lib/data-presence'
 import Link from 'next/link'
-import {
-  AlertCircle,
-  CircleDollarSign,
-  Clock3,
-  ContactRound,
-  FileWarning,
-  ShieldAlert,
-} from 'lucide-react'
+import { CircleDollarSign, FileDown, FileWarning, PhoneOff, ShieldAlert, WalletCards } from 'lucide-react'
 
-import {
-  BarDistributionChart,
-  RiskDonutChart,
-  TopDebtHorizontalChart,
-} from '@/components/dashboard/chart-cards'
+import { BarDistributionChart, RiskDonutChart, TopDebtHorizontalChart } from '@/components/dashboard/chart-cards'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { DataWarnings } from '@/components/equitas/data-warnings'
-import { ReportDownloads } from '@/components/equitas/report-downloads'
-import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
-import { Badge } from '@/components/ui/badge'
+import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
+import { bandLabel, casesLabel, daysLabel, filterLine, GROUP_CRITERIA, missingLines, SCORE_LABEL, SCORE_NOTE, SCORE_RECIPE, scoreText, scoreView } from '@/components/portfolio/portfolio-text'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatNumber, formatPercentage, percentageData } from '@/lib/data-presence'
 import { getDashboardData } from '@/lib/equitas-data'
-import { availableReportLinks } from '@/lib/server/report-links'
-import {
-  RECOMMENDATION_BADGE_VARIANT,
-  RECOMMENDATION_KINDS,
-} from '@/lib/equitas-view-selectors'
+import { RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
+import { normalizePortfolioSearchParams, portfolioHref, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { cn, formatCurrency } from '@/lib/utils'
+import type { NumericData } from '@/types/equitas-domain'
 
 export const dynamic = 'force-dynamic'
 
+const TITLE = 'Tablero'
+const BAR_COLOR: Record<string, string> = {
+  'Revisión jurídica': 'bg-[#9d3d3d]', 'Contacto y plan': 'bg-[#8a6f2a]', 'Mejorar datos': 'bg-[#163a63]',
+  Recordatorio: 'bg-[#436584]', Seguimiento: 'bg-[#2d6a4f]',
+}
+// Un porcentaje sin base no se escribe «No aplica de los casos».
+const shareText = (share: NumericData) => share.value !== null ? `${formatPercentage(share)} de los casos.`
+  : share.presence === 'NO_APLICA' ? 'Sin casos en la selección.' : 'Porcentaje no disponible.'
+const isFiltered = (filters: Record<string, string | undefined>) => Object.entries(filters).some(([key, value]) => key !== 'page' && key !== 'pageSize' && Boolean(value))
+
 export default async function HomePage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
+  const empty = await emptyPortfolioScreen(TITLE)
+  if (empty) return empty
   const filters = normalizePortfolioSearchParams(await searchParams ?? {})
-  const [{ dashboard, warnings }, reportLinks] = await Promise.all([getDashboardData(filters), availableReportLinks()])
-  const riskMap = new Map(dashboard.byRisk.map((item) => [item.label, item.value]))
-  const highRiskShare = percentageData(dashboard.byRisk.length && dashboard.metrics?.highSeverityCases?.value !== null ? riskMap.get('ALTO') ?? 0 : null, dashboard.totalDebtors)
-  const chartEmpty = warnings.length ? 'No disponible: lectura incompleta; consulte los avisos y la cobertura.' : dashboard.totalDebtors === 0 ? 'No hay objetos en la selección.' : 'No hay valores observados para graficar; consulte la cobertura.'
-  const topDebtConcentration = percentageData(sumMoney(dashboard.topDebtDebtors.map(debtor => numericData(debtor.totalDebt))).value, dashboard.totalDebt)
-  const availableRecommendations = dashboard.byRecommendation.filter(item => item.label !== 'No disponible')
-  const dominantRecommendation = dashboard.totalDebtors !== null && dashboard.totalDebtors > 0
-    ? availableRecommendations.sort((a, b) => b.value - a.value)[0] : null
-  const dominantTies = availableRecommendations.filter(item => item.value === dominantRecommendation?.value)
+  const { dashboard, warnings } = await getDashboardData(filters)
+  const metrics = dashboard.metrics ?? {}
+  const total = dashboard.totalDebtors
+  const highRiskShare = percentageData(dashboard.priorityCases, total)
+  // Un grupo vacío sin caso «No disponible» no se muestra: solo aparece si hay casos sin evaluar.
+  const groups = RECOMMENDATION_KINDS.map(label => ({
+    label,
+    count: dashboard.byRecommendation.find(item => item.label === label)?.value ?? null,
+    preview: dashboard.queuePreviews?.find(item => item.label === label),
+  })).filter(group => group.label !== 'No disponible' || (group.count ?? 0) > 0)
+  // Gráficos opcionales: se retiran si el dato no existe para ningún caso; un error de lectura se dice.
+  const scoreBuckets = dashboard.byRisk.filter(item => item.label !== 'No disponible').map(item => ({ label: bandLabel(item.label), value: item.value }))
+  const withoutScore = dashboard.byRisk.find(item => item.label === 'No disponible')?.value ?? 0
+  const readFailed = warnings.length > 0
+  const unavailableChart = 'No disponible: no se pudieron leer los datos necesarios.'
+  const missing = missingLines([
+    ['Total registrado', metrics.totalDebt], ['Deuda pendiente', metrics.pendingDebt], ['Deuda vencida', metrics.overdueDebt],
+    ['Casos con deuda vencida', metrics.overdueCases], ['Puntaje de prioridad', metrics.priorityCases], ['Contacto', metrics.withoutContactCases],
+  ])
 
   return (
     <AppShell>
-      <section className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
-            Dashboard ejecutivo
-          </h1>
-          <p className="text-sm text-slate-600">
-            Resumen municipal para decidir prioridades de gestion diaria.
-          </p>
-        </div>
-      </section>
+      <PageHeading title={TITLE} description="Resumen de la cartera del municipio para decidir qué casos trabajar." />
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
-        <PortfolioScope context={dashboard.context} filters={filters} />
-        <p className="text-xs text-slate-600">{missingSummary(dashboard.metrics)}</p>
+        {isFiltered(filters) && <p className="text-sm text-slate-700">{filterLine(total)}</p>}
+        {missing && <p className="text-xs text-slate-600">Datos faltantes que afectan los cálculos. {missing}.</p>}
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <MetricCard
-            label="Objetos con severidad alta"
-            value={formatNumber(dashboard.priorityCases)}
-            hint={`Desde 70 puntos; ${dashboard.coverage?.priorityCases ?? "cobertura no disponible"}`}
-            icon={ShieldAlert}
-            tone="critical"
-          />
-          <MetricCard
-            label="Total registrado"
-            value={formatCurrency(dashboard.totalDebt)}
-            hint={`ARS; todas las obligaciones, cualquiera sea su estado. ${dashboard.coverage?.totalDebt ?? ""}`}
-            icon={CircleDollarSign}
-            tone="primary"
-          />
-          <MetricCard
-            label="Casos vencidos"
-            value={formatNumber(dashboard.overdueCases)}
-            hint={`Al menos una obligación evaluable vencida. ${dashboard.coverage?.overdueCases ?? ""}`}
-            icon={FileWarning}
-            tone="danger"
-          />
-          <MetricCard
-            label="Casos sin contacto"
-            value={formatNumber(dashboard.withoutContactCases)}
-            hint={`Sin contacto cargado activo. ${dashboard.coverage?.withoutContactCases ?? ""}`}
-            icon={AlertCircle}
-            tone="warning"
-          />
-          <MetricCard
-            label="Revisión requerida"
-            value={formatNumber(dashboard.urgentRecommendationCases)}
-            hint={`Revisión humana o jurídica; no es urgencia. ${dashboard.coverage?.urgentRecommendationCases ?? ""}`}
-            icon={Clock3}
-            tone="danger"
-          />
-          <MetricCard
-            label="Con contacto"
-            value={formatNumber(dashboard.withContactCases)}
-            hint={`Contacto cargado, no verificado. ${dashboard.coverage?.withContactCases ?? ""}`}
-            icon={ContactRound}
-            tone="success"
-          />
+        <section aria-label="Totales de la cartera" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <MetricCard label="Total registrado" value={formatCurrency(dashboard.totalDebt)}
+            hint={`Todas las obligaciones, cualquiera sea su estado. ${dashboard.coverage?.totalDebt ?? ''}`} icon={CircleDollarSign} tone="primary" />
+          <MetricCard label="Deuda pendiente" value={formatCurrency(dashboard.pendingDebt)}
+            hint={`Total registrado sin las obligaciones pagadas. ${dashboard.coverage?.pendingDebt ?? ''}`} icon={WalletCards} tone="accent" />
+          <MetricCard label="Deuda vencida" value={formatCurrency(dashboard.overdueDebt)}
+            hint={`Deuda pendiente con vencimiento anterior a la fecha de la cartera. ${dashboard.coverage?.overdueDebt ?? ''}`} icon={FileWarning} tone="danger" />
+          <MetricCard label="Casos con deuda vencida" value={formatNumber(dashboard.overdueCases)}
+            hint={`Al menos una obligación pendiente vencida. ${dashboard.coverage?.overdueCases ?? ''}`} icon={FileWarning} tone="warning" />
+          <MetricCard label="Casos con puntaje alto" value={formatNumber(dashboard.priorityCases)}
+            hint={`${SCORE_LABEL} desde 70. ${shareText(highRiskShare)} ${dashboard.coverage?.priorityCases ?? ''}`} icon={ShieldAlert} tone="critical" />
+          <MetricCard label="Casos sin contacto" value={formatNumber(dashboard.withoutContactCases)}
+            hint={`Sin un contacto activo cargado. ${dashboard.coverage?.withoutContactCases ?? ''}`} icon={PhoneOff} tone="warning" />
         </section>
 
-        <ReportDownloads links={reportLinks} />
-
-        <Card className="border-[#d2dceb]">
-          <CardHeader>
-            <CardTitle>Resumen operativo del dia</CardTitle>
-            <CardDescription>Lectura rapida para orientar la mesa de gestion.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-3">
-            {highRiskShare.value === null ? (
-              <p>Objetos con severidad alta: <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span></p>
-            ) : (
-              <p>
-                <span className="font-semibold text-slate-900">{formatPercentage(highRiskShare)}</span> de los objetos
-                tienen severidad alta. La base incluye los objetos sin puntaje.
-              </p>
-            )}
-            {topDebtConcentration.value === null ? (
-              <p>Concentración de los 5 objetos con mayor deuda: <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span></p>
-            ) : (
-              <p>
-                Los 5 objetos con mayor deuda concentran{' '}
-                <span className="font-semibold text-slate-900">{formatPercentage(topDebtConcentration)}</span> del
-                saldo observado (puede ser parcial).
-              </p>
-            )}
-            {dashboard.withoutContactCases === null ? (
-              <p>Casos bloqueados por falta de contacto: <span className="font-semibold text-slate-900">{formatNumber(null)}</span></p>
-            ) : (
-              <p>
-                Hay{' '}
-                <span className="font-semibold text-slate-900">
-                  {formatNumber(dashboard.withoutContactCases)}
-                </span>{' '}
-                casos bloqueados por falta de contacto.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <details className="rounded-lg border border-[#d2dceb] bg-white p-4 text-sm text-slate-700" data-definitions>
+          <summary className="cursor-pointer font-semibold text-[#163a63]">¿Qué significan estas cifras?</summary>
+          <dl className="mt-3 space-y-2">
+            <div><dt className="font-medium">Total registrado</dt><dd>El importe de todas las obligaciones de la cartera, cualquiera sea su estado.</dd></div>
+            <div><dt className="font-medium">Deuda pendiente</dt><dd>El total registrado sin las obligaciones pagadas.</dd></div>
+            <div><dt className="font-medium">Deuda vencida</dt><dd>Las obligaciones pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera.</dd></div>
+            <div><dt className="font-medium">{SCORE_LABEL}</dt><dd>{SCORE_NOTE} {SCORE_RECIPE}</dd></div>
+            <div><dt className="font-medium">Caso</dt><dd>Un objeto tributario (un inmueble, un rodado, una conexión), no una persona.</dd></div>
+          </dl>
+          {dashboard.byDebtStatus.length > 0 && (
+            <p className="mt-3 text-xs text-slate-600">
+              Obligaciones por estado (informativo, no cambia ningún cálculo): {dashboard.byDebtStatus.map(item => `${item.label} ${formatNumber(item.value)}`).join(' · ')}.
+            </p>
+          )}
+          <p className="mt-3"><Link href="/help" className="font-medium text-[#163a63] underline">Ver la ayuda completa</Link></p>
+        </details>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Primeros casos de cada cola</CardTitle>
-              <CardDescription>Hasta 3 por intervención; las prioridades de colas distintas no se comparan.</CardDescription>
+              <CardTitle>Grupos de trabajo</CardTitle>
+              <CardDescription>
+                Cada caso está en un solo grupo, por reglas. Dentro de cada grupo los casos se ordenan por su {SCORE_LABEL.toLowerCase()}; entre grupos no se compara.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(dashboard.queuePreviews ?? []).map(group => (
-                <section key={group.label}>
-                  <Link href={portfolioHref('/priority-cases', filters, { queue: group.code ?? 'SIN_COLA', page: '' })} className="font-semibold underline">{group.label}</Link>
-                  <p>{formatWithUnit(group.count, 'objetos')}</p>
-                  {group.cases.length === 0 && <p>{group.count === null ? 'No disponible: pertenencia a la cola desconocida.' : 'Sin casos en esta cola.'}</p>}
-                  <ul>{group.cases.map(debtor => <li key={debtor.id}>
-                    <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} className="underline">{debtor.identifier}</Link>
-                    {' · '}{formatWithUnit(debtor.priorityScore, 'puntos de 0 a 100')}{debtor.decision?.severidad.estado === 'PARCIAL' ? ' (mínimo parcial)' : ''}
-                  </li>)}</ul>
-                </section>
-              ))}
+              {groups.map(group => {
+                const percentage = percentageData(group.count, total)
+                return (
+                  <section key={group.label} data-group={group.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <Link href={portfolioHref('/priority-cases', filters, { queue: group.preview?.code ?? 'SIN_COLA', page: '' })} className="font-semibold text-[#163a63] underline">{group.label}</Link>
+                      <span className="text-xs font-semibold text-slate-700">{group.count === null ? formatNumber(null) : `${casesLabel(group.count)} (${formatPercentage(percentage)})`}</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
+                      <div className={cn('h-full rounded-full', BAR_COLOR[group.label] ?? 'bg-slate-500')} style={{ width: percentage.value === null ? undefined : `${percentage.value}%` }} />
+                    </div>
+                    {group.preview && group.preview.cases.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {group.preview.cases.map(debtor => (
+                          <li key={debtor.id}>
+                            <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} className="font-medium underline">{debtor.identifier}</Link>
+                            {' · '}{scoreView(debtor).text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )
+              })}
+              <details className="text-xs text-slate-600">
+                <summary className="cursor-pointer">Cómo se arma cada grupo</summary>
+                <ol className="mt-2 list-decimal space-y-1 pl-5">
+                  {GROUP_CRITERIA.map(item => <li key={item.rule}>Si {item.rule}: {item.group}.</li>)}
+                </ol>
+                <p className="mt-1">Gana la primera regla que se cumple. No es clustering ni aprendizaje automático.</p>
+              </details>
             </CardContent>
           </Card>
 
@@ -181,35 +141,31 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
             <CardHeader className="gap-2 md:flex-row md:items-center md:justify-between md:space-y-0">
               <div>
                 <CardTitle>Casos sin contacto</CardTitle>
-                <CardDescription>Hasta 5 sin contacto cargado, en orden de cola. Contacto no verificado.</CardDescription>
+                <CardDescription>Hasta 5, en el orden de su grupo de trabajo. Contacto cargado, no verificado.</CardDescription>
               </div>
-              <Link href={portfolioHref('/no-contact', filters)} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-                Ver casos
-              </Link>
+              <Link href={portfolioHref('/no-contact', filters)} className={buttonVariants({ variant: 'outline', size: 'sm' })}>Ver todos</Link>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Objeto</TableHead>
-                    <TableHead>Severidad (puntos)</TableHead>
-                    <TableHead className="text-right">Atraso</TableHead>
-                    <TableHead className="text-right">Deuda</TableHead>
+                    <TableHead>Caso</TableHead>
+                    <TableHead>{SCORE_LABEL}</TableHead>
+                    <TableHead className="text-right">Atraso máximo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dashboard.withoutContactDebtors.length === 0 && <TableRow><TableCell colSpan={4}>{dashboard.withoutContactCases === null ? 'No disponible: lectura incompleta.' : 'Sin casos sin contacto.'}</TableCell></TableRow>}
-                  {dashboard.withoutContactDebtors.map((debtor) => (
+                  {dashboard.withoutContactDebtors.length === 0 && (
+                    <TableRow><TableCell colSpan={3}>{dashboard.withoutContactCases === null ? 'No disponible: no se pudieron leer los contactos.' : 'Todos los casos tienen un contacto cargado.'}</TableCell></TableRow>
+                  )}
+                  {dashboard.withoutContactDebtors.map(debtor => (
                     <TableRow key={debtor.id}>
                       <TableCell>
-                        <div className="font-medium text-slate-900">{debtor.identifier}</div>
+                        <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} className="font-medium text-[#163a63] underline">{debtor.identifier}</Link>
                         <p className="text-xs text-slate-500">{debtor.type}</p>
                       </TableCell>
-                      <TableCell>
-                        <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
-                      </TableCell>
-                      <TableCell className="text-right">{formatWithUnit(debtor.overdueDays, 'dias')}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
+                      <TableCell>{scoreText(debtor.riskScore, debtor.risk).text}</TableCell>
+                      <TableCell className="text-right">{daysLabel(debtor.overdueDays)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -218,74 +174,18 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
           </Card>
         </section>
 
-        <section className="space-y-4">
-          <Card className="border-[#d2dceb]">
-            <CardHeader className="gap-2 md:flex-row md:items-center md:justify-between md:space-y-0">
-              <div>
-                <CardTitle>Recomendaciones sugeridas</CardTitle>
-                <CardDescription>Objetos por intervención; denominador: todos los objetos filtrados, incluso sin cola conocida. Las barras no representan prioridad.</CardDescription>
-              </div>
-              <Link
-                href={portfolioHref('/recommended-actions', filters)}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                Ver acciones
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {RECOMMENDATION_KINDS.map((recommendation) => {
-                const bucket = dashboard.byRecommendation.find((item) => item.label === recommendation)
-                const count = bucket?.value ?? null
-                const percentage = percentageData(count, dashboard.totalDebtors)
-
-                return (
-                  <div key={recommendation} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <Badge variant={RECOMMENDATION_BADGE_VARIANT[recommendation]}>
-                        {recommendation}
-                      </Badge>
-                      <span className="text-xs font-semibold text-slate-700">
-                        {count === null ? formatNumber(null) : `${formatNumber(count)} casos (${formatPercentage(percentage)})`}
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={cn(
-                          'h-full rounded-full',
-                          recommendation === 'Revisión jurídica' && 'bg-[#9d3d3d]',
-                          recommendation === 'Contacto y plan' && 'bg-[#8a6f2a]',
-                          recommendation === 'Mejorar datos' && 'bg-[#163a63]',
-                          recommendation === 'Seguimiento' && 'bg-[#2d6a4f]'
-                        )}
-                        style={{ width: percentage.value === null ? undefined : `${percentage.value}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-              <p className="text-xs text-slate-700">
-                {dominantRecommendation
-                  ? `${dominantTies.length > 1 ? 'Empate: ' + dominantTies.map(item => item.label).join(', ') : '"' + dominantRecommendation.label + '"'} concentra ${formatPercentage(percentageData(dominantRecommendation.value, dashboard.totalDebtors))} de los objetos actuales.`
-                  : 'Sin datos suficientes para consolidar recomendacion dominante.'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <RiskDonutChart emptyMessage={chartEmpty}
-              title="Distribución por severidad v1"
-              data={dashboard.byRisk}
-              legendLayout="side"
-              size="compact"
-            />
-            <BarDistributionChart emptyMessage={chartEmpty}
-              title="Objetos por tipo"
-              data={dashboard.byDebtorType}
-              size="compact"
-            />
-            <TopDebtHorizontalChart emptyMessage={chartEmpty} title="Top de deuda" data={dashboard.topDebtChart} size="compact" />
-          </section>
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          {scoreBuckets.some(item => item.value > 0)
+            ? <RiskDonutChart title={`Casos por banda de ${SCORE_LABEL.toLowerCase()}`} data={scoreBuckets} legendLayout="side" size="compact" />
+            : readFailed && <RiskDonutChart title={`Casos por banda de ${SCORE_LABEL.toLowerCase()}`} data={[]} emptyMessage={unavailableChart} />}
+          <BarDistributionChart emptyMessage={readFailed ? unavailableChart : 'No hay casos en la selección.'} title="Casos por tipo" data={dashboard.byDebtorType} size="compact" />
+          <TopDebtHorizontalChart emptyMessage={readFailed ? unavailableChart : 'No hay importes registrados.'} title="Casos con mayor total registrado" data={dashboard.topDebtChart} size="compact" />
         </section>
+        {withoutScore > 0 && <p className="text-xs text-slate-600">{casesLabel(withoutScore)} sin {SCORE_LABEL.toLowerCase()} calculado: no entran en el gráfico de bandas.</p>}
+
+        <p>
+          <Link href="/reports" className={buttonVariants({ variant: 'outline', size: 'sm' })}><FileDown className="size-3.5" />Ver reportes</Link>
+        </p>
       </div>
     </AppShell>
   )

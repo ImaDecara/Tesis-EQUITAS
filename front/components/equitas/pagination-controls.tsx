@@ -11,9 +11,13 @@ type PaginationControlsProps = {
   currentStart: number
   currentEnd: number
   totalItems: number
-  itemLabel: string
+  /** Unidad en singular y plural: «caso» / «casos». */
+  itemLabel: readonly [string, string]
   buildHref: (page: number, pageSize: number) => string
 }
+
+const n = (value: number) => value.toLocaleString('es-AR')
+const unit = (count: number, [one, other]: readonly [string, string]) => (count === 1 ? one : other)
 
 export function PaginationSummary({
   currentStart,
@@ -29,8 +33,7 @@ export function PaginationSummary({
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <p className="text-sm text-slate-600">
-        Mostrando {currentStart.toLocaleString('es-AR')}-{currentEnd.toLocaleString('es-AR')}{' '}
-        de {totalItems.toLocaleString('es-AR')} {itemLabel}.
+        {totalItems === 0 ? `0 ${itemLabel[1]}.` : `${n(currentStart)}–${n(currentEnd)} de ${n(totalItems)} ${unit(totalItems, itemLabel)}.`}
       </p>
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
         <span className="font-semibold text-slate-700">Ver</span>
@@ -50,9 +53,18 @@ export function PaginationSummary({
             {option}
           </Link>
         ))}
-        <span>por pagina</span>
+        <span>por página</span>
       </div>
     </div>
+  )
+}
+
+function PageLink({ href, label, variant }: { href: string | null; label: string; variant: 'outline' | 'default' }) {
+  if (href) return <Link href={href} className={buttonVariants({ variant, size: 'sm' })}>{label}</Link>
+  return (
+    <span className={cn(buttonVariants({ variant, size: 'sm' }), 'pointer-events-none opacity-50')} aria-disabled>
+      {label}
+    </span>
   )
 }
 
@@ -60,64 +72,20 @@ export function PaginationControls({
   currentPage,
   totalPages,
   pageSize,
-  currentStart,
-  currentEnd,
   totalItems,
-  itemLabel,
   buildHref,
 }: PaginationControlsProps) {
-  const hasPreviousPage = currentPage > 1
-  const hasNextPage = currentPage < totalPages
-
   if (totalItems === 0) {
     return null
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-      <p>
-        Pagina {currentPage.toLocaleString('es-AR')} de {totalPages.toLocaleString('es-AR')}.{' '}
-        {currentStart.toLocaleString('es-AR')}-{currentEnd.toLocaleString('es-AR')} de{' '}
-        {totalItems.toLocaleString('es-AR')} {itemLabel}.
-      </p>
+    <nav aria-label="Páginas" className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+      <p>Página {n(currentPage)} de {n(totalPages)}</p>
       <div className="flex flex-wrap gap-2">
-        {hasPreviousPage ? (
-          <Link
-            href={buildHref(currentPage - 1, pageSize)}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Anterior
-          </Link>
-        ) : (
-          <span
-            className={cn(
-              buttonVariants({ variant: 'outline', size: 'sm' }),
-              'pointer-events-none opacity-50'
-            )}
-            aria-disabled
-          >
-            Anterior
-          </span>
-        )}
-        {hasNextPage ? (
-          <Link
-            href={buildHref(currentPage + 1, pageSize)}
-            className={buttonVariants({ variant: 'default', size: 'sm' })}
-          >
-            Ver mas
-          </Link>
-        ) : (
-          <span
-            className={cn(
-              buttonVariants({ variant: 'default', size: 'sm' }),
-              'pointer-events-none opacity-50'
-            )}
-            aria-disabled
-          >
-            Ver mas
-          </span>
-        )}
+        <PageLink href={currentPage > 1 ? buildHref(currentPage - 1, pageSize) : null} label="Anterior" variant="outline" />
+        <PageLink href={currentPage < totalPages ? buildHref(currentPage + 1, pageSize) : null} label="Siguiente" variant="default" />
       </div>
-    </div>
+    </nav>
   )
 }

@@ -72,11 +72,12 @@ describe('R-SEG-01 / E04: contrato aislado de autenticacion y pertenencia', () =
   })
 
   it.each([
-    [null, 'No se pudo iniciar sesion.'],
-    [{ message: 'INVALID LOGIN CREDENTIALS' }, 'Email o password incorrectos.'],
-    [{ message: 'invalid_credentials' }, 'Email o password incorrectos.'],
-    [{ message: 'Email not confirmed' }, 'El email aun no fue confirmado.'],
-    [{ message: 'Service unavailable' }, 'Service unavailable'],
+    [null, 'No se pudo iniciar sesión.'],
+    [{ message: 'INVALID LOGIN CREDENTIALS' }, 'Correo o contraseña incorrectos.'],
+    [{ message: 'invalid_credentials' }, 'Correo o contraseña incorrectos.'],
+    [{ message: 'Email not confirmed' }, 'El correo todavía no fue confirmado. Revisá tu bandeja de entrada.'],
+    // N7: un mensaje técnico del servidor (en inglés) no llega a la pantalla.
+    [{ message: 'Service unavailable' }, 'No se pudo iniciar sesión. Intentá de nuevo en unos minutos.'],
   ])('AUTH-04: mensaje de usuario para %j', (error, expected) => {
     expect(mapAuthErrorMessage(error)).toBe(expected)
   })

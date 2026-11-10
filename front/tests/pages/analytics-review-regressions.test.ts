@@ -11,6 +11,7 @@ import { buildQueueReport } from '@/lib/reports/queue-report'
 import { csvCents, parseCsvBytes } from '@/tests/helpers/independent-csv-parser'
 import { textFromReactTree } from '@/tests/helpers/react-tree'
 import type { RawDebtorDataBundle } from '@/types/equitas-domain'
+import { decisionsFixture, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const api = vi.hoisted(() => ({ getDebtorsData: vi.fn(), getPeopleData: vi.fn(), getDashboardData: vi.fn(), getDebtorDetailData: vi.fn(), loadRawDebtorData: vi.fn() }))
 vi.mock('@/lib/equitas-data', () => api)
@@ -20,6 +21,10 @@ vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen: async 
 vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 vi.mock('next/navigation', () => ({ usePathname: () => '/debtors', useRouter: () => ({ replace: vi.fn() }), notFound: () => { throw new Error('notFound') } }))
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
+// N7: sesión y decisiones simuladas para las pantallas de cartera.
+const session = vi.hoisted(() => ({ viewer: vi.fn(), decisions: vi.fn() }))
+vi.mock('@/lib/server/viewer-context', async original => ({ ...(await original<typeof import('@/lib/server/viewer-context')>()), loadViewerContext: session.viewer }))
+vi.mock('@/lib/server/recorded-decisions', async original => ({ ...(await original<typeof import('@/lib/server/recorded-decisions')>()), loadRecordedDecisions: session.decisions }))
 
 import HomePage from '@/app/page'
 import RiskAnalysisPage from '@/app/risk-analysis/page'
@@ -59,7 +64,12 @@ async function configure(raw: RawDebtorDataBundle = fixture()) {
   return mapped
 }
 
-beforeEach(async () => { vi.clearAllMocks(); await configure() })
+beforeEach(async () => {
+  vi.clearAllMocks()
+  session.viewer.mockResolvedValue(viewerFixture())
+  session.decisions.mockResolvedValue(decisionsFixture())
+  await configure()
+})
 
 describe('ALIGN-014 MEN-2: parámetros repetidos', () => {
   it.each(pages)('%s usa el primer valor como URLSearchParams.get y conserva navegación', async (_path, page) => {
@@ -94,8 +104,9 @@ describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => 
     // Oráculo manual: 31/10 - 1/5 = 183 días; un importe positivo de 310.000.
     expect(csvCents(row.deuda_vencida_ars)).toBe(31000000)
     expect(row.dias_atraso_max).toBe('183')
+    // N7: «días», con tilde, en los listados.
     for (const page of [DebtAgingPage, PriorityCasesPage, NoContactPage]) {
-      expect(text(await page({ searchParams: Promise.resolve({}) }))).toContain('183 dias')
+      expect(text(await page({ searchParams: Promise.resolve({}) }))).toContain('183 días')
     }
     const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
     expect(detail).toMatch(/Deuda vencida(?: al corte)?: \$\s?310\.000/)
@@ -113,7 +124,7 @@ describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => 
     expect(csvCents(row.deuda_vencida_ars)).toBe(0)
     expect(row.dias_atraso_max).toBe('NO_APLICA')
     for (const page of [DebtAgingPage, PriorityCasesPage, NoContactPage]) {
-      expect(text(await page({ searchParams: Promise.resolve({}) }))).not.toContain('183 dias')
+      expect(text(await page({ searchParams: Promise.resolve({}) }))).not.toMatch(/183 d[ií]as/)
     }
     const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
     expect(detail).toMatch(/Total registrado: \$\s?310\.000/)

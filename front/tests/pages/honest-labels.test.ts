@@ -12,6 +12,8 @@ import { mapPeopleFromRawData } from '@/lib/mappers/person-risk-mapper'
 import { getDebtorDetailDataFromService } from '@/lib/services/debtor-data-service'
 import { getPeopleDataFromService } from '@/lib/services/person-data-service'
 import { buildPresencePeopleData, buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
+import { decisionsFixture, viewerFixture } from '@/tests/helpers/viewer-fixtures'
+import { PriorityScoreBadge } from '@/components/portfolio/case-cells'
 
 const { loadRawDebtorData, getDebtorDetailData, getDebtorsData, getPeopleData, getDashboardData, loadAllTableRows } = vi.hoisted(() => ({
   loadRawDebtorData: vi.fn(), getDebtorDetailData: vi.fn(), getDebtorsData: vi.fn(),
@@ -38,6 +40,10 @@ vi.mock('next/image', () => ({ default: () => null }))
 vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
 vi.mock('@/components/auth/login-form', () => ({ LoginForm: () => null }))
+// N7: sesión y decisiones simuladas para las pantallas de cartera.
+const session = vi.hoisted(() => ({ viewer: vi.fn(), decisions: vi.fn() }))
+vi.mock('@/lib/server/viewer-context', async original => ({ ...(await original<typeof import('@/lib/server/viewer-context')>()), loadViewerContext: session.viewer }))
+vi.mock('@/lib/server/recorded-decisions', async original => ({ ...(await original<typeof import('@/lib/server/recorded-decisions')>()), loadRecordedDecisions: session.decisions }))
 
 import DebtorDetailPage from '@/app/debtors/[debtorId]/page'
 import HomePage from '@/app/page'
@@ -89,6 +95,8 @@ function configureLists(raw = rawObject(), peopleRaw = buildPresencePeopleData()
   getDebtorsData.mockResolvedValue({ debtors: mapped.debtors, warnings: raw.warnings })
   getPeopleData.mockResolvedValue({ people: people.people, peopleDashboard: people.dashboard, warnings: [] })
   getDashboardData.mockResolvedValue({ dashboard: mapDashboardMetricsFromDebtorObjects(mapped), warnings: raw.warnings })
+  session.viewer.mockResolvedValue(viewerFixture())
+  session.decisions.mockResolvedValue(decisionsFixture())
 }
 
 const peoplePage = () => PeoplePage({ searchParams: Promise.resolve({}) })
@@ -101,8 +109,9 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     peopleRaw.debts = [{ id: 801, debtor: 901, current_amount: 1250, due_date: '2025-01-01' }]
     configureLists(rawObject(), peopleRaw)
     const markup = markupOf(await peoplePage())
-    expect(headingsOf(markup)).toContain('Personas / Deudores')
-    expect(headingsOf(markupOf(await HomePage()))).toContain('Dashboard ejecutivo')
+    // N7: «Personas» y «Tablero», como en el menú (SMOKE-01 debe actualizar estos dos títulos).
+    expect(headingsOf(markup)).toContain('Personas')
+    expect(headingsOf(markupOf(await HomePage()))).toContain('Tablero')
     // Mismo camino que deployed-smoke.mjs: la tabla se ubica por el encabezado exacto y la fila por la persona.
     const tables = tablesOf(markup).filter(table => headersOf(table).includes('Total registrado asociado'))
     expect(tables).toHaveLength(1)
@@ -112,30 +121,27 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(row).toContain('Exposición asociada (no aditiva)')
   })
 
-  it('explica la exposición y el índice heredado por persona en toda la pantalla', async () => {
+  // N7 (H10): el índice por persona se rotula «Índice anterior» y se separa del puntaje de prioridad.
+  it('explica la exposición y el índice anterior por persona en toda la pantalla', async () => {
     const markup = markupOf(await peoplePage())
     const text = textOfMarkup(markup)
-    expect(text).toContain('objetos vinculados')
-    expect(text).toContain('máxima severidad entre ellos')
-    expect(text).toContain('Exposición no aditiva')
+    expect(text).toContain('Personas vinculadas a los casos')
+    expect(text).toContain('los importes no se suman entre personas')
     expect(text).toContain('Exposición asociada (no aditiva)')
-    expect(text).toContain('no son probabilidades de pago')
-    for (const label of ['Severidad heredada baja', 'Severidad heredada media', 'Severidad heredada alta',
-      'Promedio del índice heredado (puntos de 0 a 100):', 'Distribución de personas por máxima severidad heredada',
-      'Top 5 personas por máxima severidad heredada']) {
+    expect(text).toContain('No es el puntaje de prioridad de los casos ni una probabilidad de pago')
+    for (const label of ['Índice anterior por persona', 'Personas por índice anterior', 'Las 5 personas con mayor índice anterior']) {
       expect(countOf(text, label), label).toBe(1)
     }
     expect(tablesOf(markup).map(headersOf)).toEqual([
-      ['Persona', 'Máxima severidad heredada', 'Puntaje (puntos de 0 a 100)', 'Objetos vinculados'],
-      ['Nombre', 'Documento', 'Máxima severidad heredada', 'Puntaje (puntos de 0 a 100)', 'Objetos vinculados',
-        'Contacto disponible', 'Total registrado asociado', 'Accion'],
+      ['Persona', 'Casos vinculados', 'Contacto', 'Total registrado asociado', 'Índice anterior'],
+      ['Persona', 'Índice anterior', 'Casos vinculados'],
     ])
-    expect(text).not.toMatch(/riesgo|\bscore\b|seguimiento individual/i)
+    expect(text).not.toMatch(/riesgo|\bscore\b|seguimiento individual|severidad/i)
   })
 
   it('el filtro de personas usa el rótulo de la columna y nombra su selector', async () => {
     const markup = markupOf(await peoplePage())
-    expect(markup).toMatch(/<label for="risk"[^>]*>\s*Máxima severidad heredada\s*<\/label>/)
+    expect(markup).toMatch(/<label for="risk"[^>]*>\s*Índice anterior\s*<\/label>/)
     expect(markup).toMatch(/<select\b[^>]*\bid="risk"/)
     expect(textOfMarkup(markup)).not.toContain('Riesgo individual')
   })
@@ -323,45 +329,39 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     configureLists(raw)
     const page = await RiskAnalysisPage()
     const text = renderedText(page)
-    expect(text).toContain('Objetos en banda alta, desde 70 puntos')
-    expect(text).toContain('Conteo desde 70 hasta 100 puntos, inclusive')
-    expect(text).toContain('Objetos en banda alta, desde 70 puntos')
-    expect(text).toContain('Hasta 10 objetos con severidad de 70 a 100 puntos')
+    expect(text).toContain('Casos en banda alta')
+    expect(text).toContain('Puntaje de prioridad desde 70 hasta 100, inclusive')
     const cards = nodesOfType(page, Card)
-    expect(renderedText(cards[0])).toMatch(/Objetos en banda alta, desde 70 puntos\s+4\s+Conteo/)
-    const high = cards.find(card => renderedText(card).includes('Hasta 10 objetos'))!
-    expect(nodesOfType(high, RiskBadge).map(node => node.props.score).sort()).toEqual([70, 80, 90, 95])
-    expect(text).toContain('no son porcentajes ni probabilidades de pago')
-    expect(text).not.toMatch(/riesgo|\bscore\b/i)
+    expect(renderedText(cards[0])).toMatch(/Casos en banda alta\s+Puntaje de prioridad desde 70 hasta 100, inclusive\.\s+4\s/)
+    const high = cards.find(card => renderedText(card).includes('Casos en banda alta (hasta 10)'))!
+    type ScoreProps = { debtor: { decision: { severidad: { valor: number } } } }
+    const scores = nodesOfType(high, PriorityScoreBadge).map(node => (node.props as unknown as ScoreProps).debtor.decision.severidad.valor)
+    expect(scores.sort()).toEqual([70, 80, 90, 95])
+    expect(renderedText(high)).toMatch(/70 · Alta/)
+    expect(text).toContain('no es una probabilidad de pago')
+    expect(text).not.toMatch(/riesgo|\bscore\b|severidad/i)
   })
 
   it('rotula títulos, tablas y gráficos de /risk-analysis y declara el orden de la tabla', async () => {
     const markup = markupOf(await RiskAnalysisPage())
     const text = textOfMarkup(markup)
-    expect(headingsOf(markup)).toEqual(['Análisis de severidad'])
+    // N7: «Puntaje de prioridad» reemplaza a «Análisis de severidad» (un solo concepto en toda la aplicación).
+    expect(headingsOf(markup)).toEqual(['Puntaje de prioridad'])
     for (const [label, times] of [
-      ['La severidad v1 describe el objeto', 1],
-      ['Severidad del objeto (v1)', 1],
-      ['Puntaje heurístico del objeto según las reglas v1.', 1],
-      ['Conteo desde 70 hasta 100 puntos, inclusive.', 1],
-      // Título de tarjeta y columna de la tabla de personas.
-      ['Máxima severidad heredada', 2],
-      ['Máximo del índice heredado por persona entre sus objetos vinculados.', 1],
-      // Tarjeta de conteo y título de la tabla de personas.
-      ['Personas con severidad heredada alta', 2],
-      ['Índice heredado desde 70 puntos', 1],
-      ['Distribución de objetos por severidad v1', 1],
-      ['Distribución de personas por máxima severidad heredada', 1],
-      ['Objetos en banda alta, desde 70 puntos', 2],
-      ['Hasta 10 objetos con severidad de 70 a 100 puntos; incluye 70 y 90.', 1],
-      ['Primeros 10 agrupados por cola, no por severidad global.', 1],
-      ['Hasta 10 personas con índice heredado máximo desde 70 puntos entre sus objetos.', 1],
+      ['De 0 a 100, por reglas: no es una probabilidad de pago.', 1],
+      ['Suma tres partes: deuda pendiente (hasta 50 puntos), atraso máximo (hasta 30) y cantidad de obligaciones vencidas (hasta 20).', 1],
+      ['Banda alta desde 70, media de 40 a 69 y baja por debajo de 40.', 1],
+      ['Puntaje de prioridad desde 70 hasta 100, inclusive.', 1],
+      ['Casos en banda alta (hasta 10)', 1],
+      ['En el orden de su grupo de trabajo, no por un ranking entre grupos.', 1],
+      ['Índice anterior por persona', 1],
+      ['No es el puntaje de prioridad de los casos', 1],
     ] as const) expect(countOf(text, label), label).toBe(times)
     expect(tablesOf(markup).map(headersOf)).toEqual([
-      ['Objeto', 'Severidad (puntos de 0 a 100)', 'Deuda', 'Accion'],
-      ['Persona', 'Máxima severidad heredada', 'Puntaje (puntos de 0 a 100)', 'Objetos vinculados'],
+      ['Identificador', 'Grupo de trabajo', 'Puntaje de prioridad', 'Deuda pendiente'],
+      ['Persona', 'Índice anterior', 'Casos vinculados'],
     ])
-    expect(text).not.toMatch(/riesgo|\bscore\b|criticidad|puntaje alto|puntaje individual/i)
+    expect(text).not.toMatch(/riesgo|\bscore\b|criticidad|severidad|puntaje individual/i)
   })
 
   it('la línea de faltantes usa los rótulos del contrato', () => {
@@ -370,14 +370,25 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       .toBe('Objetos con severidad mayor a 90 puntos: 1 INVALIDO; Severidad: 1 INVALIDO; Promedio del índice heredado: 1 INVALIDO; Revisión requerida: 1 INVALIDO')
   })
 
-  it('las pantallas muestran los faltantes sin los rótulos heredados', async () => {
+  // N7: los faltantes se dicen en palabras, sin códigos internos.
+  it('las pantallas de cartera muestran los faltantes en palabras', async () => {
     const raw = rawObject()
     raw.debts[0].current_amount = 'ilegible'
     configureLists(raw)
     const analysis = renderedText(await RiskAnalysisPage())
-    expect(analysis).toContain('Objetos con severidad mayor a 90 puntos: 1 INVALIDO')
-    expect(analysis).toContain('Revisión requerida: 1 INVALIDO')
-    expect(analysis).not.toMatch(/riesgo|recomendación urgente/i)
+    expect(analysis).toContain('Casos con puntaje mayor a 90: 1 dato con un valor inválido')
+    expect(analysis).not.toMatch(/INVALIDO|riesgo|recomendación urgente/i)
+
+    const peopleRaw = buildPresencePeopleData()
+    peopleRaw.debtorProfilesDetail = [{ person: 701, debtor_profile: 901, risk_value: 'ilegible' }]
+    configureLists(rawObject(), peopleRaw)
+    const people = renderedText(await peoplePage())
+    // Un índice inválido existe (no se retira): se informa como faltante.
+    expect(people).toContain('Índice anterior: 1 dato con un valor inválido')
+    expect(people).not.toMatch(/INVALIDO|riesgo/i)
+  })
+
+  it('las pantallas muestran los faltantes sin los rótulos heredados', async () => {
 
     const failedDebt = rawObject()
     failedDebt.warnings = [{ table: 'debt', message: 'Fallo sintético de lectura', needsSelectPolicy: false }]
@@ -386,23 +397,16 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(detail).toContain('Severidad: 1 NO_INTEGRADO')
     expect(detail).not.toMatch(/\briesgo\b/i)
 
-    const peopleRaw = buildPresencePeopleData()
-    peopleRaw.debtorProfilesDetail = [{ person: 701, debtor_profile: 901, risk_value: 'ilegible' }]
-    configureLists(rawObject(), peopleRaw)
-    const people = renderedText(await peoplePage())
-    expect(people).toContain('Promedio del índice heredado: 1 ')
-    expect(people).not.toMatch(/riesgo/i)
   })
 
-  it('rotula todos los ejemplos del ingreso y no afirma gestión realizada', async () => {
+  // N7 (H15): el ingreso ya no muestra cifras de ejemplo: describe lo que hace la aplicación.
+  it('el ingreso no muestra cifras inventadas ni afirma gestión realizada', async () => {
     const page = await LoginPage({ searchParams: Promise.resolve({}) })
     const text = renderedText(page)
-    expect(text).toContain('Ejemplo ilustrativo, no son datos')
-    expect(text).toContain('Centro operativo ilustrativo, no son datos')
-    expect(text).toContain('Objetos en banda alta')
-    expect(text).toContain('Deuda de ejemplo')
-    expect(text).toContain('Distribución ilustrativa de objetos por severidad')
-    expect(text).not.toMatch(/Deuda gestionada|Casos criticos|perfiles de riesgo|Distribucion de riesgo|Preview institucional/i)
+    expect(text).toContain('Iniciar sesión')
+    expect(text).toContain('total registrado, deuda pendiente y deuda vencida')
+    expect(text).not.toMatch(/\b186\b|\b176\b|\$\s*99M|\d+\s*%|ilustrativ|ejemplo/i)
+    expect(text).not.toMatch(/Deuda gestionada|Casos criticos|perfiles de riesgo|Distribucion de riesgo|Preview institucional|severidad|Dashboard/i)
   })
 
   it.each([false, true])('los avisos de acceso no aconsejan abrir SELECT a anon (policy=%s)', needsSelectPolicy => {
@@ -422,10 +426,13 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
       table: 'debtor_profile_detail', message: 'No devolvió filas para esta sesión.', needsSelectPolicy: true,
     }])
     getPeopleData.mockResolvedValue(data)
+    // N7 (H10): «no devolvió filas» es lo que pasa con una cartera cargada por CSV, que no trae el índice:
+    // se explica con una nota y no como error de lectura.
     for (const page of [await peoplePage(), await RiskAnalysisPage()]) {
       const text = renderedText(page)
-      expect(text).toContain('debtor_profile_detail: No devolvió filas para esta sesión. (Acceso no disponible. Solicite al administrador que revise los permisos de su cuenta.)')
-      expect(text).not.toMatch(/policy|SELECT|\banon\b|authenticated|desde frontend|sesion autenticada|\brol\b/i)
+      expect(text).toContain('Esta cartera no trae el índice anterior por persona')
+      expect(text).not.toContain('No se pudieron leer algunos datos')
+      expect(text).not.toMatch(/policy|SELECT|\banon\b|authenticated|desde frontend|sesion autenticada|\brol\b|debtor_profile_detail/i)
     }
   })
 })

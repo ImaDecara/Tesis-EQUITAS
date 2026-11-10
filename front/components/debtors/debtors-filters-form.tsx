@@ -7,20 +7,11 @@ import { Search } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+// Bandas del puntaje de prioridad (un solo concepto en toda la aplicación).
+const BAND_FILTER_LABELS: Record<string, string> = { ALTO: 'Alta (70 a 100)', MEDIO: 'Media (40 a 69)', BAJO: 'Baja (0 a 39)' }
+
 function getRiskFilterLabel(risk: string) {
-  if (risk === 'BAJO') {
-    return 'Bajo (0-39)'
-  }
-
-  if (risk === 'MEDIO') {
-    return 'Medio (40-69)'
-  }
-
-  if (risk === 'ALTO') {
-    return 'Alto (70-100)'
-  }
-
-  return risk
+  return BAND_FILTER_LABELS[risk] ?? risk
 }
 
 type DebtorsFiltersFormProps = {
@@ -93,7 +84,7 @@ export function DebtorsFiltersForm({
       {initialValues.queue && <input type="hidden" name="queue" value={initialValues.queue} />}
       <div className="xl:col-span-2">
         <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
-          Buscar por objeto o persona
+          Buscar por identificador o persona
         </label>
         <div className="relative">
           <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-slate-400" />
@@ -101,14 +92,14 @@ export function DebtorsFiltersForm({
             id="q"
             name="q"
             defaultValue={initialValues.q}
-            placeholder="Ej: OBJ-001 o Perez"
+            placeholder="Ej.: OBJ-001 o Pérez"
             className="h-9 w-full rounded-md border border-slate-300 bg-white pr-3 pl-8 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition focus:ring-4"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Severidad</label>
+        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Puntaje de prioridad</label>
         <select
           id="risk"
           name="risk"
@@ -178,7 +169,7 @@ export function DebtorsFiltersForm({
           disabled={isPending}
           className={cn(buttonVariants({ variant: 'default' }), 'h-9')}
         >
-          {isPending ? 'Aplicando...' : 'Aplicar filtros'}
+          {isPending ? 'Aplicando…' : 'Aplicar filtros'}
         </button>
         <button
           type="button"

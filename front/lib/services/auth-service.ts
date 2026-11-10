@@ -10,7 +10,7 @@ function selectedTenant() {
 
 export function mapAuthErrorMessage(error: AuthError | { message: string } | null) {
   if (!error) {
-    return 'No se pudo iniciar sesion.'
+    return 'No se pudo iniciar sesión.'
   }
 
   const message = error.message.toLowerCase()
@@ -19,14 +19,15 @@ export function mapAuthErrorMessage(error: AuthError | { message: string } | nul
     message.includes('invalid login credentials') ||
     message.includes('invalid_credentials')
   ) {
-    return 'Email o password incorrectos.'
+    return 'Correo o contraseña incorrectos.'
   }
 
   if (message.includes('email not confirmed')) {
-    return 'El email aun no fue confirmado.'
+    return 'El correo todavía no fue confirmado. Revisá tu bandeja de entrada.'
   }
 
-  return error.message
+  // Un mensaje técnico del servidor (a menudo en inglés) no se muestra tal cual.
+  return 'No se pudo iniciar sesión. Intentá de nuevo en unos minutos.'
 }
 
 export async function signInWithPassword(email: string, password: string) {
@@ -36,7 +37,7 @@ export async function signInWithPassword(email: string, password: string) {
     return {
       error: {
         name: 'SupabaseNotConfigured',
-        message: 'Supabase no esta configurado en el frontend.',
+        message: 'La aplicación no está configurada para iniciar sesión. Avisá a quien administra el sistema.',
       },
     }
   }
@@ -87,16 +88,16 @@ export async function validateAuthUserTenantAccess(
 
 export async function validateCurrentUserTenantAccess(tenantId: string | null | undefined = selectedTenant()): Promise<TenantAccessValidation> {
   const supabase = createBrowserSupabaseClient()
-  if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'Supabase no esta configurado en el frontend.')
+  if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'La aplicación no está configurada para iniciar sesión. Avisá a quien administra el sistema.')
   const { data, error } = await supabase.auth.getUser()
-  if (error || !data.user) return denied('AUTH_REQUIRED', 'Debes iniciar sesion para continuar.')
+  if (error || !data.user) return denied('AUTH_REQUIRED', 'Tenés que iniciar sesión para continuar.')
   return resolveTenantAccess(data.user.id, supabase, tenantId ?? undefined)
 }
 
-// La cookie conserva una eleccion, nunca una prueba de autorizacion. La DAL la
+// La cookie conserva una elección, nunca una prueba de autorizacion. La DAL la
 // verifica de nuevo con getUser y las tablas en cada solicitud.
 export async function selectCurrentTenant(tenantId: string): Promise<TenantAccessValidation> {
-  if (!databaseId(tenantId)) return denied('TENANT_ACCESS_NOT_FOUND', 'La seleccion de municipio no es valida.')
+  if (!databaseId(tenantId)) return denied('TENANT_ACCESS_NOT_FOUND', 'La selección de municipio no es válida.')
   const access = await validateCurrentUserTenantAccess(tenantId)
   if (access.isAuthorized && typeof document !== 'undefined') {
     const secure = location.protocol === 'https:' ? '; Secure' : ''
