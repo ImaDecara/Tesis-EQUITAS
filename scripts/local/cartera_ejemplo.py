@@ -228,13 +228,19 @@ def write(output: Path) -> None:
 
 def check(folder: Path) -> list[str]:
     """Diferencias entre la carpeta y lo que genera este archivo (vacía si coinciden byte a byte)."""
+    expected = build()
     problems = []
-    for name, data in build().items():
+    for name, data in expected.items():
         path = folder / name
         if not path.is_file():
             problems.append(f'falta {name}')
         elif path.read_bytes() != data:
             problems.append(f'{name} difiere del generador')
+    # La carpeta se publica con la aplicación: no puede contener nada que este generador no haya escrito.
+    if folder.is_dir():
+        for path in sorted(folder.rglob('*')):
+            if path.is_file() and path.relative_to(folder).as_posix() not in expected:
+                problems.append(f'{path.relative_to(folder).as_posix()} no es un archivo generado: sobra')
     return problems
 
 

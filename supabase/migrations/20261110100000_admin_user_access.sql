@@ -13,6 +13,8 @@
 do $$ begin
   if to_regprocedure('public.record_case_review(bigint, bigint, bigint, bigint, text, date, text, text, integer, jsonb, text, uuid, text, integer, text, text, jsonb, bigint)') is null
      or to_regprocedure('public.record_case_review_approval(bigint, bigint, bigint, text, uuid, bigint, text, jsonb, bigint)') is null
+     or to_regprocedure('public.read_case_review_reason_text(bigint, bigint, bigint)') is null
+     or to_regprocedure('public.record_import_batch(bigint, bigint, text, jsonb, date, text, text, uuid, date, jsonb, bigint)') is null
      or to_regprocedure('public.record_access_audit(bigint, bigint, text, text, uuid)') is null
      or to_regprocedure('equitas_import_private.authorize(bigint, bigint)') is null then
     raise exception 'Requiere las migraciones hasta 20261107151854';
@@ -261,5 +263,42 @@ revoke create on schema public from equitas_write_definer;
 revoke equitas_import_definer from postgres;
 
 revoke equitas_write_definer from postgres;
+
+-- 9. Comprobacion de cierre. `create or replace` con una firma distinta no reemplaza: crea una sobrecarga nueva, de postgres
+-- y con el EXECUTE por defecto para anon y authenticated. Si algo de esto no se cumple, la migracion falla entera.
+
+do $$
+declare
+  f record;
+  expected constant jsonb := '{
+    "public.record_case_review": {"owner": "equitas_write_definer", "definer": true},
+    "public.record_case_review_approval": {"owner": "equitas_write_definer", "definer": true},
+    "public.read_case_review_reason_text": {"owner": "equitas_write_definer", "definer": true},
+    "public.record_import_batch": {"owner": "equitas_write_definer", "definer": true},
+    "public.equitas_role_allows": {"owner": "equitas_write_definer", "definer": false},
+    "equitas_import_private.authorize": {"owner": "equitas_import_definer", "definer": false}
+  }';
+  seen integer := 0;
+begin
+  for f in
+    select n.nspname || '.' || p.proname as name, count(*) over (partition by n.nspname, p.proname) as overloads,
+           pg_get_userbyid(p.proowner) as owner, p.prosecdef, p.proconfig, p.oid
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where expected ? (n.nspname || '.' || p.proname)
+  loop
+    seen := seen + 1;
+    if f.overloads <> 1 then raise exception 'ACCESO: % tiene % sobrecargas', f.name, f.overloads; end if;
+    if f.owner <> expected -> f.name ->> 'owner' then raise exception 'ACCESO: % tiene dueno %', f.name, f.owner; end if;
+    if f.prosecdef <> (expected -> f.name ->> 'definer')::boolean then raise exception 'ACCESO: % cambio SECURITY DEFINER', f.name; end if;
+    if f.proconfig is distinct from array['search_path=""'] then raise exception 'ACCESO: % sin search_path vacio', f.name; end if;
+    if has_function_privilege('anon', f.oid, 'execute') or has_function_privilege('service_role', f.oid, 'execute') then
+      raise exception 'ACCESO: % es ejecutable por anon o service_role', f.name;
+    end if;
+    if has_function_privilege('authenticated', f.oid, 'execute') <> (f.name = 'public.equitas_role_allows') then
+      raise exception 'ACCESO: % con EXECUTE inesperado para authenticated', f.name;
+    end if;
+  end loop;
+  if seen <> 6 then raise exception 'ACCESO: se esperaban 6 funciones y hay %', seen; end if;
+end $$;
 
 notify pgrst, 'reload schema';

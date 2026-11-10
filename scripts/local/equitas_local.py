@@ -652,6 +652,13 @@ def ensure_build(home: Path, env: dict[str, str], force: bool = False) -> None:
     dirty = bool(git('status', '--porcelain', '--', 'front', 'contracts'))
     if not force and not dirty and current == stamp and (FRONT / '.next/BUILD_ID').exists():
         return
+    # Compilar reemplaza front/.next: no se hace debajo de otra aplicación que esté sirviendo desde esta carpeta.
+    listing = run(['ps', '-axo', 'pid=,command='], timeout=30).stdout
+    for line in listing.splitlines():
+        pid, _, command = line.strip().partition(' ')
+        if 'next-server' in command and pid.isdigit() and (process_cwd(int(pid)) or '') == str(FRONT.resolve()):
+            raise LocalError('Hay otra aplicación Next sirviendo desde front/ (por ejemplo, la demo de la noche 6). '
+                             'Detenela antes de arrancar este entorno: compilar reemplazaría su build.')
     say('Compilando la aplicación con la configuración pública de este entorno local; puede tardar unos minutos.')
     # La compilación reemplaza front/.next: la marca de la demo de la noche 6 deja de valer y se retira, para que
     # esa demo recompile con SU configuración la próxima vez que se arranque (no se toca nada más de esa demo).

@@ -198,16 +198,32 @@ const INPUT_MESSAGES: Readonly<Record<string, string>> = {
   UPLOAD_INTERRUMPIDO: 'La subida se interrumpió antes de terminar. Probá de nuevo.',
   MULTIPART_REQUERIDO: 'La solicitud no llegó con el formato esperado. Recargá la página y probá de nuevo.',
 }
-const NOTHING_CHANGED = 'La cartera y su fecha siguen como estaban.'
-const SERVICE_DOWN = `El servicio de importación local no respondió. ${NOTHING_CHANGED} Comprobá que el entorno local esté en marcha y probá de nuevo.`
+// Lo único que se afirma es lo demostrable: qué hizo ESTA carga.
+const NOT_MODIFIED = 'Esta carga no modificó la cartera ni su fecha.'
+const UNKNOWN_RESULT = 'No se pudo confirmar si la carga se completó. Repetí la misma carga: si ya había entrado, la aplicación lo va a informar y no se duplica nada.'
+
+// Respuestas que solo pueden ocurrir ANTES de que el servicio de importación empiece a trabajar: con ellas
+// se puede afirmar que esta carga no escribió nada. Cualquier otra respuesta sin `resultado` (un corte por
+// tiempo, un error interno) es un resultado desconocido: el servicio pudo haber seguido hasta publicar.
+const BEFORE_ANY_WRITE: Readonly<Record<string, string>> = {
+  IMPORT_SERVICE_UNAVAILABLE: 'El servicio de importación local no está en marcha.',
+  IMPORT_WRITER_NOT_CONFIGURED: 'El servicio de importación local no tiene configurada su credencial.',
+  API_NOT_CONFIGURED: 'El servicio de importación local no está configurado para la base local.',
+  AUTH_UNAVAILABLE: 'No se pudo verificar tu sesión en este momento.',
+  CONTEXT_UNAVAILABLE: 'No se pudo verificar tu municipio y tu rol en este momento.',
+  ALMACEN_TEMPORAL_INSEGURO: 'El servicio de importación no pudo usar su carpeta temporal privada.',
+  TENANT_SELECTION_REQUIRED: 'Tu cuenta tiene acceso a más de un municipio y esta versión de la carga necesita uno solo.',
+  NOT_FOUND: 'La ruta de carga no existe en esta instalación.',
+}
 
 function outcome(kind: OutcomeKind, title: string, message: string, body: LoadBody, portfolioChanged = false): LoadOutcome {
   const revision = typeof body.revision === 'string' && /^[0-9a-f]{64}$/.test(body.revision) ? body.revision : null
   return { kind, title, message, portfolioChanged, revision, body }
 }
 
-// Traduce la respuesta HTTP a lo que la persona necesita leer. Una falla del servicio nunca se
-// presenta como un error del archivo, y solo «loaded» afirma que la cartera cambió.
+// Traduce la respuesta HTTP a lo que la persona necesita leer. Una falla del servicio nunca se presenta
+// como un error del archivo, solo «loaded» afirma que la cartera cambió, y «no la modificó» se dice
+// únicamente cuando se sabe.
 export function describeLoadResponse(status: number, payload: unknown): LoadOutcome {
   const body: LoadBody = payload !== null && typeof payload === 'object' ? payload as LoadBody : {}
   const message = typeof body.mensaje === 'string' ? body.mensaje : ''
@@ -220,21 +236,23 @@ export function describeLoadResponse(status: number, payload: unknown): LoadOutc
     case 'NO_COMPLETADO': return outcome('service', 'La carga no se completó', message, body)
   }
   const code = typeof body.detail === 'string' ? body.detail : ''
-  if (status === 401) return outcome('session', 'La sesión venció', `Volvé a ingresar y repetí la carga. ${NOTHING_CHANGED}`, body)
+  if (status === 401) return outcome('session', 'La sesión venció', `Volvé a ingresar y repetí la carga. ${NOT_MODIFIED}`, body)
   if (status === 403) {
     return outcome('forbidden', 'Tu cuenta no puede cargar CSV', code === 'ORIGIN_NOT_ALLOWED'
-      ? `La solicitud no vino de esta aplicación. ${NOTHING_CHANGED}`
-      : `Cargar CSV cambia la cartera de todo el municipio y requiere una cuenta ADMIN. ${NOTHING_CHANGED}`, body)
+      ? `La solicitud no vino de esta aplicación. ${NOT_MODIFIED}`
+      : `Cargar CSV cambia la cartera de todo el municipio y requiere una cuenta ADMIN. ${NOT_MODIFIED}`, body)
   }
-  if (INPUT_MESSAGES[code]) return outcome('input', 'Revisá lo que elegiste', `${INPUT_MESSAGES[code]} ${NOTHING_CHANGED}`, body)
-  if (status === 413) return outcome('input', 'Revisá lo que elegiste', `${INPUT_MESSAGES.LIMITE_ARCHIVO_EXCEDIDO} ${NOTHING_CHANGED}`, body)
-  return outcome('service', 'La carga no se completó', SERVICE_DOWN, body)
+  if (INPUT_MESSAGES[code]) return outcome('input', 'Revisá lo que elegiste', `${INPUT_MESSAGES[code]} ${NOT_MODIFIED}`, body)
+  if (status === 413) return outcome('input', 'Revisá lo que elegiste', `${INPUT_MESSAGES.LIMITE_ARCHIVO_EXCEDIDO} ${NOT_MODIFIED}`, body)
+  if (BEFORE_ANY_WRITE[code]) {
+    return outcome('service', 'La carga no se completó', `${BEFORE_ANY_WRITE[code]} ${NOT_MODIFIED} Comprobá que el entorno local esté en marcha y probá de nuevo.`, body)
+  }
+  return outcome('unconfirmed', 'No se pudo confirmar el resultado', UNKNOWN_RESULT, body)
 }
 
 // Cuando la solicitud no llegó a tener respuesta (corte de red): no se sabe qué pasó.
 export function describeLoadFailure(): LoadOutcome {
-  return outcome('unconfirmed', 'No se pudo confirmar el resultado',
-    'Se perdió la conexión antes de recibir la respuesta. Repetí la misma carga: si ya había entrado, la aplicación lo va a informar y no se duplica nada.', {})
+  return outcome('unconfirmed', 'No se pudo confirmar el resultado', UNKNOWN_RESULT, {})
 }
 
 export function formatBytes(bytes: number): string {

@@ -10,6 +10,7 @@ import time
 
 from ETL.config import ETLError
 from ETL.readers.supervised import BACK, _worker_environment
+from ETL.transform import source_contract
 
 PROCESS_SECONDS = 180
 MEMORY_BYTES = 2 * 1024**3
@@ -26,13 +27,15 @@ class PreviewSourceError(ETLError):
 
 
 def _location(value):
-    """Forma cerrada: lo que no sea exactamente archivo/línea/campo del contrato se descarta."""
-    if (isinstance(value, dict) and set(value) == {'archivo', 'linea', 'campo'}
+    """Forma cerrada: archivo y línea del lote, y un campo que sea una columna del contrato para ese archivo
+    (o `*`). Cualquier otra cosa se descarta: por construcción nunca viaja un valor del archivo."""
+    if not (isinstance(value, dict) and set(value) == {'archivo', 'linea', 'campo'}
             and value['archivo'] in ('cabecera', 'detalle', 'libro')
-            and type(value['linea']) is int and 0 <= value['linea'] < 10**9
-            and isinstance(value['campo'], str) and re.fullmatch(r'[A-Za-z_*][A-Za-z0-9_]{0,63}', value['campo'])):
-        return value
-    return None
+            and type(value['linea']) is int and 0 <= value['linea'] < 10**9):
+        return None
+    columns = source_contract()['archivos'].get(value['archivo'], {}).get('columnas', {})
+    return {'archivo': value['archivo'], 'linea': value['linea'],
+            'campo': value['campo'] if isinstance(value['campo'], str) and value['campo'] in columns else '*'}
 
 
 def _stop(process):

@@ -137,8 +137,11 @@ export async function forwardImportRequest(request: NextRequest, segments: reado
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     } as RequestInit)
     return await browserResponse(upstream)
-  } catch {
-    // Ni el mensaje ni la causa: pueden citar la URL interna.
-    return failure(503, 'IMPORT_SERVICE_UNAVAILABLE')
+  } catch (error) {
+    // Ni el mensaje ni la causa viajan: pueden citar la URL interna. Solo se distingue un caso: si la conexion
+    // fue rechazada, el servicio no recibio nada. En cualquier otro corte (tiempo agotado, conexion caida a
+    // mitad) una escritura pudo haber llegado: su resultado no se conoce y no se afirma que nada cambio.
+    const refused = (error as { cause?: { code?: unknown } } | null)?.cause?.code === 'ECONNREFUSED'
+    return refused || !hasBody ? failure(503, 'IMPORT_SERVICE_UNAVAILABLE') : failure(504, 'IMPORT_RESULT_UNKNOWN')
   }
 }

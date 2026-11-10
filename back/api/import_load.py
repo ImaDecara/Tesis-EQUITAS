@@ -43,6 +43,7 @@ from api.auth import (
 from api.upload_store import UploadStore, UploadStoreBusy
 from ETL.config import PROJECT_ROOT, ETLError
 from ETL.transform import CATALOG_KEY_COLUMNS, canonical_json_hash, source_contract
+from services.decision_rules_v1 import RULES_VERSION
 from services.import_preview_process import PreviewSourceError, prepare_input
 
 logger = logging.getLogger("equitas.api")
@@ -61,14 +62,20 @@ MAX_STAGED_ROWS = 200_000
 # La función de publicación tiene 60 s de cómputo: el cliente espera un poco más para leer su respuesta.
 RPC_SECONDS = 75.0
 CLOSED_STATES = frozenset({"FALLIDO", "DESCARTADO", "REQUIERE_NUEVO_PREVIEW"})
+ROLE_REJECTIONS = frozenset({"ACTOR_NOT_ACTIVE_MEMBER", "ROLE_NOT_ALLOWED"})
 
 # Resultados que ve la pantalla. Cada uno dice qué pasó con la cartera.
 PUBLISHED = "PUBLICADO"
 ALREADY_LOADED = "YA_CARGADO"
 REJECTED = "RECHAZADO"
 NEEDS_CONFIRMATION = "REQUIERE_CONFIRMACION"
+# Se sabe que esta carga no escribió cartera.
 NOT_COMPLETED = "NO_COMPLETADO"
+# No se sabe si la publicación confirmó: repetir la misma carga lo resuelve sin duplicar.
 NOT_CONFIRMED = "NO_CONFIRMADO"
+
+# Lo único que se afirma es lo demostrable: qué hizo ESTA carga. La cartera pudo cambiar por otra vía.
+NOT_MODIFIED = "Esta carga no modificó la cartera ni su fecha."
 
 STRUCTURAL_MESSAGES = {
     "ARCHIVOS_REQUERIDOS": "El lote necesita los dos archivos: cabecera y detalle.",
@@ -116,6 +123,10 @@ def _outcome(status: int, result: str, message: str, **fields: Any) -> JSONRespo
     return JSONResponse(status_code=status, content={"resultado": result, "mensaje": message, **fields})
 
 
+def _not_completed(message: str, code: str, **fields: Any) -> JSONResponse:
+    return _outcome(503, NOT_COMPLETED, message, codigo=code, **fields)
+
+
 def _profile(as_of: str) -> dict[str, Any]:
     profile = copy.deepcopy(json.loads(PROFILE_PATH.read_text(encoding="utf-8")))
     profile["fecha_corte"] = as_of
@@ -125,35 +136,23 @@ def _profile(as_of: str) -> dict[str, Any]:
 # ---- Hallazgos de validación: qué puede corregir la persona
 
 
-def _effect(contract: dict[str, Any], finding: dict[str, Any]) -> str:
-    """Misma regla que el validador (`_Validator.effect`): una columna opcional puede degradar el efecto."""
-    spec = contract["codigos"].get(finding["codigo"], {})
-    column = contract["archivos"].get(finding["archivo"], {}).get("columnas", {}).get(finding["campo"], {})
-    required = column.get("requerida", True)
-    return spec.get("efecto", "BLOQUEO") if required else spec.get("efecto_opcional", spec.get("efecto", "BLOQUEO"))
-
-
 def _findings(detail: dict[str, Any]) -> dict[str, Any]:
-    """Errores (impiden o excluyen) y advertencias (se cargan igual), con totales por código."""
-    contract = source_contract()
-    groups: dict[str, dict[str, Any]] = {
-        "errores": {"total": 0, "por_codigo": {}, "detalle": []},
-        "advertencias": {"total": 0, "por_codigo": {}, "detalle": []},
-    }
-    for finding in detail["hallazgos"]:
-        code = finding["codigo"]
-        effect = _effect(contract, finding)
-        group = groups["advertencias" if effect == "ALERTA" else "errores"]
-        description = contract["codigos"].get(code, {}).get("descripcion", code)
-        group["total"] += 1
-        entry = group["por_codigo"].setdefault(code, {"codigo": code, "descripcion": description, "cantidad": 0})
-        entry["cantidad"] += 1
-        group["detalle"].append({"archivo": finding["archivo"], "linea": finding["linea"], "columna": finding["campo"],
-                                 "codigo": code, "descripcion": description, "efecto": effect})
-    for group in groups.values():
-        group["por_codigo"] = sorted(group["por_codigo"].values(), key=lambda item: (-item["cantidad"], item["codigo"]))
-    return {**groups, "hallazgos_total": detail["hallazgos_total"],
-            "hallazgos_mostrados": len(detail["hallazgos"]),
+    """Errores (excluyen o bloquean) y advertencias (se cargan igual). Los totales los calculó el proceso de
+    validación sobre TODOS los hallazgos; el detalle puede venir acotado y se declara."""
+    codes = source_contract()["codigos"]
+    described = lambda code: codes.get(code, {}).get("descripcion", code)
+    groups: dict[str, Any] = {}
+    for name, effect_is_warning in (("errores", False), ("advertencias", True)):
+        totals = detail["totales"][name]
+        groups[name] = {
+            "total": sum(totals.values()),
+            "por_codigo": sorted(({"codigo": code, "descripcion": described(code), "cantidad": count}
+                                  for code, count in totals.items()), key=lambda item: (-item["cantidad"], item["codigo"])),
+            "detalle": [{"archivo": item["archivo"], "linea": item["linea"], "columna": item["campo"], "codigo": item["codigo"],
+                         "descripcion": described(item["codigo"]), "efecto": item["efecto"]}
+                        for item in detail["hallazgos"] if (item["efecto"] == "ALERTA") == effect_is_warning],
+        }
+    return {**groups, "hallazgos_total": detail["hallazgos_total"], "hallazgos_mostrados": len(detail["hallazgos"]),
             "truncado": detail["hallazgos_total"] > len(detail["hallazgos"])}
 
 
@@ -162,6 +161,11 @@ def _summary(prepared: dict[str, Any]) -> dict[str, Any]:
     return {"objetos": counts.get("objetos"), "objetos_aceptados": counts.get("objetos_aceptados"),
             "objetos_en_cuarentena": counts.get("objetos_en_cuarentena"), "personas": counts.get("personas"),
             "obligaciones": counts.get("obligaciones_unicas"), "filas": prepared["detail"]["filas"]}
+
+
+def _report(prepared: dict[str, Any]) -> dict[str, Any]:
+    """Resumen y hallazgos, armados ANTES de escribir nada: después de publicar no queda cómputo que pueda fallar."""
+    return {"resumen": _summary(prepared), **_findings(prepared["detail"])}
 
 
 def _blockers(codes: list[str]) -> list[dict[str, str]]:
@@ -176,17 +180,20 @@ def _blockers(codes: list[str]) -> list[dict[str, str]]:
 
 def _register_rejection(session: Session, context: TenantContext, form: imports.ReceivedForm,
                         as_of: str, counts: dict[str, Any]) -> bool:
-    """FALLIDO sin antecedente, como la terminal: `equitas_current_cutoff` lo ignora. La clave es
-    determinista: repetir el mismo archivo rechazado no agrega eventos."""
-    key = uuid.uuid5(uuid.NAMESPACE_URL, "equitas:carga-rechazada:{}:{}:{}:{}".format(
-        context.tenant_id, form.hashes.get("cabecera"), form.hashes.get("detalle"), as_of))
+    """FALLIDO sin antecedente, como la terminal: `equitas_current_cutoff` lo ignora. La clave es determinista
+    por persona, archivos, fecha y reglas: repetir el mismo archivo rechazado no agrega eventos, y el intento
+    de otra persona queda registrado a su nombre."""
+    key = uuid.uuid5(uuid.NAMESPACE_URL, "equitas:carga-rechazada:{}:{}:{}:{}:{}:{}".format(
+        context.tenant_id, context.user_id, form.hashes.get("cabecera"), form.hashes.get("detalle"), as_of, RULES_VERSION))
     try:
         imports._write_batch(session.config, context, file_hashes=form.hashes, as_of=as_of,
                              status="FALLIDO", idempotency_key=str(key), counts=counts)
     except HTTPException as error:
         if error.status_code == 403:
             raise
-        # El archivo ya fue rechazado y nada cambió: se informa igual, declarando que no quedó registrado.
+        if error.detail == "IDEMPOTENCY_KEY_CONFLICT":
+            return True  # El mismo intento ya estaba registrado (con otros conteos): no se duplica.
+        # El archivo ya fue rechazado y esta carga no escribió cartera: se informa igual, declarando que no quedó registrado.
         logger.error("IMPORT_RECHAZO_SIN_REGISTRO codigo=%s", error.detail)
         return False
     return True
@@ -196,19 +203,11 @@ def _structural_rejection(error: PreviewSourceError, as_of: str, registered: boo
     code = str(error)
     location = error.location or {}
     return _outcome(
-        422, REJECTED, "El lote no se cargó: un archivo no tiene la forma esperada. La cartera anterior sigue intacta.",
+        422, REJECTED, f"El lote no se cargó: un archivo no tiene la forma esperada. {NOT_MODIFIED}",
         fecha_corte=as_of, intento_registrado=registered,
         estructura={"codigo": code, "descripcion": STRUCTURAL_MESSAGES.get(code, "El archivo no se pudo interpretar como un lote."),
                     "archivo": location.get("archivo"), "linea": location.get("linea") or None,
                     "columna": None if location.get("campo") in (None, "*") else location.get("campo")},
-    )
-
-
-def _blocked(prepared: dict[str, Any], as_of: str, registered: bool) -> JSONResponse:
-    return _outcome(
-        422, REJECTED, "El lote no se cargó porque tiene errores. La cartera anterior sigue intacta. Corregí el archivo y volvé a cargarlo.",
-        fecha_corte=as_of, intento_registrado=registered, resumen=_summary(prepared),
-        motivos=_blockers(prepared["validation"]["motivos_bloqueo"]), **_findings(prepared["detail"]),
     )
 
 
@@ -229,115 +228,104 @@ def _check_catalogs(client: SyncPostgrestClient, required: dict[str, list[str]])
     return missing
 
 
-def _previous_attempt(client: SyncPostgrestClient, session: Session, context: TenantContext,
-                      document: dict[str, Any], identity_key: str) -> dict[str, Any] | None:
-    """Recibo del intento anterior del MISMO lote, que quedó cerrado sin publicar. Solo sirve para que
-    la persona decida reintentarlo de forma explícita (equivale a `--revalidate` de la terminal).
-
-    `publish_import_batch` devuelve el recibo de un lote cerrado sin comparar la revisión y sin escribir.
-    Se llama únicamente después de que `stage_import_batch` respondió IMPORT_REVALIDATION_REQUIRED, es
-    decir, cuando el lote ya no está VALIDADO ni PUBLICADO."""
-    as_of = document["identity"]["parameters"]["as_of"]
-    roots = [row for row in imports._tenant_batches(client, context.tenant_id).values()
-             if row["supersedes"] is None and row["file_hashes"] == document["file_hashes"] and row["as_of"] == as_of
-             and isinstance(row["counts"], dict) and row["counts"].get("publicacion_atomica") == 1]
-    for row in sorted(roots, key=lambda item: item["id"], reverse=True):
-        receipt = _rpc(session, "publish_import_batch", {
-            "p_batch_id": row["id"], "p_idempotency_key": identity_key, "p_revision": "0" * 64,
-            "p_tenant": context.tenant_id, "p_actor_user": context.user_id})
-        if (receipt.get("idempotency_key") == identity_key and receipt.get("status") in CLOSED_STATES
-                and isinstance(receipt.get("revision"), str) and REVISION.fullmatch(receipt["revision"])):
-            return receipt
+def _previous_attempt(session: Session, context: TenantContext, identity_key: str) -> dict[str, Any] | None:
+    """Recibo del intento anterior del MISMO lote (misma identidad), si quedó cerrado sin publicar. Solo sirve
+    para que la persona decida reintentarlo de forma explícita (equivale a `--revalidate` de la terminal).
+    `read_import_receipt` es de solo lectura: no escribe eventos ni toca la cartera."""
+    try:
+        receipt = _rpc(session, "read_import_receipt", {"p_actor_user": context.user_id, "p_tenant": context.tenant_id,
+                                                        "p_idempotency_key": identity_key})
+    except _Rejected:
+        return None
+    if (receipt.get("status") in CLOSED_STATES and isinstance(receipt.get("revision"), str)
+            and REVISION.fullmatch(receipt["revision"])):
+        return receipt
     return None
 
 
-def _not_completed(message: str, code: str, **fields: Any) -> JSONResponse:
-    return _outcome(503, NOT_COMPLETED, message, codigo=code, **fields)
-
-
-NOTHING_CHANGED = "La cartera y su fecha siguen como estaban."
-
-
 def _stage(prepared: dict[str, Any], document: dict[str, Any], revision: str | None, context: TenantContext,
-           session: Session, client: SyncPostgrestClient, identity_key: str) -> dict[str, Any] | JSONResponse:
-    actor = {"p_actor_user": context.user_id, "p_tenant": context.tenant_id}
+           session: Session, identity_key: str) -> dict[str, Any] | JSONResponse:
+    as_of = document["identity"]["parameters"]["as_of"]
     try:
-        return _rpc(session, "stage_import_batch", {**actor, "p_document": document, "p_rows": prepared["rows"],
-                                                    "p_expected_revision": revision})
+        return _rpc(session, "stage_import_batch", {
+            "p_actor_user": context.user_id, "p_tenant": context.tenant_id, "p_document": document,
+            "p_rows": prepared["rows"], "p_expected_revision": revision})
     except _Rejected as error:
-        if error.code in ("ACTOR_NOT_ACTIVE_MEMBER", "ROLE_NOT_ALLOWED"):
+        if error.code in ROLE_REJECTIONS:
             raise HTTPException(403, "ROLE_FORBIDDEN") from None
         if error.code == "IMPORT_REVALIDATION_REQUIRED":
-            previous = _previous_attempt(client, session, context, document, identity_key)
+            try:
+                previous = _previous_attempt(session, context, identity_key)
+            except _Unavailable:
+                previous = None
             if previous is None:
-                return _not_completed(f"Este lote tuvo un intento anterior que no se completó y no se pudo recuperar su referencia. {NOTHING_CHANGED}",
+                return _not_completed(f"Este lote tuvo un intento anterior que no se completó y no se pudo leer su referencia. {NOT_MODIFIED} Repetí la carga en unos minutos.",
                                       "INTENTO_ANTERIOR_SIN_REFERENCIA")
             return _outcome(409, NEEDS_CONFIRMATION,
-                            f"Este mismo lote ya se intentó cargar y ese intento no se completó. {NOTHING_CHANGED} Si querés, reintentalo.",
-                            fecha_corte=document["identity"]["parameters"]["as_of"], revision=previous["revision"],
-                            estado_anterior=previous["status"])
+                            f"Este mismo lote ya se intentó cargar y ese intento no se completó. {NOT_MODIFIED} Si querés, reintentalo.",
+                            fecha_corte=as_of, revision=previous["revision"], estado_anterior=previous["status"])
         if error.code == "IMPORT_REVISION_CONFLICT":
             return _outcome(409, NEEDS_CONFIRMATION,
-                            f"La referencia del reintento ya no es válida (el lote o la cartera cambiaron). {NOTHING_CHANGED} Volvé a cargar los archivos.",
-                            fecha_corte=document["identity"]["parameters"]["as_of"], revision=None, estado_anterior=None)
+                            f"La referencia del reintento ya no sirve: el lote o la cartera cambiaron desde ese intento. {NOT_MODIFIED} Volvé a elegir los archivos y cargalos de nuevo.",
+                            fecha_corte=as_of, revision=None, estado_anterior=None)
         if error.code == "SHARED_PERSON_OTHER_TENANT":
-            return _outcome(422, REJECTED, f"El lote no se cargó: incluye personas que ya pertenecen a la cartera de otro municipio. {NOTHING_CHANGED}",
+            return _outcome(422, REJECTED, f"El lote no se cargó: incluye personas que ya pertenecen a la cartera de otro municipio. {NOT_MODIFIED}",
+                            fecha_corte=as_of,
                             motivos=[{"codigo": error.code, "descripcion": "Una persona del archivo ya está registrada en otro municipio."}])
         if error.code == "IMPORT_RETRY_REQUIRED":
-            return _not_completed(f"La base estaba ocupada y la carga no se completó. {NOTHING_CHANGED} Repetí la misma carga.", error.code)
-        return _not_completed(f"No se pudo preparar la publicación. {NOTHING_CHANGED} No es un problema del archivo: repetí la misma carga.", "STAGING_NO_DISPONIBLE")
+            return _not_completed(f"La base estaba ocupada y la carga no se completó. {NOT_MODIFIED} Repetí la misma carga.", error.code)
+        return _not_completed(f"No se pudo preparar la publicación. {NOT_MODIFIED} No es un problema del archivo: repetí la misma carga.", "STAGING_NO_DISPONIBLE")
     except _Unavailable:
-        # Staging nunca escribe cartera: aunque su resultado no se conozca, la cartera no cambió.
-        return _not_completed(f"No se pudo completar la carga. {NOTHING_CHANGED} Repetí la misma carga.", "SERVICIO_NO_DISPONIBLE")
+        # Staging nunca escribe cartera: aunque su resultado no se conozca, esta carga no la modificó.
+        return _not_completed(f"No se pudo completar la carga. {NOT_MODIFIED} Repetí la misma carga.", "SERVICIO_NO_DISPONIBLE")
 
 
-def _published(result: dict[str, Any], prepared: dict[str, Any], as_of: str, batch_id: int) -> JSONResponse:
-    return _outcome(201, PUBLISHED, "La carga se completó. El tablero y los listados ya muestran estos datos.",
-                    fecha_corte=as_of, lote=batch_id, resumen=_summary(prepared),
-                    publicado=result.get("counts", {}), **_findings(prepared["detail"]))
-
-
-def _publish(prepared: dict[str, Any], as_of: str, revision: str | None, context: TenantContext,
-             session: Session, client: SyncPostgrestClient) -> JSONResponse:
+def _publish(prepared: dict[str, Any], report: dict[str, Any], as_of: str, revision: str | None,
+             context: TenantContext, session: Session, client: SyncPostgrestClient) -> JSONResponse:
     document = {**prepared["document"], "source": imports.SOURCE_WEB}
     # Misma huella que calcula la base sobre la identidad (JSON canónico compartido).
     identity_key = canonical_json_hash(document["identity"])
-    review = _stage(prepared, document, revision, context, session, client, identity_key)
+    review = _stage(prepared, document, revision, context, session, identity_key)
     if isinstance(review, JSONResponse):
         return review
     status, batch_id = review.get("status"), review.get("batch_id")
     if status == "PUBLICADO":
         return _outcome(200, ALREADY_LOADED, "Este mismo lote ya estaba cargado con esa fecha. No cambió nada.",
-                        fecha_corte=as_of, lote=batch_id, resumen=_summary(prepared), publicado=review.get("counts", {}),
-                        **_findings(prepared["detail"]))
+                        fecha_corte=as_of, lote=batch_id, publicado=review.get("counts", {}), **report)
     if status == "FALLIDO":
-        missing = review.get("counts", {}).get("ausentes", {})
         return _outcome(422, REJECTED,
-                        f"El lote no se cargó: no trae todo lo que ya está en la cartera, y cada lote representa la cartera completa. {NOTHING_CHANGED}",
-                        fecha_corte=as_of, lote=batch_id, resumen=_summary(prepared), ausentes=missing,
+                        f"El lote no se cargó: no trae todo lo que ya está en la cartera, y cada lote representa la cartera completa. {NOT_MODIFIED}",
+                        fecha_corte=as_of, lote=batch_id, ausentes=review.get("counts", {}).get("ausentes", {}),
                         motivos=[{"codigo": "PARTIAL_LOAD_REJECTED",
                                   "descripcion": "Faltan objetos, obligaciones o titulares que la cartera ya tiene. Incluilos en el archivo y volvé a cargarlo."}],
-                        **_findings(prepared["detail"]))
+                        **report)
     if status != "VALIDADO" or type(batch_id) is not int or not isinstance(review.get("revision"), str):
-        return _not_completed(f"La preparación devolvió un estado inesperado. {NOTHING_CHANGED} Repetí la misma carga.", "STAGING_ESTADO_INESPERADO")
+        return _not_completed(f"La preparación devolvió un estado inesperado. {NOT_MODIFIED} Repetí la misma carga.", "STAGING_ESTADO_INESPERADO")
 
     # La sesión se vuelve a confirmar antes de escribir: una revocación durante la validación rige.
     if resolve_tenant_context(client, session_for_token(session.token)) != context:
         raise HTTPException(403, "ROLE_FORBIDDEN")
     reference = {"p_batch_id": batch_id, "p_idempotency_key": identity_key, "p_revision": review["revision"],
                  "p_tenant": context.tenant_id, "p_actor_user": context.user_id}
-    # Auditoría ANTES de publicar y con clave del lote y su revisión: sin registro no hay publicación.
-    audit_key = uuid.uuid5(uuid.NAMESPACE_URL, f"equitas:import-confirm:{context.tenant_id}:{batch_id}:{review['revision']}")
+    # Auditoría ANTES de publicar: sin registro no hay publicación. Registra «confirmación solicitada» por ESTA
+    # persona sobre este lote y revisión; el resultado está en la cadena de `import_batch` del mismo lote.
+    audit_key = uuid.uuid5(uuid.NAMESPACE_URL, "equitas:import-confirm:{}:{}:{}:{}".format(
+        context.tenant_id, context.user_id, batch_id, review["revision"]))
     try:
-        _rpc(session, "record_access_audit", {"p_actor_user": context.user_id, "p_tenant": context.tenant_id,
-                                              "p_action": "IMPORT_CONFIRM", "p_target": str(batch_id),
-                                              "p_idempotency_key": str(audit_key)})
+        audit = _rpc(session, "record_access_audit", {
+            "p_actor_user": context.user_id, "p_tenant": context.tenant_id, "p_action": "IMPORT_CONFIRM",
+            "p_target": str(batch_id), "p_idempotency_key": str(audit_key)})
+        if audit.get("audit_id") is None:
+            raise _Unavailable()
     except (_Rejected, _Unavailable):
-        return _not_completed(f"No se pudo registrar la auditoría de la carga, así que no se publicó. {NOTHING_CHANGED} Repetí la misma carga.",
+        return _not_completed(f"No se pudo registrar la auditoría de la carga, así que no se publicó. {NOT_MODIFIED} Repetí la misma carga.",
                               "AUDITORIA_NO_DISPONIBLE")
     try:
         result = _rpc(session, "publish_import_batch", reference)
-    except (_Rejected, _Unavailable):
+    except (_Rejected, _Unavailable) as original:
+        if isinstance(original, _Rejected) and original.code in ROLE_REJECTIONS:
+            # La función autoriza antes de leer el lote: con este rechazo no llegó a escribir nada.
+            raise HTTPException(403, "ROLE_FORBIDDEN") from None
         # Como `ETL.publication.publish_batch`: no se inventa un resultado. `settle` espera a que la
         # publicación termine y devuelve su recibo si confirmó; si no, cierra el intento como FALLIDO.
         try:
@@ -349,49 +337,62 @@ def _publish(prepared: dict[str, Any], as_of: str, revision: str | None, context
                             fecha_corte=as_of, lote=batch_id)
     if result.get("status") == "PUBLICADO":
         logger.info("IMPORT_PUBLICADO lote=%s", batch_id)
-        return _published(result, prepared, as_of, batch_id)
-    return _not_completed(f"La carga no se completó. {NOTHING_CHANGED} No es un problema del archivo: podés reintentarla.",
-                          "PUBLICACION_NO_COMPLETADA", fecha_corte=as_of, lote=batch_id, revision=review["revision"],
-                          estado=result.get("status"))
+        return _outcome(201, PUBLISHED, "La carga se completó. El tablero y los listados ya muestran estos datos.",
+                        fecha_corte=as_of, lote=batch_id, publicado=result.get("counts", {}), **report)
+    changed = result.get("status") == "REQUIERE_NUEVO_PREVIEW"
+    return _not_completed(
+        ("La cartera cambió mientras se preparaba esta carga, así que no se publicó. " if changed else "La carga no se completó. ")
+        + f"{NOT_MODIFIED} No es un problema del archivo: podés reintentarla.",
+        "PUBLICACION_NO_COMPLETADA", fecha_corte=as_of, lote=batch_id, revision=review["revision"], estado=result.get("status"))
+
+
+def _prepare(form: imports.ReceivedForm, as_of: str, context: TenantContext, session: Session,
+             store: UploadStore, lock_fd: int) -> dict[str, Any] | JSONResponse:
+    """Lee, valida y transforma. Devuelve el lote preparado o la respuesta de rechazo; nunca escribe cartera."""
+    try:
+        prepared = prepare_input(store.incoming_files(form.token), _profile(as_of), context.tenant_id,
+                                 ABSENT_POLICY, lock_fd=lock_fd)
+    except PreviewSourceError as error:
+        return _structural_rejection(error, as_of, _register_rejection(session, context, form, as_of, {}))
+    except imports.STORE_ERRORS:
+        raise HTTPException(503, imports.STORE_UNAVAILABLE) from None
+    except ETLError as error:
+        if str(error) in ("PREVIEW_TIME_LIMIT", "PREVIEW_WORK_LIMIT"):
+            return _outcome(422, REJECTED, f"El lote es demasiado grande para procesarlo en esta versión (tiempo o memoria). {NOT_MODIFIED}",
+                            fecha_corte=as_of, motivos=[{"codigo": "LIMITE_PROCESO_EXCEDIDO", "descripcion": "Se superó el límite de 180 segundos o de memoria del procesamiento."}])
+        return _not_completed(f"No se pudo procesar el lote. {NOT_MODIFIED} No es un problema del archivo: repetí la misma carga.", "PROCESO_NO_DISPONIBLE")
+    return prepared
 
 
 def _load(form: imports.ReceivedForm, as_of: str, revision: str | None, context: TenantContext,
           session: Session, client: SyncPostgrestClient, store: UploadStore) -> JSONResponse:
-    profile = _profile(as_of)
     try:
         # Un solo trabajo pesado a la vez: una segunda carga simultánea no se encola ni se mezcla.
         with store.processing_slot() as lock_fd:
-            try:
-                prepared = prepare_input(store.incoming_files(form.token), profile, context.tenant_id,
-                                         ABSENT_POLICY, lock_fd=lock_fd)
-            except PreviewSourceError as error:
-                return _structural_rejection(error, as_of, _register_rejection(session, context, form, as_of, {}))
+            prepared = _prepare(form, as_of, context, session, store, lock_fd)
+            if isinstance(prepared, JSONResponse):
+                return prepared
+            report = _report(prepared)
             if not prepared["publishable"]:
                 registered = _register_rejection(session, context, form, as_of, prepared["document"]["counts"])
-                return _blocked(prepared, as_of, registered)
+                return _outcome(422, REJECTED, f"El lote no se cargó porque tiene errores. {NOT_MODIFIED} Corregí el archivo y volvé a cargarlo.",
+                                fecha_corte=as_of, intento_registrado=registered,
+                                motivos=_blockers(prepared["validation"]["motivos_bloqueo"]), **report)
             if len(prepared["rows"]) > MAX_STAGED_ROWS:
-                return _outcome(422, REJECTED, f"El lote supera el máximo de {MAX_STAGED_ROWS} registros (personas más objetos) de esta versión. {NOTHING_CHANGED}",
-                                fecha_corte=as_of, resumen=_summary(prepared),
+                return _outcome(422, REJECTED, f"El lote supera el máximo de {MAX_STAGED_ROWS} registros (personas más objetos) de esta versión. {NOT_MODIFIED}",
+                                fecha_corte=as_of, resumen=report["resumen"],
                                 motivos=[{"codigo": "LIMITE_REGISTROS_EXCEDIDO", "descripcion": "Dividir el lote no es posible: cada lote es la cartera completa. Es un límite de esta versión."}])
             try:
                 missing = _check_catalogs(client, prepared["detail"]["catalogos"])
             except (APIError, httpx.HTTPError, KeyError, TypeError, ValueError, AttributeError):
-                return _not_completed(f"No se pudieron leer los catálogos de la base. {NOTHING_CHANGED} Repetí la misma carga.", "CATALOGOS_NO_DISPONIBLES")
+                return _not_completed(f"No se pudieron leer los catálogos de la base. {NOT_MODIFIED} Repetí la misma carga.", "CATALOGOS_NO_DISPONIBLES")
             if missing:
-                return _not_completed(f"La base no tiene catálogos que este formato necesita. {NOTHING_CHANGED} Es un problema de configuración del entorno, no del archivo.",
+                return _not_completed(f"La base no tiene catálogos que este formato necesita. {NOT_MODIFIED} Es un problema de configuración del entorno, no del archivo.",
                                       "CATALOGO_INCOMPLETO", faltantes=missing)
-            return _publish(prepared, as_of, revision, context, session, client)
+            return _publish(prepared, report, as_of, revision, context, session, client)
     except UploadStoreBusy:
-        return _outcome(429, NOT_COMPLETED, f"Ya hay una carga en curso en este servicio. {NOTHING_CHANGED} Esperá a que termine y repetí la carga.",
+        return _outcome(429, NOT_COMPLETED, f"Ya hay una carga en curso en este servicio. {NOT_MODIFIED} Esperá a que termine y repetí la carga.",
                         codigo="CARGA_EN_CURSO")
-    except imports.STORE_ERRORS:
-        raise HTTPException(503, imports.STORE_UNAVAILABLE) from None
-    except ETLError as error:
-        code = str(error)
-        if code in ("PREVIEW_TIME_LIMIT", "PREVIEW_WORK_LIMIT"):
-            return _outcome(422, REJECTED, f"El lote es demasiado grande para procesarlo en esta versión (tiempo o memoria). {NOTHING_CHANGED}",
-                            fecha_corte=as_of, motivos=[{"codigo": "LIMITE_PROCESO_EXCEDIDO", "descripcion": "Se superó el límite de 180 segundos o de memoria del procesamiento."}])
-        return _not_completed(f"No se pudo procesar el lote. {NOTHING_CHANGED} No es un problema del archivo: repetí la misma carga.", "PROCESO_NO_DISPONIBLE")
 
 
 def _revision(fields: dict[str, str]) -> str | None:
