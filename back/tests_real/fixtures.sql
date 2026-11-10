@@ -37,14 +37,15 @@ select 952000 + case label when 'otro-importador' then 1 when 'multi' then 2 whe
   case label when 'usuario-inactivo' then 'INACTIVE' else 'ACTIVE' end
 from a052_credentials;
 
--- 920002 operador, 920004 importador (roles de case-review-fixtures.sql).
+-- Noche 7: 920001 USER, 920002 ADMIN (case-review-fixtures.sql). Antes 920002 era operador y 920004 importador:
+-- las cuentas que importaban (otro-importador, de-sesion) y las que leian (multi, usuario-inactivo, revocable) quedan ADMIN.
 insert into public.tenant_user(id,tenant,"user",role,status) values
-  (952001,920002,952001,920004,true),
+  (952001,920002,952001,920002,true),
   (952002,920001,952002,920002,true),
   (952003,920002,952002,920002,true),
   (952004,920001,952003,920002,true),
   (952005,920001,952004,920002,true),
-  (952006,920001,952005,920004,true);
+  (952006,920001,952005,920002,true);
 
 -- Cartera: un objeto con deuda y contacto por municipio, con centinelas distintos.
 insert into public.person_type(id,key,value) values (952001,'A052_INDIVIDUAL','Sintetico');

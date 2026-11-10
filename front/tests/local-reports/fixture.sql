@@ -2,9 +2,10 @@
 -- Cartera evaluable con celdas hostiles en el municipio A, y filas marcadas del municipio B para detectar fugas.
 -- IDs reservados 928001..928999. Para limpiar: db reset.
 -- Noche 7: los roles del producto son ADMIN y USER (migracion 20261110100000_admin_user_access). Las cuentas de
--- ALIGN-018 conservan su etiqueta (consulta, operador, ...), que es el nombre de la CUENTA, no del rol: abajo se les
--- asigna ADMIN o USER. `importador` queda con su rol anterior y ya no ingresa (rol no reconocido). Las revisiones
--- guardadas conservan `reviewer_role = 'operador'`: son el dato historico que los reportes exportan como tal.
+-- ALIGN-018 conservan su etiqueta (consulta, operador, ...), que es el nombre de la CUENTA, no del rol:
+-- case-review-fixtures.sql ya les asigna ADMIN o USER (importador = ADMIN); abajo se reafirma y se ajusta lo propio
+-- de esta campana (otro-operador = USER en B). Las revisiones guardadas conservan `reviewer_role = 'operador'`: son
+-- el dato historico que los reportes exportan como tal.
 begin;
 do $$ begin
   if (select count(*) from public.tenant where id in (920001, 920002)) <> 2 then
@@ -18,9 +19,9 @@ select v.id, v.name, v.description
 from (values (928011::bigint, 'ADMIN', 'Administrador'), (928012::bigint, 'USER', 'Usuario')) as v(id, name, description)
 where not exists(select 1 from public.role r where r.name = v.name);
 
--- Cuenta -> rol. A: consulta USER; operador ADMIN (registra); supervisor ADMIN (aprueba); inactivo ADMIN con la
--- membresia inactiva. B: otro-operador USER; otro-supervisor ADMIN. importador conserva el rol anterior.
-update public.tenant_user set role = (select id from public.role where name = 'ADMIN') where id in (920002, 920003, 920006, 920008);
+-- Cuenta -> rol. A: consulta USER; operador ADMIN (registra); supervisor ADMIN (aprueba); importador ADMIN; inactivo
+-- ADMIN con la membresia inactiva. B: otro-operador USER; otro-supervisor ADMIN.
+update public.tenant_user set role = (select id from public.role where name = 'ADMIN') where id in (920002, 920003, 920004, 920006, 920008);
 update public.tenant_user set role = (select id from public.role where name = 'USER') where id in (920001, 920007);
 
 -- Dos membresias: ADMIN en B (semilla) y USER en A. Sin seleccion no entra.

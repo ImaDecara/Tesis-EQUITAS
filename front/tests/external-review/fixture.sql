@@ -1,7 +1,8 @@
 -- ALIGN-022. SOLO base local, con turno. Datos totalmente sinteticos, sobre case-review-fixtures.sql y local-review/fixture.sql.
 -- El resultado contiene una contrasena aleatoria: guardarlo solo en un archivo 0600 de /tmp, nunca en el repositorio ni en la evidencia.
--- local-review/fixture.sql deja a la cuenta `importador` con rol tp_operator: esta semilla agrega una cuenta con el rol `importador` real
--- y los actores que faltan para la campana. Sin revisiones ni lotes: los crea la prueba por las funciones de servidor. Para limpiar: db reset.
+-- local-review/fixture.sql deja a la cuenta `importador` con rol tp_operator: esta semilla agrega una cuenta que importa de verdad
+-- y los actores que faltan para la campana. Noche 7: esa cuenta (importador-real) es ADMIN, como todo el que importa; usuario
+-- inactivo, municipio inactivo y proponente son ADMIN (920002, antes operador). Sin revisiones ni lotes: los crea la prueba por las funciones de servidor. Para limpiar: db reset.
 begin;
 do $$ begin
   if not exists(select 1 from public.role where id = 920010 and name = 'tp_operator') then
@@ -42,7 +43,7 @@ insert into public."user"(id,full_name,email,status) values
   (920012,'Fixture de municipio inactivo','tp-a022-municipio-inactivo@example.test','ACTIVE'),
   (920013,'Fixture proponente','tp-a022-proponente@example.test','ACTIVE');
 insert into public.tenant_user(id,tenant,"user",role,status) values
-  (920012,920001,920010,920004,true),
+  (920012,920001,920010,920002,true),
   (920013,920001,920011,920002,true),
   (920014,920003,920012,920002,true),
   (920015,920001,920013,920002,true);

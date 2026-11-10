@@ -85,6 +85,7 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(viewer?.portfolio).toEqual({ kind: 'UNDATED', today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
     expect(viewer?.roleName).toBe('ADMIN')
     expect(viewer?.capabilities).toEqual({ canImport: false, canRecordDecision: false, canApprove: false, canSeeSupervision: false, canSeeAudit: false })
+    expect(viewer?.moduleMissing).toBe(true)
     expect(moduleAvailable(viewer!)).toBe(false)
     expect(portfolioLabel(viewer!)).toMatch(/^Sin fecha de cartera registrada: se calcula con la fecha de hoy \(\d{1,2}\/\d{1,2}\/\d{4}\)$/)
     expect(undatedPortfolioText('10/11/2026')).toBe('Sin fecha de cartera registrada: se calcula con la fecha de hoy (10/11/2026)')
@@ -99,6 +100,28 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(moduleAvailable(viewer!)).toBe(true)
     expect(portfolioLabel(viewer!)).toBe('Cartera al 15/10/2026')
     expect(probes).toEqual([])
+  })
+
+  it('con el módulo presente y ningún lote publicado, una cartera que existe NO se oculta: se muestra con la fecha de hoy', async () => {
+    // Datos cargados por otra vía (como en la base original, o las cuentas de la campaña de acceso): hay casos y no hay lote.
+    const { requests } = session({ missing: [], tables: { import_batch: [] } })
+    const viewer = await loadViewerContext()
+    expect(viewer?.portfolio).toEqual({ kind: 'UNDATED', today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+    // El módulo está: las funciones nuevas dependen del rol, no se apagan.
+    expect(viewer?.moduleMissing).toBeUndefined()
+    expect(moduleAvailable(viewer!)).toBe(true)
+    expect(viewer?.capabilities.canImport).toBe(true)
+    expect(portfolioLabel(viewer!)).toMatch(/^Sin fecha de cartera registrada/)
+    // Una sola consulta de una fila, filtrada por el municipio, para saber si hay casos.
+    const probes = requests.filter(request => request.table === 'debtor')
+    expect(probes.map(probe => [probe.select, probe.limit, probe.filters])).toEqual([['id', 1, { tenant: 'eq.7' }]])
+  })
+
+  it('«sin cartera cargada» solo cuando de verdad no hay ningún caso; si no se pudo saber, no se afirma', async () => {
+    session({ missing: [], tables: { import_batch: [], debtor: [{ id: 801, tenant: 8, type: 6, identifier: 'AJENO' }] } })
+    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'EMPTY' })
+    session({ missing: ['debtor'], tables: { import_batch: [] } })
+    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'UNAVAILABLE' })
   })
 
   it('una cartera heredada muestra su fecha como declarada; si una carga posterior la reemplaza, deja de serlo', async () => {
@@ -223,7 +246,8 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(renderToStaticMarkup(createElement(DecisionsNotice, { decisions: noModule }))).toContain('no tiene instalado el módulo de decisiones')
     expect(recordedDecisionView(noModule, '101')).toEqual({ kind: 'no-module' })
     expect(renderToStaticMarkup(createElement(RecordedDecisionSummary, { view: { kind: 'no-module' } }))).toContain('No disponible en esta base')
-    const viewer = { portfolio: { kind: 'UNDATED', today: '2026-11-10' } } as ViewerContext
+    const viewer = { portfolio: { kind: 'UNDATED', today: '2026-11-10' }, moduleMissing: true } as ViewerContext
+    expect(moduleAvailable(viewer)).toBe(false)
     expect(portfolioLabel(viewer)).toBe('Sin fecha de cartera registrada: se calcula con la fecha de hoy (10/11/2026)')
   })
 })

@@ -4,7 +4,11 @@ mint-jwt   emite el JWT server-only de un rol de servidor en /tmp/equitas-local-
 http-check ejercita Auth y la Data API del stack local con cuentas sinteticas. Publica solo codigos y conteos.
 
 Solo acepta el stack local (docs/tesis/entorno-aislado.md, seccion 4). Requiere los archivos de
-/tmp/equitas-local-db/ y deja filas: al terminar corresponde db reset.
+/tmp/equitas-local-db/ (o de la carpeta privada que declare EQUITAS_LOCAL_DIR, como hace
+scripts/campanas/equitas_campanas.py con su proyecto propio) y deja filas: al terminar corresponde db reset.
+
+Noche 7: matriz ADMIN/USER. Las constantes USER_<CUENTA> nombran cuentas de ALIGN-018: consulta = USER; operador,
+supervisor e importador = ADMIN. Los casos traducidos llevan «N7:».
 """
 import argparse
 import base64
@@ -21,7 +25,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-LOCAL_DIR = '/tmp/equitas-local-db'
+LOCAL_DIR = os.environ.get('EQUITAS_LOCAL_DIR', '/tmp/equitas-local-db')
 ENV_FILE = f'{LOCAL_DIR}/supabase-local.env'
 CREDENTIALS_FILE = f'{LOCAL_DIR}/case-review-credentials.psv'
 LOOPBACK_HOSTS = {'localhost', '127.0.0.1', '::1'}
@@ -274,11 +278,15 @@ def check_write_flow(api, report, review_jwt, import_jwt):
         p_reason_code='MOTIVO_SINTETICO', p_reason_text='Texto sintetico', p_checklist=READY_CHECKLIST))
     report.expect('propuesta de intensidad 3 pendiente', '200-True', f"{status}-{proposal.get('pending_supervisor')}")
     review = proposal.get('review_id')
-    report.rejected('operador aprobando', 'ROLE_NOT_ALLOWED', api.rpc('record_case_review_approval', review_jwt, approval_body(USER_OPERADOR, TENANT_A, review)))
+    # N7: antes «operador aprobando» era ROLE_NOT_ALLOWED; hoy es ADMIN y lo frena la identidad (propuso esta revision).
+    report.rejected('N7: proponente ADMIN aprobando su propuesta', 'APPROVER_IS_PROPONENT', api.rpc('record_case_review_approval', review_jwt, approval_body(USER_OPERADOR, TENANT_A, review)))
+    report.rejected('USER aprobando', 'ROLE_NOT_ALLOWED', api.rpc('record_case_review_approval', review_jwt, approval_body(USER_CONSULTA, TENANT_A, review)))
     status, approved = api.rpc('record_case_review_approval', review_jwt, approval_body(USER_SUPERVISOR, TENANT_A, review))
-    report.expect('supervisor distinto aprueba', '200-True', f"{status}-{approved.get('created')}")
+    report.expect('otra persona ADMIN (cuenta supervisor) aprueba', '200-True', f"{status}-{approved.get('created')}")
     status, text = api.rpc('read_case_review_reason_text', review_jwt, {'p_actor_user': USER_SUPERVISOR, 'p_tenant': TENANT_A, 'p_case_review': review})
     report.expect('motivo libre por la funcion de servidor', '200-True', f"{status}-{text == 'Texto sintetico'}")
+    report.rejected('USER no lee el motivo libre', 'ROLE_NOT_ALLOWED', api.rpc('read_case_review_reason_text', review_jwt, {
+        'p_actor_user': USER_CONSULTA, 'p_tenant': TENANT_A, 'p_case_review': review}))
     status, batch = api.rpc('record_import_batch', import_jwt, batch_body(USER_IMPORTADOR, TENANT_A))
     report.expect('lote por el servidor de importacion', '200-True', f"{status}-{batch.get('created')}")
 
@@ -331,12 +339,14 @@ def check_reason_length(api, report, review_jwt):
 
 
 def check_import_permission(api, report, review_jwt, import_jwt):
-    """ALIGN-003: solo importador e importador_sistema. Supervisor no adquiere el permiso por serlo."""
+    """Noche 7 (encargo 4.2): importa ADMIN e importador_sistema; USER no. Antes (ALIGN-003) solo importador e importador_sistema."""
     for status_name in ('RECIBIDO', 'CONFIRMADO', 'PUBLICADO'):
-        report.rejected(f'supervisor sin permiso de importacion, {status_name}', 'ROLE_NOT_ALLOWED', api.rpc(
-            'record_import_batch', import_jwt, batch_body(USER_SUPERVISOR, TENANT_A, p_status=status_name)))
-    report.rejected('operador sin permiso de importacion', 'ROLE_NOT_ALLOWED', api.rpc('record_import_batch', import_jwt, batch_body(USER_OPERADOR, TENANT_A)))
-    report.rejected('consulta sin permiso de importacion', 'ROLE_NOT_ALLOWED', api.rpc('record_import_batch', import_jwt, batch_body(USER_CONSULTA, TENANT_A)))
+        # N7: antes «supervisor sin permiso»; hoy la cuenta supervisor es ADMIN: el rechazo se prueba con USER.
+        report.rejected(f'N7: USER sin permiso de importacion, {status_name}', 'ROLE_NOT_ALLOWED', api.rpc(
+            'record_import_batch', import_jwt, batch_body(USER_CONSULTA, TENANT_A, p_status=status_name)))
+    for label, user in (('supervisor', USER_SUPERVISOR), ('operador', USER_OPERADOR)):
+        status, created = api.rpc('record_import_batch', import_jwt, batch_body(user, TENANT_A))
+        report.expect(f'N7: ADMIN (cuenta {label}) registra lotes', '200-True', f"{status}-{created.get('created')}")
     status, machine = api.rpc('record_import_batch', import_jwt, batch_body(USER_SISTEMA, TENANT_A))
     report.expect('importador_sistema registra lotes', '200-True', f"{status}-{machine.get('created')}")
     report.error('credencial de revision no registra lotes de supervisor', '42501', api.rpc('record_import_batch', review_jwt, batch_body(USER_SUPERVISOR, TENANT_A)))
@@ -348,7 +358,8 @@ def check_reads(api, report, sessions):
         return len(rows) if status == 200 and isinstance(rows, list) else f'http-{status}'
 
     # Filas de publish_cutoff, check_write_flow, check_chains, check_reason_length, check_import_permission y check_cutoff.
-    expected = {'case_review': 8, 'case_review_approval': 3, 'import_batch': 7}
+    # N7: dos lotes mas (las cuentas ADMIN supervisor y operador registran en check_import_permission).
+    expected = {'case_review': 8, 'case_review_approval': 3, 'import_batch': 9}
     for table, rows in expected.items():
         for label in ('consulta', 'operador', 'supervisor', 'importador'):
             report.expect(f'lectura {label} {table}', rows, count(table, sessions[label]))

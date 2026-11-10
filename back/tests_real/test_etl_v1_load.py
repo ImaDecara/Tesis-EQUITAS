@@ -437,7 +437,7 @@ def test_los_estados_del_lote_concilian_con_debt(published):
 
 def test_el_perfil_de_cada_objeto_es_la_suma_de_sus_deudas(published):
     tables = tenant_tables(published.rows)
-    overdue = catalogs()["debt_status"]["OVERDUE"]
+    paid = catalogs()["debt_status"]["PAID"]
     tolerance = Decimal("0.01")
     assert tables["debtor_profile"], "Sin perfiles esta prueba sería vacía"
     for profile in tables["debtor_profile"]:
@@ -446,7 +446,10 @@ def test_el_perfil_de_cada_objeto_es_la_suma_de_sus_deudas(published):
         assert abs(Decimal(str(profile["total_debt_amount"])) - total) <= tolerance
         assert profile["debt_count"] == len(debts)
         if profile["overdue_debt_amount"] is not None:
-            late = [row for row in debts if row["status"] == overdue]
+            # Reglas 1.1.0: la mora es por calendario sobre las no pagadas con importe mayor que cero.
+            # La clave OVERDUE ya no decide (una «vencida» de importe cero no cuenta).
+            late = [row for row in debts if row["status"] != paid and row["due_date"] is not None and str(row["due_date"]) < AS_OF
+                    and row["current_amount"] is not None and Decimal(str(row["current_amount"])) > 0]
             assert abs(Decimal(str(profile["overdue_debt_amount"])) - sum((Decimal(str(row["current_amount"])) for row in late), Decimal(0))) <= tolerance
             assert profile["overdue_debt_count"] == len(late)
 
@@ -650,7 +653,10 @@ def test_con_estados_faltantes_y_sin_vencidas_la_paridad_se_mantiene_en_un_lote_
     assert line_value(result, "Resultado del lote") == "VALIDADO"
     tables = tenant_tables(snapshot())
     profile = next(row for row in tables["debtor_profile"] if row["debtor"] == debtor_of(tables, ids["debtor_type"], MODIFIED_CASE)["id"])
-    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (None, None), "Regla 2 de §4.1: no es un cero"
+    # Reglas 1.1.0: una obligación sin estado no está pagada y es evaluable (tiene importe y vencimiento), así que
+    # su mora sale del calendario. Con 1.0.0 la falta de estado anulaba el subtotal (regla 2 de §4.1); ahora lo
+    # anula solo una obligación no evaluable. El valor exacto se compara abajo con el oráculo de Python.
+    assert profile["overdue_debt_amount"] is not None and profile["overdue_debt_count"] is not None
     assert profile["debt_state_not_observed_count"] == item["obligaciones"]
     assert persisted_mismatches(tables, accepted_with_altered((MODIFIED_CASE,), lot), ids, lot) == []
     wanted = _python_oracle(tables, status_keys, profile["debtor"])
@@ -680,16 +686,27 @@ def _recompute_in_rollback(debts: list[tuple], *, integrated: bool = True, extra
 RECOMPUTE_CASES = {
     "sin-obligaciones-cero-derivado": ([], {"total_debt_amount": 0, "overdue_debt_amount": 0, "debt_count": 0, "overdue_debt_count": 0,
                                             "debt_state_not_observed_count": 0, "oldest_debt_days": None}),
-    "faltantes-sin-vencidas-nulos": ([("10.50", "UNKNOWN", "2026-01-01"), ("5", "ACTIVE", AS_OF)],
+    # Reglas 1.1.0: el subtotal queda nulo por una obligación NO EVALUABLE (sin vencimiento), no por el estado.
+    "faltantes-sin-vencidas-nulos": ([("10.50", "UNKNOWN", None), ("5", "ACTIVE", AS_OF)],
                                      {"total_debt_amount": Decimal("15.50"), "overdue_debt_amount": None, "overdue_debt_count": None,
                                       "debt_state_not_observed_count": 1, "oldest_debt_days": None, "average_debt_age_days": None}),
-    "faltantes-con-vencidas-subtotal": ([("10.50", "OVERDUE", "2026-09-28"), ("3", "UNKNOWN", "2026-01-01")],
+    "faltantes-con-vencidas-subtotal": ([("10.50", "OVERDUE", "2026-09-28"), ("3", "UNKNOWN", None)],
                                         {"overdue_debt_amount": Decimal("10.50"), "overdue_debt_count": 1,
                                          "debt_state_not_observed_count": 1, "oldest_debt_days": 2, "average_debt_age_days": 2}),
     "observados-sin-vencidas-cero": ([("7", "ACTIVE", AS_OF)], {"overdue_debt_amount": 0, "overdue_debt_count": 0,
                                                                         "debt_state_not_observed_count": 0}),
     "promedio-mitad-hacia-arriba": ([("1", "OVERDUE", "2026-09-28"), ("1", "OVERDUE", "2026-09-27")],
                                     {"oldest_debt_days": 3, "average_debt_age_days": 3}),
+    # Reglas 1.1.0: sin estado o desconocida pero evaluable, la mora sale del calendario (273 días al 30/09/2026).
+    "sin-estado-evaluable-por-calendario": ([("10.50", "UNKNOWN", "2025-12-31"), ("5", "ACTIVE", AS_OF)],
+                                            {"overdue_debt_amount": Decimal("10.50"), "overdue_debt_count": 1,
+                                             "debt_state_not_observed_count": 1, "oldest_debt_days": 273, "average_debt_age_days": 273}),
+    # Una pagada no cuenta como vencida aunque su vencimiento haya pasado, ni vuelve nulo el subtotal si le falta la fecha.
+    "pagadas-fuera-del-calculo": ([("8", "PAID", "2026-01-01"), ("6", "PAID", None), ("2", "OVERDUE", "2026-09-29")],
+                                  {"total_debt_amount": Decimal("16"), "overdue_debt_amount": Decimal("2"), "overdue_debt_count": 1,
+                                   "oldest_debt_days": 1, "average_debt_age_days": 1}),
+    # Vencida por rótulo pero con importe cero: no cuenta.
+    "vencida-de-importe-cero": ([("0", "OVERDUE", "2026-05-01")], {"overdue_debt_amount": 0, "overdue_debt_count": 0, "oldest_debt_days": None}),
 }
 
 
@@ -707,7 +724,8 @@ def test_cada_regla_del_perfil_coincide_con_el_oraculo_python(published, name):
 
 def test_un_estado_nulo_tampoco_esta_observado_y_sin_columnas_de_contacto_no_hay_conteo(published):
     _answer, profile = _recompute_in_rollback([("4", None, "2026-01-01")], integrated=False)
-    assert (profile["debt_state_not_observed_count"], profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (1, None, None)
+    # Sigue sin estar observado; con reglas 1.1.0 no está pagada y su mora sale del calendario.
+    assert (profile["debt_state_not_observed_count"], profile["overdue_debt_amount"], profile["overdue_debt_count"]) == (1, Decimal("4"), 1)
     assert profile["available_contact_count"] is None
     _answer, profile = _recompute_in_rollback([("4", "ACTIVE", "2026-01-01")])
     assert profile["available_contact_count"] == 0
@@ -788,8 +806,12 @@ def test_reclasificacion_sql_respeta_estados_faltantes_fechas_y_objetos_ajenos(p
     profile = after["profiles"][0]
     assert profile["debtor"] == 990001
     assert profile["total_debt_amount"] == sum(Decimal(amount) for _, _, amount, _ in cases)
-    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("40.50"), 3, 2)
-    assert (profile["oldest_debt_days"], profile["average_debt_age_days"]) == (5, 4)
+    # Reglas 1.1.0, por calendario al 30/09/2026 sobre las no pagadas con importe y vencimiento:
+    # 10,50 (28/09) + 11 (25/09) + siete de 13 (01/09: todas menos la pagada) = 112,50 en 9 obligaciones.
+    # Las dos sin vencimiento no son evaluables y, habiendo vencidas conocidas, no anulan el subtotal.
+    assert (profile["overdue_debt_amount"], profile["overdue_debt_count"], profile["debt_state_not_observed_count"]) == (Decimal("112.50"), 9, 2)
+    # Atraso máximo 29 días (01/09); promedio (2 + 5 + 7 × 29) / 9 = 23,3 -> 23.
+    assert (profile["oldest_debt_days"], profile["average_debt_age_days"]) == (29, 23)
 
 
 def test_error_de_perfil_revierte_la_reclasificacion_de_la_misma_rpc(published):

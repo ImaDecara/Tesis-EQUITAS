@@ -20,7 +20,8 @@ export const INHERITED_SOURCE = 'CARTERA_HEREDADA'
 export type PortfolioState =
   // `declared`: la fecha no salió de una carga; la declaró una persona al registrar la cartera ya cargada.
   | { kind: 'LOADED'; asOf: string; declared?: boolean }
-  // La base no registra fecha de corte (no tiene el módulo): los cálculos usan la fecha del día.
+  // Hay cartera pero ninguna fecha de corte registrada (la base no tiene el módulo, o los datos se cargaron
+  // por otra vía y no hay ningún lote publicado): los cálculos usan la fecha del día y la pantalla lo dice.
   | { kind: 'UNDATED'; today: string }
   // El municipio todavía no tiene ninguna cartera publicada: no es un error.
   | { kind: 'EMPTY' }
@@ -41,6 +42,8 @@ export type ViewerContext = {
   roleLabel: string
   tenantName: string | null
   portfolio: PortfolioState
+  // true: la base no tiene el módulo de decisiones, cargas y registro de accesos (encargo 10.2).
+  moduleMissing?: true
   capabilities: ViewerCapabilities
 }
 
@@ -68,6 +71,15 @@ function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+// Sin ningún lote publicado: «sin cartera» solo si de verdad no hay ningún caso. Si los hay (se cargaron por
+// otra vía, como en la base original), se muestran con la fecha del día: nunca se oculta una cartera que existe.
+// Una consulta de una sola fila, y solo en este caso.
+async function portfolioWithoutBatch(supabase: Awaited<ReturnType<typeof requireTenantAccess>>['supabase'], tenantId: string): Promise<PortfolioState> {
+  const { data, error } = await supabase.from('debtor').select('id').eq('tenant', tenantId).limit(1)
+  if (error || !Array.isArray(data)) return { kind: 'UNAVAILABLE' }
+  return data.length > 0 ? { kind: 'UNDATED', today: todayInCordoba() } : { kind: 'EMPTY' }
+}
+
 async function readViewerContext(): Promise<ViewerContext | null> {
   try {
     const { supabase, context } = await requireTenantAccess()
@@ -86,13 +98,15 @@ async function readViewerContext(): Promise<ViewerContext | null> {
       && !batches.rows.some(other => other.supersedes !== null && String(other.supersedes) === String(row.id)))
     const portfolio: PortfolioState = !hasModule ? { kind: 'UNDATED', today: todayInCordoba() }
       : cutoff.warning ? { kind: 'UNAVAILABLE' }
-      : cutoff.batch?.as_of ? { kind: 'LOADED', asOf: cutoff.batch.as_of, ...(declared ? { declared } : {}) } : { kind: 'EMPTY' }
+      : cutoff.batch?.as_of ? { kind: 'LOADED', asOf: cutoff.batch.as_of, ...(declared ? { declared } : {}) }
+      : await portfolioWithoutBatch(supabase, context.tenantId)
     return {
       userName: user.error ? null : text(user.data?.[0]?.full_name),
       roleName: context.roleName,
       roleLabel: roleLabel(context.roleName),
       tenantName: tenant.error ? null : text(tenant.data?.[0]?.name),
       portfolio,
+      ...(hasModule ? {} : { moduleMissing: true as const }),
       capabilities: capabilitiesFor(context.roleName, hasModule),
     }
   } catch {

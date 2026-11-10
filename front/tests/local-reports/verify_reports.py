@@ -84,8 +84,8 @@ def aggregated(rows, indicator, category="TOTAL"):
 REPORTS = ["queue", "decisions", "supervision", "data-quality", "access"]
 PATHS = {name: f"/api/reports/{name}" for name in REPORTS}
 # Noche 7 (encargo §4.2): cola, calidad y decisiones para todo miembro activo; supervision y accesos solo ADMIN.
-# Las claves son CUENTAS de ALIGN-018; fixture.sql les asigna ADMIN o USER. importador conserva un rol anterior
-# y no ingresa (rol no reconocido).
+# Las claves son CUENTAS de ALIGN-018; case-review-fixtures.sql y fixture.sql les asignan ADMIN o USER.
+# importador = ADMIN (encargo de las campañas, noche 7): antes conservaba un rol anterior y se esperaba 403 en todo.
 EVERY_MEMBER = {"queue", "decisions", "data-quality"}
 ALLOWED = {
     "consulta": EVERY_MEMBER,
@@ -93,7 +93,7 @@ ALLOWED = {
     "supervisor": set(REPORTS),
     "otro-operador": EVERY_MEMBER,
     "tp-e06-a": {"queue", "data-quality"},
-    "importador": set(),
+    "importador": set(REPORTS),
     "sin-membresia": set(),
     "inactivo": set(),
     "tp-e06-none": set(),

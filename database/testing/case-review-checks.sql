@@ -1,5 +1,9 @@
 -- ALIGN-018. Pruebas de comportamiento por rol. SOLO base local aislada, con case-review-fixtures.sql cargado.
--- docker exec -i supabase_db_equitas-tp-testing psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -At -F '|' < database/testing/case-review-checks.sql
+-- Noche 7: matriz ADMIN/USER (migracion 20261110100000_admin_user_access). Las variables u_<cuenta> nombran CUENTAS:
+-- consulta = USER; operador, supervisor, importador, inactivo, otro-operador y otro-supervisor = ADMIN (ver la fixture).
+-- Registrar, aprobar (otra persona), leer el motivo e importar: solo ADMIN. Cada traduccion de un caso anterior lleva
+-- la etiqueta «N7:» con la regla vigente. Ninguna aprobacion por identidad se relaja (APPROVER_IS_PROPONENT, cadena).
+-- docker exec -i supabase_db_<proyecto local> psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -At -F '|' < database/testing/case-review-checks.sql
 -- Se conecta como superusuario local solo para simular roles con SET LOCAL ROLE: el superusuario no ejecuta las pruebas.
 -- Todo corre en una transaccion que termina en ROLLBACK: no deja filas ni cambios de esquema. Publica solo codigos y conteos, sin valores de filas.
 -- Sale con error si algun caso no da lo esperado.
@@ -207,9 +211,10 @@ begin
   perform pg_temp.expect('revision revisor sin membresia', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_sin, t_a, d_a)));
   perform pg_temp.expect('revision membresia inactiva', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_inactivo, t_a, d_a)));
   perform pg_temp.expect('revision usuario inexistente', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.review(1, t_a, d_a)));
-  perform pg_temp.expect('revision rol consulta', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_consulta, t_a, d_a)));
-  perform pg_temp.expect('revision rol supervisor', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_supervisor, t_a, d_a)));
-  perform pg_temp.expect('revision rol importador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_importador, t_a, d_a)));
+  perform pg_temp.expect('revision rol USER (cuenta consulta)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_consulta, t_a, d_a)));
+  -- N7: antes «supervisor» e «importador» no registraban; hoy registra todo ADMIN (encargo 4.2).
+  perform pg_temp.expect('N7: revision rol ADMIN (cuenta supervisor) registra', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_supervisor, t_a, d_a)));
+  perform pg_temp.expect('N7: revision rol ADMIN (cuenta importador) registra', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_importador, t_a, d_a)));
   perform pg_temp.expect('revision rol importador_sistema', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_sistema, t_a, d_a)));
   update public."user" set status = 'INACTIVE' where id = u_operador;
   perform pg_temp.expect('revision usuario no activo', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a)));
@@ -268,7 +273,7 @@ begin
   -- E. Revision: alta, fecha y rol de servidor, idempotencia, correccion.
   perform pg_temp.expect('revision valida', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a), true));
   review_ok := current_setting('a018.id')::bigint;
-  perform pg_temp.expect('fecha y rol los fija el servidor', '1', (select count(*)::text from public.case_review where id = review_ok and reviewer = u_operador and reviewer_role = 'operador' and created_at = now()));
+  perform pg_temp.expect('fecha y rol los fija el servidor', '1', (select count(*)::text from public.case_review where id = review_ok and reviewer = u_operador and reviewer_role = 'ADMIN' and created_at = now()));
   perform pg_temp.expect('revision de otro tenant valida', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_otro_op, t_b, d_b), true));
   review_b := current_setting('a018.id')::bigint;
   perform pg_temp.expect('revision con motivo libre', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'RECHAZA', 'p_reason_code => ''MOTIVO_SINTETICO'', p_reason_text => ''Texto sintetico'''), true));
@@ -300,9 +305,11 @@ begin
   perform pg_temp.expect('propuesta de intensidad 3', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa), true));
   prop := current_setting('a018.id')::bigint;
   perform pg_temp.expect('propuesta queda pendiente de supervisor', 'true', pg_temp.scalar('equitas_review_server', null, replace(pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa), $s$select set_config('a018.id', r.review_id::text, true)$s$, 'select r.pending_supervisor::text')));
-  perform pg_temp.expect('aprobacion por operador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop)));
-  perform pg_temp.expect('aprobacion por consulta', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_a, prop)));
-  perform pg_temp.expect('aprobacion por importador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_importador, t_a, prop)));
+  -- N7: «operador no aprueba» era una regla de rol; hoy el proponente es ADMIN y lo frena la identidad.
+  perform pg_temp.expect('N7: aprobacion por el proponente ADMIN (cuenta operador)', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop)));
+  perform pg_temp.expect('aprobacion por USER (cuenta consulta)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_a, prop)));
+  -- N7: antes «importador» no aprobaba; hoy es ADMIN y otra persona: aprueba (se deshace con la sonda).
+  perform pg_temp.expect('N7: aprobacion por otro ADMIN (cuenta importador)', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_importador, t_a, prop)));
   perform pg_temp.expect('aprobacion por importador_sistema', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_sistema, t_a, prop)));
   perform pg_temp.expect('aprobacion sin membresia', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_sin, t_a, prop)));
   perform pg_temp.expect('aprobacion membresia inactiva', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_inactivo, t_a, prop)));
@@ -310,17 +317,20 @@ begin
   perform pg_temp.expect('aprobacion revision de otro tenant', 'REVIEW_NOT_IN_TENANT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_otro_sup, t_b, prop)));
   perform pg_temp.expect('aprobacion revision inexistente', 'REVIEW_NOT_IN_TENANT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 1)));
   perform pg_temp.expect('aprobacion de intensidad menor a 3', 'APPROVAL_NOT_REQUIRED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, review_ok)));
-  update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_operador;
+  -- N7: antes habia que darle al operador el rol supervisor para llegar a la comprobacion de identidad; hoy ya es ADMIN.
   perform pg_temp.expect('aprobacion por el mismo proponente', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop)));
-  update public.tenant_user set role = 920002 where tenant = t_a and "user" = u_operador;
+  perform pg_temp.expect('N7: OBJETA por el mismo proponente', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop, 'OBJETA', 'p_reason_code => ''X''')));
   update public.tenant_user set status = true where tenant = t_a and "user" = u_inactivo;
   perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_inactivo, t_a, d_a, 'MODIFICA', intensa), true);
   prop2 := current_setting('a018.id')::bigint;
   perform pg_temp.probe('equitas_review_server', null, pg_temp.review(u_operador, t_a, d_a, 'MODIFICA', intensa || format(', p_supersedes => %s', prop2)), true);
   prop3 := current_setting('a018.id')::bigint;
-  update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_inactivo;
+  -- Cadena de reemplazos: inactivo (ADMIN, activado solo aca) registro prop2 y el operador la reemplazo con prop3.
   perform pg_temp.expect('aprobacion por proponente de una version anterior', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_inactivo, t_a, prop3)));
-  update public.tenant_user set role = 920002, status = false where tenant = t_a and "user" = u_inactivo;
+  perform pg_temp.expect('N7: OBJETA por proponente de una version anterior', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_inactivo, t_a, prop3, 'OBJETA', 'p_reason_code => ''X''')));
+  perform pg_temp.expect('N7: aprobacion por el proponente de la version vigente', 'APPROVER_IS_PROPONENT', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, prop3)));
+  perform pg_temp.expect('N7: aprobacion de la cadena por otro ADMIN fuera de ella', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_importador, t_a, prop3)));
+  update public.tenant_user set status = false where tenant = t_a and "user" = u_inactivo;
   perform pg_temp.expect('APRUEBA sin lista', invalid_ap || 'case_review_approval_requires_checklist', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'APRUEBA', 'p_reason_code => ''X''')));
   perform pg_temp.expect('APRUEBA con lista incompleta', invalid_ap || 'case_review_approval_requires_checklist', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'APRUEBA', 'p_checklist => ''{"canal_valido":true}''')));
   perform pg_temp.expect('aprobacion con texto en la lista', invalid_ap || 'case_review_checklist_shape', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', 'p_reason_code => ''X'', p_checklist => ''{"situacion_hogar":"sin ingresos"}''')));
@@ -328,7 +338,7 @@ begin
   perform pg_temp.expect('decision de aprobacion fuera de lista', invalid_ap || 'case_review_approval_decision_valid', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OTRA', 'p_reason_code => ''X''')));
   perform pg_temp.expect('aprobacion de supervisor distinto', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop), true));
   appr := current_setting('a018.id')::bigint;
-  perform pg_temp.expect('rol del aprobador fijado por el servidor', '1', (select count(*)::text from public.case_review_approval where id = appr and approver = u_supervisor and approver_role = 'supervisor'));
+  perform pg_temp.expect('rol del aprobador fijado por el servidor', '1', (select count(*)::text from public.case_review_approval where id = appr and approver = u_supervisor and approver_role = 'ADMIN'));
   perform pg_temp.expect('segunda cadena sobre la misma revision', invalid_ap || 'case_review_approval_single_head', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop)));
   select last_value + 1 into siguiente from public.case_review_approval_id_seq;
   perform pg_temp.expect('aprobacion que se reemplaza a si misma', not_found, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, prop, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', siguiente))));
@@ -357,23 +367,28 @@ begin
   -- G. Lote.
   perform pg_temp.expect('lote por importador', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a), true));
   bat := current_setting('a018.id')::bigint;
-  perform pg_temp.expect('rol del lote fijado por el servidor', '1', (select count(*)::text from public.import_batch where id = bat and created_by = u_importador and created_by_role = 'importador'));
+  perform pg_temp.expect('rol del lote fijado por el servidor', '1', (select count(*)::text from public.import_batch where id = bat and created_by = u_importador and created_by_role = 'ADMIN'));
   perform pg_temp.expect('lote por credencial de maquina', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_sistema, t_a)));
   -- ALIGN-003: supervisor aprueba u objeta. Sin membresia importador no registra lotes en ningun estado.
-  perform pg_temp.expect('lote por supervisor sin permiso de importacion', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
-  perform pg_temp.expect('lote CONFIRMADO por supervisor', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a, 'CONFIRMADO')));
-  perform pg_temp.expect('lote PUBLICADO por supervisor', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a, 'PUBLICADO')));
-  perform pg_temp.expect('lote por supervisor de otro tenant', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_otro_sup, t_b)));
+  -- N7: importar es de ADMIN (encargo 4.2): la cuenta supervisor ahora importa; USER es quien no (abajo, cuenta consulta).
+  perform pg_temp.expect('N7: lote por ADMIN (cuenta supervisor)', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
+  perform pg_temp.expect('N7: lote CONFIRMADO por USER (cuenta consulta)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a, 'CONFIRMADO')));
+  perform pg_temp.expect('N7: lote PUBLICADO por USER (cuenta consulta)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a, 'PUBLICADO')));
+  perform pg_temp.expect('N7: lote por ADMIN de otro tenant en su tenant', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_otro_sup, t_b)));
   -- Caso combinado: la funcion de importar sale de una membresia explicita, por tenant, y no se infiere de otra.
-  insert into public.tenant_user(tenant, "user", role, status) values (t_b, u_supervisor, 920004, true);
-  perform pg_temp.expect('supervisor con membresia importador explicita importa en ese tenant', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_b), true));
+  -- N7: el rol es por membresia. La cuenta consulta (USER en A) recibe ADMIN en B: importa y aprueba en B, nada de eso en A.
+  insert into public.tenant_user(tenant, "user", role, status) values (t_b, u_consulta, 920002, true);
+  perform pg_temp.expect('N7: USER de A con membresia ADMIN en B importa en B', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_b), true));
   bat_b := current_setting('a018.id')::bigint;
-  perform pg_temp.expect('rol del lote combinado es importador', '1', (select count(*)::text from public.import_batch where id = bat_b and created_by = u_supervisor and created_by_role = 'importador'));
-  perform pg_temp.expect('la membresia importador de otro tenant no se hereda', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_supervisor, t_a)));
-  perform pg_temp.expect('la membresia importador no aprueba en ese tenant', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_b, prop_b)));
-  delete from public.tenant_user where tenant = t_b and "user" = u_supervisor;
-  perform pg_temp.expect('lote por operador', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_operador, t_a)));
-  perform pg_temp.expect('lote por consulta', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a)));
+  perform pg_temp.expect('N7: rol del lote combinado es el de esa membresia (ADMIN)', '1', (select count(*)::text from public.import_batch where id = bat_b and created_by = u_consulta and created_by_role = 'ADMIN'));
+  perform pg_temp.expect('N7: la membresia ADMIN de otro tenant no se hereda (importar en A)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a)));
+  perform pg_temp.expect('N7: la membresia ADMIN de otro tenant no se hereda (aprobar en A)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_a, prop3)));
+  perform pg_temp.expect('N7: la membresia ADMIN de otro tenant no se hereda (registrar en A)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_consulta, t_a, d_a)));
+  perform pg_temp.expect('N7: con la membresia ADMIN aprueba en B la propuesta de otra persona', 'OK', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_b, prop_b, 'OBJETA', format('p_reason_code => ''X'', p_supersedes => %s', appr_b))));
+  delete from public.tenant_user where tenant = t_b and "user" = u_consulta;
+  -- N7: antes «operador no importa»; hoy importa todo ADMIN. USER no importa.
+  perform pg_temp.expect('N7: lote por ADMIN (cuenta operador)', 'OK', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_operador, t_a)));
+  perform pg_temp.expect('lote por USER (cuenta consulta)', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a)));
   perform pg_temp.expect('lote sin membresia', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_sin, t_a)));
   perform pg_temp.expect('lote en otro tenant', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_b)));
   perform pg_temp.expect('lote con estado fuera de lista', invalid_b || 'import_batch_status_valid', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_importador, t_a, 'OTRO')));
@@ -446,12 +461,24 @@ begin
   perform pg_temp.expect('authenticated lee las demas columnas', 'OK', pg_temp.probe('authenticated', sub_op, 'select id, decision, reason_code, checklist from public.case_review'));
   perform pg_temp.expect('motivo: operador lo lee por funcion', 'true', pg_temp.scalar('equitas_review_server', null, format($s$select public.read_case_review_reason_text(%s, %s, %s) = 'Texto sintetico'$s$, u_operador, t_a, review_nota)));
   perform pg_temp.expect('motivo: supervisor lo lee por funcion', 'true', pg_temp.scalar('equitas_review_server', null, format($s$select public.read_case_review_reason_text(%s, %s, %s) = 'Texto sintetico'$s$, u_supervisor, t_a, review_nota)));
-  perform pg_temp.expect('motivo: consulta no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_consulta, t_a, review_nota)));
-  perform pg_temp.expect('motivo: importador no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_importador, t_a, review_nota)));
+  perform pg_temp.expect('motivo: USER (cuenta consulta) no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_consulta, t_a, review_nota)));
+  -- N7: antes «importador no lo lee»; hoy lo lee todo ADMIN.
+  perform pg_temp.expect('N7: motivo: ADMIN (cuenta importador) lo lee', 'true', pg_temp.scalar('equitas_review_server', null, format($s$select public.read_case_review_reason_text(%s, %s, %s) = 'Texto sintetico'$s$, u_importador, t_a, review_nota)));
   perform pg_temp.expect('motivo: importador_sistema no lo lee', 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_sistema, t_a, review_nota)));
   perform pg_temp.expect('motivo: sin membresia no lo lee', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_sin, t_a, review_nota)));
   perform pg_temp.expect('motivo: otro tenant no lo lee', 'ACTOR_NOT_ACTIVE_MEMBER', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_a, review_nota)));
   perform pg_temp.expect('motivo: revision de otro tenant', 'REVIEW_NOT_IN_TENANT', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_otro_op, t_b, review_nota)));
+
+  -- N7 (nuevo). Los nombres historicos de rol ya no otorgan ningun permiso, ni ADMIN escrito con otra caja.
+  foreach rol in array array['consulta', 'operador', 'supervisor', 'importador', 'admin', 'Admin', 'ADMIN '] loop
+    insert into public.role(id, name, description) values ((select max(id) + 1 from public.role), rol, 'N7: nombre no reconocido (solo dentro de esta transaccion)');
+    update public.tenant_user set role = (select id from public.role where name = rol) where tenant = t_a and "user" = u_consulta;
+    perform pg_temp.expect(format('N7: rol %L no registra', rol), 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.review(u_consulta, t_a, d_a)));
+    perform pg_temp.expect(format('N7: rol %L no aprueba', rol), 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_consulta, t_a, prop3)));
+    perform pg_temp.expect(format('N7: rol %L no lee el motivo', rol), 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_review_server', null, format('select public.read_case_review_reason_text(%s, %s, %s)', u_consulta, t_a, review_nota)));
+    perform pg_temp.expect(format('N7: rol %L no importa', rol), 'ROLE_NOT_ALLOWED', pg_temp.probe('equitas_import_server', null, pg_temp.batch(u_consulta, t_a)));
+  end loop;
+  update public.tenant_user set role = 920001 where tenant = t_a and "user" = u_consulta;
 
   -- J. Un rechazo no publica el contenido de la fila. El bloque G dejo un VALIDADO abierto: sin un corte nuevo, el rechazo seria por el corte y este caso no probaria nada.
   perform pg_temp.publish_cutoff(t_a);
@@ -631,9 +658,8 @@ begin
   perform pg_temp.expect('aprobacion sobre antecedente posterior sin ciclo', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910007)));
   perform pg_temp.expect('aprobacion sobre cola que entra en un ciclo', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_supervisor, t_a, 910012)));
   -- La cadena invalida se rechaza antes que cualquier otra conclusion: tampoco el proponente recibe otra respuesta.
-  update public.tenant_user set role = 920003 where tenant = t_a and "user" = u_operador;
+  -- N7: el operador ya es ADMIN; antes se le daba el rol supervisor solo para este caso.
   perform pg_temp.expect('proponente sobre ciclo de 2', invalida, pg_temp.probe('equitas_review_server', null, pg_temp.approval(u_operador, t_a, 910002)));
-  update public.tenant_user set role = 920002 where tenant = t_a and "user" = u_operador;
   perform pg_temp.expect('ninguna aprobacion sobre cadenas invalidas', '0', (select count(*)::text from public.case_review_approval where case_review between 910001 and 910012));
 end $body$;
 

@@ -15,9 +15,11 @@ from pathlib import Path
 import httpx
 import jwt
 import pytest
-from conftest import BACK, GENERAL_KEYS, free_port, psql, wait_for_port
+from conftest import BACK, GENERAL_KEYS, PROJECT_ID, free_port, psql, wait_for_port
 from cryptography.hazmat.primitives.asymmetric import ec
 from jwt.algorithms import ECAlgorithm
+
+from services.decision_rules_v1 import RULES_VERSION
 
 ASOF = {"as_of": "2026-09-30"}
 TENANT_A, TENANT_B = 920001, 920002
@@ -151,7 +153,8 @@ def test_properly_signed_token_is_accepted_so_the_rejections_below_are_meaningfu
     "overrides",
     [
         {"iss": "https://otro-emisor.example.invalid/auth/v1"},
-        {"iss": "http://127.0.0.1:54321/auth/v1/"},
+        # El emisor real con una barra final (el destino local lo declara EQUITAS_LOCAL_API_URL; por defecto 54321).
+        {"iss": os.environ.get("EQUITAS_LOCAL_API_URL", "http://127.0.0.1:54321") + "/auth/v1/"},
         {"iss": None},
         {"aud": "otra-audiencia"},
         {"aud": None},
@@ -213,7 +216,9 @@ def test_closed_session_is_401_before_the_token_expires(http, env, login):
 # ---- 403 y 404 en lotes
 
 
-@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor", "otro-operador"])
+# N7: importar es de ADMIN (encargo 4.2). Antes tambien recibian 403 operador, supervisor y otro-operador; hoy son ADMIN
+# (test_admin_accounts_import) y el 403 por rol lo reciben USER (consulta) y los nombres de rol anteriores.
+@pytest.mark.parametrize("label", ["consulta"])
 def test_roles_without_import_get_403(http, login, label):
     before = psql("select count(*) from public.import_batch").strip()
     response = post_batch(http, login(label))
@@ -222,6 +227,33 @@ def test_roles_without_import_get_403(http, login, label):
     assert http.get("/imports/1", headers=bearer(login(label))).status_code == 403
     assert http.post("/imports/1/discard", headers=bearer(login(label))).status_code == 403
     assert psql("select count(*) from public.import_batch").strip() == before
+
+
+@pytest.mark.parametrize("name", ["consulta", "operador", "supervisor", "importador", "admin", "USER"])
+def test_previous_role_names_do_not_import_or_read(http, login, name):
+    """N7: los nombres anteriores (y ADMIN con otra caja) ya no otorgan nada; USER lee pero no importa."""
+    psql(f"insert into public.role(id,name) select (select max(id)+1 from public.role),'{name}' "
+         f"where not exists(select 1 from public.role where name='{name}')")
+    psql(f"update public.tenant_user set role=(select id from public.role where name='{name}') where id=952005")
+    try:
+        before = psql("select count(*) from public.import_batch").strip()
+        response = post_batch(http, login("revocable"))
+        assert response.status_code == 403
+        assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+        assert psql("select count(*) from public.import_batch").strip() == before
+        reading = http.get("/case-groups", params=ASOF, headers=bearer(login("revocable")))
+        assert reading.status_code == (200 if name == "USER" else 403)
+    finally:
+        psql("update public.tenant_user set role=920002 where id=952005")
+
+
+@pytest.mark.parametrize("label,tenant", [("operador", TENANT_A), ("supervisor", TENANT_A), ("otro-operador", TENANT_B)])
+def test_admin_accounts_import(http, login, label, tenant):
+    """N7: toda cuenta ADMIN importa en su municipio (antes estas tres recibian 403)."""
+    response = post_batch(http, login(label))
+    assert response.status_code == 201
+    assert response.json()["tenant"] == tenant
+    assert psql(f"select created_by_role from public.import_batch where id = {response.json()['id']}").strip() == "ADMIN"
 
 
 @pytest.mark.parametrize("label", ["sin-membresia", "inactivo", "usuario-inactivo"])
@@ -252,7 +284,9 @@ def test_importer_creates_a_received_batch_with_the_dedicated_credential(http, l
         "select tenant,status,created_by,created_by_role,source,rules_version,as_of,"
         f"counts->>'archivos' from public.import_batch where id = {body['id']}"
     ).strip()
-    assert row == f"{TENANT_A}|RECIBIDO|{USER_IMPORTADOR}|importador|WEB_UPLOAD|1.0.0|2026-09-30|2"
+    # N7: rol ADMIN (antes importador) y la version de reglas vigente (1.1.0 desde 687e681; antes 1.0.0 fija).
+    assert row == f"{TENANT_A}|RECIBIDO|{USER_IMPORTADOR}|ADMIN|WEB_UPLOAD|{RULES_VERSION}|2026-09-30|2"
+    assert RULES_VERSION == "1.1.0"
 
 
 def test_client_supplied_tenant_is_ignored_in_body_query_and_headers(http, login):
@@ -305,7 +339,7 @@ def identifiers(response) -> set[str]:
     return {case["debtor_identifier"] for case in response.json()["items"]}
 
 
-@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor"])
+@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor", "importador"])
 def test_scoring_of_a_tenant_shows_only_its_rows_and_counts(http, login, label):
     headers = bearer(login(label))
     cases = http.get("/case-groups", params={**ASOF, "limit": 500}, headers=headers)
@@ -347,10 +381,13 @@ def test_scoring_without_membership_returns_no_rows_or_counts(http, login, path,
     assert response.json() == {"detail": "MEMBERSHIP_REQUIRED"}
 
 
-def test_importer_does_not_read_the_portfolio(http, login):
-    response = http.get("/case-groups", params=ASOF, headers=bearer(login("importador")))
-    assert response.status_code == 403
-    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+def test_importer_reads_the_portfolio(http, login):
+    """N7: antes «el importador no lee la cartera» (403). Hoy leer es de todo miembro activo y quien importa es ADMIN:
+    la cuenta importador lee su municipio y nada del otro."""
+    response = http.get("/case-groups", params={**ASOF, "limit": 500}, headers=bearer(login("importador")))
+    assert response.status_code == 200
+    assert "CENTINELA_A052_OBJETO_A" in identifiers(response)
+    assert "CENTINELA_A052_OBJETO_B" not in response.text
 
 
 def test_revoking_a_membership_applies_on_the_next_request(http, login):
@@ -872,12 +909,7 @@ def http_client_for(api_server):
 
 # ---- Ciclo 2, R3: el número del cliente no llega a los registros de la infraestructura
 
-INFRASTRUCTURE = (
-    "supabase_kong_equitas-tp-testing",
-    "supabase_rest_equitas-tp-testing",
-    "supabase_auth_equitas-tp-testing",
-    "supabase_db_equitas-tp-testing",
-)
+INFRASTRUCTURE = tuple(f"supabase_{service}_{PROJECT_ID}" for service in ("kong", "rest", "auth", "db"))
 
 
 def docker_logs(container: str, since: float) -> str:

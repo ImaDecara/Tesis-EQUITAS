@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { LOCAL_API_URL } from '../local-review/config'
 import { actionIds, approvals, config, post, READY_CHECKLIST, reviews, sql } from '../local-review/http-support'
 import {
   ACCOUNTS, api, approvalBody, AS_OF, batchBody, createdId, DECISION_TABLES, expectCode, expectRejected, INTENSE, INTERVENTION, MISSING_ID, OBJECT, proposalBody,
@@ -10,6 +11,11 @@ import {
 
 // ALIGN-022. Cada `it` es un caso del inventario de database/testing/review_integration.py: el validador rechaza faltantes,
 // omitidos y casos ajenos. Un caso rojo es un hallazgo: se documenta y se reporta, no se ajusta para dar verde.
+// Noche 7: matriz ADMIN/USER (migracion 20261110100000_admin_user_access). Los nombres de cuenta se conservan: consulta = USER;
+// operador, supervisor, importador-real, proponente y los actores inactivos = ADMIN; otro-operador = ADMIN en B y USER en A;
+// otro-supervisor = ADMIN en B; la cuenta `importador` sigue con tp_operator. Registrar, aprobar (otra persona), leer el motivo e
+// importar requieren ADMIN. Cada caso traducido lo dice con «N7:»; donde la distincion de rol ya no existe se prueba la regla vigente
+// y, ademas, que el nombre de rol anterior ya no otorga nada (withHistoricRole).
 const tokens = {} as Record<Account, string>
 const cutoff = { A: 0, B: 0 }
 const base = { review: 0, proposal: 0, approvedProposal: 0, approval: 0, reviewB: 0, proposalB: 0, approvalB: 0, batchA: 0, batchB: 0 }
@@ -25,12 +31,12 @@ const CLIENTS: ReadonlyArray<readonly [string, () => string | undefined]> = [
 
 const forgedRow = (overrides: Record<string, unknown> = {}) => ({
   tenant: TENANT.A, debtor: OBJECT.A, rules_version: '1.0.0', as_of: AS_OF, inputs_hash: 'a'.repeat(64), suggested_intervention: INTERVENTION, suggested_intensity: 1,
-  explanation: { factores: [] }, decision: 'ACEPTA', decided_intervention: INTERVENTION, decided_intensity: 1, reviewer: USER.operador, reviewer_role: 'operador',
+  explanation: { factores: [] }, decision: 'ACEPTA', decided_intervention: INTERVENTION, decided_intensity: 1, reviewer: USER.operador, reviewer_role: 'ADMIN',
   idempotency_key: randomUUID(), ...overrides,
 })
 
 const forgedApproval = (overrides: Record<string, unknown> = {}) => ({
-  tenant: TENANT.A, case_review: base.proposal, decision: 'APRUEBA', checklist: READY_CHECKLIST, approver: USER.supervisor, approver_role: 'supervisor', idempotency_key: randomUUID(), ...overrides,
+  tenant: TENANT.A, case_review: base.proposal, decision: 'APRUEBA', checklist: READY_CHECKLIST, approver: USER.supervisor, approver_role: 'ADMIN', idempotency_key: randomUUID(), ...overrides,
 })
 
 const forgedBatch = (overrides: Record<string, unknown> = {}) => ({
@@ -62,6 +68,17 @@ async function serverShown(debtor: number, cookie: string) {
   return { current, expected: { asOf: current.asOf, rulesVersion: current.rulesVersion, inputsHash: current.inputsHash } }
 }
 
+// N7: la membresia del proponente (920015) pasa un momento a un rol con nombre anterior; se restituye ADMIN al terminar.
+async function withHistoricRole(name: 'consulta' | 'operador' | 'supervisor' | 'importador', check: () => Promise<void>) {
+  sql(`insert into public.role(id, name, description) select (select max(id) + 1 from public.role), '${name}', 'N7: nombre anterior, no reconocido' where not exists(select 1 from public.role where name = '${name}')`)
+  sql(`update public.tenant_user set role = (select id from public.role where name = '${name}') where id = 920015`)
+  try {
+    await check()
+  } finally {
+    sql('update public.tenant_user set role = 920002 where id = 920015')
+  }
+}
+
 beforeAll(async () => {
   initialCounts = rowCounts()
   ids = actionIds()
@@ -81,9 +98,10 @@ beforeAll(async () => {
 
 describe('precondiciones', () => {
   it('REV-ENV-01: destino local, migraciones aplicadas, cuentas sinteticas y base recien sembrada', async () => {
-    expect(config.supabaseUrl).toBe('http://127.0.0.1:54321')
+    expect(config.supabaseUrl).toBe(LOCAL_API_URL)
     expect(initialCounts, 'sin revisiones, aprobaciones ni lotes anteriores').toBe('0|0|0')
-    expect(sql(`select count(*) from supabase_migrations.schema_migrations where version in ('20261030100000', '20261102120000')`)).toBe('2')
+    expect(sql(`select count(*) from supabase_migrations.schema_migrations where version in ('20261030100000', '20261102120000', '20261110100000')`)).toBe('3')
+    expect(sql(`select string_agg(distinct r.name collate "C", ',' order by r.name collate "C") from public.tenant_user tu join public.role r on r.id = tu.role where tu.tenant in (${TENANT.A}, ${TENANT.B})`), 'roles vigentes de las cuentas').toBe('ADMIN,USER,importador_sistema,tp_operator')
     expect(sql(`select count(*) from auth.users where email not like '%@example.test'`), 'solo cuentas sinteticas').toBe('0')
     expect(sql(`select count(*) from public.tenant where id in (${TENANT.A}, ${TENANT.B}, ${TENANT.INACTIVE})`)).toBe('3')
     expect((await readBuildInfo()).supabaseProjectRef, 'el servidor probado no apunta a un proyecto remoto').toBeNull()
@@ -94,7 +112,7 @@ describe('registro por la funcion, con la credencial de servidor', () => {
   it('REV-FN-01: operador inserta en su municipio; rol y revisor los fija la base', async () => {
     const id = createdId(await recordReview(reviewBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
     expect(sql(`select tenant, debtor, reviewer, reviewer_role, rules_version, as_of, inputs_hash from public.case_review where id = ${id}`))
-      .toBe(`${TENANT.A}|${OBJECT.A}|${USER.operador}|operador|1.0.0|${AS_OF}|${'a'.repeat(64)}`)
+      .toBe(`${TENANT.A}|${OBJECT.A}|${USER.operador}|ADMIN|1.0.0|${AS_OF}|${'a'.repeat(64)}`)
   })
 
   it('REV-FN-02: objeto de otro municipio, denegado', async () => {
@@ -128,19 +146,25 @@ describe('registro por la funcion, con la credencial de servidor', () => {
     })
   })
 
-  it('REV-FN-07: rol consulta, denegado', async () => {
+  it('REV-FN-07: rol USER (cuenta consulta), denegado', async () => {
     await withoutWrites(async () => {
       expectRejected(await recordReview(reviewBody(USER.consulta, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED')
     })
   })
 
-  it('REV-FN-08: supervisor no registra decisiones', async () => {
-    await withoutWrites(async () => {
-      expectRejected(await recordReview(reviewBody(USER.supervisor, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED')
-    })
+  it('REV-FN-08: N7: otra cuenta ADMIN (supervisor) registra; los nombres de rol anteriores no registran', async () => {
+    // Antes «supervisor no registra decisiones»: hoy registra todo ADMIN (encargo 4.2). Lo que no registra es un rol que no es ADMIN.
+    createdId(await recordReview(reviewBody(USER.supervisor, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
+    for (const name of ['operador', 'supervisor'] as const) {
+      await withHistoricRole(name, async () => {
+        await withoutWrites(async () => {
+          expectRejected(await recordReview(reviewBody(USER.proponente, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED', name)
+        })
+      })
+    }
   })
 
-  it('REV-FN-09: operador en B y consulta en A: en A no registra, en B si', async () => {
+  it('REV-FN-09: ADMIN en B y USER en A: en A no registra, en B si', async () => {
     await withoutWrites(async () => {
       expectRejected(await recordReview(reviewBody(USER.otroOperador, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED')
     })
@@ -287,29 +311,41 @@ describe('cliente directo por la Data API', () => {
 })
 
 describe('aprobacion de intensidad 3 o mayor', () => {
-  it('REV-APR-01: operador aprobando, denegado por la funcion', async () => {
+  it('REV-APR-01: N7: quien propuso (operador, ADMIN) no aprueba ni objeta su propuesta', async () => {
+    // Antes ROLE_NOT_ALLOWED por ser operador; hoy es ADMIN y lo frena la comprobacion por identidad.
     await withoutWrites(async () => {
-      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, cutoff.A)), 'ROLE_NOT_ALLOWED', 'aprueba')
-      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, null, { p_decision: 'OBJETA', p_reason_code: 'MOTIVO_SINTETICO', p_checklist: {} })), 'ROLE_NOT_ALLOWED', 'objeta')
+      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, cutoff.A)), 'APPROVER_IS_PROPONENT', 'aprueba')
+      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, base.proposal, null, { p_decision: 'OBJETA', p_reason_code: 'MOTIVO_SINTETICO', p_checklist: {} })), 'APPROVER_IS_PROPONENT', 'objeta')
     })
     expect(approvals(base.proposal)).toBe(0)
   })
 
-  it('REV-APR-02: supervisor aprueba; rol y aprobador los fija la base', async () => {
+  it('REV-APR-02: otra persona ADMIN (supervisor) aprueba; rol y aprobador los fija la base', async () => {
     const proposal = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
     const id = createdId(await recordApproval(approvalBody(USER.supervisor, TENANT.A, proposal, cutoff.A)), 'approval_id')
-    expect(sql(`select tenant, case_review, decision, approver, approver_role from public.case_review_approval where id = ${id}`)).toBe(`${TENANT.A}|${proposal}|APRUEBA|${USER.supervisor}|supervisor`)
+    expect(sql(`select tenant, case_review, decision, approver, approver_role from public.case_review_approval where id = ${id}`)).toBe(`${TENANT.A}|${proposal}|APRUEBA|${USER.supervisor}|ADMIN`)
   })
 
-  it('REV-APR-03: consulta, importador, importador_sistema y tp_operator no aprueban', async () => {
+  it('REV-APR-03: N7: USER, importador_sistema, tp_operator y los nombres anteriores no aprueban; otra cuenta ADMIN si', async () => {
+    // Antes la cuenta importador-real tampoco aprobaba; hoy es ADMIN y otra persona.
     await withoutWrites(async () => {
-      for (const user of [USER.consulta, USER.importador, USER.sistema, USER.tpOperator]) {
+      for (const user of [USER.consulta, USER.sistema, USER.tpOperator]) {
         expectRejected(await recordApproval(approvalBody(user, TENANT.A, base.proposal, cutoff.A)), 'ROLE_NOT_ALLOWED', String(user))
       }
     })
+    for (const name of ['supervisor', 'importador'] as const) {
+      await withHistoricRole(name, async () => {
+        await withoutWrites(async () => {
+          expectRejected(await recordApproval(approvalBody(USER.proponente, TENANT.A, base.proposal, cutoff.A)), 'ROLE_NOT_ALLOWED', name)
+        })
+      })
+    }
+    const proposal = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
+    createdId(await recordApproval(approvalBody(USER.importador, TENANT.A, proposal, cutoff.A)), 'approval_id')
+    expect(approvals(base.proposal)).toBe(0)
   })
 
-  it('REV-APR-04: supervisor de otro municipio no aprueba ni desde el suyo ni desde este', async () => {
+  it('REV-APR-04: ADMIN de otro municipio no aprueba ni desde el suyo ni desde este', async () => {
     await withoutWrites(async () => {
       expectRejected(await recordApproval(approvalBody(USER.otroSupervisor, TENANT.A, base.proposal, cutoff.A)), 'ACTOR_NOT_ACTIVE_MEMBER', 'nombrando el municipio ajeno')
       expectRejected(await recordApproval(approvalBody(USER.otroSupervisor, TENANT.B, base.proposal, cutoff.B)), 'REVIEW_NOT_IN_TENANT', 'nombrando el suyo')
@@ -329,16 +365,18 @@ describe('aprobacion de intensidad 3 o mayor', () => {
     })
   })
 
-  it('REV-APR-07: quien propuso no aprueba aunque hoy sea supervisor', async () => {
+  it('REV-APR-07: quien propuso no aprueba aunque tenga el rol que aprueba, tampoco una version posterior de su propuesta', async () => {
+    // N7: el proponente ya es ADMIN (antes se le daba el rol supervisor solo para este caso). Se agrega la cadena de reemplazos.
     const proposal = createdId(await recordReview(proposalBody(USER.proponente, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
-    sql('update public.tenant_user set role = 920003 where id = 920015')
-    try {
-      await withoutWrites(async () => {
-        expectRejected(await recordApproval(approvalBody(USER.proponente, TENANT.A, proposal, cutoff.A)), 'APPROVER_IS_PROPONENT')
-      })
-    } finally {
-      sql('update public.tenant_user set role = 920002 where id = 920015')
-    }
+    await withoutWrites(async () => {
+      expectRejected(await recordApproval(approvalBody(USER.proponente, TENANT.A, proposal, cutoff.A)), 'APPROVER_IS_PROPONENT')
+    })
+    const replacement = createdId(await recordReview(proposalBody(USER.operador, TENANT.A, OBJECT.A, cutoff.A, { p_supersedes: proposal })), 'review_id')
+    await withoutWrites(async () => {
+      expectRejected(await recordApproval(approvalBody(USER.proponente, TENANT.A, replacement, cutoff.A)), 'APPROVER_IS_PROPONENT', 'version anterior')
+      expectRejected(await recordApproval(approvalBody(USER.operador, TENANT.A, replacement, cutoff.A)), 'APPROVER_IS_PROPONENT', 'version vigente')
+    })
+    createdId(await recordApproval(approvalBody(USER.supervisor, TENANT.A, replacement, cutoff.A)), 'approval_id')
   })
 })
 
@@ -507,18 +545,26 @@ describe('credenciales', () => {
   })
 })
 
-describe('importacion, segun ALIGN-003', () => {
-  it('REV-IMP-01: supervisor importando, denegado en todo estado', async () => {
+describe('importacion: ADMIN e importador_sistema (antes ALIGN-003: importador e importador_sistema)', () => {
+  it('REV-IMP-01: N7: USER importando, denegado en todo estado; otra cuenta ADMIN (supervisor) registra', async () => {
+    // Antes «supervisor importando, denegado»: hoy importa todo ADMIN (encargo 4.2). El rechazo se prueba con USER y el rol anterior.
     await withoutWrites(async () => {
       for (const status of ['RECIBIDO', 'VALIDADO', 'CONFIRMADO', 'PUBLICADO']) {
-        expectRejected(await recordBatch(batchBody(USER.supervisor, TENANT.A, { p_status: status })), 'ROLE_NOT_ALLOWED', status)
+        expectRejected(await recordBatch(batchBody(USER.consulta, TENANT.A, { p_status: status })), 'ROLE_NOT_ALLOWED', status)
       }
     })
+    await withHistoricRole('supervisor', async () => {
+      await withoutWrites(async () => {
+        expectRejected(await recordBatch(batchBody(USER.proponente, TENANT.A)), 'ROLE_NOT_ALLOWED', 'supervisor anterior')
+      })
+    })
+    const id = createdId(await recordBatch(batchBody(USER.supervisor, TENANT.A)), 'batch_id')
+    expect(sql(`select created_by_role, status from public.import_batch where id = ${id}`)).toBe('ADMIN|RECIBIDO')
   })
 
-  it('REV-IMP-02: importador registra un lote de su municipio', async () => {
+  it('REV-IMP-02: ADMIN (cuenta importador-real) registra un lote de su municipio', async () => {
     const id = createdId(await recordBatch(batchBody(USER.importador, TENANT.A)), 'batch_id')
-    expect(sql(`select tenant, created_by, created_by_role, status from public.import_batch where id = ${id}`)).toBe(`${TENANT.A}|${USER.importador}|importador|RECIBIDO`)
+    expect(sql(`select tenant, created_by, created_by_role, status from public.import_batch where id = ${id}`)).toBe(`${TENANT.A}|${USER.importador}|ADMIN|RECIBIDO`)
   })
 
   it('REV-IMP-03: importador_sistema registra un lote de su municipio', async () => {
@@ -526,23 +572,35 @@ describe('importacion, segun ALIGN-003', () => {
     expect(sql(`select tenant, created_by, created_by_role, status from public.import_batch where id = ${id}`)).toBe(`${TENANT.A}|${USER.sistema}|importador_sistema|RECIBIDO`)
   })
 
-  it('REV-IMP-04: operador, consulta y tp_operator no importan', async () => {
+  it('REV-IMP-04: N7: USER, tp_operator y los nombres anteriores no importan', async () => {
+    // Antes tambien «operador no importa»; hoy el operador es ADMIN e importa (REV-IMP-01 lo prueba con otra cuenta ADMIN).
     await withoutWrites(async () => {
-      for (const user of [USER.operador, USER.consulta, USER.tpOperator]) {
+      for (const user of [USER.consulta, USER.tpOperator]) {
         expectRejected(await recordBatch(batchBody(user, TENANT.A)), 'ROLE_NOT_ALLOWED', String(user))
       }
     })
+    for (const name of ['operador', 'importador'] as const) {
+      await withHistoricRole(name, async () => {
+        await withoutWrites(async () => {
+          expectRejected(await recordBatch(batchBody(USER.proponente, TENANT.A)), 'ROLE_NOT_ALLOWED', name)
+        })
+      })
+    }
   })
 
-  it('REV-IMP-05: importador e importador_sistema no registran decisiones', async () => {
+  it('REV-IMP-05: N7: importador_sistema y el rol anterior importador no registran decisiones; la cuenta importador-real (ADMIN) si', async () => {
     await withoutWrites(async () => {
-      for (const user of [USER.importador, USER.sistema]) {
-        expectRejected(await recordReview(reviewBody(user, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED', String(user))
-      }
+      expectRejected(await recordReview(reviewBody(USER.sistema, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED', 'importador_sistema')
     })
+    await withHistoricRole('importador', async () => {
+      await withoutWrites(async () => {
+        expectRejected(await recordReview(reviewBody(USER.proponente, TENANT.A, OBJECT.A, cutoff.A)), 'ROLE_NOT_ALLOWED', 'importador anterior')
+      })
+    })
+    createdId(await recordReview(reviewBody(USER.importador, TENANT.A, OBJECT.A, cutoff.A)), 'review_id')
   })
 
-  it('REV-IMP-06: importador de un municipio no importa en otro; sin membresia e inactivo tampoco', async () => {
+  it('REV-IMP-06: ADMIN de un municipio no importa en otro; sin membresia e inactivo tampoco', async () => {
     await withoutWrites(async () => {
       expectRejected(await recordBatch(batchBody(USER.importador, TENANT.B)), 'ACTOR_NOT_ACTIVE_MEMBER', 'otro municipio')
       expectRejected(await recordBatch(batchBody(USER.sinMembresia, TENANT.A)), 'ACTOR_NOT_ACTIVE_MEMBER', 'sin membresia')
@@ -550,11 +608,14 @@ describe('importacion, segun ALIGN-003', () => {
     })
   })
 
-  it('REV-IMP-07: importador con sesion no decide ni aprueba por las acciones', async () => {
-    const session = await cookie('importador-real')
+  it('REV-IMP-07: N7: USER con sesion no decide ni aprueba por las acciones; la cuenta importador-real (ADMIN) pasa el permiso', async () => {
+    // Antes la cuenta importador-real recibia ROLE_FORBIDDEN; hoy es ADMIN. El rechazo por rol se prueba con USER.
+    const user = await cookie('consulta')
     await withoutWrites(async () => {
-      expect((await post(ids.record, blind(OBJECT.A), { cookie: session })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
-      expect((await post(ids.approve, { caseReviewId: String(base.proposal), decision: 'APRUEBA', checklist: READY_CHECKLIST }, { cookie: session })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+      expect((await post(ids.record, blind(OBJECT.A), { cookie: user })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+      expect((await post(ids.approve, { caseReviewId: String(base.proposal), decision: 'APRUEBA', checklist: READY_CHECKLIST }, { cookie: user })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+      // ADMIN pasa la autorizacion y llega a la comprobacion de la sugerencia: sin escribir.
+      expect((await post(ids.record, blind(OBJECT.A), { cookie: await cookie('importador-real') })).result).toMatchObject({ ok: false, code: 'SUGGESTION_OUTDATED' })
     })
   })
 
@@ -623,7 +684,7 @@ describe('lectura entre municipios', () => {
     }
   })
 
-  it('REV-READ-02: el supervisor de B ve lo de B y nada de A', async () => {
+  it('REV-READ-02: el ADMIN de B ve lo de B y nada de A', async () => {
     for (const table of DECISION_TABLES) {
       const seen = await rows(table, tokens['otro-supervisor'])
       expect(seen.length, `${table}: hay filas para ver`).toBeGreaterThan(0)
@@ -655,7 +716,7 @@ describe('lectura entre municipios', () => {
     expectCode(await api('GET', `/rest/v1/debtor?select=id,case_review(reason_text)&id=eq.${OBJECT.A}`, { token: tokens.supervisor }), '42501', 'embeber el motivo')
     expectCode(await readReason(USER.supervisor, TENANT.A, id, tokens.supervisor), '42501', 'funcion con la sesion')
     expectCode(await api('GET', `/rest/v1/rpc/read_case_review_reason_text?p_actor_user=${USER.supervisor}&p_tenant=${TENANT.A}&p_case_review=${id}`, { token: tokens.supervisor }), '42501', 'funcion por GET')
-    expectRejected(await readReason(USER.consulta, TENANT.A, id), 'ROLE_NOT_ALLOWED', 'consulta')
+    expectRejected(await readReason(USER.consulta, TENANT.A, id), 'ROLE_NOT_ALLOWED', 'USER (consulta)')
     expectRejected(await readReason(USER.otroSupervisor, TENANT.A, id), 'ACTOR_NOT_ACTIVE_MEMBER', 'otro municipio')
     expectRejected(await readReason(USER.otroSupervisor, TENANT.B, id), 'REVIEW_NOT_IN_TENANT', 'nombrando el suyo')
     const allowed = await readReason(USER.supervisor, TENANT.A, id)
@@ -676,7 +737,7 @@ describe('lectura entre municipios', () => {
 })
 
 describe('acciones de servidor, compiladas y por HTTP', () => {
-  it('REV-ACT-01: recorrido autorizado: el operador registra y la fila lleva lo calculado por el servidor', async () => {
+  it('REV-ACT-01: recorrido autorizado: un ADMIN (operador) registra y la fila lleva lo calculado por el servidor', async () => {
     const session = await cookie('operador')
     const debtor = 920011
     const { current, expected } = await serverShown(debtor, session)
@@ -685,10 +746,10 @@ describe('acciones de servidor, compiladas y por HTTP', () => {
     expect(status).toBe(200)
     expect(result).toMatchObject({ ok: true, created: true, status: 'REGISTRADA' })
     expect(sql(`select tenant, debtor, reviewer, reviewer_role, inputs_hash, rules_version, as_of, suggested_intervention, suggested_intensity from public.case_review where id = ${result!.reviewId}`))
-      .toBe(`${TENANT.A}|${debtor}|${USER.operador}|operador|${current.inputsHash}|${current.rulesVersion}|${current.asOf}|${current.suggestedIntervention}|${current.suggestedIntensity}`)
+      .toBe(`${TENANT.A}|${debtor}|${USER.operador}|ADMIN|${current.inputsHash}|${current.rulesVersion}|${current.asOf}|${current.suggestedIntervention}|${current.suggestedIntensity}`)
   })
 
-  it('REV-ACT-02: recorrido autorizado de intensidad 3: el operador propone y no aprueba; el supervisor aprueba', async () => {
+  it('REV-ACT-02: recorrido autorizado de intensidad 3: un ADMIN propone y no aprueba lo suyo; otro ADMIN aprueba', async () => {
     const operator = await cookie('operador')
     const debtor = 920012
     const { expected } = await serverShown(debtor, operator)
@@ -696,11 +757,12 @@ describe('acciones de servidor, compiladas y por HTTP', () => {
     expect(proposal.result).toMatchObject({ ok: true, created: true, status: 'PENDIENTE_SUPERVISOR' })
     const reviewId = String(proposal.result!.reviewId)
     const approval = { caseReviewId: reviewId, decision: 'APRUEBA', checklist: READY_CHECKLIST }
-    expect((await post(ids.approve, approval, { cookie: operator })).result).toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+    // N7: antes ROLE_FORBIDDEN por ser operador; hoy es ADMIN y la base lo rechaza por identidad.
+    expect((await post(ids.approve, approval, { cookie: operator })).result).toMatchObject({ ok: false, code: 'APPROVER_IS_PROPONENT' })
     expect(approvals(reviewId)).toBe(0)
     const approved = await post(ids.approve, approval, { cookie: await cookie('supervisor') })
     expect(approved.result).toMatchObject({ ok: true, created: true, status: 'APROBADA' })
-    expect(sql(`select approver, approver_role, decision from public.case_review_approval where case_review = ${reviewId}`)).toBe(`${USER.supervisor}|supervisor|APRUEBA`)
+    expect(sql(`select approver, approver_role, decision from public.case_review_approval where case_review = ${reviewId}`)).toBe(`${USER.supervisor}|ADMIN|APRUEBA`)
   })
 
   it('REV-ACT-03: por la accion tampoco se falsifica: campo extra rechazado y hash ajeno sin escribir', async () => {
@@ -716,12 +778,13 @@ describe('acciones de servidor, compiladas y por HTTP', () => {
     })
   })
 
-  it('REV-ACT-04: la accion deniega consulta, supervisor, sin membresia, inactivo y dos membresias sin elegir', async () => {
+  it('REV-ACT-04: N7: la accion deniega USER, sin membresia, inactivo y dos membresias sin elegir; otro ADMIN pasa el permiso', async () => {
     await withoutWrites(async () => {
-      for (const [label, code] of [['consulta', 'ROLE_FORBIDDEN'], ['supervisor', 'ROLE_FORBIDDEN'], ['sin-membresia', 'TENANT_ACCESS_NOT_FOUND'], ['inactivo', 'TENANT_ACCESS_INACTIVE'], ['otro-operador', 'TENANT_SELECTION_REQUIRED']] as const) {
+      // Antes la cuenta supervisor recibia ROLE_FORBIDDEN; hoy es ADMIN y llega a la comprobacion de la sugerencia, sin escribir.
+      for (const [label, code] of [['consulta', 'ROLE_FORBIDDEN'], ['supervisor', 'SUGGESTION_OUTDATED'], ['sin-membresia', 'TENANT_ACCESS_NOT_FOUND'], ['inactivo', 'TENANT_ACCESS_INACTIVE'], ['otro-operador', 'TENANT_SELECTION_REQUIRED']] as const) {
         expect((await post(ids.record, blind(OBJECT.A), { cookie: await cookie(label) })).result, label).toMatchObject({ ok: false, code })
       }
-      expect((await post(ids.record, blind(OBJECT.A), { cookie: await cookie('otro-operador', String(TENANT.A)) })).result, 'operador en B que elige A').toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
+      expect((await post(ids.record, blind(OBJECT.A), { cookie: await cookie('otro-operador', String(TENANT.A)) })).result, 'ADMIN en B que elige A, donde es USER').toMatchObject({ ok: false, code: 'ROLE_FORBIDDEN' })
     })
   })
 

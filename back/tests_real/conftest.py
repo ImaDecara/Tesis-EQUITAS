@@ -20,11 +20,16 @@ from urllib.parse import urlsplit
 import httpx
 import pytest
 
-LOCAL_DIR = Path("/tmp/equitas-local-db")
+# Noche 7: por defecto, el stack de siempre; scripts/campanas/equitas_campanas.py declara su proyecto local propio con
+# EQUITAS_LOCAL_DIR (carpeta privada con supabase-local.env y el turno) y EQUITAS_LOCAL_PROJECT (nombre de los contenedores).
+LOCAL_DIR = Path(os.environ.get("EQUITAS_LOCAL_DIR", "/tmp/equitas-local-db"))
 ENV_FILE = LOCAL_DIR / "supabase-local.env"
 LOCK = LOCAL_DIR / "lock"
-DB_CONTAINER = "supabase_db_equitas-tp-testing"
-AUTH_CONTAINER = "supabase_auth_equitas-tp-testing"
+PROJECT_ID = os.environ.get("EQUITAS_LOCAL_PROJECT", "equitas-tp-testing")
+if not PROJECT_ID.replace("-", "").isalnum():
+    raise RuntimeError("EQUITAS_LOCAL_PROJECT invalido")
+DB_CONTAINER = f"supabase_db_{PROJECT_ID}"
+AUTH_CONTAINER = f"supabase_auth_{PROJECT_ID}"
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 ROOT = Path(__file__).resolve().parents[2]
 BACK = ROOT / "back"
@@ -226,7 +231,9 @@ def next_server(env, api_server, tmp_path_factory):
         "EQUITAS_IMPORT_API_URL": api_server.url,
     }
     # Con `node_modules` enlazado desde otro directorio, Turbopack rechaza el enlace.
-    bundler = ["--", "--webpack"] if os.environ.get("EQUITAS_E2E_FRONT") else []
+    # Noche 7: con una copia cuyo node_modules es una clonacion (no un enlace), Turbopack compila: EQUITAS_E2E_WEBPACK=0
+    # usa el compilador por defecto, el mismo de la aplicacion entregada.
+    bundler = ["--", "--webpack"] if os.environ.get("EQUITAS_E2E_FRONT") and os.environ.get("EQUITAS_E2E_WEBPACK", "1") != "0" else []
     subprocess.run([npm, "run", "build", *bundler], cwd=FRONT, env=environment, check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
     port = free_port()

@@ -11,7 +11,9 @@ export const config = readLocalReviewConfig()
 export const BASE = process.env.EQUITAS_REVIEW_HTTP_BASE ?? ''
 if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE)) throw new Error('Falta EQUITAS_REVIEW_HTTP_BASE local; la prueba no se omite.')
 const PAGE = `${BASE}/align020-probe`
-const CONTAINER = 'supabase_db_equitas-tp-testing'
+// Noche 7: el contenedor del proyecto local propio que declare EQUITAS_LOCAL_PROJECT (nunca otro entorno).
+const PROJECT = /^[a-z0-9-]+$/.test(process.env.EQUITAS_LOCAL_PROJECT ?? '') ? process.env.EQUITAS_LOCAL_PROJECT : 'equitas-tp-testing'
+const CONTAINER = `supabase_db_${PROJECT}`
 export const READY_CHECKLIST = { situacion_hogar: 'NO_DISPONIBLE', estado_juridico_verificado: true, canal_valido: true, alternativa_asistida_ofrecida: true }
 export const TENANT_A = '920001'
 const SYSTEM_USER = 920009

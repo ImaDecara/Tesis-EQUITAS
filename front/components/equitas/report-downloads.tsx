@@ -14,6 +14,7 @@ import { cn, formatDate } from '@/lib/utils'
 
 function portfolioLine(portfolio: PortfolioState) {
   if (portfolio.kind === 'LOADED') return `Cartera al ${formatDate(portfolio.asOf)}${portfolio.declared ? ' (fecha declarada)' : ''}`
+  if (portfolio.kind === 'UNDATED') return 'Sin fecha de cartera registrada: se usa la de hoy'
   return portfolio.kind === 'EMPTY' ? 'Sin cartera cargada' : 'Fecha de la cartera no disponible'
 }
 

@@ -1,22 +1,27 @@
 // ALIGN-028. Pide los reportes a `next start` con sesiones reales del stack local, generadas por el mismo
 // @supabase/ssr de la web, y guarda las respuestas. No juzga el contenido: eso lo hace verify_reports.py.
 // Noche 7: las etiquetas son nombres de CUENTA de ALIGN-018; fixture.sql les asigna el rol del producto
-// (consulta = USER; operador y supervisor = ADMIN; otro-operador = USER en B; otro-supervisor = ADMIN en B y
-// USER en A; importador conserva el rol anterior y no ingresa). Se agrega el reporte de accesos.
+// (consulta = USER; operador, supervisor e importador = ADMIN; otro-operador = USER en B; otro-supervisor = ADMIN
+// en B y USER en A). Se agrega el reporte de accesos.
 // Uso: node tests/local-reports/run-http.mjs <credenciales.psv> <http://127.0.0.1:PUERTO> <salida nueva en /tmp>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createServerClient } from '@supabase/ssr'
 
 const [credentialsPath, base, output] = process.argv.slice(2)
-if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(base ?? '') || !output?.startsWith('/tmp/')) {
+// Destino: el stack local de siempre o, si se declara, otro proyecto local propio (scripts/campanas/equitas_campanas.py
+// fija EQUITAS_LOCAL_DIR y EQUITAS_LOCAL_API_URL). Solo loopback; la salida va a /tmp o a esa carpeta privada.
+const LOCAL = process.env.EQUITAS_LOCAL_DIR ?? '/tmp/equitas-local-db'
+const API_URL = process.env.EQUITAS_LOCAL_API_URL ?? 'http://127.0.0.1:54321'
+if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(base ?? '') || !/^http:\/\/127\.0\.0\.1:\d+$/.test(API_URL)
+    || !(output?.startsWith('/tmp/') || output?.startsWith(`${LOCAL}/`))) {
   throw new Error('Uso: run-http.mjs <credenciales.psv> <http://127.0.0.1:PUERTO> </tmp/salida>')
 }
-const env = Object.fromEntries(readFileSync('/tmp/equitas-local-db/supabase-local.env', 'utf8').split('\n').flatMap(line => {
+const env = Object.fromEntries(readFileSync(`${LOCAL}/supabase-local.env`, 'utf8').split('\n').flatMap(line => {
   const at = line.indexOf('=')
   return at > 0 ? [[line.slice(0, at), line.slice(at + 1).replace(/^"|"$/g, '')]] : []
 }))
-if (env.API_URL !== 'http://127.0.0.1:54321') throw new Error('Solo se admite el stack local.')
+if (env.API_URL !== API_URL) throw new Error('Solo se admite el stack local.')
 const accounts = Object.fromEntries(readFileSync(credentialsPath, 'utf8').trim().split('\n').map(line => {
   const [label, email, password] = line.split('|')
   return [label, { email, password }]

@@ -152,6 +152,8 @@ export default async function ImportPage() {
                   ? `Cartera vigente de ${viewer.tenantName ?? 'tu municipio'}: al ${formatDate(currentAsOf)}.`
                   : viewer.portfolio.kind === 'EMPTY'
                     ? `${viewer.tenantName ?? 'Tu municipio'} todavía no tiene cartera cargada. Esta va a ser la primera.`
+                    : viewer.portfolio.kind === 'UNDATED'
+                    ? `${viewer.tenantName ?? 'Tu municipio'} tiene una cartera sin fecha registrada. Un lote tiene que traerla completa: si le falta algo de lo que ya está, se rechaza.`
                     : 'No se pudo determinar la fecha de la cartera vigente.'}{' '}
                 Los archivos se guardan en la base local de pruebas de esta instalación.
               </CardDescription>

@@ -12,7 +12,8 @@ end $$;
 -- los lotes los registra importador_sistema, que no inicia sesion.
 insert into public.role(id, name, description) values (920010, 'tp_operator', 'Compatibilidad E06: solo lectura');
 update public.tenant_user set role = 920010 where id = 920004;
--- Dos membresias: operador en el municipio B, consulta en el A. Sin seleccion no entra, y la cookie no suma permisos.
+-- Noche 7: los roles 920001/920002 son USER/ADMIN (case-review-fixtures.sql).
+-- Dos membresias: otro-operador es ADMIN en el municipio B y USER en el A. Sin seleccion no entra, y la cookie no suma permisos.
 insert into public.tenant_user(id, tenant, "user", role, status) values
   (920010, 920001, 920007, 920001, true),
   (920011, 920002, 920009, 920005, true);

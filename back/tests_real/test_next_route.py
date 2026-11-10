@@ -112,7 +112,8 @@ def test_oversize_gives_a_clear_error_through_next(browser, next_server, session
     assert declared.status_code == 413
 
 
-@pytest.mark.parametrize("label", ["consulta", "operador", "supervisor"])
+# N7: antes tambien operador y supervisor; hoy son ADMIN e importan. Sin el permiso queda USER (consulta).
+@pytest.mark.parametrize("label", ["consulta"])
 def test_direct_post_without_the_role_is_403(browser, next_server, session_cookie, label):
     body, content_type = batch()
     response = post(browser, next_server, session_cookie(label), body, content_type)

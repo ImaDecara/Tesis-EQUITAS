@@ -432,14 +432,15 @@ def test_cron_purga_abandonados_sin_nueva_importacion(importer):
 @pytest.fixture(scope="module")
 def auth_tokens(campaign):
     accounts = parse_accounts(psql(script=TESTING / "case-review-auth-fixtures.sql"))
-    psql("""insert into public.role(id,name) select coalesce(max(id),0)+1,'importador' from public.role;
-         insert into public.role(id,name) select coalesce(max(id),0)+1,'operador' from public.role;
+    # N7: ADMIN y USER (antes importador y operador): importador y otro-operador = ADMIN; operador = USER, que no importa.
+    psql("""insert into public.role(id,name) select (select coalesce(max(id),0)+1 from public.role),'ADMIN' where not exists(select 1 from public.role where name='ADMIN');
+         insert into public.role(id,name) select (select coalesce(max(id),0)+1 from public.role),'USER' where not exists(select 1 from public.role where name='USER');
          insert into public.tenant(id,name) values(8032,'Municipio aislado ALIGN032');
          insert into public."user"(auth_user,full_name,email)
            select id,'Persona de prueba ALIGN032',email from auth.users where email like 'tp-a018-%@example.test';
          insert into public.tenant_user(tenant,"user",role)
            select case when u.email like '%otro-operador@%' then 8032 else 1 end,u.id,r.id
-           from public."user" u join public.role r on r.name=case when u.email like '%operador@%' and u.email not like '%otro-operador@%' then 'operador' else 'importador' end
+           from public."user" u join public.role r on r.name=case when u.email like '%operador@%' and u.email not like '%otro-operador@%' then 'USER' else 'ADMIN' end
            where u.email in ('tp-a018-importador@example.test','tp-a018-operador@example.test','tp-a018-otro-operador@example.test');""")
     tokens = {}
     for label in ("importador", "operador", "otro-operador"):

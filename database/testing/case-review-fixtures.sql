@@ -17,12 +17,16 @@ do $$ begin
 end $$;
 
 insert into public.tenant(id,name) values(920001,'TP A018 Municipio'),(920002,'TP A018 Otro municipio');
--- Nombres de roles aprobados en ALIGN-003. Las funciones de escritura los leen por nombre.
+-- Noche 7: roles del producto ADMIN y USER (migracion 20261110100000_admin_user_access; nombres exactos, que las
+-- funciones de escritura leen por nombre). Antes eran consulta/operador/supervisor/importador (ALIGN-003).
+-- Las etiquetas de las CUENTAS (tp-a018-consulta, -operador, ...) se conservan como nombres de cuenta:
+--   consulta = USER; operador = ADMIN (registra); supervisor = ADMIN (otra persona, aprueba); importador = ADMIN;
+--   inactivo = ADMIN con la membresia inactiva; otro-operador y otro-supervisor = ADMIN del municipio B.
+-- importador_sistema sigue siendo la identidad de maquina de la ingesta (no inicia sesion).
+-- Si la base ya tiene ADMIN o USER con otro id, falla sin modificar nada (role_name_key): usar una base recien creada.
 insert into public.role(id,name,description) values
-  (920001,'consulta','Solo lectura'),
-  (920002,'operador','Decide intensidad hasta 2 y propone 3 o mas'),
-  (920003,'supervisor','Aprueba u objeta intensidad 3 o mas'),
-  (920004,'importador','Sube, mapea y confirma lotes'),
+  (920001,'USER','Usuario estandar (fixture)'),
+  (920002,'ADMIN','Administrador (fixture)'),
   (920005,'importador_sistema','Credencial de maquina para la ingesta, sin pantallas');
 insert into public."user"(id,auth_user,full_name,email)
 select 920000 + case split_part(email,'@',1)
@@ -32,14 +36,15 @@ select 920000 + case split_part(email,'@',1)
   id,'Fixture '||email,email from auth.users where email like 'tp-a018-%@example.test';
 -- Credencial de maquina: usuario de aplicacion sin cuenta de Auth, no puede iniciar sesion.
 insert into public."user"(id,full_name,email) values(920009,'Fixture sistema','tp-a018-sistema@example.test');
+-- 920001 USER, 920002 ADMIN, 920005 importador_sistema.
 insert into public.tenant_user(id,tenant,"user",role,status) values
   (920001,920001,920001,920001,true),
   (920002,920001,920002,920002,true),
-  (920003,920001,920003,920003,true),
-  (920004,920001,920004,920004,true),
+  (920003,920001,920003,920002,true),
+  (920004,920001,920004,920002,true),
   (920006,920001,920006,920002,false),
   (920007,920002,920007,920002,true),
-  (920008,920002,920008,920003,true),
+  (920008,920002,920008,920002,true),
   (920009,920001,920009,920005,true);
 insert into public.debtor(id,tenant,external_id,identifier,description) values
   (920001,920001,920001,'TP-A018-1','Objeto sintetico del municipio'),

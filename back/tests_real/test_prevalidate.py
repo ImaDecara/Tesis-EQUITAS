@@ -15,7 +15,7 @@ import uuid
 
 import httpx
 import pytest
-from conftest import ROOT, psql
+from conftest import DB_CONTAINER, ROOT, psql
 
 from ETL.publication import effective_mapping
 from ETL.transform import canonical_json_hash
@@ -154,7 +154,8 @@ def new_preview(http,token,seeded):
 
 
 @pytest.mark.parametrize('method',['get','post'])
-@pytest.mark.parametrize('role,status',[('anonymous',401),('operador',403),('sin-membresia',403),('otro-importador',404)])
+# N7: antes ('operador',403); hoy el operador es ADMIN e importa: el 403 por rol lo da USER (consulta).
+@pytest.mark.parametrize('role,status',[('anonymous',401),('consulta',403),('sin-membresia',403),('otro-importador',404)])
 def test_02_auth_and_tenant(seeded,http,token,login,method,role,status):
     root=upload(http,token,seeded)
     auth={} if role=='anonymous' else {'Authorization':'Bearer '+login(role)}
@@ -252,7 +253,7 @@ def test_08_publication_regression_and_version_invalidation(seeded,http,token,en
     assert psql(f"select count(*) from public.import_preview_row_staging where root_id={root}").strip()=='0'
     # Direct stable S2: real publication is the cutoff, despite other nonpublished atomic batches.
     published=response.json()['published_event_id']
-    cutoff=subprocess.run(['docker','exec','-i','supabase_db_equitas-tp-testing','psql','-X','-qAt','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
+    cutoff=subprocess.run(['docker','exec','-i',DB_CONTAINER,'psql','-X','-qAt','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
                           input='select public.equitas_current_cutoff(920001);',capture_output=True,text=True,timeout=10)
     assert cutoff.returncode==0 and cutoff.stdout.strip()==str(published)
 
@@ -332,7 +333,7 @@ def test_14_payload_integrity_and_ttl_purge(seeded,http,token):
     root,review=new_preview(http,token,seeded);auth={'Authorization':'Bearer '+token}
     batch=review['publication']['batch_id']
     def administrative_probe(sql):
-        result=subprocess.run(['docker','exec','-i','supabase_db_equitas-tp-testing','psql','-X','-qAt',
+        result=subprocess.run(['docker','exec','-i',DB_CONTAINER,'psql','-X','-qAt',
                                '-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
                               input=sql,capture_output=True,text=True,timeout=10)
         assert result.returncode==0,'Administrative synthetic probe failed'
@@ -346,7 +347,7 @@ def test_14_payload_integrity_and_ttl_purge(seeded,http,token):
 
 def administrative(sql):
     """Synthetic local mutations only; never include credentials in a failure."""
-    result=subprocess.run(['docker','exec','-i','supabase_db_equitas-tp-testing','psql','-X','-qAt',
+    result=subprocess.run(['docker','exec','-i',DB_CONTAINER,'psql','-X','-qAt',
                            '-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],
                           input=sql,capture_output=True,text=True,timeout=20)
     assert result.returncode==0,'Administrative synthetic probe failed'
