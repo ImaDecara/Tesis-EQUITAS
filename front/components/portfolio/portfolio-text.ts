@@ -108,7 +108,7 @@ export const readLabel = (table: string) => READ_LABELS[table] ?? 'otros datos'
 // La lectura de personas agrega este aviso cuando el índice anterior no devolvió filas: puede ser
 // un permiso faltante o, como en una cartera cargada desde CSV, que el dato no existe.
 export const isEmptyLegacyIndexWarning = (warning: DataWarning) =>
-  warning.table === 'debtor_profile_detail' && warning.message === 'No devolvió filas para esta sesión.'
+  warning.table === 'debtor_profile_detail' && warning.code === 'EMPTY_LEGACY_INDEX'
 
 /** Los avisos que agregó un filtro (no son errores de lectura): lo que no venía en la lectura. */
 export function filterNotes(selection: readonly DataWarning[], read: readonly DataWarning[]): DataWarning[] {

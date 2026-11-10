@@ -60,21 +60,21 @@ export class DataAccessError extends Error {
 export async function requireTenantAccess(options: { permission?: DalPermission; tenantId?: string } = {}) {
   const cookieStore = await cookies()
   const supabase = await createServerSupabaseClient()
-  if (!supabase) throw new DataAccessError('SUPABASE_NOT_CONFIGURED', 'No disponible: Supabase no esta configurado.')
+  if (!supabase) throw new DataAccessError('SUPABASE_NOT_CONFIGURED', 'No disponible: el servicio de datos no está configurado.')
   let identity
   try {
     identity = await supabase.auth.getUser()
   } catch {
-    throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesion.')
+    throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesión.')
   }
-  if (isAuthServiceUnavailable(identity.error)) throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesion.')
-  if (identity.error || !identity.data.user) throw new DataAccessError('AUTH_REQUIRED', 'Debes iniciar sesion para continuar.')
+  if (isAuthServiceUnavailable(identity.error)) throw new DataAccessError('AUTH_UNAVAILABLE', 'No disponible: no se pudo verificar la sesión.')
+  if (identity.error || !identity.data.user) throw new DataAccessError('AUTH_REQUIRED', 'Tenés que iniciar sesión para continuar.')
   const tenantId = options.tenantId ?? cookieStore.get(TENANT_COOKIE)?.value
   const { access, roleName } = await resolveTenantAccessWithRoleName(identity.data.user.id, supabase, tenantId)
   if (!access.isAuthorized || !access.context) {
     throw new DataAccessError(access.code!, access.message!)
   }
-  if (!roleName || !roleHasPermission(roleName, options.permission ?? 'portfolio:read')) throw new DataAccessError('ROLE_FORBIDDEN', 'El rol no permite esta operacion.')
+  if (!roleName || !roleHasPermission(roleName, options.permission ?? 'portfolio:read')) throw new DataAccessError('ROLE_FORBIDDEN', 'Tu cuenta no tiene permiso para esta función.')
   const { role: roleId, ...identityContext } = access.context
   const context: DalContext = { ...identityContext, roleId, roleName }
   return { supabase, context }
@@ -97,7 +97,7 @@ export async function createTenantReader() {
     },
     async readTable(table: PortfolioTable) {
       const scope = tenantReadScope(table, context.tenantId)
-      if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'La tabla no esta habilitada en la DAL.')
+      if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'Esa lectura no está habilitada.')
       return loadAllTableRows(table, supabase, scope)
     },
   }

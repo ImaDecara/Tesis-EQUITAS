@@ -96,7 +96,7 @@ async function checkTenantAccess(
   supabase: SupabaseClient | null,
   selectedTenantId?: string,
 ): Promise<TenantAccessValidation & { roleName?: ResolvedRoleName }> {
-  if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'Supabase no esta configurado.')
+  if (!supabase) return denied('SUPABASE_NOT_CONFIGURED', 'El servicio de datos no está configurado.')
   try {
     const app = await supabase.from('user').select('id,auth_user,status', { count: 'exact' }).eq('auth_user', authUserId).limit(2)
     if (app.error || !Array.isArray(app.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el usuario.')
@@ -107,7 +107,7 @@ async function checkTenantAccess(
     }
     if (user.status !== 'ACTIVE') return denied('APP_USER_INACTIVE', ACCESS_MESSAGES.APP_USER_INACTIVE)
     if (selectedTenantId !== undefined && !databaseId(selectedTenantId)) {
-      return denied('TENANT_ACCESS_NOT_FOUND', 'La seleccion de municipio no es valida.')
+      return denied('TENANT_ACCESS_NOT_FOUND', 'La selección de municipio no es válida.')
     }
     const memberships = (activeOnly: boolean) => {
       let query = supabase.from('tenant_user').select('user,tenant,role,status', { count: 'exact' }).eq('user', appUserId)
@@ -121,16 +121,16 @@ async function checkTenantAccess(
     const selectedMemberships = selectedTenantId === undefined ? null : await loadAllTableRows('tenant_user', supabase, {
       select: 'id,user,tenant,role,status', filters: [['user', appUserId]],
     })
-    if (selectedMemberships?.warning) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
+    if (selectedMemberships?.warning) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresía.')
     const matching = selectedMemberships?.rows.filter(row => databaseId(row.tenant) === selectedTenantId)
     const selectedActive = matching?.filter(row => row.status === true)
     const active = selectedActive
       ? { data: selectedActive, count: selectedActive.length, error: null }
       : await memberships(true)
-    if (active.error || !Array.isArray(active.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
+    if (active.error || !Array.isArray(active.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresía.')
     if (active.data.length === 0) {
       const anyStatus = matching ? { data: matching, error: null } : await memberships(false)
-      if (anyStatus.error || !Array.isArray(anyStatus.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresia.')
+      if (anyStatus.error || !Array.isArray(anyStatus.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar la membresía.')
       return anyStatus.data.length
         ? denied('TENANT_ACCESS_INACTIVE', ACCESS_MESSAGES.TENANT_ACCESS_INACTIVE)
         : denied('TENANT_ACCESS_NOT_FOUND', ACCESS_MESSAGES.TENANT_ACCESS_NOT_FOUND)
@@ -145,7 +145,7 @@ async function checkTenantAccess(
         const selection = row.selection as { name?: unknown } | null
         return id ? [{ id, name: typeof selection?.name === 'string' ? selection.name : `Municipio ${id}` }] : []
       })
-      return { ...denied('TENANT_SELECTION_REQUIRED', 'Selecciona explicitamente un municipio para continuar.'), tenantChoices }
+      return { ...denied('TENANT_SELECTION_REQUIRED', 'Elegí un municipio para continuar.'), tenantChoices }
     }
     const membership = active.data[0]
     const tenantId = databaseId(membership.tenant)
@@ -153,7 +153,7 @@ async function checkTenantAccess(
     if (membership.status !== true) return denied('TENANT_ACCESS_INACTIVE', ACCESS_MESSAGES.TENANT_ACCESS_INACTIVE)
     if (!tenantId || !roleId || databaseId(membership.user) !== appUserId ||
         (selectedTenantId !== undefined && tenantId !== selectedTenantId)) {
-      return denied('TENANT_ACCESS_NOT_FOUND', 'No se pudo verificar la membresia seleccionada.')
+      return denied('TENANT_ACCESS_NOT_FOUND', 'No se pudo verificar la membresía seleccionada.')
     }
     const tenant = await supabase.from('tenant').select('id,status').eq('id', tenantId).limit(1)
     if (tenant.error || !Array.isArray(tenant.data)) return denied('DATABASE_ERROR', 'No disponible: no se pudo verificar el municipio.')

@@ -17,12 +17,13 @@ const PEOPLE_TABLE_LOAD_ORDER = [
   EQUITAS_TABLE_NAMES.debtor,
 ] as const
 
-function buildLikelyRlsWarning(table: string, message: string): DataWarning {
-  return {
-    table,
-    message,
-    needsSelectPolicy: true,
-  }
+// El índice anterior por persona (debtor_profile_detail.risk_value) no existe en una cartera cargada desde CSV:
+// que no haya filas no es un error de lectura ni un permiso faltante. Lleva un código propio para que las
+// pantallas lo traten como «dato que no existe para nadie» y no como una falla.
+export const EMPTY_LEGACY_INDEX = 'EMPTY_LEGACY_INDEX'
+
+function emptyLegacyIndexWarning(table: string): DataWarning {
+  return { table, code: EMPTY_LEGACY_INDEX, message: 'El índice anterior por persona no tiene filas.', needsSelectPolicy: false }
 }
 
 async function loadRawPeopleData(): Promise<RawPersonDataBundle> {
@@ -40,14 +41,8 @@ async function loadRawPeopleData(): Promise<RawPersonDataBundle> {
     (warning) => warning.table === EQUITAS_TABLE_NAMES.debtorProfileDetail
   )
 
-  // Si hay personas pero risk_value viene vacio, normalmente hay policy faltante en debtor_profile_detail.
   if (peopleRows.length > 0 && riskDetailRows.length === 0 && !alreadyWarnedRiskTable) {
-    warnings.push(
-      buildLikelyRlsWarning(
-        EQUITAS_TABLE_NAMES.debtorProfileDetail,
-        'No devolvió filas para esta sesión.'
-      )
-    )
+    warnings.push(emptyLegacyIndexWarning(EQUITAS_TABLE_NAMES.debtorProfileDetail))
   }
 
   return {

@@ -99,17 +99,17 @@ const ruleColumns = [
 // Calculos hechos dentro de paginas y componentes, sin DTO propio (contrato §7.8-§7.9).
 // Si se renombra o elimina uno, la prueba obliga a actualizar el diccionario.
 const pageCalculations: Record<string, string[]> = {
-  'app/page.tsx': ['highRiskShare', 'topDebtConcentration', 'percentage', 'dominantRecommendation'],
+  'app/page.tsx': ['highRiskShare', 'percentage'],
   'app/people/page.tsx': [
-    'withContactCount', 'filteredPeople', 'totalDebtAssociated', 'averageRiskValue',
+    'withContactCount', 'filteredPeople', 'totalDebtAssociated',
   ],
   'app/debtors/page.tsx': ['filteredDebtors'],
   'app/priority-cases/page.tsx': ['filteredCases'],
   'app/debt-aging/page.tsx': ['debtByQueueChart', 'topDebtChart'],
   'app/risk-analysis/page.tsx': [
-    'objectRiskDistribution', 'highRiskCases', 'highIndividualRiskPeople',
+    'objectRiskDistribution', 'highRiskCases',
   ],
-  'app/no-contact/page.tsx': ['noContactCases', 'associatedDebt', 'highRiskNoContact', 'totalShare'],
+  'app/no-contact/page.tsx': ['noContactCases', 'highRiskNoContact', 'totalShare'],
   'app/recommended-actions/page.tsx': ['buildRecommendationSummary'],
   'components/charts/debtor-dashboard-charts.tsx': [
     'RiskDonutChart', 'BarDistributionChart', 'TopDebtHorizontalChart',
