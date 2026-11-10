@@ -5,45 +5,48 @@ import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-me
 import { buildIncompleteStatusRawData, buildPresenceRawData, buildPresencePeopleData } from '@/tests/helpers/equitas-fixtures'
 import { buildDebtAgingSummary } from '@/lib/equitas-view-selectors'
 
+// Reglas 1.1.0 (decisión del usuario del 2026-11-10): la mora del objeto es por calendario sobre las no
+// pagadas, la misma definición de las reglas. Un estado faltante o UNKNOWN ya no la vuelve nula y los
+// importes persistidos del perfil no la reemplazan; solo PAID la excluye.
 describe('ALIGN-026: perfil tal como lo persiste la carga V1', () => {
   const NO_INFORMADO = 'NO_INFORMADO_EN_ORIGEN'
-  const debt = (id: number, status: number, currentAmount: number, dueDate = '2020-01-01') => ({
+  const debt = (id: number, status: number, currentAmount: number, dueDate: string | null = '2020-01-01') => ({
     id, debtor: 901, original_amount: currentAmount, current_amount: currentAmount, status, due_date: dueDate,
   })
 
-  it('sin ningún estado observado, la mora no se muestra como cero observado', () => {
-    const raw = buildPresenceRawData()
+  it('sin ningún estado observado, la mora sale de importe y vencimiento y no del perfil', () => {
+    const raw = { ...buildPresenceRawData(), batch: { as_of: '2026-09-30' } }
     raw.debts = [debt(801, 8, 125), debt(802, 8, 75)]
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: null, overdue_debt_count: null,
       oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 2 }]
     const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
-    expect(debtor.overdueDebt).toBeNull()
-    expect(debtor.metrics?.overdueDebt).toEqual({ value: null, presence: NO_INFORMADO, missing: { [NO_INFORMADO]: 2 } })
-    expect(debtor.overdueDebtsCount).toBeNull()
-    expect(debtor.maxDaysOverdue).toBeNull()
-    expect(debtor.metrics?.maxDaysOverdue.presence).toBe(NO_INFORMADO)
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 200, presence: 'OBSERVADO', missing: {} })
+    expect(debtor).toMatchObject({ totalDebt: 200, pendingDebt: 200, overdueDebt: 200, overdueDebtsCount: 2, maxDaysOverdue: 2464 })
+    expect(debtor.maxDaysOverdue).toBe(debtor.decision?.severidad.dias_atraso_maximo)
   })
 
-  it('en un caso mixto conserva el subtotal observado con su desglose', () => {
+  it('en un caso mixto OVERDUE y UNKNOWN cuentan igual: ni la clave ni el perfil deciden la mora', () => {
     const raw = buildPresenceRawData()
     raw.debts = [debt(801, 2, 125), debt(802, 8, 75)]
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: 125, overdue_debt_count: 1,
       oldest_debt_days: 2000, average_debt_age_days: 2000, debt_state_not_observed_count: 1 }]
     const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
-    expect(debtor.metrics?.overdueDebt).toEqual({ value: 125, presence: 'OBSERVADO', missing: { [NO_INFORMADO]: 1 } })
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 200, presence: 'OBSERVADO', missing: {} })
   })
 
   it.each([
     ['nulo, como lo persiste la carga', null],
     ['cero, como en un perfil anterior', 0],
-  ])('con un estado faltante y sin vencidas observadas no hay cero legítimo: %s', (_label, overdueAmount) => {
+  ])('una no pagada sin vencimiento y sin vencidas no da un cero legítimo: el cero lleva su faltante (%s)', (_label, overdueAmount) => {
     const raw = buildPresenceRawData()
     raw.debtStatuses.push({ id: 1, key: 'ACTIVE', value: 'Vigente' })
-    raw.debts = [debt(801, 1, 125, '2999-01-01'), debt(802, 8, 75)]
+    raw.debts = [debt(801, 1, 125, '2999-01-01'), debt(802, 8, 75, null)]
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 200, overdue_debt_amount: overdueAmount, overdue_debt_count: overdueAmount,
       oldest_debt_days: null, average_debt_age_days: null, debt_state_not_observed_count: 1 }]
     const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
-    expect(debtor.metrics?.overdueDebt).toEqual({ value: null, presence: NO_INFORMADO, missing: { [NO_INFORMADO]: 1 } })
+    expect(debtor.metrics?.overdueDebt).toEqual({ value: 0, presence: 'OBSERVADO', missing: { [NO_INFORMADO]: 1 } })
+    expect(debtor.metrics?.maxDaysOverdue).toEqual({ value: null, presence: NO_INFORMADO, missing: { [NO_INFORMADO]: 1 } })
+    expect(debtor.decision?.severidad.estado).toBe('PARCIAL')
   })
 
   it('con todos los estados observados y sin vencidas, el cero del perfil es un cero derivado completo', () => {
@@ -75,7 +78,8 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     raw.debts[0].current_amount = 125
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 0, overdue_debt_amount: 0 }]
     result = mapDebtorObjectsFromRawData(raw)
-    expect(result.debtors[0]).toMatchObject({ totalDebt: 0, overdueDebt: 0 })
+    // 1.1.0: el total registrado es la suma de las obligaciones; el cero persistido del perfil no la reemplaza.
+    expect(result.debtors[0]).toMatchObject({ totalDebt: 125, pendingDebt: 125, overdueDebt: 125 })
   })
 
   it('resuelve la FK status por catálogo y no infiere un estado por la fecha', () => {
@@ -93,8 +97,8 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
   it.each([
     ['OVERDUE', 'Pendiente', 125, 'OBSERVADO'],
     ['PAID', 'Vencida', 0, 'OBSERVADO'],
-    ['UNKNOWN', 'Desconocido', null, 'NO_INFORMADO_EN_ORIGEN'],
-  ])('decide la mora por key=%s aunque la etiqueta sea %s', (key, value, overdueDebt, statusPresence) => {
+    ['UNKNOWN', 'Desconocido', 125, 'NO_INFORMADO_EN_ORIGEN'],
+  ])('solo key=PAID excluye; con key=%s la etiqueta %s no decide la mora', (key, value, overdueDebt, statusPresence) => {
     const raw = buildPresenceRawData()
     raw.debts[0].current_amount = 125
     raw.debtStatuses = [{ id: 2, key, value }]
@@ -104,12 +108,14 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
   })
 
   it.each(['Desconocido', 'UNKNOWN'])('conserva mora parcial y faltantes con estado %s sin perfil', label => {
-    const raw = buildIncompleteStatusRawData()
+    const raw = { ...buildIncompleteStatusRawData(), batch: { as_of: '2026-09-30' } }
     raw.debtStatuses[2].value = label
     const mapped = mapDebtorObjectsFromRawData(raw)
     const incomplete = mapped.debtors.find(debtor => debtor.id === '902')!
     expect(incomplete.metrics?.overdueDebt).toEqual({ value: 50, presence: 'OBSERVADO', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
-    expect(incomplete.metrics?.maxDaysOverdue).toEqual({ value: null, presence: 'NO_INFORMADO_EN_ORIGEN', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
+    // 1.1.0: la obligación sin vencimiento no impide conocer el atraso de la que sí vence (el de las reglas).
+    expect(incomplete.metrics?.maxDaysOverdue).toEqual({ value: 2464, presence: 'OBSERVADO', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
+    expect(incomplete.maxDaysOverdue).toBe(incomplete.decision?.severidad.dias_atraso_maximo)
     const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
     expect(dashboard.metrics?.overdueCases).toEqual({ value: 1, presence: 'OBSERVADO', missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
     expect(buildDebtAgingSummary(mapped.debtors).metrics.overdueDebt).toEqual(incomplete.metrics?.overdueDebt)
@@ -135,7 +141,8 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     raw.debtorProfiles = raw.debtors.map(debtor => ({ debtor: debtor.id, socioeconomic_risk_level: 80 }))
     const mapped = mapDebtorObjectsFromRawData(raw)
     const incomplete = mapped.debtors.find(debtor => debtor.id === '902')!
-    expect(incomplete).toMatchObject({ maxDaysOverdue: null, priorityScore: 45, recommendationType: 'Revisión jurídica' })
+    expect(incomplete).toMatchObject({ priorityScore: 45, recommendationType: 'Revisión jurídica' })
+    expect(incomplete.maxDaysOverdue).toBe(incomplete.decision?.severidad.dias_atraso_maximo)
     expect(incomplete.metrics?.overdueDebt.missing).toEqual({ NO_INFORMADO_EN_ORIGEN: 2 })
     const dashboard = mapDashboardMetricsFromDebtorObjects(mapped)
     expect(dashboard.metrics?.overdueCases).toMatchObject({ value: 1, missing: { NO_INFORMADO_EN_ORIGEN: 1 } })
@@ -200,9 +207,10 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.totalDebt).toMatchObject({ value: null, presence: 'NO_INTEGRADO' })
     delete raw.debts[0].updated_amount
     expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBeNull()
+    // 1.1.0: el total del perfil ya no se lee; un perfil ilegible no anula la suma de obligaciones.
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 'ilegible' }]
     raw.debts[0].current_amount = 100
-    expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBeNull()
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].totalDebt).toBe(100)
   })
 
   it('no usa un ID sin etiqueta ni un código desconocido como estado visible', () => {
@@ -210,7 +218,10 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     raw.debtStatuses = [{ id: 2 }, { id: 3, value: 3 }, { value: 'sin id' }]
     expect(mapDebtorObjectsFromRawData(raw).debtsByDebtor.get('901')?.[0]).toMatchObject({ status: 'UNKNOWN', statusPresence: 'INVALIDO' })
     raw.debtStatuses = [{ id: 2, value: 'UNKNOWN' }]
-    expect(mapDebtorObjectsFromRawData(raw).debtors[0].overdueDebt).toBeNull()
+    // Sin clave no es pagada: la mora sale del importe (0, observado) y del vencimiento.
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.decisionInput?.obligaciones[0].estado_catalogo).toEqual({ estado: 'NO_INFORMADO_EN_ORIGEN', valor: null })
+    expect(debtor.overdueDebt).toBe(0)
   })
 
   it('excluye relaciones inactivas y deduplica relaciones y contactos repetidos', () => {
@@ -232,8 +243,18 @@ describe('ALIGN-011: presencia con filas de forma real', () => {
     const key = table === 'debtor' ? 'totalDebtors' : table === 'debt_status' ? 'overdueCases'
       : table === 'debtor_contact' || table === 'debtor_person' ? 'withContactCases' : 'totalDebt'
     if (table === 'debt_status') {
-      expect(result.overdueCases).toBe(0)
+      // 1.1.0: sin catálogo no se sabe qué está pagado; el total registrado sí se conoce.
       expect(result.byDebtStatus).toEqual([])
+      expect(result.totalDebt).toBe(0)
+      for (const metric of ['overdueCases', 'pendingDebt', 'overdueDebt'] as const) {
+        expect(result[metric]).toBeNull()
+        expect(result.metrics?.[metric].presence).toBe('NO_INTEGRADO')
+      }
+      return
+    }
+    if (table === 'debtor_profile') {
+      // 1.1.0: los totales salen de las obligaciones, no del perfil: su lectura fallida no los anula.
+      expect(result.totalDebt).toBe(0)
       return
     }
     expect(result[key]).toBeNull()

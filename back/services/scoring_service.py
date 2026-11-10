@@ -131,7 +131,7 @@ def build_all_case_groups(client: Any, *, tenant: int, as_of: str) -> list[dict[
     debtor_ids = list(debtors)
     profiles = fetch_debtor_profiles(client, debtor_ids)
     obligations = _read_for_ids(
-        client, "debt", "id,debtor,current_amount,due_date", "debtor", debtor_ids
+        client, "debt", "id,debtor,current_amount,due_date,status", "debtor", debtor_ids
     )
     relations = _read_for_ids(
         client,
@@ -168,6 +168,17 @@ def build_all_case_groups(client: Any, *, tenant: int, as_of: str) -> list[dict[
         if person_ids
         else {}
     )
+    # Reglas 1.1.0: la clave PAID excluye la obligación. Sin el catálogo completo no se evalúa.
+    debt_statuses = (
+        {
+            row_id(row["id"]): row
+            for row in read_all_by_id(
+                "debt_status", lambda: client.table("debt_status").select("id,key")
+            )
+        }
+        if obligations
+        else {}
+    )
     profiles_by_object = _by_parent(profiles, "debtor", "debtor_profile")
     queues: dict[str, list[dict[str, Any]]] = {key: [] for key in GROUP_DEFINITIONS}
     for identifier, debtor in debtors.items():
@@ -188,6 +199,7 @@ def build_all_case_groups(client: Any, *, tenant: int, as_of: str) -> list[dict[
             object_contacts,
             person_types,
             as_of=as_of,
+            debt_statuses=debt_statuses,
         )
         object_profiles = profiles_by_object[identifier]
         # Si hay más de un perfil, solo se referencia el último id: no altera reglas.

@@ -58,7 +58,13 @@ export type DashboardData = PresenceMetrics & {
   context?: string
   queuePreviews?: Array<{ code: string | null; label: RecommendationKind; count: number | null; cases: DebtorListItem[] }>
   totalDebtors: number | null
+  // Definiciones únicas (lib/domain/portfolio-totals.ts); su presencia está en metrics.
+  /** Total registrado: todas las obligaciones, cualquiera sea su estado. */
   totalDebt: number | null
+  /** Deuda pendiente: suma directa de las obligaciones no pagadas. */
+  pendingDebt: number | null
+  /** Deuda vencida: pendientes con importe > 0 y vencimiento anterior al corte. */
+  overdueDebt: number | null
   overdueCases: number | null
   withContactCases: number | null
   withoutContactCases: number | null
@@ -132,7 +138,13 @@ export type DebtorListItem = PresenceMetrics & {
   type: string
   description: string
   status: string
+  // Definiciones únicas (lib/domain/portfolio-totals.ts), con presencia en metrics.totalDebt,
+  // metrics.pendingDebt y metrics.overdueDebt.
+  /** Total registrado: todas las obligaciones, cualquiera sea su estado. */
   totalDebt: number | null
+  /** Deuda pendiente: suma directa de las obligaciones no pagadas. */
+  pendingDebt: number | null
+  /** Deuda vencida: pendientes con importe > 0 y vencimiento anterior al corte. */
   overdueDebt: number | null
   peopleCount: number | null
   peopleIds: string[]
@@ -185,6 +197,7 @@ export type DebtorDebtItem = PresenceMetrics & {
 
 export type DebtorProfileSummary = PresenceMetrics & {
   totalDebt: number | null
+  pendingDebt: number | null
   overdueDebt: number | null
   debtCount: number | null
   antiquityDays: number | null

@@ -104,7 +104,7 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(headingsOf(markup)).toContain('Personas / Deudores')
     expect(headingsOf(markupOf(await HomePage()))).toContain('Dashboard ejecutivo')
     // Mismo camino que deployed-smoke.mjs: la tabla se ubica por el encabezado exacto y la fila por la persona.
-    const tables = tablesOf(markup).filter(table => headersOf(table).includes('Deuda total asociada'))
+    const tables = tablesOf(markup).filter(table => headersOf(table).includes('Total registrado asociado'))
     expect(tables).toHaveLength(1)
     const amount = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(1250)
     const row = rowsOf(tables[0]).find(text => text.includes('Persona sintética A'))
@@ -128,7 +128,7 @@ describe('ALIGN-012: etiquetas honestas con datos sintéticos', () => {
     expect(tablesOf(markup).map(headersOf)).toEqual([
       ['Persona', 'Máxima severidad heredada', 'Puntaje (puntos de 0 a 100)', 'Objetos vinculados'],
       ['Nombre', 'Documento', 'Máxima severidad heredada', 'Puntaje (puntos de 0 a 100)', 'Objetos vinculados',
-        'Contacto disponible', 'Deuda total asociada', 'Accion'],
+        'Contacto disponible', 'Total registrado asociado', 'Accion'],
     ])
     expect(text).not.toMatch(/riesgo|\bscore\b|seguimiento individual/i)
   })

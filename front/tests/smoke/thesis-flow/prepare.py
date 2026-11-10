@@ -101,8 +101,9 @@ def main():
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     evidence = {'version': 'thesis-flow-load.v1', 'passed': False, 'sha': sha, 'started_at_utc': utc(),
                 'scope': 'isolated_branch', 'supabase_url': env['API_URL'], 'tenant': 1, 'cutoff': CUTOFF,
-                'rules_version': json.loads((ROOT / 'contracts/decision-rules.v1.json').read_text())['version'],
-                'rules_sha256': digest(ROOT / 'contracts/decision-rules.v1.json'), 'commands': []}
+                # Contrato ACTIVO (reglas 1.1.0): el que usa la carga para rules_version.
+                'rules_version': json.loads((ROOT / 'contracts/decision-rules.v1.1.json').read_text())['version'],
+                'rules_sha256': digest(ROOT / 'contracts/decision-rules.v1.1.json'), 'commands': []}
     try:
         lot = output / 'dataset'
         generate(lot)

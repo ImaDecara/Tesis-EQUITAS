@@ -1,0 +1,272 @@
+{
+  "id": "portfolio-small-cases",
+  "version": "1",
+  "fecha": "2026-11-10",
+  "version_reglas": "1.1.0",
+  "reglas": "contracts/decision-rules.v1.1.json",
+  "documento": "docs/tesis/casos-chicos-v1.md",
+  "datos": "SINTETICOS: identificadores SINT-CHICO-* y la referencia DEMO6-6-60012 de la demo sintética de la noche 6; sin personas, documentos ni contactos reales.",
+  "fecha_cartera": "2026-09-30",
+  "nota": "Resultados calculados a mano. Cada consumidor (reglas TypeScript y Python, analytics.ts, mapeo de objetos y del tablero, reportes de cola y de calidad, scoring_service y el oráculo del perfil) arma su propia entrada desde estas filas y debe obtener los MISMOS números. Los casos repiten las entradas de SINT-P01..P10 del golden 1.1.0.",
+  "definiciones": {
+    "total_registrado": "Importe de todas las obligaciones del objeto, cualquiera sea su estado. Un importe faltante no se cuenta como cero: queda como faltante.",
+    "deuda_pendiente": "Suma directa de los importes de las obligaciones NO pagadas (estado de catálogo distinto de PAID, ausente o no reconocido). No es una resta: una pagada sin importe no la afecta.",
+    "deuda_vencida": "Obligaciones pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera (comparación estricta).",
+    "atraso_maximo_dias": "Mayor diferencia en días entre la fecha de la cartera y el vencimiento de las vencidas. NO_APLICA si no hay vencidas y no falta ningún dato; NO_DISPONIBLE si no hay vencidas conocidas pero falta un importe o un vencimiento.",
+    "faltantes": "Cantidad de obligaciones cuyo dato falta en esa suma (no se cuentan como cero)."
+  },
+  "catalogo_debt_status": [
+    { "id": 1, "key": "ACTIVE", "value": "Vigente" },
+    { "id": 2, "key": "OVERDUE", "value": "Vencida" },
+    { "id": 3, "key": "PAYMENT_PLAN", "value": "Plan de pago" },
+    { "id": 4, "key": "JUDICIAL", "value": "Judicial" },
+    { "id": 5, "key": "CERTIFICATE_ACTIVE", "value": "Certificado activo" },
+    { "id": 6, "key": "PAID", "value": "Pagada" },
+    { "id": 7, "key": "CANCELLED", "value": "Cancelada" },
+    { "id": 8, "key": "UNKNOWN", "value": "Desconocido" },
+    { "id": 9, "key": "SUSPENDED", "value": "Suspendida" }
+  ],
+  "estado_no_reconocido": "estado_id 99 no está en el catálogo; estado_id null es una obligación sin estado. Ninguno se trata como pagado. En la base, la clave foránea debt.status impide el 99: el caso existe para las lecturas que no la tienen.",
+  "casos": [
+    {
+      "id": "CHICO-01",
+      "nombre": "Solo pagadas",
+      "golden": "SINT-P01",
+      "explicacion": "Las dos obligaciones están pagadas: suman al total registrado (42 500) pero no a la deuda pendiente ni a la vencida. La pagada sin vencimiento no vuelve «parcial» el cálculo. Sin deuda vencida el puntaje es 0 y, con contacto, la regla es R7 (seguimiento sin contacto).",
+      "objeto": { "id": 960001, "identificador": "SINT-CHICO-01" },
+      "titulares": [{ "id": 970011, "porcentaje": 100, "contactos": [{ "id": 975011, "valor": "chico01@example.test" }] }],
+      "obligaciones": [
+        { "id": 980011, "importe": 30000, "vencimiento": "2026-03-01", "estado_id": 6 },
+        { "id": 980012, "importe": 12500, "vencimiento": null, "estado_id": 6 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 42500, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 0, "faltantes": 0 },
+        "deuda_vencida": { "valor": 0, "faltantes": 0 },
+        "obligaciones_vencidas": 0,
+        "atraso_maximo_dias": { "valor": null, "estado": "NO_APLICA" },
+        "puntaje": 0, "banda": "BAJA", "estado_severidad": "COMPLETA", "monto_evaluable": 0,
+        "obligaciones_pagadas": 2, "obligaciones_no_evaluables": 0,
+        "intervencion": "SEGUIMIENTO", "grupo": "Seguimiento", "regla": "R7", "intensidad": 0,
+        "perfil": { "total_debt_amount": "42500.00", "overdue_debt_amount": "0.00", "overdue_debt_count": 0, "oldest_debt_days": null, "average_debt_age_days": null, "debt_count": 2, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-02",
+      "nombre": "Pagada + suspendida + vencida (DEMO6-6-60012)",
+      "golden": "SINT-P02",
+      "explicacion": "Total registrado 48 000 + 47 150 + 46 200 = 141 350. La pagada (vencía el 10/10/2025) sale: deuda pendiente 47 150 + 46 200 = 93 350. La suspendida se computa como antes, por importe y vencimiento: vence el 10/01/2026 (263 días) y la vencida el 10/04/2026 (173 días): 2 vencidas por 93 350. Puntaje 20 (93 350 ≥ 50 000) + 20 (263 ≥ 181) + 5 (2 ≥ 1) = 45, banda MEDIA, R5 (recordatorio).",
+      "objeto": { "id": 960002, "identificador": "DEMO6-6-60012" },
+      "titulares": [{ "id": 970021, "porcentaje": 100, "contactos": [{ "id": 975021, "valor": "chico02@example.test" }] }],
+      "obligaciones": [
+        { "id": 980021, "importe": 48000, "vencimiento": "2025-10-10", "estado_id": 6 },
+        { "id": 980022, "importe": 47150, "vencimiento": "2026-01-10", "estado_id": 9 },
+        { "id": 980023, "importe": 46200, "vencimiento": "2026-04-10", "estado_id": 2 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 141350, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 93350, "faltantes": 0 },
+        "deuda_vencida": { "valor": 93350, "faltantes": 0 },
+        "obligaciones_vencidas": 2,
+        "atraso_maximo_dias": { "valor": 263, "estado": "OBSERVADO" },
+        "puntaje": 45, "banda": "MEDIA", "estado_severidad": "COMPLETA", "monto_evaluable": 93350,
+        "obligaciones_pagadas": 1, "obligaciones_no_evaluables": 0,
+        "intervencion": "RECORDATORIO_INFORMATIVO", "grupo": "Recordatorio", "regla": "R5", "intensidad": 1,
+        "perfil": { "total_debt_amount": "141350.00", "overdue_debt_amount": "93350.00", "overdue_debt_count": 2, "oldest_debt_days": 263, "average_debt_age_days": 218, "debt_count": 3, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-03",
+      "nombre": "Vencida con importe cero",
+      "golden": "SINT-P03",
+      "explicacion": "El rótulo del catálogo dice «Vencida» (OVERDUE), pero el importe es 0: no cuenta como vencida ni como deuda. El rótulo de estado se muestra tal cual en el desglose por estado; el conteo de vencidas no lo usa. Puntaje 0, R7.",
+      "objeto": { "id": 960003, "identificador": "SINT-CHICO-03" },
+      "titulares": [{ "id": 970031, "porcentaje": 100, "contactos": [{ "id": 975031, "valor": "chico03@example.test" }] }],
+      "obligaciones": [
+        { "id": 980031, "importe": 0, "vencimiento": "2026-05-01", "estado_id": 2 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 0, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 0, "faltantes": 0 },
+        "deuda_vencida": { "valor": 0, "faltantes": 0 },
+        "obligaciones_vencidas": 0,
+        "atraso_maximo_dias": { "valor": null, "estado": "NO_APLICA" },
+        "puntaje": 0, "banda": "BAJA", "estado_severidad": "COMPLETA", "monto_evaluable": 0,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 0,
+        "intervencion": "SEGUIMIENTO", "grupo": "Seguimiento", "regla": "R7", "intensidad": 0,
+        "perfil": { "total_debt_amount": "0.00", "overdue_debt_amount": "0.00", "overdue_debt_count": 0, "oldest_debt_days": null, "average_debt_age_days": null, "debt_count": 1, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-04",
+      "nombre": "Vence después de la fecha",
+      "golden": "SINT-P04",
+      "explicacion": "80 000 vencen el 15/10/2026 y 20 000 el mismo 30/09/2026: ninguna es anterior a la fecha de la cartera (la comparación es estricta). Deuda pendiente 100 000 y 0 vencidas: sin mora el puntaje es 0 aunque el monto puntuaría 20. R7.",
+      "objeto": { "id": 960004, "identificador": "SINT-CHICO-04" },
+      "titulares": [{ "id": 970041, "porcentaje": 100, "contactos": [{ "id": 975041, "valor": "chico04@example.test" }] }],
+      "obligaciones": [
+        { "id": 980041, "importe": 80000, "vencimiento": "2026-10-15", "estado_id": 1 },
+        { "id": 980042, "importe": 20000, "vencimiento": "2026-09-30", "estado_id": 1 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 100000, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 100000, "faltantes": 0 },
+        "deuda_vencida": { "valor": 0, "faltantes": 0 },
+        "obligaciones_vencidas": 0,
+        "atraso_maximo_dias": { "valor": null, "estado": "NO_APLICA" },
+        "puntaje": 0, "banda": "BAJA", "estado_severidad": "COMPLETA", "monto_evaluable": 100000,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 0,
+        "intervencion": "SEGUIMIENTO", "grupo": "Seguimiento", "regla": "R7", "intensidad": 0,
+        "perfil": { "total_debt_amount": "100000.00", "overdue_debt_amount": "0.00", "overdue_debt_count": 0, "oldest_debt_days": null, "average_debt_age_days": null, "debt_count": 2, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-05",
+      "nombre": "Sin vencimiento",
+      "golden": "SINT-P05",
+      "explicacion": "60 000 vencieron el 01/02/2026 (241 días); 25 000 no tienen vencimiento y no se sabe si están vencidas. Total y deuda pendiente 85 000; deuda vencida al menos 60 000 (1 faltante). Puntaje mínimo 20 + 20 (241 ≥ 181) + 5 = 45, MEDIA, R5 con revisión humana (severidad parcial).",
+      "objeto": { "id": 960005, "identificador": "SINT-CHICO-05" },
+      "titulares": [{ "id": 970051, "porcentaje": 100, "contactos": [{ "id": 975051, "valor": "chico05@example.test" }] }],
+      "obligaciones": [
+        { "id": 980051, "importe": 60000, "vencimiento": "2026-02-01", "estado_id": 2 },
+        { "id": 980052, "importe": 25000, "vencimiento": null, "estado_id": 8 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 85000, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 85000, "faltantes": 0 },
+        "deuda_vencida": { "valor": 60000, "faltantes": 1 },
+        "obligaciones_vencidas": 1,
+        "atraso_maximo_dias": { "valor": 241, "estado": "OBSERVADO" },
+        "puntaje": 45, "banda": "MEDIA", "estado_severidad": "PARCIAL", "monto_evaluable": 60000,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 1,
+        "intervencion": "RECORDATORIO_INFORMATIVO", "grupo": "Recordatorio", "regla": "R5", "intensidad": 1,
+        "perfil": { "total_debt_amount": "85000.00", "overdue_debt_amount": "60000.00", "overdue_debt_count": 1, "oldest_debt_days": 241, "average_debt_age_days": 241, "debt_count": 2, "debt_state_not_observed_count": 1 }
+      }
+    },
+    {
+      "id": "CHICO-06",
+      "nombre": "Sin importe",
+      "golden": "SINT-P06",
+      "explicacion": "Una obligación vencida el 15/03/2026 no tiene importe: no se cuenta como cero ni como vencida. La otra (10 000) vence el 30/11/2026. Total y deuda pendiente 10 000 con 1 faltante; ninguna vencida conocida, atraso no disponible. Puntaje mínimo 0, R7 con revisión humana.",
+      "objeto": { "id": 960006, "identificador": "SINT-CHICO-06" },
+      "titulares": [{ "id": 970061, "porcentaje": 100, "contactos": [{ "id": 975061, "valor": "chico06@example.test" }] }],
+      "obligaciones": [
+        { "id": 980061, "importe": null, "vencimiento": "2026-03-15", "estado_id": 2 },
+        { "id": 980062, "importe": 10000, "vencimiento": "2026-11-30", "estado_id": 1 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 10000, "faltantes": 1 },
+        "deuda_pendiente": { "valor": 10000, "faltantes": 1 },
+        "deuda_vencida": { "valor": 0, "faltantes": 1 },
+        "obligaciones_vencidas": 0,
+        "atraso_maximo_dias": { "valor": null, "estado": "NO_DISPONIBLE" },
+        "puntaje": 0, "banda": "BAJA", "estado_severidad": "PARCIAL", "monto_evaluable": 10000,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 1,
+        "intervencion": "SEGUIMIENTO", "grupo": "Seguimiento", "regla": "R7", "intensidad": 0,
+        "perfil": { "total_debt_amount": "10000.00", "overdue_debt_amount": null, "overdue_debt_count": null, "oldest_debt_days": null, "average_debt_age_days": null, "debt_count": 2, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-07",
+      "nombre": "Objeto con dos titulares",
+      "golden": "SINT-P07",
+      "explicacion": "Dos titulares al 50 % sobre el mismo objeto. Las obligaciones son del objeto y se suman una sola vez: 250 000 vencidos el 01/12/2025 (303 días) + 30 000 que vencen el 31/10/2026 = 280 000. Puntaje 30 (280 000 ≥ 200 000) + 20 (303) + 5 = 55, MEDIA, R5.",
+      "objeto": { "id": 960007, "identificador": "SINT-CHICO-07" },
+      "titulares": [
+        { "id": 970071, "porcentaje": 50, "contactos": [{ "id": 975071, "valor": "chico07a@example.test" }] },
+        { "id": 970072, "porcentaje": 50, "contactos": [{ "id": 975072, "valor": "chico07b@example.test" }] }
+      ],
+      "obligaciones": [
+        { "id": 980071, "importe": 250000, "vencimiento": "2025-12-01", "estado_id": 2 },
+        { "id": 980072, "importe": 30000, "vencimiento": "2026-10-31", "estado_id": 1 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 280000, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 280000, "faltantes": 0 },
+        "deuda_vencida": { "valor": 250000, "faltantes": 0 },
+        "obligaciones_vencidas": 1,
+        "atraso_maximo_dias": { "valor": 303, "estado": "OBSERVADO" },
+        "puntaje": 55, "banda": "MEDIA", "estado_severidad": "COMPLETA", "monto_evaluable": 280000,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 0,
+        "intervencion": "RECORDATORIO_INFORMATIVO", "grupo": "Recordatorio", "regla": "R5", "intensidad": 1,
+        "perfil": { "total_debt_amount": "280000.00", "overdue_debt_amount": "250000.00", "overdue_debt_count": 1, "oldest_debt_days": 303, "average_debt_age_days": 303, "debt_count": 2, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-08",
+      "nombre": "Estado no reconocido o ausente",
+      "golden": "SINT-P08",
+      "explicacion": "40 000 con un estado que no está en el catálogo (vence el 30/06/2026, 92 días) y 15 000 sin estado (31/08/2026, 30 días). No se tratan como pagadas: se computan por importe y vencimiento. 2 vencidas por 55 000; puntaje 20 + 15 (92 ≥ 91) + 5 = 40, justo en el umbral MEDIA, R5.",
+      "objeto": { "id": 960008, "identificador": "SINT-CHICO-08" },
+      "titulares": [{ "id": 970081, "porcentaje": 100, "contactos": [{ "id": 975081, "valor": "chico08@example.test" }] }],
+      "obligaciones": [
+        { "id": 980081, "importe": 40000, "vencimiento": "2026-06-30", "estado_id": 99 },
+        { "id": 980082, "importe": 15000, "vencimiento": "2026-08-31", "estado_id": null }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 55000, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 55000, "faltantes": 0 },
+        "deuda_vencida": { "valor": 55000, "faltantes": 0 },
+        "obligaciones_vencidas": 2,
+        "atraso_maximo_dias": { "valor": 92, "estado": "OBSERVADO" },
+        "puntaje": 40, "banda": "MEDIA", "estado_severidad": "COMPLETA", "monto_evaluable": 55000,
+        "obligaciones_pagadas": 0, "obligaciones_no_evaluables": 0,
+        "intervencion": "RECORDATORIO_INFORMATIVO", "grupo": "Recordatorio", "regla": "R5", "intensidad": 1,
+        "perfil": { "total_debt_amount": "55000.00", "overdue_debt_amount": "55000.00", "overdue_debt_count": 2, "oldest_debt_days": 92, "average_debt_age_days": 61, "debt_count": 2, "debt_state_not_observed_count": 2 }
+      }
+    },
+    {
+      "id": "CHICO-09",
+      "nombre": "Pagada sin importe ni vencimiento",
+      "golden": "SINT-P09",
+      "explicacion": "La pagada no tiene importe ni vencimiento: el total registrado queda 70 000 con 1 faltante, pero la deuda pendiente (70 000) está completa porque se suma solo lo no pagado. La vencida del 30/09/2025 tiene 365 días: 20 + 20 (365 < 366) + 5 = 45, MEDIA, R5.",
+      "objeto": { "id": 960009, "identificador": "SINT-CHICO-09" },
+      "titulares": [{ "id": 970091, "porcentaje": 100, "contactos": [{ "id": 975091, "valor": "chico09@example.test" }] }],
+      "obligaciones": [
+        { "id": 980091, "importe": null, "vencimiento": null, "estado_id": 6 },
+        { "id": 980092, "importe": 70000, "vencimiento": "2025-09-30", "estado_id": 2 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 70000, "faltantes": 1 },
+        "deuda_pendiente": { "valor": 70000, "faltantes": 0 },
+        "deuda_vencida": { "valor": 70000, "faltantes": 0 },
+        "obligaciones_vencidas": 1,
+        "atraso_maximo_dias": { "valor": 365, "estado": "OBSERVADO" },
+        "puntaje": 45, "banda": "MEDIA", "estado_severidad": "COMPLETA", "monto_evaluable": 70000,
+        "obligaciones_pagadas": 1, "obligaciones_no_evaluables": 0,
+        "intervencion": "RECORDATORIO_INFORMATIVO", "grupo": "Recordatorio", "regla": "R5", "intensidad": 1,
+        "perfil": { "total_debt_amount": "70000.00", "overdue_debt_amount": "70000.00", "overdue_debt_count": 1, "oldest_debt_days": 365, "average_debt_age_days": 365, "debt_count": 2, "debt_state_not_observed_count": 0 }
+      }
+    },
+    {
+      "id": "CHICO-10",
+      "nombre": "Solo pagadas, sin contacto",
+      "golden": "SINT-P10",
+      "explicacion": "Una sola obligación pagada (5 000) y ningún contacto activo. Deuda pendiente 0 y puntaje 0; la falta de contacto lleva a R1 (mejorar datos).",
+      "objeto": { "id": 960010, "identificador": "SINT-CHICO-10" },
+      "titulares": [{ "id": 970101, "porcentaje": 100, "contactos": [] }],
+      "obligaciones": [
+        { "id": 980101, "importe": 5000, "vencimiento": "2026-01-31", "estado_id": 6 }
+      ],
+      "esperado": {
+        "total_registrado": { "valor": 5000, "faltantes": 0 },
+        "deuda_pendiente": { "valor": 0, "faltantes": 0 },
+        "deuda_vencida": { "valor": 0, "faltantes": 0 },
+        "obligaciones_vencidas": 0,
+        "atraso_maximo_dias": { "valor": null, "estado": "NO_APLICA" },
+        "puntaje": 0, "banda": "BAJA", "estado_severidad": "COMPLETA", "monto_evaluable": 0,
+        "obligaciones_pagadas": 1, "obligaciones_no_evaluables": 0,
+        "intervencion": "MEJORAR_DATOS", "grupo": "Mejorar datos", "regla": "R1", "intensidad": 0,
+        "perfil": { "total_debt_amount": "5000.00", "overdue_debt_amount": "0.00", "overdue_debt_count": 0, "oldest_debt_days": null, "average_debt_age_days": null, "debt_count": 1, "debt_state_not_observed_count": 0 }
+      }
+    }
+  ],
+  "tablero": {
+    "explicacion": "Suma de los diez objetos: cada total suma una vez cada objeto y arrastra sus faltantes.",
+    "total_registrado": { "valor": 788850, "faltantes": 2 },
+    "deuda_pendiente": { "valor": 693350, "faltantes": 1 },
+    "deuda_vencida": { "valor": 528350, "faltantes": 2 },
+    "objetos_con_vencidas": { "valor": 5, "faltantes": 2 },
+    "grupos": { "RECORDATORIO_INFORMATIVO": 5, "SEGUIMIENTO": 4, "MEJORAR_DATOS": 1 }
+  }
+}

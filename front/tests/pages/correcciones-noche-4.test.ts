@@ -216,7 +216,7 @@ describe('(c) una unidad nunca acompaña a un valor faltante', () => {
     const page = await detailPage(e06Raw())
     expect(tabText(page, 'summary')).toMatch(/Dias de atraso:\s+121 dias/)
     expect(tabText(page, 'recommendation')).toContain('atraso: 121 dias')
-    expect(tabText(page, 'recommendation')).toMatch(/deuda total: \$\s*1\.250/)
+    expect(tabText(page, 'recommendation')).toMatch(/deuda pendiente: \$\s*1\.250/)
     expect(tabText(page, 'risk')).toMatch(/Antiguedad\s+\d+ dias/)
     expect(textOf(page)).toContain('1 persona(s) asociada(s)')
   })
@@ -228,7 +228,7 @@ describe('(c) una unidad nunca acompaña a un valor faltante', () => {
     raw.debtorPeople = []
     const page = await detailPage(raw)
     const reading = tabText(page, 'recommendation')
-    expect(reading).toContain('deuda total: No disponible')
+    expect(reading).toContain('deuda pendiente: No disponible')
     expect(reading).toContain('atraso: No disponible')
     expect(reading).toContain('contacto: no disponible')
     expect(textOf(page)).not.toContain('persona(s) asociada(s)')
@@ -355,14 +355,15 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(text).toContain('Acciones recomendadas')
     expect(text).toContain('Resumen por recomendacion')
     expect(text).toMatch(/Suma de las colas\s+\$\s*1\.500/)
-    expect(text).toMatch(/Deuda total del tablero\s+\$\s*2\.650\s+Faltantes: Deuda total: 1 NO_INFORMADO_EN_ORIGEN/)
+    expect(text).toMatch(/Total registrado del tablero\s+\$\s*2\.650\s+Faltantes: Total registrado: 1 NO_INFORMADO_EN_ORIGEN/)
     expect(text).toMatch(/Diferencia con el tablero\s+\$\s*1\.150/)
     expect(text).toMatch(/Importe sin vencimiento evaluable\s+\$\s*1\.200/)
     expect(text).toContain('4 objetos · 4 obligaciones')
     expect(text).toMatch(/Resto de la diferencia\s+-\s*\$\s*50/)
     expect(text).toContain('1 de esas obligaciones no tiene importe observado')
-    expect(text).toContain('el tablero suma el total de cada objeto')
-    expect(text).toContain('Cada cola suma el importe actual de las obligaciones evaluables')
+    expect(text).toContain('el tablero suma el total registrado de cada objeto')
+    expect(text).toContain('Cada cola suma el importe actual de las obligaciones no pagadas y evaluables')
+    expect(text).toMatch(/Importe de obligaciones pagadas\s+\$\s*0\s+0 obligaciones/)
     // Las tarjetas y la tabla vecinas siguen con el mismo cálculo de KPI-V1-05 y KPI-V1-06.
     expect(text).toMatch(/Seguimiento\s+2\s+ARS evaluables:\s+\$\s*1\.500\.\s+No disponible/)
     expect(text).toMatch(/Seguimiento\s+2\s+\$\s*1\.500\s+17\.5 \/ 100\s+OBJ-A\s+OBJ-B/)
@@ -406,15 +407,32 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(reconciliation.outsideObligations).toBe(byRule)
   })
 
-  it('un total persistido del perfil queda en el resto, no en el importe sin vencimiento', () => {
+  it('un total persistido del perfil ya no cambia el tablero: el total registrado suma obligaciones', () => {
+    // Reglas 1.1.0: una sola definición (portfolio-totals); antes el perfil (800) desplazaba 250 al resto.
     const raw = handmadeRaw()
     raw.debtorProfiles = [{ id: 1, debtor: 2, total_debt_amount: 800 }]
     const mapped = configureLists(raw)
     const reconciliation = buildQueueReconciliation(mapped.debtors, [])
     expect(reconciliation.queueTotal.value).toBe(1500)
-    expect(reconciliation.dashboardTotal.value).toBe(2950)
+    expect(reconciliation.dashboardTotal.value).toBe(2650)
     expect(reconciliation.outsideAmount.value).toBe(1200)
-    expect(reconciliation.otherDifference.value).toBe(250)
+    expect(reconciliation.otherDifference.value).toBe(-50)
+  })
+
+  it('reglas 1.1.0: las pagadas están en el tablero y no en las colas, y se explican aparte', () => {
+    const raw = handmadeRaw()
+    const [first] = raw.debts
+    raw.debtStatuses = [...raw.debtStatuses, { id: 6, key: 'PAID', value: 'Pagada' }]
+    raw.debts.push({ ...first, id: 9001, current_amount: 300, status: 6 }, { ...first, id: 9002, current_amount: 40, due_date: null, status: 6 })
+    const mapped = configureLists(raw)
+    const reconciliation = buildQueueReconciliation(mapped.debtors, [])
+    expect(reconciliation.queueTotal.value).toBe(1500)
+    expect(reconciliation.dashboardTotal.value).toBe(2990)
+    expect(reconciliation.paidAmount.value).toBe(340)
+    expect(reconciliation.paidObligations).toBe(2)
+    // La pagada sin vencimiento no está «sin vencimiento evaluable»: está pagada.
+    expect(reconciliation.outsideAmount.value).toBe(1200)
+    expect(reconciliation.otherDifference.value).toBe(-50)
   })
 
   it('un cero es derivado cuando todo se leyó: sin faltantes, la diferencia es 0', async () => {
@@ -502,19 +520,20 @@ describe('(d) /recommended-actions: lectura honesta del monto de cola', () => {
     expect(unitOnMissing(text)).toBeNull()
   })
 
-  it('con falla solo de perfiles: colas conocidas, tablero y diferencia no disponibles', async () => {
+  it('con falla solo de perfiles: el total registrado no depende del perfil y la conciliación sigue completa', async () => {
+    // Reglas 1.1.0: el tablero suma obligaciones; antes una falla del perfil dejaba el total no disponible.
     const raw = handmadeRaw()
     raw.warnings = [warning('debtor_profile')]
     const mapped = configureLists(raw)
     const reconciliation = buildQueueReconciliation(mapped.debtors, raw.warnings)
     expect(reconciliation.queueTotal.value).toBe(1500)
     expect(reconciliation.outsideAmount.value).toBe(1200)
-    expect(reconciliation.dashboardTotal.value).toBeNull()
-    expect(reconciliation.otherDifference.value).toBeNull()
+    expect(reconciliation.dashboardTotal.value).toBe(2650)
+    expect(reconciliation.otherDifference.value).toBe(-50)
     const text = textOf(await RecommendedActionsPage()).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')
     expect(text).toMatch(/Suma de las colas\s+\$\s*1\.500/)
-    expect(text).toMatch(/Deuda total del tablero\s+No disponible/)
-    expect(text).toMatch(/Diferencia con el tablero\s+No disponible/)
+    expect(text).toMatch(/Total registrado del tablero\s+\$\s*2\.650/)
+    expect(text).toMatch(/Diferencia con el tablero\s+\$\s*1\.150/)
   })
 
   it('sin objetos leídos correctamente, los ceros son derivados', () => {

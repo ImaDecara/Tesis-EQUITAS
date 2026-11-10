@@ -58,15 +58,29 @@ describe('ALIGN-014: catálogo analítico, contraejemplos heredados', () => {
     const raw = fixture()
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: 9000000, overdue_debt_amount: 8000000 }]
     raw.debts[0].status = 999
-    raw.warnings = [{ table: 'debt_status', message: 'Fallo sintético', needsSelectPolicy: false }]
     const summary = buildDebtAgingSummary(mapDebtorObjectsFromRawData(raw).debtors, raw.warnings)
+    expect(summary.totalDebt).toBe(1000000)
     expect(summary.overdueDebt).toBe(1000000)
     expect(summary.averageOverdueDays).toBe(272)
   })
 
-  it('un importe de perfil fuera del rango seguro no se publica redondeado', () => {
+  it('reglas 1.1.0: sin catálogo de estados no se sabe qué está pagado y la mora no se publica', () => {
+    const raw = fixture()
+    raw.warnings = [{ table: 'debt_status', message: 'Fallo sintético', needsSelectPolicy: false }]
+    const [debtor] = mapDebtorObjectsFromRawData(raw).debtors
+    expect(debtor.decision).toBeNull()
+    expect(debtor.decisionIssues).toContainEqual({ field: 'estado_catalogo', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    expect(debtor).toMatchObject({ totalDebt: 1000000, pendingDebt: null, overdueDebt: null, maxDaysOverdue: null })
+    const summary = buildDebtAgingSummary([debtor], raw.warnings)
+    expect(summary.overdueDebt).toBeNull()
+    expect(summary.averageOverdueDays).toBeNull()
+  })
+
+  it('el total del perfil no sustituye la suma de obligaciones; un importe fuera del rango seguro no se redondea', () => {
     const raw = fixture()
     raw.debtorProfiles = [{ debtor: 901, total_debt_amount: '100000000000000.01' }]
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.totalDebt).toEqual({ value: 1000000, presence: 'OBSERVADO', missing: {} })
+    raw.debts[0].current_amount = '100000000000000.01'
     const debtor = mapDebtorObjectsFromRawData(raw).debtors[0]
     expect(debtor.totalDebt).toBeNull()
     expect(debtor.metrics?.totalDebt.presence).toBe('INVALIDO')

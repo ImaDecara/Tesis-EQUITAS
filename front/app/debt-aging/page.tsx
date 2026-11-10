@@ -76,9 +76,9 @@ export default async function DebtAgingPage({
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <MetricCard
-            label="Deuda total"
+            label="Total registrado"
             value={formatCurrency(readingFailed(warnings, 'debtor', 'debt', 'debtor_profile') ? null : summary.totalDebt)}
-            hint={`ARS de saldo histórico. ${summary.coverage.totalDebt}`}
+            hint={`ARS; todas las obligaciones, cualquiera sea su estado. ${summary.coverage.totalDebt}`}
             icon={CircleDollarSign}
             tone="primary"
           />
@@ -119,7 +119,7 @@ export default async function DebtAgingPage({
                 <TableRow>
                   <TableHead>Objeto</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Deuda total</TableHead>
+                  <TableHead className="text-right">Total registrado</TableHead>
                   <TableHead className="text-right">Deuda vencida</TableHead>
                   <TableHead className="text-right">Atraso</TableHead>
                 </TableRow>
@@ -159,7 +159,7 @@ export default async function DebtAgingPage({
                 <TableRow>
                   <TableHead>Objeto</TableHead>
                   <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Deuda total</TableHead>
+                  <TableHead className="text-right">Total registrado</TableHead>
                   <TableHead className="text-right">Deuda vencida</TableHead>
                   <TableHead className="text-right">Dias de atraso</TableHead>
                   <TableHead>Estado de catálogo</TableHead>

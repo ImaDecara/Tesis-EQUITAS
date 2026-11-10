@@ -126,6 +126,33 @@ def _overdue_from_file(rows: dict[str, dict], cut_off: date,
     return amount, [(cut_off - _due(row['NOTD_vencimiento'])).days for row in overdue], not_observed
 
 
+def _calendar(text: str) -> date | None:
+    text = (text or '').strip()
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2}', text):
+        return date.fromisoformat(text)
+    return _due(text) if re.fullmatch(r'\d{2}/\d{2}/\d{4}', text) else None
+
+
+def _profile_overdue_from_file(rows: dict[str, dict], cut_off: date,
+                               catalogs: dict[str, dict[str, str]]) -> tuple[Decimal | None, int | None, list[int]]:
+    """Mora del perfil con las reglas 1.1.0, sin ETL: no pagadas (estado distinto de PAGADA, o sin estado) con
+    importe > 0 y vencimiento anterior al corte. Una no pagada sin importe o vencimiento evaluable, sin ninguna
+    vencida, deja importe y conteo nulos (no es un cero legítimo)."""
+    unpaid = [row for row in rows.values() if _file_state(row, catalogs) != 'PAGADA']
+
+    def evaluable(row: dict) -> bool:
+        due = _calendar(row.get('NOTD_vencimiento'))
+        text = (row.get('NOTD_totalActualizado') or '').strip()
+        return bool(text) and _amount(text) >= 0 and due is not None and due >= date(1970, 1, 1)
+
+    overdue = [row for row in unpaid if evaluable(row) and _amount(row['NOTD_totalActualizado']) > 0
+               and _calendar(row['NOTD_vencimiento']) < cut_off]
+    ages = [(cut_off - _calendar(row['NOTD_vencimiento'])).days for row in overdue]
+    if not overdue and any(not evaluable(row) for row in unpaid):
+        return None, None, ages
+    return sum((_amount(row['NOTD_totalActualizado']) for row in overdue), Decimal(0)), len(overdue), ages
+
+
 def oracle_with_file_states(item: dict, lot: Path, catalogs: dict[str, dict[str, str]] | None = None,
                             cut_off: str = AS_OF) -> dict:
     """Copia de un objeto del oráculo con estados y atraso recalculados del archivo alterado por la prueba."""
@@ -140,7 +167,9 @@ def oracle_with_file_states(item: dict, lot: Path, catalogs: dict[str, dict[str,
         states[state or 'UNKNOWN'] += 1
     _, ages, not_observed = _overdue_from_file(rows, corte, catalogs)
     presence = 'OBSERVADO' if ages else NO_OBSERVADO if not_observed else 'NO_APLICA'
-    return {**item, 'estados_al_corte': states, 'dias_vencida_mas_antigua': {
+    dues = [due.isoformat() for due in map(_calendar, (row['NOTD_vencimiento'] for row in rows.values())) if due]
+    oldest = {**item['vencimiento_mas_antiguo'], 'valor': min(dues, default=None)}
+    return {**item, 'estados_al_corte': states, 'vencimiento_mas_antiguo': oldest, 'dias_vencida_mas_antigua': {
         'valor': max(ages, default=None), 'presencia': presence, 'completo': not not_observed,
         'filas_no_observadas': {NO_OBSERVADO: not_observed} if not_observed else {},
     }}
@@ -231,17 +260,19 @@ def persisted_mismatches(tables: dict[str, list[dict]], expected: list[dict], ca
         if profile is None:
             problems.append(f'{case}|perfil|esperado=1|obtenido=0')
             continue
-        amount, ages, not_observed = _overdue_from_file(file_details.get(item['clave_agrupacion'], {}), corte, state_catalogs)
+        details = file_details.get(item['clave_agrupacion'], {})
+        _, _, not_observed = _overdue_from_file(details, corte, state_catalogs)
+        # Reglas 1.1.0 (perfil 20261110120000): mora por calendario sobre las no pagadas; el estado OVERDUE ya no la
+        # decide. El total registrado y los estados persistidos siguen saliendo de expected.json.
+        amount, count, ages = _profile_overdue_from_file(details, corte, state_catalogs)
         average = None if not ages else int((Decimal(sum(ages)) / len(ages)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
         delay = item['dias_vencida_mas_antigua']
-        # §4.1: un estado faltante impide el cero derivado; con vencidas observadas queda el subtotal y el desglose aparte.
-        no_state = not_observed > 0 and not ages
         check(case, 'total_debt_amount', Decimal(item['importe_actualizado']['valor']), _optional_decimal(profile['total_debt_amount']))
-        check(case, 'overdue_debt_amount', None if no_state else amount, _optional_decimal(profile['overdue_debt_amount']))
+        check(case, 'overdue_debt_amount', amount, _optional_decimal(profile['overdue_debt_amount']))
         for field, wanted in (
             ('debt_count', item['obligaciones']),
-            ('overdue_debt_count', None if no_state else item['estados_al_corte']['VENCIDA']),
-            ('oldest_debt_days', delay['valor']),
+            ('overdue_debt_count', count),
+            ('oldest_debt_days', max(ages, default=None)),
             ('average_debt_age_days', average),
             ('active_person_count', len(item['personas'])),
             ('available_contact_count', item['contactos_utilizables']),
@@ -253,6 +284,6 @@ def persisted_mismatches(tables: dict[str, list[dict]], expected: list[dict], ca
             check(case, field, wanted, profile[field])
         unobserved = profile['debt_state_not_observed_count']
         presence = 'OBSERVADO' if profile['oldest_debt_days'] is not None else NO_OBSERVADO if unobserved else 'NO_APLICA'
-        check(case, 'presencia_del_atraso', delay['presencia'], presence)
+        check(case, 'presencia_del_atraso', 'OBSERVADO' if ages else NO_OBSERVADO if not_observed else 'NO_APLICA', presence)
         check(case, 'atraso_completo', delay['completo'], unobserved == 0)
     return problems

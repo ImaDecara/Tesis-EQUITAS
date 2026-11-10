@@ -1,6 +1,5 @@
 import { compareObjectIds, coverageText, withMaturityMetrics, sumMoney } from '@/lib/analytics'
-import decisionRules from '../../contracts/decision-rules.v1.json'
-import { comparePriority, type InterventionCode, type RuleDatum } from '@/lib/domain/decision-rules-v1'
+import { ACTIVE_RULES, comparePriority, isPaidObligation, type InterventionCode, type RuleDatum } from '@/lib/domain/decision-rules-v1'
 import { INTERVENTION_CODES, INTERVENTION_LABELS } from '@/lib/services/debtor-recommendation-generator'
 import { aggregateData, compareNullable, metric, observed, readingFailed, unavailable } from '@/lib/data-presence'
 import type {
@@ -79,13 +78,16 @@ export function getHighIndividualRiskPeople(people: PersonListItem[]) {
 }
 
 export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
-  const failed = readingFailed(warnings, 'debtor', 'debt', 'debtor_profile')
-  const statusFailed = readingFailed(warnings, 'debtor', 'debt', 'debtor_person')
+  // Las tres definiciones salen de las obligaciones (portfolio-totals); sin catálogo de estados no se sabe qué
+  // está pagado, así que la deuda pendiente y la vencida quedan no disponibles.
+  const failed = readingFailed(warnings, 'debtor', 'debt')
+  const statusFailed = readingFailed(warnings, 'debtor', 'debt', 'debt_status')
   const cases = debtors.map(withMaturityMetrics)
   const averages = cases.flatMap(debtor => debtor.overdueDebt === null ? [metric(debtor, 'overdueDebt')]
     : debtor.overdueDebt > 0 || Object.keys(metric(debtor, 'maxDaysOverdue').missing).length ? [metric(debtor, 'maxDaysOverdue')] : [])
   const metrics = {
     totalDebt: sumMoney(debtors.map(debtor => metric(debtor, 'totalDebt')), failed),
+    pendingDebt: sumMoney(debtors.map(debtor => metric(debtor, 'pendingDebt')), statusFailed),
     overdueDebt: sumMoney(cases.map(debtor => metric(debtor, 'overdueDebt')), statusFailed),
     averageOverdueDays: aggregateData(averages, 'mean', statusFailed),
   }
@@ -136,7 +138,7 @@ export function buildDebtAgingSummary(debtors: DebtorListItem[], warnings: DataW
 
 // La pertenencia a una cola requiere estas lecturas, no perfiles ni catálogos históricos.
 export function recommendationQueuesUnknown(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
-  return readingFailed(warnings, 'debtor', 'debt', 'debtor_contact', 'debtor_person') ||
+  return readingFailed(warnings, 'debtor', 'debt', 'debt_status', 'debtor_contact', 'debtor_person') ||
     (debtors.length > 0 && debtors.every(item => !item.decision))
 }
 
@@ -185,7 +187,7 @@ export function selectQueueGroup<T extends QueueGroup>(groups: readonly T[], req
 
 // Misma definición de obligación evaluable que evaluateSeverity, solo para el vencimiento.
 function dueDateNotEvaluable(due: RuleDatum<string>) {
-  return due.estado !== 'OBSERVADO' || due.valor < decisionRules.evaluabilidad.fecha_minima_plausible
+  return due.estado !== 'OBSERVADO' || due.valor < ACTIVE_RULES.evaluabilidad.fecha_minima_plausible
 }
 
 function differenceData(left: NumericData, right: NumericData) {
@@ -194,6 +196,7 @@ function differenceData(left: NumericData, right: NumericData) {
 }
 
 // KPI-V1-07 a 09. No recalcula colas ni tablero: explica por qué sus sumas no coinciden.
+// Reglas 1.1.0: las pagadas están en el total registrado del tablero y nunca en las colas.
 export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: DataWarning[] = []) {
   const queuesUnknown = recommendationQueuesUnknown(debtors, warnings)
   // Una cola vacía no observa ningún importe: su 0 no reemplaza al monto que falta en otra.
@@ -201,8 +204,12 @@ export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: Da
     .filter(group => group.interventionCode !== null && group.count !== 0)
     .map(group => group.metrics.totalDebt), queuesUnknown)
   const dashboardTotal = buildDebtAgingSummary(debtors, warnings).metrics.totalDebt
+  const obligations = (debtor: DebtorListItem) => debtor.decisionInput?.obligaciones ?? []
+  const paid = queuesUnknown ? [] : debtors.flatMap(debtor => obligations(debtor).filter(item => isPaidObligation(item)))
+  const paidAmount = sumMoney(paid.map(({ current_amount: amount }) => amount.estado === 'OBSERVADO'
+    ? observed(amount.valor) : unavailable(amount.estado)), queuesUnknown)
   const outsideByObject = queuesUnknown ? [] : debtors
-    .map(debtor => (debtor.decisionInput?.obligaciones ?? []).filter(item => dueDateNotEvaluable(item.due_date)))
+    .map(debtor => obligations(debtor).filter(item => !isPaidObligation(item) && dueDateNotEvaluable(item.due_date)))
     .filter(items => items.length > 0)
   const outside = outsideByObject.flat()
   // Un importe negativo no es evaluable por sí mismo: queda en el resto de la diferencia.
@@ -213,11 +220,13 @@ export function buildQueueReconciliation(debtors: DebtorListItem[], warnings: Da
     queueTotal,
     dashboardTotal,
     difference,
+    paidAmount,
+    paidObligations: queuesUnknown ? null : paid.length,
     outsideAmount,
     outsideObjects: queuesUnknown ? null : outsideByObject.length,
     outsideObligations: queuesUnknown ? null : outside.length,
     outsideWithoutAmount: queuesUnknown ? null : outside.filter(item => item.current_amount.estado !== 'OBSERVADO').length,
-    otherDifference: differenceData(difference, outsideAmount),
+    otherDifference: differenceData(differenceData(difference, paidAmount), outsideAmount),
   }
 }
 

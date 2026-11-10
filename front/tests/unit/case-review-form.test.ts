@@ -34,7 +34,7 @@ import {
   type DecisionFormValues,
 } from '@/lib/domain/case-review-form'
 
-const contract = JSON.parse(readFileSync(new URL('../../../contracts/decision-rules.v1.json', import.meta.url), 'utf8')) as {
+const contract = JSON.parse(readFileSync(new URL('../../../contracts/decision-rules.v1.1.json', import.meta.url), 'utf8')) as {
   intervenciones: Record<string, { intensidad: number | number[] }>
   banderas: { orden: string[] }
 }

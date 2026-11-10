@@ -134,7 +134,7 @@ async function run() {
   assert.equal(git('status', '--porcelain'), '', 'El recorrido oficial exige un commit limpio')
   const config = await readConfig()
   assert(values['load-evidence'], 'Faltan antecedentes reales de validación y carga')
-  const load = await loadEvidence(values['load-evidence'], report.source_sha, resolve(ROOT, 'contracts/decision-rules.v1.json'))
+  const load = await loadEvidence(values['load-evidence'], report.source_sha, resolve(ROOT, 'contracts/decision-rules.v1.1.json'))
   report.dataset_sha256 = load.dataset_sha256
   report.rules_version = load.rules_version
   report.rules_sha256 = load.rules_sha256

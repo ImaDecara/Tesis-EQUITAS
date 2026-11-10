@@ -52,12 +52,24 @@ afterEach(() => { vi.useRealTimers() })
 describe('MEN-3: panel real de Revisión sin snapshot', () => {
   it.each(['consulta', 'operador'])('%s conserva la mora de la ficha calculada y no la histórica', async role => {
     api.screen.mockResolvedValue({ kind: 'ready', capabilities: { canRecord: role === 'operador', canApprove: false, canReadReasonText: false }, snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE'), history: { ok: true, entries: [] } })
-    const raw = fixture(); delete raw.batch
+    // Estado OVERDUE: la mora calculada (310 000) no es la del perfil persistido (0).
+    const raw = fixture(); delete raw.batch; raw.debts[0].status = 2
     const { text, review } = await renderDetail(raw)
     expect(text).toContain('Deuda vencida al corte: $ 310.000')
     expect(review).toContain('Deuda vencida $ 310.000')
     expect(review).toContain('Corte: no disponible')
     expect(text).toContain('189 dias')
+  })
+
+  it.each(['consulta', 'operador'])('%s: reglas 1.1.0, la obligación pagada no es mora aunque su vencimiento pasó', async role => {
+    api.screen.mockResolvedValue({ kind: 'ready', capabilities: { canRecord: role === 'operador', canApprove: false, canReadReasonText: false }, snapshot: caseReviewFailure('CUTOFF_NOT_AVAILABLE'), history: { ok: true, entries: [] } })
+    const raw = fixture(); delete raw.batch
+    const { text, review } = await renderDetail(raw)
+    expect(text).toContain('Total registrado: $ 310.000')
+    expect(text).toContain('Deuda vencida al corte: $ 0')
+    expect(review).toContain('Deuda vencida $ 0')
+    // Sin vencidas el atraso no aplica (la página hoy lo rotula como no disponible).
+    expect(mapDebtorObjectsFromRawData(raw).debtors[0].metrics?.maxDaysOverdue.presence).toBe('NO_APLICA')
   })
 
   it.each(['CUTOFF_NOT_AVAILABLE', 'SUGGESTION_UNAVAILABLE'] as const)('%s no presenta saldo histórico como mora evaluable', async code => {
@@ -74,15 +86,17 @@ describe('MEN-3: panel real de Revisión sin snapshot', () => {
 })
 
 describe('MEN-3: presencia de KPI-02/03 en CSV de calidad, oráculo manual', () => {
+  // Columna de estado: 2 = OVERDUE, 3 = PAID. Reglas 1.1.0: la pagada sale de la mora (cero completo, sin atraso).
   const cases = [
-    ['vencida con catálogo PAID', '2026-05-01', false, 'OBSERVADO', 'OBSERVADO'],
-    ['vencimiento ausente', null, false, 'NO_INFORMADO_EN_ORIGEN', 'NO_INFORMADO_EN_ORIGEN'],
-    ['parcial con otra obligación sin fecha', '2026-05-01', true, 'OBSERVADO_PARCIAL', 'OBSERVADO_PARCIAL'],
-    ['vigente por calendario', '2027-01-01', false, 'OBSERVADO', 'NO_APLICA'],
+    ['vencida no pagada', '2026-05-01', 2, false, 'OBSERVADO', 'OBSERVADO'],
+    ['vencimiento pasado con catálogo PAID', '2026-05-01', 3, false, 'OBSERVADO', 'NO_APLICA'],
+    ['vencimiento ausente', null, 2, false, 'NO_INFORMADO_EN_ORIGEN', 'NO_INFORMADO_EN_ORIGEN'],
+    ['parcial con otra obligación sin fecha', '2026-05-01', 2, true, 'OBSERVADO_PARCIAL', 'OBSERVADO_PARCIAL'],
+    ['vigente por calendario', '2027-01-01', 3, false, 'OBSERVADO', 'NO_APLICA'],
   ] as const
-  it.each(cases)('%s', (_name, due, partial, overdueState, daysState) => {
-    const raw = fixture(); raw.debts[0].due_date = due
-    if (due === null) { raw.debts[0].status = 2; raw.debtorProfiles[0].overdue_debt_amount = 310000 }
+  it.each(cases)('%s', (_name, due, status, partial, overdueState, daysState) => {
+    const raw = fixture(); raw.debts[0].due_date = due; raw.debts[0].status = status
+    if (due === null) raw.debtorProfiles[0].overdue_debt_amount = 310000
     if (partial) raw.debts.push({ ...raw.debts[0], id: 802, current_amount: 50000, due_date: null })
     const { debtors } = mapDebtorObjectsFromRawData(raw)
     const before = JSON.stringify(debtors)

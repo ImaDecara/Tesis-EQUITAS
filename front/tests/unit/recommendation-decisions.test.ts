@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import golden from '../../../contracts/decision-rules.v1.golden.json'
+import golden from '../../../contracts/decision-rules.v1.1.golden.json'
 import { evaluateDecisionRulesV1, type DecisionInput } from '@/lib/domain/decision-rules-v1'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 

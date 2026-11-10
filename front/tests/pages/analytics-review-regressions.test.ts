@@ -85,7 +85,8 @@ describe('ALIGN-014 MEN-2: parámetros repetidos', () => {
 })
 
 describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => {
-  it.each([3, 2, 8, 4])('no sustituye calendario por el estado histórico %s ni por el perfil con cero', async status => {
+  // Estados no pagados del catálogo de la fixture: 2 OVERDUE, 8 UNKNOWN y 4 (fuera del catálogo).
+  it.each([2, 8, 4])('no sustituye calendario por el estado histórico %s ni por el perfil con cero', async status => {
     const raw = fixture(); raw.debts[0].status = status
     const mapped = await configure(raw)
     const csv = parseCsvBytes(new TextEncoder().encode(buildQueueReport(mapped.debtors, {}, '2026-11-06T00:00:00Z', { showIdentifier: true }, raw.batch)))
@@ -101,6 +102,23 @@ describe('ALIGN-014 MEN-3: mora al mismo corte en ficha, listados y CSV', () => 
     expect(detail).toContain('183 dias')
     expect(detail).not.toMatch(/Deuda vencida(?: al corte)?\s*:?[\s]*\$\s?0(?:\s|,)/)
     expect(detail).toContain('1 obligación vencida')
+  })
+
+  it('reglas 1.1.0: con estado 3 (PAID) no hay mora en ficha, listados ni CSV, y el total registrado la conserva', async () => {
+    const raw = fixture(); raw.debts[0].status = 3
+    const mapped = await configure(raw)
+    const csv = parseCsvBytes(new TextEncoder().encode(buildQueueReport(mapped.debtors, {}, '2026-11-06T00:00:00Z', { showIdentifier: true }, raw.batch)))
+    const row = csv.rows.find(item => item.tipo_fila === 'DETALLE')!
+    expect(csvCents(row.deuda_total_ars)).toBe(31000000)
+    expect(csvCents(row.deuda_vencida_ars)).toBe(0)
+    expect(row.dias_atraso_max).toBe('NO_APLICA')
+    for (const page of [DebtAgingPage, PriorityCasesPage, NoContactPage]) {
+      expect(text(await page({ searchParams: Promise.resolve({}) }))).not.toContain('183 dias')
+    }
+    const detail = text(await DebtorDetailPage({ params: Promise.resolve({ debtorId: '901' }) }))
+    expect(detail).toMatch(/Total registrado: \$\s?310\.000/)
+    expect(detail).toMatch(/Deuda vencida al corte: \$\s?0/)
+    expect(detail).not.toContain('1 obligación vencida')
   })
 
   it('si el corte no es evaluable no muestra mora histórica como si fuera actual', async () => {

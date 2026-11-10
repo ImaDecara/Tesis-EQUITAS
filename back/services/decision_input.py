@@ -1,5 +1,6 @@
 """Adaptador del esquema actual al contrato v1, sin usar agregados heredados."""
 
+from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -54,6 +55,27 @@ def _person_type(
     return presence(value) if value is not None else presence(state="INVALIDO")
 
 
+def _debt_status(row: dict[str, Any], catalog: Mapping[int, dict[str, Any]]) -> dict[str, Any]:
+    """Clave de debt_status (reglas 1.1.0, obligaciones_pagadas), sin interpretarla.
+
+    Solo PAID observado excluye la obligación; ausente, inválido o UNKNOWN se computa igual.
+    """
+    if "status" not in row:
+        return presence(state="NO_INTEGRADO")
+    if row["status"] is None:
+        return presence(state="NO_INFORMADO_EN_ORIGEN")
+    try:
+        definition = catalog.get(row_id(row["status"]))
+    except ValueError:
+        return presence(state="INVALIDO")
+    if definition is None:
+        return presence(state="INVALIDO")
+    key = definition.get("key")
+    if not isinstance(key, str) or not key:
+        return presence(state="NO_INTEGRADO")
+    return presence(state="NO_INFORMADO_EN_ORIGEN") if key.upper() == "UNKNOWN" else presence(key)
+
+
 def build_decision_input(
     debtor: dict[str, Any],
     obligations: list[dict[str, Any]],
@@ -63,11 +85,14 @@ def build_decision_input(
     person_types: dict[int, dict[str, Any]],
     *,
     as_of: str,
+    debt_statuses: Mapping[int, dict[str, Any]],
 ) -> dict[str, Any]:
     """Solo se llama después de completar todas las lecturas requeridas.
 
     DE02/DE10 y L05 no están integrados: period/status/issue_date no sustituyen
     período fiscal, estado de origen ni actualización del lote. AU01 no se infiere.
+    debt.status solo alimenta estado_catalogo, con el catálogo debt_status ya leído
+    completo: una lectura fallida del catálogo no llega acá (no se evalúa).
     """
     parse_date(as_of)
     active_relations = [
@@ -110,6 +135,7 @@ def build_decision_input(
                 "due_date": _field(row, "due_date", "date"),
                 "estado_origen": presence(state="NO_INTEGRADO"),
                 "periodo_fiscal": presence(state="NO_INTEGRADO"),
+                "estado_catalogo": _debt_status(row, debt_statuses),
             }
             for row in obligations
         ],

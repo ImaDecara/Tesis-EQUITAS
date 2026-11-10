@@ -165,7 +165,7 @@ for query in ["", "?contact=without", "?contact=with", "?risk=ALTO", "?minAmount
     check(f"pantalla con contador {query}", count is not None)
     check(f"cola = pantalla {query}", len(details(report)) == count, f"{len(details(report))} {count}")
     check(f"total con metadatos {query}", number(total(report)["objetos"]) == len(details(report)) and bool(total(report)["generado_en"]))
-shown_total = card_value(page_flight(result("operador", "/debt-aging")), "Deuda total")
+shown_total = card_value(page_flight(result("operador", "/debt-aging")), "Total registrado")
 check("/debt-aging muestra la deuda", shown_total is not None and re.fullmatch(r"\$\$? ?[\d.]+", shown_total) is not None, str(shown_total))
 if shown_total:
     # La pantalla redondea a pesos enteros.

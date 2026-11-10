@@ -66,7 +66,7 @@ function ReviewFacts({ detail, warnings, snapshot, view }: { detail: DebtorDetai
   const { debtor, debts } = detail
   const missing = missingSummary(debtor.metrics)
   const facts = view ? factsAtCutoff(view) : [
-    ['Deuda total', formatCurrency(debtor.totalDebt)] as const,
+    ['Total registrado', formatCurrency(debtor.totalDebt)] as const,
     ['Deuda vencida', formatCurrency(debtor.overdueDebt)] as const,
   ]
   return (

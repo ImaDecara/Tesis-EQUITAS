@@ -448,18 +448,21 @@ def test_cero_valido_se_conserva_como_cero_observado(database, tmp_path):
     assert all(row['current_amount'] is not None for row in debts)
 
 
-def test_estado_suspendido_y_demas_estados_de_origen_no_se_vuelven_vencida(database, tmp_path):
+def test_estado_suspendido_y_demas_estados_conservan_su_estado_y_solo_la_pagada_sale_de_la_mora(database, tmp_path):
+    # Reglas 1.1.0: ningún estado se reclasifica; la mora del perfil es por calendario sobre las no pagadas.
+    # Las cinco vencen el 15/01/2020 (2450 días): cuentan anulada, suspendida, pendiente y sin estado; la pagada no.
     expected = object_by_case('estados-origen-vencimiento-viejo')
     lot = derive_lot(tmp_path / 'estados')
     execute(lot)
     debtor, debts = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
     names = {identifier: key for key, identifier in CATALOGS['debt_status'].items()}
     assert sorted(names[row['status']] for row in debts) == ['CANCELLED', 'OVERDUE', 'PAID', 'SUSPENDED', 'UNKNOWN']
+    paid = sum(Decimal(row['current_amount']) for row in debts if names[row['status']] == 'PAID')
     profile = profile_of(database, debtor)
-    assert profile['overdue_debt_count'] == 1
-    assert profile['oldest_debt_days'] == expected['dias_vencida_mas_antigua']['valor']
+    assert profile['overdue_debt_count'] == 4
+    assert profile['oldest_debt_days'] == 2450
     assert Decimal(profile['total_debt_amount']) == Decimal(expected['importe_actualizado']['valor'])
-    assert Decimal(profile['overdue_debt_amount']) < Decimal(profile['total_debt_amount'])
+    assert Decimal(profile['overdue_debt_amount']) == Decimal(profile['total_debt_amount']) - paid == Decimal('98160.74')
 
 
 def test_edades_y_vencida_dependen_del_corte_declarado_y_no_del_reloj(database, tmp_path, monkeypatch):
@@ -506,14 +509,15 @@ def test_objeto_sin_obligaciones_no_inventa_antiguedad(database, tmp_path):
 # ---------------------------------------------------------------- ciclo 1: B1, ausencia de estados
 
 
-def test_sin_ningun_estado_observado_el_vencido_queda_no_disponible(database, tmp_path):
+def test_sin_ningun_estado_observado_la_mora_se_computa_por_importe_y_vencimiento(database, tmp_path):
+    # Reglas 1.1.0: sin estado no es pagada; la mora sale del calendario igual que con estado PENDIENTE.
     target = object_by_case('base-valido')
     lot = derive_lot(tmp_path / 'sin-estados', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_ESTA_id'): ''})
     execute(lot)
     debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
     profile = profile_of(database, debtor)
-    assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
-    assert profile['oldest_debt_days'] is None and profile['average_debt_age_days'] is None
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (target['importe_actualizado']['valor'], 3)
+    assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (1042, 726)
     assert profile['debt_state_not_observed_count'] == target['obligaciones']
     assert profile['total_debt_amount'] == target['importe_actualizado']['valor']
     assert persisted_mismatches(database.tables, accepted_with_altered(('base-valido',), lot), CATALOGS, lot) == []
@@ -526,18 +530,21 @@ def test_codigo_catalogado_como_unknown_equivale_a_sin_estado(database, tmp_path
     lot = derive_lot(tmp_path / 'unknown', detalle_cells={(target['clave_agrupacion'], None, 'NOTD_ESTA_id'): '99'})
     execute(lot, mapping=synthetic_profile(tmp_path, catalogos=catalogos))
     debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
-    assert profile_of(database, debtor)['overdue_debt_amount'] is None
+    profile = profile_of(database, debtor)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (target['importe_actualizado']['valor'], 3)
+    assert profile['debt_state_not_observed_count'] == target['obligaciones']
 
 
-def test_lote_sin_columnas_de_estado_no_publica_ningun_cero_de_vencido(database, tmp_path):
+def test_lote_sin_columnas_de_estado_computa_la_mora_por_calendario(database, tmp_path):
+    # Reglas 1.1.0: sin estados nada es pagado; cada perfil coincide con el oráculo calculado desde el archivo.
     lot = derive_lot(tmp_path / 'sin-columnas', drop_detail_columns=('NOTD_ESTA_id', 'NOTD_SITU_id'))
     execute(lot)
     for profile in database.tables['debtor_profile']:
+        assert profile['debt_state_not_observed_count'] == profile['debt_count']
         if profile['debt_count'] == 0:
             assert profile['overdue_debt_amount'] == '0.00' and profile['overdue_debt_count'] == 0
-        else:
-            assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
-            assert profile['debt_state_not_observed_count'] == profile['debt_count']
+    cases = tuple(item['caso'] for item in accepted_objects())
+    assert persisted_mismatches(database.tables, accepted_with_altered(cases, lot), CATALOGS, lot) == []
 
 
 def test_mixto_conserva_el_subtotal_y_declara_lo_no_observado(database, tmp_path):
@@ -546,21 +553,25 @@ def test_mixto_conserva_el_subtotal_y_declara_lo_no_observado(database, tmp_path
     debtor, _ = debts_of(database, expected['bien_tipo_id'], expected['cuenta'])
     profile = profile_of(database, debtor)
     assert expected['dias_vencida_mas_antigua']['completo'] is False
-    assert profile['oldest_debt_days'] == expected['dias_vencida_mas_antigua']['valor']
-    assert profile['overdue_debt_count'] == 1
+    # 1.1.0: la fila sin estado también vence el 15/01/2020; el desglose de no observadas se conserva aparte.
+    assert profile['oldest_debt_days'] == expected['dias_vencida_mas_antigua']['valor'] == 2450
+    assert profile['overdue_debt_count'] == 4
     assert profile['debt_state_not_observed_count'] == sum(expected['dias_vencida_mas_antigua']['filas_no_observadas'].values())
 
 
-def test_estado_faltante_sin_vencidas_observadas_no_es_un_cero_legitimo(database, tmp_path):
+def test_no_pagada_sin_vencimiento_y_sin_vencidas_no_es_un_cero_legitimo(database, tmp_path):
+    # 1.1.0: la regla del nulo es la no pagada no evaluable, no el estado faltante. Un vencimiento vacío va a
+    # cuarentena en la carga; uno anterior a 1970-01-01 entra y no es evaluable (como VENCIMIENTO_INCONSISTENTE).
     target = object_by_case('misma-cuenta-otro-tipo')
     key = target['clave_agrupacion']
-    lot = derive_lot(tmp_path / 'mixto-cero', detalle_cells={(key, '700004', 'NOTD_ESTA_id'): '',
+    lot = derive_lot(tmp_path / 'mixto-cero', detalle_cells={(key, '700004', 'NOTD_ESTA_id'): '40',
+                                                             (key, '700004', 'NOTD_vencimiento'): '31/12/1969',
                                                              (key, '700005', 'NOTD_vencimiento'): '30/09/2026'})
     execute(lot)
     debtor, _ = debts_of(database, target['bien_tipo_id'], target['cuenta'])
     profile = profile_of(database, debtor)
     assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
-    assert profile['debt_state_not_observed_count'] == 1
+    assert profile['debt_state_not_observed_count'] == 0
     assert persisted_mismatches(database.tables, accepted_with_altered(('misma-cuenta-otro-tipo',), lot), CATALOGS, lot) == []
 
 

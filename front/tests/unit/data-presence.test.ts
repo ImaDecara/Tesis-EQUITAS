@@ -39,7 +39,8 @@ describe('reglas de presencia y agregación del contrato §4.1', () => {
     expect(formatPercentage(percentageData(1, 0))).toBe('No aplica')
     expect(formatPercentage(percentageData(null, 10))).toBe('No disponible')
     expect(formatPercentage(percentageData(0, 10))).toBe('0%')
-    expect(missingSummary({ totalDebt: unavailable('INVALIDO') })).toContain('Deuda total: 1 INVALIDO')
+    expect(missingSummary({ totalDebt: unavailable('INVALIDO') })).toContain('Total registrado: 1 INVALIDO')
+    expect(missingSummary({ pendingDebt: unavailable('INVALIDO') })).toContain('Deuda pendiente: 1 INVALIDO')
     expect(missingSummary()).toBe('')
   })
   it('la unidad acompaña solo a un valor', () => {

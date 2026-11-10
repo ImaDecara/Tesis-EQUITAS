@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import golden from '../../../contracts/decision-rules.v1.golden.json'
+import golden from '../../../contracts/decision-rules.v1.1.golden.json'
 import type { Decision, InterventionCode } from '@/lib/domain/decision-rules-v1'
 
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
@@ -54,6 +54,7 @@ function buildDebtor(overrides: Partial<DebtorListItem>): DebtorListItem {
     description: 'Objeto de prueba',
     status: 'Vencida',
     totalDebt: 100,
+    pendingDebt: 100,
     overdueDebt: 100,
     peopleCount: 1,
     peopleIds: ['50'],
@@ -92,7 +93,7 @@ describe('mapeador de objetos de deuda', () => {
       priorityLevel: 'ALTA',
       priorityScore: 85,
       recommendationType: 'Revisión jurídica',
-      rulesVersion: '1.0.0',
+      rulesVersion: '1.1.0',
       decisionAsOf: { estado: 'OBSERVADO', valor: '2026-09-30' },
       decisionAsOfSource: 'MANIFIESTO_LOTE',
     })
@@ -255,7 +256,7 @@ describe('ALIGN-010: adaptación y procedencia de los insumos', () => {
     expect(fallback.decisionAsOfSource).toBe('FECHA_CALCULO')
     expect(fallback.temporalProvenance).toContain('corte de origen no informado')
     expect(fallback.recommendationReason).toContain('Fecha de cálculo usada: 2026-09-30')
-    expect(fallback.rulesVersion).toBe('1.0.0')
+    expect(fallback.rulesVersion).toBe('1.1.0')
   })
 
   it.each(['2026-02-30', '', null])('no sustituye en silencio el corte declarado inválido/ausente %j', asOf => {

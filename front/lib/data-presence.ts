@@ -137,7 +137,7 @@ export function formatPercentage(data: NumericData) {
 
 export function missingSummary(metrics?: Record<string, NumericData>) {
   const labels: Record<string, string> = {
-    totalDebt: 'Deuda total', overdueDebt: 'Deuda vencida', totalDebtAssociated: 'Deuda asociada',
+    totalDebt: 'Total registrado', pendingDebt: 'Deuda pendiente', overdueDebt: 'Deuda vencida', overdueDebtsCount: 'Obligaciones vencidas', totalDebtAssociated: 'Deuda asociada',
     highSeverityCases: 'Severidad alta', riskValue: 'Puntaje', riskScore: 'Severidad', averageRiskValue: 'Promedio del índice heredado',
     totalDebtors: 'Objetos', overdueCases: 'Casos vencidos', withContactCases: 'Con contacto',
     withoutContactCases: 'Sin contacto', priorityCases: 'Prioridad', urgentRecommendationCases: 'Revisión requerida',

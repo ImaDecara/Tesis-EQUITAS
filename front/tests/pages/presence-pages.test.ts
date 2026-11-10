@@ -185,11 +185,20 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     const page = await RecommendedActionsPage()
     expect(cardValues(page)).toMatchObject({ Seguimiento: '1', 'No disponible': '1', 'Mejorar datos': '0' })
     expect(textFromReactTree(page).replace(/(?:[\d.]+ de [\d.]+ objetos con dato(?:; [\d.]+ parciales)?\.|Cobertura no disponible: lectura fallida o selección incompleta\.)/g, '')).toMatch(/Seguimiento\s+1\s+\$\s*100\s+20\.0\s*\/\s*100/)
-    expect(textFromReactTree(page)).toContain('Deuda total: 1 NO_INFORMADO_EN_ORIGEN')
+    expect(textFromReactTree(page)).toContain('Total registrado: 1 NO_INFORMADO_EN_ORIGEN')
     expect(mapDashboardMetricsFromDebtorObjects(mapped).byRecommendation).toContainEqual({ label: 'Seguimiento', value: 1 })
   })
 
-  it.each(['person', 'debtor_profile', 'debt_status'])('una falla de %s no oculta las colas v1 conocidas', async table => {
+  it('reglas 1.1.0: una falla de debt_status no se vuelve «no pagada»: sin decisión, colas no disponibles', async () => {
+    const raw = buildPresenceRawData()
+    raw.warnings = [{ table: 'debt_status', message: 'Fallo sintético', needsSelectPolicy: false }]
+    const mapped = configure(buildPresencePeopleData(), raw)
+    expect(mapped.debtors.every(debtor => debtor.decision === null)).toBe(true)
+    expect(buildRecommendationSummary(mapped.debtors, raw.warnings).filter(group => group.interventionCode !== null).every(group => group.count === null)).toBe(true)
+    expect(cardValues(await RecommendedActionsPage())).toMatchObject({ Seguimiento: 'No disponible', 'Mejorar datos': 'No disponible' })
+  })
+
+  it.each(['person', 'debtor_profile'])('una falla de %s no oculta las colas v1 conocidas', async table => {
     const raw = buildPresenceRawData()
     raw.warnings = [{ table, message: 'Fallo sintético', needsSelectPolicy: false }]
     const mapped = configure(buildPresencePeopleData(), raw)
@@ -229,7 +238,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     peopleRaw.warnings = [warning]; debtorRaw.warnings = [warning]
     configure(peopleRaw, debtorRaw)
     const cards = cardValues(await HomePage())
-    expect(cards['Deuda total']).toBe('No disponible')
+    expect(cards['Total registrado']).toBe('No disponible')
     expect(cards['Casos vencidos']).toBe('No disponible')
     const text = textFromReactTree(await PeoplePage({ searchParams: Promise.resolve({ q: 'no existe' }) }))
     expect(text).toMatch(/Deuda asociada\s*No disponible/)
@@ -241,7 +250,7 @@ describe('ALIGN-011: cálculos y valores visibles de las páginas', () => {
     raw.debtors = []
     raw.warnings = [{ table: 'debtor', message: 'Fallo sintético', needsSelectPolicy: false }]
     configure(buildPresencePeopleData(), raw)
-    expect(cardValues(await DebtAgingPage({ searchParams: Promise.resolve({}) }))['Deuda total']).toBe('No disponible')
+    expect(cardValues(await DebtAgingPage({ searchParams: Promise.resolve({}) }))['Total registrado']).toBe('No disponible')
     const noContact = cardValues(await NoContactPage({ searchParams: Promise.resolve({}) }))
     expect(Object.values(noContact).filter(value => value === 'No disponible').length).toBeGreaterThanOrEqual(3)
     const recommended = cardValues(await RecommendedActionsPage())

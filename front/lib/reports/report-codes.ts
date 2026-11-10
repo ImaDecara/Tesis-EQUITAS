@@ -1,5 +1,5 @@
 import costs from '../../../contracts/action-costs.v1.json'
-import rules from '../../../contracts/decision-rules.v1.json'
+import { RULES_CONTRACTS } from '@/lib/domain/decision-rules-v1'
 import { WEB_ROLES } from '@/lib/auth/tenant-access'
 
 // ALIGN-028. La base y las acciones de servidor solo exigen formato (`^[A-Z][A-Z0-9_]{0,63}$`):
@@ -17,9 +17,10 @@ export const EXPORTABLE_REASON_CODES: ReadonlySet<string> = new Set([
   'DATOS_CAMBIARON', 'CRITERIO_DE_SUPERVISION',
 ])
 
-// Intervenciones de los dos contratos del repositorio; los niveles 3 y 4 estan en el de costos.
+// Intervenciones de todas las versiones de reglas (una decision guardada conserva la suya) y del
+// contrato de costos, donde estan los niveles 3 y 4.
 export const EXPORTABLE_INTERVENTIONS: ReadonlySet<string> = new Set([
-  ...Object.keys(rules.intervenciones), ...costs.acciones.map(action => action.id),
+  ...Object.values(RULES_CONTRACTS).flatMap(rules => Object.keys(rules.intervenciones)), ...costs.acciones.map(action => action.id),
 ])
 
 const EXPORTABLE_ROLES: ReadonlySet<string> = new Set(WEB_ROLES)

@@ -541,8 +541,12 @@ def _rounded_average(values: list[int]) -> int:
 
 def _evaluable_debt(row: dict[str, Any]) -> bool:
     # Misma obligación evaluable que las reglas: importe ≥ 0 y vencimiento plausible, ambos presentes.
+    # La vista previa trae NaN de pandas donde falta un dato: tampoco es evaluable.
     amount, due = row.get("current_amount"), row.get("due_date")
-    return amount is not None and Decimal(str(amount)) >= 0 and due is not None and due >= MINIMUM_PLAUSIBLE_DUE
+    if amount is None or not isinstance(due, str):
+        return False
+    number = Decimal(str(amount))
+    return number.is_finite() and number >= 0 and due >= MINIMUM_PLAUSIBLE_DUE
 
 
 # Oráculo Python de recompute_debtor_profiles (ALIGN-031; reglas 1.1.0 en 20261110120000_debtor_profile_rules_1_1):

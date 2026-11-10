@@ -46,8 +46,9 @@ export default async function RecommendedActionsPage({ searchParams }: { searchP
     : `${countLabel(reconciliation.outsideObjects, 'objeto', 'objetos')} · ${countLabel(reconciliation.outsideObligations!, 'obligación', 'obligaciones')}`
   const reconciliationRows: { label: string; value: string; detail?: string | null }[] = [
     { label: 'Suma de las colas', value: formatCurrency(reconciliation.queueTotal.value), detail: queueMissing && `Faltantes: ${queueMissing}` },
-    { label: 'Deuda total del tablero', value: formatCurrency(reconciliation.dashboardTotal.value), detail: totalMissing && `Faltantes: ${totalMissing}` },
+    { label: 'Total registrado del tablero', value: formatCurrency(reconciliation.dashboardTotal.value), detail: totalMissing && `Faltantes: ${totalMissing}` },
     { label: 'Diferencia con el tablero', value: formatCurrency(reconciliation.difference.value) },
+    { label: 'Importe de obligaciones pagadas', value: formatCurrency(reconciliation.paidAmount.value), detail: reconciliation.paidObligations === null ? null : countLabel(reconciliation.paidObligations, 'obligación', 'obligaciones') },
     { label: 'Importe sin vencimiento evaluable', value: formatCurrency(reconciliation.outsideAmount.value), detail: outsideDetail },
     { label: 'Resto de la diferencia', value: formatCurrency(reconciliation.otherDifference.value) },
   ]
@@ -97,9 +98,9 @@ export default async function RecommendedActionsPage({ searchParams }: { searchP
           <CardHeader>
             <CardTitle>Qué suma el monto de cada cola</CardTitle>
             <CardDescription>
-              Cada cola suma el importe actual de las obligaciones evaluables de sus objetos: importe
-              observado y no negativo, con vencimiento válido, vencidas o no. Cada objeto cuenta una vez y
-              no se usan los importes del perfil.
+              Cada cola suma el importe actual de las obligaciones no pagadas y evaluables de sus objetos:
+              importe observado y no negativo, con vencimiento válido, vencidas o no. Cada objeto cuenta una
+              vez y no se usan los importes del perfil.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-700">
@@ -127,11 +128,10 @@ export default async function RecommendedActionsPage({ searchParams }: { searchP
               </p>
             )}
             <p>
-              Por qué no coincide con el tablero: el tablero suma el total de cada objeto (el del perfil
-              persistido o, si no hay, todas sus obligaciones con importe, tengan o no vencimiento). Las
-              colas dejan fuera el importe de las obligaciones sin vencimiento evaluable. El resto de la
-              diferencia viene de totales del perfil distintos de la suma de obligaciones, importes
-              negativos y objetos sin decisión.
+              Por qué no coincide con el tablero: el tablero suma el total registrado de cada objeto (todas
+              sus obligaciones con importe, cualquiera sea su estado y tengan o no vencimiento). Las colas
+              dejan fuera las obligaciones pagadas y el importe de las que no tienen vencimiento evaluable.
+              El resto de la diferencia viene de importes negativos y objetos sin decisión.
             </p>
           </CardContent>
         </Card>

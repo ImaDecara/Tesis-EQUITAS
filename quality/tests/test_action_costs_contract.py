@@ -423,3 +423,16 @@ class ActionCostsContractTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RulesVersionReference(unittest.TestCase):
+    """Reglas 1.1.0 (pagadas) no cambian nada de lo que este contrato referencia de las reglas v1."""
+
+    def test_reglas_1_1_0_conservan_intervenciones_escala_y_revision(self):
+        old = json.loads(RULES.read_text(encoding='utf-8'))
+        new = json.loads((ROOT / 'contracts/decision-rules.v1.1.json').read_text(encoding='utf-8'))
+        contract = json.loads(CONTRACT.read_text(encoding='utf-8'))
+        self.assertEqual(contract['reglas_de_decision'], 'contracts/decision-rules.v1.json')
+        self.assertEqual((old['version'], new['version']), ('1.0.0', '1.1.0'))
+        for key in ('intervenciones', 'escala_intensidad', 'reglas_intervencion', 'revision', 'vulnerabilidad'):
+            self.assertEqual(new[key], old[key], key)

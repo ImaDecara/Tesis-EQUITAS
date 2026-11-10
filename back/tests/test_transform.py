@@ -7,8 +7,10 @@ Reemplazos deliberados:
 - índice heredado relativo al promedio del lote y ajuste por persona: ya no se calculan.
 """
 
+import json
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -276,10 +278,12 @@ def test_perfil_agrega_al_corte_sin_indice_heredado():
         {'current_amount': '9.00', 'status': 'ACTIVE', 'due_date': '2027-01-01'},
     ]
     profile = build_debtor_profile_payload(11, rows, 2, 3, CUT_OFF)
+    # Reglas 1.1.0: el total registrado incluye todo; la mora es por calendario sobre las no pagadas.
+    # Sale la pagada y el 0,00 OVERDUE; entran la suspendida y la UNKNOWN vencidas el 2000-01-01 (9769 días).
     assert profile['total_debt_amount'] == '170.30'
-    assert profile['overdue_debt_amount'] == '150.30'
-    assert (profile['debt_count'], profile['overdue_debt_count']) == (7, 3)
-    assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (10, 5)
+    assert profile['overdue_debt_amount'] == '154.30'
+    assert (profile['debt_count'], profile['overdue_debt_count']) == (7, 4)
+    assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (9769, 4888)
     assert (profile['active_person_count'], profile['available_contact_count']) == (2, 3)
     assert profile['socioeconomic_risk_level'] is None
     assert profile['previous_contact_count'] is None and profile['previous_response_count'] is None
@@ -291,30 +295,74 @@ def test_detalle_por_persona_conserva_la_fila_sin_indice_heredado():
     assert 'no calculado' in detail['reason']
 
 
-def test_perfil_sin_ningun_estado_observado_no_publica_cero_de_vencido():
+def test_perfil_con_estado_desconocido_computa_por_importe_y_vencimiento():
+    # 1.1.0: sin estado observado no hay excepción; solo PAID sale de la mora.
     rows = [{'current_amount': '9.00', 'status': 'UNKNOWN', 'due_date': '2000-01-01'},
-            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+            {'current_amount': '1.00', 'status': None, 'due_date': '2001-01-01'}]
     profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
     assert profile['total_debt_amount'] == '10.00' and profile['debt_count'] == 2
-    assert profile['overdue_debt_amount'] is None and profile['overdue_debt_count'] is None
-    assert profile['oldest_debt_days'] is None and profile['average_debt_age_days'] is None
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('10.00', 2)
+    assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (9769, 9586)
     assert profile['debt_state_not_observed_count'] == 2
 
 
-def test_perfil_con_estado_faltante_y_sin_vencidas_observadas_no_publica_cero():
+def test_perfil_con_no_pagada_no_evaluable_y_sin_vencidas_no_publica_cero():
     rows = [{'current_amount': '9.00', 'status': 'ACTIVE', 'due_date': '2027-01-01'},
-            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': None}]
     profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
     assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
     assert profile['debt_state_not_observed_count'] == 1
 
 
-def test_perfil_con_estado_faltante_y_vencidas_observadas_conserva_el_subtotal():
+def test_perfil_con_no_pagada_no_evaluable_y_vencidas_conserva_el_subtotal():
     rows = [{'current_amount': '9.00', 'status': 'OVERDUE', 'due_date': '2026-09-20'},
-            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': '2001-01-01'}]
+            {'current_amount': '1.00', 'status': 'UNKNOWN', 'due_date': None}]
     profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
     assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('9.00', 1)
     assert (profile['oldest_debt_days'], profile['debt_state_not_observed_count']) == (10, 1)
+
+
+@pytest.mark.parametrize('row', [
+    {'current_amount': '-1.00', 'status': 'ACTIVE', 'due_date': '2026-01-01'},
+    {'current_amount': '5.00', 'status': 'ACTIVE', 'due_date': '1969-12-31'},
+    {'current_amount': None, 'status': 'OVERDUE', 'due_date': '2026-01-01'},
+])
+def test_perfil_trata_como_no_evaluable_lo_mismo_que_las_reglas(row):
+    profile = build_debtor_profile_payload(11, [row], 1, 0, CUT_OFF)
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
+
+
+def test_perfil_excluye_pagadas_aunque_les_falte_importe_o_vencimiento():
+    rows = [{'current_amount': None, 'status': 'PAID', 'due_date': None},
+            {'current_amount': '-3.00', 'status': 'PAID', 'due_date': '1969-01-01'},
+            {'current_amount': '4.00', 'status': 'PAID', 'due_date': '2026-01-01'}]
+    profile = build_debtor_profile_payload(11, rows, 1, 0, CUT_OFF)
+    assert profile['total_debt_amount'] == '1.00' and profile['debt_count'] == 3
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == ('0.00', 0)
+    assert profile['oldest_debt_days'] is None
+
+
+def test_perfil_sin_corte_no_calcula_mora():
+    rows = [{'current_amount': '9.00', 'status': 'OVERDUE', 'due_date': '2000-01-01'}]
+    profile = build_debtor_profile_payload(11, rows, 1, 0, None)
+    assert profile['total_debt_amount'] == '9.00'
+    assert (profile['overdue_debt_amount'], profile['overdue_debt_count']) == (None, None)
+    assert (profile['oldest_debt_days'], profile['average_debt_age_days']) == (None, None)
+
+
+SMALL_CASES = json.loads((Path(__file__).resolve().parents[2] / 'contracts/portfolio-small-cases.v1.json').read_text(encoding='utf-8'))
+
+
+@pytest.mark.parametrize('case', SMALL_CASES['casos'], ids=lambda case: case['id'])
+def test_perfil_de_los_casos_chicos(case):
+    keys = {row['id']: row['key'] for row in SMALL_CASES['catalogo_debt_status']}
+    # Un estado fuera del catálogo no tiene clave (la base lo impide con la FK): queda sin estado.
+    rows = [{'current_amount': None if item['importe'] is None else str(item['importe']),
+             'due_date': item['vencimiento'], 'status': keys.get(item['estado_id'])} for item in case['obligaciones']]
+    profile = build_debtor_profile_payload(case['objeto']['id'], rows, len(case['titulares']), 0,
+                                           date.fromisoformat(SMALL_CASES['fecha_cartera']))
+    assert {key: profile[key] for key in case['esperado']['perfil']} == case['esperado']['perfil']
+    assert Decimal(profile['total_debt_amount']) == case['esperado']['total_registrado']['valor']
 
 
 def test_perfil_sin_obligaciones_mantiene_el_cero_derivado():

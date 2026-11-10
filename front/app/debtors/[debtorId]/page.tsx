@@ -1,7 +1,7 @@
 import { withMaturityMetrics } from '@/lib/analytics'
 import { portfolioHref, normalizePortfolioSearchParams, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatNumber, formatWithUnit, missingSummary, numericData, readingFailed } from '@/lib/data-presence'
-import decisionRules from '../../../../contracts/decision-rules.v1.json'
+import { ACTIVE_RULES as decisionRules } from '@/lib/domain/decision-rules-v1'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -112,7 +112,7 @@ export default async function DebtorDetailPage({
         {reviewNotice && <p role="status" className="text-sm text-amber-800">{reviewNotice}</p>}
         <p className="text-sm text-slate-700">Vulnerabilidad: no informada</p>
         <p className="text-xs text-slate-600">{debtor.temporalProvenance}</p>
-        <p className="text-xs text-slate-600">La deuda vencida y los días de atraso usan los importes y vencimientos evaluables al corte de la decisión. El estado de catálogo se conserva como dato histórico; no determina esa mora.</p>
+        <p className="text-xs text-slate-600">La deuda vencida y los días de atraso usan los importes y vencimientos evaluables al corte de la decisión, sin las obligaciones pagadas. El estado de catálogo solo se usa para excluir las pagadas; no determina esa mora.</p>
         <p className="text-xs text-slate-600">{missingSummary(debtor.metrics)}</p>
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -126,7 +126,7 @@ export default async function DebtorDetailPage({
           </Card>
           <Card className="border-[#cfdaea] bg-[#edf2f9] shadow-sm">
             <CardHeader className="pb-1">
-              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Deuda total</CardTitle>
+              <CardTitle className="text-xs uppercase tracking-wide text-slate-600">Total registrado</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 text-lg font-semibold text-[#163a63]">
               {formatCurrency(debtor.totalDebt)}
@@ -198,7 +198,7 @@ export default async function DebtorDetailPage({
                     {debtor.description}
                   </p>
                   <p>
-                    <span className="font-medium text-slate-900">Deuda total:</span>{' '}
+                    <span className="font-medium text-slate-900">Total registrado:</span>{' '}
                     {formatCurrency(debtor.totalDebt)}
                   </p>
                   <p>
@@ -354,7 +354,7 @@ export default async function DebtorDetailPage({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Deuda total</CardTitle>
+                  <CardTitle className="text-sm">Total registrado</CardTitle>
                 </CardHeader>
                 <CardContent className="text-2xl font-semibold text-slate-900">
                   {formatCurrency(profile.totalDebt)}
@@ -417,7 +417,7 @@ export default async function DebtorDetailPage({
                 <p>{debtor.recommendationReason}</p>
                 <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                   Ejemplo de lectura operativa: {debtor.recommendation === 'No disponible' ? 'recomendación no disponible; el caso combina' : `${debtor.recommendation} porque el caso combina`}{' '}
-                  deuda total: {formatCurrency(debtor.totalDebt)}, atraso: {formatWithUnit(debtor.maxDaysOverdue, 'dias')} y
+                  deuda pendiente: {formatCurrency(debtor.pendingDebt)}, atraso: {formatWithUnit(debtor.maxDaysOverdue, 'dias')} y
                   contacto: {debtor.hasContact === null ? 'no disponible' : debtor.hasContact ? 'disponible' : 'faltante'}.
                 </p>
                 <p>Para decidir sobre este caso, abre la pestaña Revisión.</p>

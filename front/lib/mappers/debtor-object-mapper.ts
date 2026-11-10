@@ -1,4 +1,4 @@
-import { moneyData, sumMoney } from '@/lib/analytics'
+import { moneyData } from '@/lib/analytics'
 import {
   parseBooleanFromUnknown,
   rowHasCandidateKey,
@@ -6,11 +6,13 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { aggregateData, daysSinceData, metric, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
+import { aggregateData, observed, readingFailed, selectNumericData, unavailable } from '@/lib/data-presence'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 import { calculateDebtorRiskAssessment } from '@/lib/services/debtor-risk-calculator'
 import { evaluateDecisionRulesV1, RULES_VERSION, type DecisionInput, type RuleDatum } from '@/lib/domain/decision-rules-v1'
+import { objectTotals } from '@/lib/domain/portfolio-totals'
 import type {
+  DataPresence,
   DebtorContactItem,
   DebtorDebtItem,
   DebtorListItem,
@@ -70,22 +72,6 @@ function normalizeStatusLabel(value: string) {
   return trimmed
 }
 
-function isDebtOverdue(key: string, label: string) {
-  if (key) return key.toUpperCase() === 'OVERDUE'
-  const normalizedStatus = label.trim().toLowerCase()
-
-  if (
-    normalizedStatus.includes('venc') ||
-    normalizedStatus.includes('mora') ||
-    normalizedStatus.includes('atras')
-  ) {
-    return true
-  }
-
-  return normalizedStatus === 'overdue'
-
-}
-
 // Identidad del canal en origen: una etiqueta faltante no puede unir contactos distintos.
 function contactChannelKey(contact: RawRow) {
   return selectTextFromRow(contact, ['channel', 'contact_channel', 'kind']) ||
@@ -121,6 +107,13 @@ function ruleDate(value: unknown, field: string, issues: DecisionDataIssue[], ab
     return recordMissing<string>(field, { estado: 'INVALIDO', valor: null }, issues, 'FECHA_INVALIDA')
   }
   return { estado: 'OBSERVADO', valor: text }
+}
+
+// Clave de debt_status para las reglas 1.1.0 (solo PAID excluye). La etiqueta nunca la sustituye:
+// un estado observado sin clave queda NO_INTEGRADO y se computa como no pagado.
+function catalogDatum(presence: DataPresence, key: string | undefined): RuleDatum<string> {
+  if (presence === 'OBSERVADO') return key ? { estado: 'OBSERVADO', valor: key } : { estado: 'NO_INTEGRADO', valor: null }
+  return { estado: presence, valor: null }
 }
 
 // Solo campos de origen explícitos: status y period heredados NO los sustituyen.
@@ -169,7 +162,6 @@ export function mapDebtorObjectsFromRawData(
   const decisionAsOfSource = raw.batch ? 'MANIFIESTO_LOTE' : 'FECHA_CALCULO'
   const decisionAsOf = ruleDate(raw.batch ? raw.batch.as_of : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Cordoba', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(decisionComputedAt)), 'as_of', contextIssues)
   const sourceUpdatedAt = ruleDate(raw.batch?.source_updated_at, 'source_updated_at', contextIssues, 'NO_INTEGRADO')
-  const cutoff = decisionAsOf.valor === null ? null : Date.parse(`${decisionAsOf.valor}T00:00:00.000Z`)
 
   const debtorTypeLabels = mapLabelById(
     raw.debtorTypes,
@@ -198,7 +190,7 @@ export function mapDebtorObjectsFromRawData(
   }
 
   const debtsByDebtor = new Map<string, DebtorDebtItem[]>()
-  const overdueDebtItems = new Set<DebtorDebtItem>()
+  const catalogFailed = readingFailed(raw.warnings, 'debt_status')
   for (const debt of raw.debts) {
     const debtorId = stringifyUnknownValue(
       selectValueFromRow(debt, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
@@ -217,7 +209,6 @@ export function mapDebtorObjectsFromRawData(
     const dueDate = dueDatum.valor
     const amountDatum = recordMissing('current_amount', ruleNumber(updated), decisionIssues, updated.reason ?? 'IMPORTE_AUSENTE')
     const debtStatusId = stringifyUnknownValue(selectValueFromRow(debt, ['status', 'debt_status_id', 'status_id', 'debt_status']))
-    const catalogFailed = readingFailed(raw.warnings, 'debt_status')
     const catalogStatus = debtStatusCatalog.get(debtStatusId)
     const status = catalogFailed ? 'No disponible' : catalogStatus?.label ?? 'UNKNOWN'
     const statusUnknown = (catalogStatus?.key || status).toUpperCase() === 'UNKNOWN'
@@ -248,11 +239,9 @@ export function mapDebtorObjectsFromRawData(
       due_date: dueDatum,
       estado_origen: recordMissing('estado_origen', sourceDatum(debt, 'estado_origen'), decisionIssues, 'ESTADO_ORIGEN_NO_EVALUABLE'),
       periodo_fiscal: recordMissing('periodo_fiscal', sourceDatum(debt, 'periodo_fiscal'), decisionIssues, 'PERIODO_FISCAL_NO_EVALUABLE'),
+      estado_catalogo: catalogDatum(statusPresence, catalogStatus?.key),
     }
     debtItem.decisionIssues = decisionIssues.map(issue => ({ ...issue, entityId: debtItem.id }))
-    if (statusPresence === 'OBSERVADO' && isDebtOverdue(catalogStatus?.key ?? '', status)) {
-      overdueDebtItems.add(debtItem)
-    }
 
     const current = debtsByDebtor.get(debtorId) ?? []
     current.push(debtItem)
@@ -463,34 +452,20 @@ export function mapDebtorObjectsFromRawData(
     const hasContact = contactCount === null ? null : contactCount > 0
     const debtFailed = readingFailed(raw.warnings, 'debt', 'debtor')
     const profileFailed = readingFailed(raw.warnings, 'debtor_profile')
-    const overdueDebts = debts.filter(debt => overdueDebtItems.has(debt))
-    const totalFromProfile = moneyData(selectValueFromRow(profile ?? {}, ['total_debt_amount', 'total_debt', 'debt_total', 'amount_total']))
-    const overdueFromProfile = moneyData(selectValueFromRow(profile ?? {}, ['overdue_debt_amount', 'overdue_debt', 'debt_overdue']))
-    const totalMetric = debtFailed || profileFailed ? unavailable()
-      : totalFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN'
-        ? sumMoney(debts.map(debt => metric(debt, 'updatedAmount'))) : totalFromProfile
-    const missingStatuses = debts.filter(debt => debt.statusPresence !== 'OBSERVADO')
-      .map(debt => unavailable(debt.statusPresence))
-    const statusIncomplete = missingStatuses.length > 0
-    const overdueMetric = debtFailed || profileFailed ? unavailable()
-      // Con estados faltantes, el valor persistido es un subtotal: leerlo solo perdería su desglose (§4.1).
-      : overdueFromProfile.presence === 'NO_INFORMADO_EN_ORIGEN' || statusIncomplete
-        ? sumMoney([...overdueDebts.map(debt => metric(debt, 'updatedAmount')), ...missingStatuses])
-        : overdueFromProfile
-    const totalDebt = totalMetric.value
-    const overdueDebt = overdueMetric.value
-    // Un estado faltante impide conocer el máximo; no es una falla de lectura del universo.
-    const overdueDaysMetric = aggregateData(statusIncomplete ? missingStatuses
-      : overdueDebts.map(debt => debt.ruleInput!.due_date.estado === 'OBSERVADO'
-        ? daysSinceData(debt.dueDate, cutoff ?? NaN)
-        : unavailable(debt.ruleInput!.due_date.estado, 'FECHA_INVALIDA')), 'max', debtFailed || cutoff === null)
-    const maxDaysOverdue = overdueDaysMetric.value
+    // Una sola definición de totales y mora (portfolio-totals), la misma de las reglas: por calendario sobre
+    // las no pagadas. Ni la clave OVERDUE, ni el rótulo, ni los importes persistidos del perfil la deciden.
+    const totals = objectTotals(debts.map(debt => debt.ruleInput!), { asOf: decisionAsOf.valor, debtsFailed: debtFailed, statusesFailed: catalogFailed })
+    const totalDebt = totals.registeredTotal.value
+    const overdueDebt = totals.overdueDebt.value
+    const maxDaysOverdue = totals.maxDaysOverdue.value
     const decisionIssues = [...contextIssues, ...debts.flatMap(debt => debt.decisionIssues ?? [])]
     if (debtFailed) decisionIssues.push({ field: 'obligaciones', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
+    // Sin catálogo de estados no se sabe qué está pagado: la lectura fallida nunca se vuelve «no pagada».
+    if (catalogFailed) decisionIssues.push({ field: 'estado_catalogo', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     if (peopleFailed) decisionIssues.push({ field: 'personas', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     if (contactsFailed) decisionIssues.push({ field: 'contactos_activos', presence: 'NO_INTEGRADO', reason: 'LECTURA_FALLIDA' })
     const relations = personRelationsByDebtor.get(id) ?? []
-    const input: DecisionInput | null = debtFailed || peopleFailed || decisionAsOf.valor === null ? null : {
+    const input: DecisionInput | null = debtFailed || catalogFailed || peopleFailed || decisionAsOf.valor === null ? null : {
       id, as_of: decisionAsOf.valor, source_updated_at: sourceUpdatedAt,
       obligaciones: debts.map(debt => debt.ruleInput!),
       contactos_activos: ruleNumber(contactMetric),
@@ -572,8 +547,13 @@ export function mapDebtorObjectsFromRawData(
       description,
       status,
       totalDebt,
+      pendingDebt: totals.pendingDebt.value,
       overdueDebt,
-      metrics: { totalDebt: totalMetric, overdueDebt: overdueMetric, contactCount: contactMetric, riskScore: priorityMetric, maxDaysOverdue: overdueDaysMetric, priorityScore: priorityMetric },
+      metrics: {
+        totalDebt: totals.registeredTotal, pendingDebt: totals.pendingDebt, overdueDebt: totals.overdueDebt,
+        overdueDebtsCount: totals.overdueCount, contactCount: contactMetric, riskScore: priorityMetric,
+        maxDaysOverdue: totals.maxDaysOverdue, priorityScore: priorityMetric,
+      },
       decision,
       decisionInput: input,
       decisionAsOf,
@@ -591,7 +571,7 @@ export function mapDebtorObjectsFromRawData(
       risk,
       riskScore,
       debtCount: debtFailed ? null : debts.length,
-      overdueDebtsCount: debtFailed || statusIncomplete ? null : overdueDebts.length,
+      overdueDebtsCount: totals.overdueCount.value,
       maxDaysOverdue,
       priorityScore,
       priorityLevel,

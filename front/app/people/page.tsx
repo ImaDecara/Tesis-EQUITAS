@@ -276,7 +276,7 @@ export default async function PeoplePage({
                   <TableHead className="text-right">Puntaje (puntos de 0 a 100)</TableHead>
                   <TableHead className="text-right">Objetos vinculados</TableHead>
                   <TableHead>Contacto disponible</TableHead>
-                  <TableHead className="text-right">Deuda total asociada</TableHead>
+                  <TableHead className="text-right">Total registrado asociado</TableHead>
                   <TableHead className="text-right">Accion</TableHead>
                 </TableRow>
               </TableHeader>

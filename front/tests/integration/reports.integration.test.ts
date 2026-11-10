@@ -267,7 +267,8 @@ describe('ALIGN-028: formato y metadatos', () => {
     const { file } = await download('queue')
     for (const row of file.rows) {
       expect(row.fecha_corte).toBe('NO_INTEGRADO')
-      expect(row.version_reglas).toBe('1.0.0')
+      // Versión activa de las reglas (la del cálculo de la cola), no la de una decisión guardada.
+      expect(row.version_reglas).toBe('1.1.0')
     }
     expect(details(file.rows)[0].fecha_calculo_usada).toBe('2026-11-02')
     const quality = await download('data-quality')
@@ -317,7 +318,10 @@ describe('ALIGN-028: formato y metadatos', () => {
 describe('ALIGN-028: una falla inesperada', () => {
   it('un importe irrepresentable se declara INVALIDO sin perder las filas legibles', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    client({ debtor_profile: [{ id: 1, debtor: 101, total_debt_amount: 1e21, __scope: { tenant: 7 } }] })
+    // Reglas 1.1.0: el total registrado sale de las obligaciones (no del perfil): el importe irrepresentable va en una.
+    const tables = portfolioTables()
+    tables.debt[0].current_amount = 1e21
+    client({ debt: tables.debt, debtor_profile: [{ id: 1, debtor: 101, total_debt_amount: 1e21, __scope: { tenant: 7 } }] })
     const response = await getQueue(request('queue'))
     expect(response.status).toBe(200)
     const body = await response.text()
@@ -580,7 +584,7 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     expect(sumCents(rows, 'deuda_vencida_ars')).toBe(csvCents(total.deuda_vencida_ars))
     expect(sumCents(rows, 'monto_evaluable_ars')).toBe(csvCents(total.monto_evaluable_ars))
     const cards = cardValues(await (DebtAgingPage as never as (props: unknown) => Promise<ReactNode>)({ searchParams: Promise.resolve({}) }))
-    expect(cards['Deuda total']).toBe(formatCurrency(csvCents(total.deuda_total_ars)! / 100))
+    expect(cards['Total registrado']).toBe(formatCurrency(csvCents(total.deuda_total_ars)! / 100))
     expect(cards['Deuda vencida']).toBe(formatCurrency(csvCents(total.deuda_vencida_ars)! / 100))
   })
 

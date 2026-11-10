@@ -225,7 +225,7 @@ export default async function DebtorsPage({
                   <TableHead className="w-[200px]">Identificador</TableHead>
                   <TableHead className="w-[95px]">Tipo</TableHead>
                   <TableHead className="w-[210px]">Descripcion</TableHead>
-                  <TableHead className="w-[130px] text-right">Deuda total</TableHead>
+                  <TableHead className="w-[130px] text-right">Total registrado</TableHead>
                   <TableHead className="w-[120px]">Estado de catálogo</TableHead>
                   <TableHead className="w-[190px]">Personas</TableHead>
                   <TableHead className="w-[120px]">Contacto</TableHead>

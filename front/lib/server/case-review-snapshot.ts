@@ -24,6 +24,7 @@ const byText = (left: string, right: string) => left < right ? -1 : left > right
 
 // SHA-256 de lo que evaluaron las reglas. Excluye la versión, que se compara aparte, y
 // no depende del orden de lectura: `personas` no tiene id, así que ordena por contenido.
+// Incluye estado_catalogo de cada obligación (reglas 1.1.0): pagar una obligación cambia el hash.
 export function computeInputsHash(input: DecisionInput): string {
   const canonical = canonicalJson({
     ...input,
@@ -98,10 +99,15 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
   const cutoffBatchId = databaseId(cutoff?.id)
   if (!cutoff || !cutoffBatchId) return { ok: false, code: 'CUTOFF_NOT_AVAILABLE' }
 
-  const [debts, debtorPeople, people, debtorContacts] = await Promise.all([
+  // debt_status decide qué obligaciones están pagadas (reglas 1.1.0): sin el catálogo completo no se
+  // registra nada, y el servidor calcula lo mismo que la pantalla.
+  const [debts, debtorPeople, people, debtorContacts, debtStatuses] = await Promise.all([
     read('debt'), read('debtor_person'), read('person'), read('debtor_contact'),
+    loadAllTableRows('debt_status', supabase, tenantReadScope('debt_status', tenantId)!),
   ])
-  if (debts.warning || debtorPeople.warning || people.warning || debtorContacts.warning) return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
+  if (debts.warning || debtorPeople.warning || people.warning || debtorContacts.warning || debtStatuses.warning) {
+    return { ok: false, code: 'SUGGESTION_UNAVAILABLE' }
+  }
 
   const mapped = mapDebtorObjectsFromRawData({
     batch: { as_of: cutoff.as_of as string | null, source_updated_at: cutoff.source_updated_at as string | null },
@@ -110,9 +116,9 @@ export async function computeCaseReviewSnapshot(supabase: SupabaseClient, tenant
     debtorPeople: debtorPeople.rows,
     people: people.rows,
     debtorContacts: debtorContacts.rows,
+    debtStatuses: debtStatuses.rows,
     // La decisión no los usa: leerlos solo agregaría formas de fallar.
     debtorTypes: [] as RawRow[],
-    debtStatuses: [] as RawRow[],
     debtorProfiles: [] as RawRow[],
     warnings: [],
   })

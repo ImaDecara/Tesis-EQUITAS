@@ -287,7 +287,7 @@ export default async function PriorityCasesPage({
                   <TableHead>Severidad</TableHead>
                   <TableHead>Prioridad (puntos de 0 a 100)</TableHead>
                   <TableHead className="text-right">Atraso</TableHead>
-                  <TableHead className="text-right">Deuda total</TableHead>
+                  <TableHead className="text-right">Total registrado</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Recomendacion</TableHead>
                   <TableHead className="text-right">Accion</TableHead>

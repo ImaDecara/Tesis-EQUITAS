@@ -8,7 +8,8 @@ import { filterPortfolio, type PortfolioFilters } from '@/lib/portfolio-filters'
 import type { RawDebtorDataBundle } from '@/types/equitas-domain'
 
 function portfolio(): RawDebtorDataBundle {
-  const raw: RawDebtorDataBundle = { batch: { as_of: '2026-09-30' }, debtors: [], debts: [], debtStatuses: [], debtorTypes: [{ id: 1, value: 'Agua' }, { id: 2, value: 'Inmueble' }], people: [], debtorPeople: [], debtorContacts: [], debtorProfiles: [], warnings: [] }
+  // Reglas 1.1.0: una de cada 11 obligaciones está pagada (clave PAID) y el perfil persistido no es fuente de totales.
+  const raw: RawDebtorDataBundle = { batch: { as_of: '2026-09-30' }, debtors: [], debts: [], debtStatuses: [{ id: 1, key: 'ACTIVE', value: 'Vigente' }, { id: 6, key: 'PAID', value: 'Pagada' }], debtorTypes: [{ id: 1, value: 'Agua' }, { id: 2, value: 'Inmueble' }], people: [], debtorPeople: [], debtorContacts: [], debtorProfiles: [], warnings: [] }
   const amounts = [0, 0.01, 49999.99, 50000, 200000, 500000, 1000000, null]
   const due = ['2026-10-01', '2026-09-30', '2026-09-29', '2026-08-31', '2026-07-01', '2026-04-02', '2025-09-29', '2024-09-29', '2020-01-01', null]
   for (let index = 1; index <= 3507; index++) {
@@ -17,7 +18,7 @@ function portfolio(): RawDebtorDataBundle {
     raw.people.push({ id, full_name: `SINTETICO-${index}`, type: 'FISICA' })
     raw.debtorPeople.push({ id, debtor: id, person: id, priority: 100, active: true })
     if (index % 7) raw.debtorContacts.push({ id, person: id, type: 1, value: `s${index}@example.test`, active: true })
-    for (let item = 0; item <= index % 13; item++) raw.debts.push({ id: `${id}-${item}`, debtor: id, current_amount: amounts[(index + item) % amounts.length], due_date: due[(index + item) % due.length] })
+    for (let item = 0; item <= index % 13; item++) raw.debts.push({ id: `${id}-${item}`, debtor: id, current_amount: amounts[(index + item) % amounts.length], due_date: due[(index + item) % due.length], status: (index + item) % 11 ? 1 : 6 })
     if (index % 19 === 0) raw.debtorProfiles.push({ debtor: id, total_debt_amount: 123.45 })
   }
   // La lectura física no define desempates.

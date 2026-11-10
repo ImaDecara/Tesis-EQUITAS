@@ -11,12 +11,13 @@ from typing import Any
 import pytest
 
 from services import scoring_service as scoring
+from services.decision_rules_v1 import RULES_VERSION
 from services.paginated_reader import DataReadError, read_all_by_id, row_id
 
 CUTOFF = "2026-09-30"
 GOLDEN = json.loads(
     (
-        Path(__file__).resolve().parents[2] / "contracts/decision-rules.v1.golden.json"
+        Path(__file__).resolve().parents[2] / "contracts/decision-rules.v1.1.golden.json"
     ).read_text()
 )
 
@@ -222,6 +223,7 @@ def synthetic_tables():
         ],
         "person": [{"id": index, "type": 1} for index in (1, 2, 3, 4)],
         "person_type": [{"id": 1, "key": "INDIVIDUAL"}],
+        "debt_status": [{"id": 1, "key": "ACTIVE"}, {"id": 2, "key": "OVERDUE"}, {"id": 6, "key": "PAID"}],
         "debtor_contact": [
             {
                 "id": index,
@@ -241,6 +243,7 @@ def synthetic_tables():
                     "debtor": identifier,
                     "current_amount": obligation["current_amount"]["valor"],
                     "due_date": obligation["due_date"]["valor"],
+                    "status": 2,
                 }
             )
     return tables
@@ -265,7 +268,7 @@ def test_service_evaluates_raw_debt_not_legacy_profiles_and_includes_objects_wit
         assert "socioeconomic_risk_level" not in case
         assert "risk_band" not in case
         assert case["as_of"] == CUTOFF
-        assert case["version_reglas"] == "1.0.0"
+        assert case["version_reglas"] == RULES_VERSION == "1.1.0"
     # Ningún agregado heredado afecta la salida ni siquiera si es contradictorio.
     tables["debtor_profile"][0].update(
         socioeconomic_risk_level=0, total_debt_amount=None
@@ -312,6 +315,7 @@ def test_2933_case_portfolio_is_complete_end_to_end(monkeypatch):
         "person",
         "debtor_contact",
         "person_type",
+        "debt_status",
         "debtor",
         "debtor_profile",
     ],
@@ -425,3 +429,53 @@ def test_console_preview_prints_only_counts(monkeypatch, capsys):
     client = install_client(monkeypatch, tables=synthetic_tables())
     scoring.print_case_groups_preview(build_cases(client)[:2])
     assert "Casos procesados: 2" in capsys.readouterr().out
+
+
+SMALL = json.loads(
+    (
+        Path(__file__).resolve().parents[2] / "contracts/portfolio-small-cases.v1.json"
+    ).read_text(encoding="utf-8")
+)
+
+
+def small_case_tables():
+    tables: dict[str, list[dict[str, Any]]] = {
+        "debtor": [], "debtor_profile": [], "debt": [], "debtor_person": [], "person": [],
+        "person_type": [{"id": 1, "key": "INDIVIDUAL"}], "debtor_contact": [],
+        "debt_status": deepcopy(SMALL["catalogo_debt_status"]),
+    }
+    for case in SMALL["casos"]:
+        debtor = case["objeto"]["id"]
+        tables["debtor"].append({"id": debtor, "identifier": case["objeto"]["identificador"]})
+        for item in case["obligaciones"]:
+            tables["debt"].append({"id": item["id"], "debtor": debtor, "current_amount": item["importe"],
+                                   "due_date": item["vencimiento"], "status": item["estado_id"]})
+        for holder in case["titulares"]:
+            tables["debtor_person"].append({"id": holder["id"], "debtor": debtor, "person": holder["id"],
+                                            "priority": holder["porcentaje"], "active": True})
+            tables["person"].append({"id": holder["id"], "type": 1})
+            for contact in holder["contactos"]:
+                tables["debtor_contact"].append({"id": contact["id"], "person": holder["id"], "type": 1,
+                                                 "value": contact["valor"], "active": True})
+    return tables
+
+
+def test_small_cases_give_the_same_numbers_in_the_scoring_service(monkeypatch):
+    client = install_client(monkeypatch, tables=small_case_tables())
+    by_id = {case["debtor_id"]: case for case in build_cases(client, SMALL["fecha_cartera"])}
+    assert len(by_id) == len(SMALL["casos"])
+    for case in SMALL["casos"]:
+        expected = case["esperado"]
+        scored = by_id[case["objeto"]["id"]]
+        severity = scored["decision"]["severidad"]
+        assert (scored["priority_score"], scored["severity_band"]) == (expected["puntaje"], expected["banda"]), case["id"]
+        assert severity["estado"] == expected["estado_severidad"], case["id"]
+        assert severity["monto_actualizado_ars"] == expected["monto_evaluable"], case["id"]
+        assert severity["cantidad_vencidas"] == expected["obligaciones_vencidas"], case["id"]
+        assert severity["dias_atraso_maximo"] == expected["atraso_maximo_dias"]["valor"], case["id"]
+        assert severity["obligaciones_pagadas"] == expected["obligaciones_pagadas"], case["id"]
+        assert (scored["group_key"], scored["group_label"]) == (expected["intervencion"], expected["grupo"]), case["id"]
+        assert scored["decision"]["intervencion"]["regla"] == expected["regla"], case["id"]
+    summary = scoring.get_case_groups_summary(client, tenant=TENANT, as_of=SMALL["fecha_cartera"])
+    totals = {group["group_key"]: group["total"] for group in summary["groups"] if group["total"]}
+    assert totals == SMALL["tablero"]["grupos"]

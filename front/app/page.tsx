@@ -81,9 +81,9 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
             tone="critical"
           />
           <MetricCard
-            label="Deuda total"
+            label="Total registrado"
             value={formatCurrency(dashboard.totalDebt)}
-            hint={`ARS; saldo histórico. ${dashboard.coverage?.totalDebt ?? ""}`}
+            hint={`ARS; todas las obligaciones, cualquiera sea su estado. ${dashboard.coverage?.totalDebt ?? ""}`}
             icon={CircleDollarSign}
             tone="primary"
           />

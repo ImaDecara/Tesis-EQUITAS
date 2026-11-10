@@ -18,7 +18,8 @@ import { selectCurrentCutoff, type BatchEvent } from '@/lib/server/case-review-s
 import type { RawRow } from '@/types/equitas-domain'
 import { createPaginatedSupabase } from '../fixtures/paginated-supabase'
 
-const RULES_VERSION = JSON.parse(readFileSync(new URL('../../../contracts/decision-rules.v1.json', import.meta.url), 'utf8')).version as string
+// Versión ACTIVA: la que calcula el servidor al registrar (reglas 1.1.0); las filas de prueba la usan como vigente.
+const RULES_VERSION = JSON.parse(readFileSync(new URL('../../../contracts/decision-rules.v1.1.json', import.meta.url), 'utf8')).version as string
 const TENANT = 7
 const OTHER_TENANT = 8
 const DEBTOR = 99
@@ -220,8 +221,9 @@ describe('ALIGN-020: recordCaseDecision', () => {
     session()
     const shown = await screen()
     const canonical = '{"as_of":"2026-10-30","contactos_activos":{"estado":"OBSERVADO","valor":1},"id":"99","obligaciones":[' +
-      '{"current_amount":{"estado":"OBSERVADO","valor":1250},"due_date":{"estado":"OBSERVADO","valor":"2026-09-01"},"estado_origen":{"estado":"NO_INTEGRADO","valor":null},"id":"1","periodo_fiscal":{"estado":"NO_INTEGRADO","valor":null}},' +
-      '{"current_amount":{"estado":"OBSERVADO","valor":90000.5},"due_date":{"estado":"OBSERVADO","valor":"2026-03-01"},"estado_origen":{"estado":"NO_INTEGRADO","valor":null},"id":"2","periodo_fiscal":{"estado":"NO_INTEGRADO","valor":null}}' +
+      // Reglas 1.1.0: estado_catalogo es parte de lo evaluado (estas obligaciones no traen estado).
+      '{"current_amount":{"estado":"OBSERVADO","valor":1250},"due_date":{"estado":"OBSERVADO","valor":"2026-09-01"},"estado_catalogo":{"estado":"NO_INFORMADO_EN_ORIGEN","valor":null},"estado_origen":{"estado":"NO_INTEGRADO","valor":null},"id":"1","periodo_fiscal":{"estado":"NO_INTEGRADO","valor":null}},' +
+      '{"current_amount":{"estado":"OBSERVADO","valor":90000.5},"due_date":{"estado":"OBSERVADO","valor":"2026-03-01"},"estado_catalogo":{"estado":"NO_INFORMADO_EN_ORIGEN","valor":null},"estado_origen":{"estado":"NO_INTEGRADO","valor":null},"id":"2","periodo_fiscal":{"estado":"NO_INTEGRADO","valor":null}}' +
       '],"personas":[{"porcentaje_declarado":{"estado":"OBSERVADO","valor":100},"tipo":{"estado":"NO_INFORMADO_EN_ORIGEN","valor":null}}],' +
       '"source_updated_at":{"estado":"OBSERVADO","valor":"2026-10-29"},"vulnerabilidad":{"estado":"NO_INFORMADO_EN_ORIGEN","valor":null}}'
     expect(shown.inputsHash).toBe(createHash('sha256').update(canonical).digest('hex'))

@@ -5,8 +5,12 @@ import pytest
 from services.decision_input import build_decision_input
 from services.decision_rules_v1 import evaluate
 
+STATUSES = {1: {"id": 1, "key": "ACTIVE"}, 6: {"id": 6, "key": "PAID"}, 8: {"id": 8, "key": "UNKNOWN"}}
 
-def make_entry(*, debts=None, relations=None, contacts=None, people=None, types=None):
+
+def make_entry(
+    *, debts=None, relations=None, contacts=None, people=None, types=None, statuses=None
+):
     return build_decision_input(
         {"id": 1},
         debts or [],
@@ -15,6 +19,7 @@ def make_entry(*, debts=None, relations=None, contacts=None, people=None, types=
         contacts or [],
         types or {},
         as_of="2026-09-30",
+        debt_statuses=STATUSES if statuses is None else statuses,
     )
 
 
@@ -172,3 +177,34 @@ def test_person_type_preserves_missing_and_invalid_catalog_data(
     )
     assert entry["personas"][0]["tipo"] == {"estado": state, "valor": value}
     assert "TIPO_PERSONA_DESCONOCIDO" in evaluate(entry)["banderas"]
+
+
+@pytest.mark.parametrize(
+    "row,expected",
+    [
+        ({}, {"estado": "NO_INTEGRADO", "valor": None}),
+        ({"status": None}, {"estado": "NO_INFORMADO_EN_ORIGEN", "valor": None}),
+        ({"status": 6}, {"estado": "OBSERVADO", "valor": "PAID"}),
+        ({"status": "6"}, {"estado": "OBSERVADO", "valor": "PAID"}),
+        ({"status": 1}, {"estado": "OBSERVADO", "valor": "ACTIVE"}),
+        ({"status": 8}, {"estado": "NO_INFORMADO_EN_ORIGEN", "valor": None}),
+        ({"status": 99}, {"estado": "INVALIDO", "valor": None}),
+        ({"status": "x"}, {"estado": "INVALIDO", "valor": None}),
+    ],
+)
+def test_catalog_state_is_the_debt_status_key_without_interpreting_it(row, expected):
+    entry = make_entry(debts=[{"id": 1, "current_amount": 10, "due_date": "2026-01-01", **row}])
+    assert entry["obligaciones"][0]["estado_catalogo"] == expected
+    paid = expected["valor"] == "PAID"
+    severity = evaluate(entry)["severidad"]
+    assert severity["obligaciones_pagadas"] == int(paid)
+    assert severity["cantidad_vencidas"] == int(not paid)
+
+
+def test_catalog_row_without_key_is_not_integrated_and_not_paid():
+    entry = make_entry(
+        debts=[{"id": 1, "current_amount": 10, "due_date": "2026-01-01", "status": 6}],
+        statuses={6: {"id": 6, "key": None}},
+    )
+    assert entry["obligaciones"][0]["estado_catalogo"] == {"estado": "NO_INTEGRADO", "valor": None}
+    assert evaluate(entry)["severidad"]["cantidad_vencidas"] == 1

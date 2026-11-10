@@ -36,7 +36,7 @@ const visibleFields = [
     decisionComputedAt: true, rulesVersion: true, decisionIssues: true,
     metrics: true, computedAt: true, temporalProvenance: true,
     id: true, identifier: true, type: true, description: true, status: true, totalDebt: true,
-    overdueDebt: true, peopleCount: true, peopleIds: true, peopleNames: true, hasContact: true,
+    pendingDebt: true, overdueDebt: true, peopleCount: true, peopleIds: true, peopleNames: true, hasContact: true,
     contactCount: true, risk: true, riskScore: true, debtCount: true, overdueDebtsCount: true,
     maxDaysOverdue: true, priorityScore: true, priorityLevel: true, recommendation: true,
     recommendationType: true, recommendationReason: true, isUrgentRecommendation: true,
@@ -57,7 +57,7 @@ const visibleFields = [
   }),
   ...fields<DebtorProfileSummary>('DebtorProfileSummary', {
     metrics: true,
-    totalDebt: true, overdueDebt: true, debtCount: true, antiquityDays: true, associatedPeople: true,
+    totalDebt: true, pendingDebt: true, overdueDebt: true, debtCount: true, antiquityDays: true, associatedPeople: true,
     availableContacts: true, risk: true, riskScore: true, socioeconomicLevel: true,
   }),
   ...fields<PersonListItem>('PersonListItem', {
@@ -67,7 +67,7 @@ const visibleFields = [
   }),
   ...fields<DashboardData>('DashboardData', {
     metrics: true, coverage: true, context: true, queuePreviews: true,
-    totalDebtors: true, totalDebt: true, overdueCases: true, withContactCases: true,
+    totalDebtors: true, totalDebt: true, pendingDebt: true, overdueDebt: true, overdueCases: true, withContactCases: true,
     withoutContactCases: true, priorityCases: true, urgentRecommendationCases: true,
     criticalCasesToday: true, riskAboveNinetyCases: true, criticalDebtTotal: true,
     byDebtStatus: true, byDebtorType: true, byRisk: true, byRecommendation: true,

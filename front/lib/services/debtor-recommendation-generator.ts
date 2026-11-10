@@ -1,5 +1,4 @@
-import contract from '../../../contracts/decision-rules.v1.json'
-import type { Decision, InterventionCode } from '@/lib/domain/decision-rules-v1'
+import { ACTIVE_RULES as contract, type Decision, type InterventionCode } from '@/lib/domain/decision-rules-v1'
 import type { RecommendationKind } from '@/types/equitas-domain'
 
 export const INTERVENTION_CODES = Object.keys(contract.intervenciones) as InterventionCode[]

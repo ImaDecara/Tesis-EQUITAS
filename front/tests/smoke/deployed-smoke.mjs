@@ -125,7 +125,7 @@ try {
   report.checks.push({ id: 'login', passed: true, observed: 'Dashboard autenticado disponible.' })
 
   const expectedAmount = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(policy.expected.debt_amount)
-  const metric = page.getByText('Deuda total', { exact: true }).locator('..').locator('..').locator('..')
+  const metric = page.getByText('Total registrado', { exact: true }).locator('..').locator('..').locator('..')
   await expect(metric).toContainText(expectedAmount)
   await expect(page.locator('body')).not.toContainText(policy.expected.other_debtor_identifier)
   await capture('dashboard')
@@ -149,7 +149,7 @@ try {
   await expect(page).toHaveURL(base.origin + '/people')
   await expect(page.getByRole('heading', { name: 'Personas / Deudores', exact: true })).toBeVisible()
   const peopleTable = page.getByRole('table').filter({
-    has: page.getByRole('columnheader', { name: 'Deuda total asociada', exact: true }),
+    has: page.getByRole('columnheader', { name: 'Total registrado asociado', exact: true }),
   })
   const ownPerson = peopleTable.getByRole('row').filter({ hasText: policy.expected.person_name })
   await expect(ownPerson).toBeVisible()

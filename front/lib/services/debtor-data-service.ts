@@ -33,6 +33,7 @@ function mapDebtorDetailFromMappedObjects(
     profile: {
       metrics: debtor.metrics,
       totalDebt: debtor.totalDebt,
+      pendingDebt: debtor.pendingDebt,
       overdueDebt: debtor.overdueDebt,
       debtCount: debtor.debtCount,
       antiquityDays: readingFailed(mapped.warnings, 'debt') ? null : daysSinceData(oldestDebt).value,

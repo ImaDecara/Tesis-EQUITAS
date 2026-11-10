@@ -7,8 +7,11 @@ type DashboardMapperInput = { debtors: DebtorListItem[]; debtStatusBuckets: Map<
 
 export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets, warnings = [] }: DashboardMapperInput): DashboardData {
   const failed = (...tables: string[]) => readingFailed(warnings, 'debtor', ...tables)
-  const severityFailed = failed('debt', 'debtor_person')
-  const moneyFailed = failed('debt', 'debtor_profile')
+  // Sin el catálogo de estados no se sabe qué está pagado: no hay decisión ni deuda pendiente o vencida.
+  const severityFailed = failed('debt', 'debt_status', 'debtor_person')
+  // Total registrado, deuda pendiente y vencida salen de las obligaciones (portfolio-totals), no del perfil.
+  const moneyFailed = failed('debt')
+  const pendingFailed = failed('debt', 'debt_status')
   const contactsFailed = failed('debtor_contact', 'debtor_person')
   const queues = buildRecommendationSummary(debtors, warnings)
   const coverage: Record<string, string> = {}
@@ -22,6 +25,7 @@ export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBucket
   }
   const severity = debtors.map(item => metric(item, 'riskScore'))
   const amounts = debtors.map(item => metric(item, 'totalDebt'))
+  const pending = debtors.map(item => metric(item, 'pendingDebt'))
   const contacts = debtors.map(item => metric(item, 'contactCount'))
   const maturity = debtors.map(maturityMetrics)
   const reviews = debtors.map(item => item.decision ? { ...observed(item.isUrgentRecommendation ? 1 : 0), missing: Object.fromEntries(Object.keys(metric(item, 'priorityScore').missing).map(state => [state, 1])) } : metric(item, 'priorityScore'))
@@ -29,6 +33,8 @@ export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBucket
   const metrics: Record<string, NumericData> = {
     totalDebtors: failed() ? unavailable() : observed(debtors.length),
     totalDebt: sumMoney(amounts, moneyFailed),
+    pendingDebt: sumMoney(pending, pendingFailed),
+    overdueDebt: sumMoney(maturity.map(item => item.overdueDebt), pendingFailed),
     overdueCases: aggregateData(maturity.map(item => ({ ...item.overdueCases, missing: Object.fromEntries(Object.keys(item.overdueCases.missing).map(key => [key, 1])) })), 'sum', severityFailed),
     withContactCases: count('contactCount', item => item.hasContact === true, contactsFailed),
     withoutContactCases: count('contactCount', item => item.hasContact === false, contactsFailed),
@@ -41,6 +47,8 @@ export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBucket
     criticalDebtTotal: sumMoney(debtors.map(item => item.riskScore === null ? metric(item, 'riskScore') : item.risk === 'ALTO' ? metric(item, 'totalDebt') : observed(0)), severityFailed || moneyFailed),
   }
   coverage.totalDebt = coverageText(amounts, moneyFailed)
+  coverage.pendingDebt = coverageText(pending, pendingFailed)
+  coverage.overdueDebt = coverageText(maturity.map(item => item.overdueDebt), pendingFailed)
   coverage.priorityCases = coverageText(severity, severityFailed)
   coverage.highSeverityCases = coverage.priorityCases
   coverage.overdueCases = coverageText(maturity.map(item => item.overdueCases), severityFailed)
@@ -58,6 +66,7 @@ export function mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBucket
     metrics, coverage, context: portfolioContext(debtors, warnings),
     queuePreviews: queues.map(group => ({ code: group.interventionCode, label: group.recommendation, count: group.count, cases: group.highlightedCases })),
     totalDebtors: metrics.totalDebtors.value, totalDebt: metrics.totalDebt.value,
+    pendingDebt: metrics.pendingDebt.value, overdueDebt: metrics.overdueDebt.value,
     overdueCases: metrics.overdueCases.value, withContactCases: metrics.withContactCases.value,
     withoutContactCases: metrics.withoutContactCases.value, priorityCases: metrics.priorityCases.value,
     urgentRecommendationCases: metrics.urgentRecommendationCases.value,

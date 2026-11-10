@@ -1,7 +1,6 @@
-import contract from '../../../contracts/decision-rules.v1.json'
 import { withMaturityMetrics } from '@/lib/analytics'
 import { metric } from '@/lib/data-presence'
-import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
+import { ACTIVE_RULES as contract, RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { serializeCsv } from '@/lib/reports/csv'
 import { AGGREGATE_COLUMNS, definitionsLink, NO_FILTERS, portfolioCutoff, readParams, shareRow, tally, totalRow, type ReportMeta } from '@/lib/reports/report-format'
 import { DATA_PRESENCE_STATES, type DebtorListItem, type NumericData, type RawDebtorDataBundle } from '@/types/equitas-domain'
