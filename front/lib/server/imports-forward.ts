@@ -91,16 +91,31 @@ function upstreamHeaders(request: NextRequest, token: string): Headers {
 
 // Solo vuelven el codigo y un cuerpo JSON. Ningun encabezado interno llega al navegador, y una
 // redireccion, que llevaria la URL interna en Location, se trata como una falla del servicio.
-async function browserResponse(upstream: Response): Promise<Response> {
+async function browserResponse(upstream: Response, path: string): Promise<Response> {
   const isJson = upstream.headers.get('content-type')?.toLowerCase().startsWith('application/json')
   if ((upstream.status >= 300 && upstream.status < 400) || !isJson) {
     await upstream.body?.cancel()
     return failure(502, 'IMPORT_SERVICE_ERROR')
   }
-  return new Response(await upstream.text(), {
-    status: upstream.status,
+  const text = await upstream.text()
+  return new Response(text, {
+    status: handledLoadOutcome(path, text) ? 200 : upstream.status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE },
   })
+}
+
+// La carga directa responde cada desenlace previsto (publicado, ya cargado, rechazado, requiere confirmacion,
+// no completado, no confirmado) con un cuerpo que lo nombra en `resultado`. Para el navegador todos son una
+// respuesta atendida: la pantalla la explica, y un lote rechazado no es un error de la aplicacion en la consola.
+// Lo que NO trae `resultado` (sesion, permiso, entrada invalida, falla sin atender) conserva su codigo.
+function handledLoadOutcome(path: string, text: string): boolean {
+  if (path !== '/imports/load') return false
+  try {
+    const body: unknown = JSON.parse(text)
+    return typeof body === 'object' && body !== null && typeof (body as { resultado?: unknown }).resultado === 'string'
+  } catch {
+    return false
+  }
 }
 
 export async function forwardImportRequest(request: NextRequest, segments: readonly string[]): Promise<Response> {
@@ -136,7 +151,7 @@ export async function forwardImportRequest(request: NextRequest, segments: reado
       cache: 'no-store',
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     } as RequestInit)
-    return await browserResponse(upstream)
+    return await browserResponse(upstream, path)
   } catch (error) {
     // Ni el mensaje ni la causa viajan: pueden citar la URL interna. Solo se distingue un caso: si la conexion
     // fue rechazada, el servicio no recibio nada. En cualquier otro corte (tiempo agotado, conexion caida a
