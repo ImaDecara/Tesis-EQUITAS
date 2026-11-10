@@ -48,7 +48,16 @@ select (select count(*) from original) as tablas,
         from pg_policies p join original o on o.relname = p.tablename where p.schemaname = 'public') as huella_politicas,
        (select count(*) from pg_index i join original o on o.oid = i.indrelid) as indices;
 
--- 6. La cartera no se toca: mismos conteos antes y después.
+-- 6. Tablas de membresía: de ellas depende quién es ADMIN. Tienen que tener RLS activo y ninguna política de
+--    escritura para roles de cliente; si no, el paquete se niega a instalarse (PAQUETE_BASE_INSEGURA).
+select c.relname as tabla, c.relrowsecurity as rls,
+       (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname and p.cmd <> 'SELECT'
+          and p.roles && array['public', 'anon', 'authenticated']::name[]) as politicas_de_escritura_de_cliente,
+       has_table_privilege('authenticated', c.oid, 'insert') or has_table_privilege('authenticated', c.oid, 'update')
+         or has_table_privilege('authenticated', c.oid, 'delete') as authenticated_tiene_permiso_de_escritura
+from pg_class c where c.oid = any (array['public.tenant_user', 'public."user"', 'public.role', 'public.tenant']::regclass[]) order by 1;
+
+-- 7. La cartera no se toca: mismos conteos antes y después.
 select (select count(*) from public.debtor) as objetos, (select count(*) from public.debt) as obligaciones,
        (select count(*) from public.person) as personas, (select count(*) from public.tenant_user) as membresias,
        (select count(*) from public.role) as roles_del_catalogo;

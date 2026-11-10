@@ -58,7 +58,8 @@ async function readDatabaseLevel(): Promise<DatabaseLevel> {
   }
 }
 
-// Una comprobación por solicitud (memoización de React): nada se guarda entre solicitudes.
+// Al renderizar una página, React comparte el resultado dentro de esa solicitud. En una ruta de reporte o en una
+// acción de servidor no hay memoización: el nivel se comprueba en cada llamada. Nada se guarda entre solicitudes.
 export const loadDatabaseLevel = cache(readDatabaseLevel)
 
 /**

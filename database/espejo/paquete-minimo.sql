@@ -37,6 +37,15 @@ do $$ begin
      or to_regclass('public.tenant') is null or to_regclass('public.role') is null then
     raise exception 'PAQUETE_BASE_INESPERADA: faltan tablas de la aplicación; no se aplica nada';
   end if;
+  -- Las funciones del módulo confían en la membresía (tenant_user, "user", role, tenant) para saber quién es ADMIN.
+  -- Si una persona pudiera escribir esas tablas con su sesión, podría darse el rol y aprobar su propia propuesta
+  -- con otra cuenta. Se exige que tengan RLS activo y ninguna política de escritura para roles de cliente.
+  if exists (select 1 from pg_class c where c.oid = any (array['public.tenant_user', 'public."user"', 'public.role', 'public.tenant']::regclass[])
+               and not c.relrowsecurity)
+     or exists (select 1 from pg_policies p where p.schemaname = 'public' and p.tablename in ('tenant_user', 'user', 'role', 'tenant')
+               and p.cmd <> 'SELECT' and p.roles && array['public', 'anon', 'authenticated']::name[]) then
+    raise exception 'PAQUETE_BASE_INSEGURA: las tablas de membresía admiten escritura con la sesión de una persona; no se aplica nada';
+  end if;
 end $$;
 
 -- Ayuda temporal (desaparece al cerrar la sesión): agrega una restricción solo si no existe.
@@ -88,7 +97,13 @@ grant select (id, status) on public."user" to equitas_write_definer;
 --   Finalidad:  Permite que case_review referencie (tenant, debtor): una decisión no puede apuntar a un caso de otro municipio.
 --   Impacto:    Agrega un índice único sobre debtor(tenant, id). No cambia filas ni columnas. Bloqueo exclusivo breve.
 --   Comprobar:  select conname from pg_constraint where conrelid = 'public.debtor'::regclass and conname = 'debtor_tenant_id_key';
-select pg_temp.paquete_restriccion('debtor', 'debtor_tenant_id_key', 'UNIQUE (tenant, id)');
+--               Si la crea este paquete queda marcada con un comentario: la reversa la quita solo si lleva esa marca.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.debtor'::regclass and conname = 'debtor_tenant_id_key') then
+    alter table public.debtor add constraint debtor_tenant_id_key unique (tenant, id);
+    comment on constraint debtor_tenant_id_key on public.debtor is 'equitas:paquete-minimo';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------------------------- tipo
 -- case_review_checklist
@@ -560,9 +575,7 @@ revoke all on table public.import_batch from public, anon, authenticated, servic
 create or replace trigger import_batch_append_only BEFORE DELETE OR UPDATE ON public.import_batch FOR EACH ROW EXECUTE FUNCTION public.equitas_append_only();
 create or replace trigger import_batch_no_truncate BEFORE TRUNCATE ON public.import_batch FOR EACH STATEMENT EXECUTE FUNCTION public.equitas_append_only();
 GRANT SELECT,INSERT ON TABLE public.import_batch TO equitas_write_definer;
-GRANT SELECT ON TABLE public.import_batch TO anon;
 GRANT SELECT ON TABLE public.import_batch TO authenticated;
-GRANT SELECT ON TABLE public.import_batch TO service_role;
 
 alter table public.case_review enable row level security;
 revoke all on table public.case_review from public, anon, authenticated, service_role;
@@ -570,16 +583,14 @@ create or replace trigger case_review_append_only BEFORE DELETE OR UPDATE ON pub
 create or replace trigger case_review_no_truncate BEFORE TRUNCATE ON public.case_review FOR EACH STATEMENT EXECUTE FUNCTION public.equitas_append_only();
 GRANT SELECT,INSERT ON TABLE public.case_review TO equitas_write_definer;
 grant select (id, tenant, debtor, rules_version, as_of, inputs_hash, suggested_intervention, suggested_intensity, explanation, decision, decided_intervention, decided_intensity, reason_code, checklist, reviewer, reviewer_role, created_at, supersedes, idempotency_key)
-  on table public.case_review to anon, authenticated, service_role;
+  on table public.case_review to authenticated;
 
 alter table public.case_review_approval enable row level security;
 revoke all on table public.case_review_approval from public, anon, authenticated, service_role;
 create or replace trigger case_review_approval_append_only BEFORE DELETE OR UPDATE ON public.case_review_approval FOR EACH ROW EXECUTE FUNCTION public.equitas_append_only();
 create or replace trigger case_review_approval_no_truncate BEFORE TRUNCATE ON public.case_review_approval FOR EACH STATEMENT EXECUTE FUNCTION public.equitas_append_only();
 GRANT SELECT,INSERT ON TABLE public.case_review_approval TO equitas_write_definer;
-GRANT SELECT ON TABLE public.case_review_approval TO anon;
 GRANT SELECT ON TABLE public.case_review_approval TO authenticated;
-GRANT SELECT ON TABLE public.case_review_approval TO service_role;
 
 alter table public.access_audit enable row level security;
 revoke all on table public.access_audit from public, anon, authenticated, service_role;
@@ -637,6 +648,16 @@ begin
              where n.nspname = 'public' and p.proname = any (array['equitas_append_only', 'equitas_role_allows', 'equitas_member_role', 'equitas_current_cutoff', 'equitas_verify_cutoff', 'record_case_review', 'record_case_review_approval', 'read_case_review_reason_text', 'record_access_audit']) and has_function_privilege(role, p.oid, 'execute')) then
     raise exception 'PAQUETE_INSEGURO: anon o service_role pueden ejecutar una función del módulo';
   end if;
+  -- Una persona con su sesión solo puede ejecutar la tabla de permisos (la usa una política de lectura).
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = any (array['equitas_append_only', 'equitas_role_allows', 'equitas_member_role', 'equitas_current_cutoff', 'equitas_verify_cutoff', 'record_case_review', 'record_case_review_approval', 'read_case_review_reason_text', 'record_access_audit']) and p.proname <> 'equitas_role_allows'
+               and has_function_privilege('authenticated', p.oid, 'execute')) then
+    raise exception 'PAQUETE_INSEGURO: authenticated puede ejecutar una función del módulo';
+  end if;
+  if exists (select 1 from unnest(array['import_batch', 'case_review', 'case_review_approval', 'access_audit']) name, unnest(array['anon', 'service_role']) role
+             where has_table_privilege(role, 'public.' || name, 'select') or has_any_column_privilege(role, 'public.' || name, 'select')) then
+    raise exception 'PAQUETE_INSEGURO: anon o service_role pueden leer una tabla del módulo';
+  end if;
   if has_schema_privilege('equitas_write_definer', 'public', 'create') then
     raise exception 'PAQUETE_INSEGURO: el definidor conservó el permiso de crear objetos';
   end if;
@@ -648,5 +669,12 @@ end $$;
 commit;
 
 -- La Data API guarda en memoria la lista de tablas y funciones: sin este aviso seguiría respondiendo
--- «la tabla no existe» durante un rato y la aplicación se comportaría como si el módulo no estuviera.
+-- «la tabla no existe» durante un rato y la aplicación se comportaría como si el módulo no estuviera
+-- (abriría casos sin dejar registro).
 notify pgrst, 'reload schema';
+
+-- ÚLTIMO PASO DE LA INSTALACIÓN, fuera de este archivo: comprobar que la Data API ya sirve el módulo.
+--   GET <url del proyecto>/rest/v1/access_audit?select=id&limit=0   (con la clave pública)
+-- Sin sesión tiene que responder 401 con el código 42501 (permiso denegado: la tabla ya es conocida); con la
+-- sesión de una cuenta, 200. Si responde 404 con el código PGRST205, la Data API todavía no sirve el módulo:
+-- repetir el `notify` de arriba y volver a probar antes de usar la aplicación.

@@ -32,7 +32,7 @@ Se niega a operar sobre los identificadores y carpetas de la demo de la noche 6 
 | `datos-escala.sql` | Cartera sintética a escala. |
 | `paquete-minimo.sql` | Propuesta mínima para registrar decisiones y obtener reportes. Lo genera `scripts/espejo/generar_paquete.py`. |
 | `paquete-minimo-verificar.sql` | Solo lectura: se corre antes y después. |
-| `paquete-minimo-revertir.sql` | Reversa completa. Se niega si hay filas, salvo `--ajuste equitas.confirmar_borrado=si`. |
+| `paquete-minimo-revertir.sql` | Reversa completa. Se niega si hay filas, salvo `--ajuste equitas.confirmar_borrado=<cantidad exacta de filas>`. |
 | `cartera-heredada.sql` | Función que registra una sola vez la cartera ya cargada, con fecha declarada. |
 | `cartera-heredada-probar.sql` | Prueba de esa función dentro de una transacción que se deshace. |
 | `politicas-lectura.sql` | Cambio de políticas de lectura. **No es aditivo**: va aparte. |

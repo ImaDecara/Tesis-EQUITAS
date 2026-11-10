@@ -55,7 +55,12 @@ export async function recordAccessAudit(context: Pick<DalContext, 'appUserId' | 
     // (faltan sus cuatro tablas, comprobado en esta misma solicitud) y la acción es abrir un caso, que en
     // esa base tampoco se registraba antes. Una descarga de reporte nunca entra acá. Ante cualquier otra
     // causa (credencial, red, función, una sola tabla ausente) el nivel no es BASE y se sigue fallando cerrado.
-    if (UNAUDITED_WITHOUT_MODULE.has(event.action) && await loadDatabaseLevel() === 'BASE') return
+    if (UNAUDITED_WITHOUT_MODULE.has(event.action) && await loadDatabaseLevel() === 'BASE') {
+      // Queda constancia en el registro del servidor, sin el destino: si esto aparece en una base donde el módulo
+      // ya se instaló, la Data API todavía no lo está sirviendo (hay que recargar su esquema).
+      console.info(`Apertura sin registro: NIVEL_BASE (${event.action})`)
+      return
+    }
     // Sin el mensaje de la base ni el destino: solo accion y codigo.
     console.error(`Auditoria no registrada: ${event.action} ${failure}`)
     throw new AccessAuditError()

@@ -11,6 +11,8 @@
 --   · La FECHA DE CORTE la declara una persona responsable, con rol ADMIN y membresía activa en el municipio.
 --     Queda guardada como declarada (counts.fecha_declarada = 1) y la aplicación la muestra así.
 --   · Solo la puede ejecutar quien administra la base (desde el editor SQL): no está expuesta a la aplicación.
+--     Por eso el responsable (created_by) es una ATRIBUCIÓN DECLARADA por quien ejecuta, no un actor autenticado:
+--     la función solo comprueba que esa persona exista y sea ADMIN activa del municipio.
 --
 -- USO, una vez por municipio (reemplazar los tres valores):
 --   select public.register_inherited_portfolio(
@@ -41,7 +43,10 @@ begin
   where tu.tenant = p_tenant and tu."user" = p_actor_user and tu.status and u.status = 'ACTIVE' and t.status = 'ACTIVE';
   if v_role is null then raise exception 'ACTOR_NOT_ACTIVE_MEMBER'; end if;
   if v_role <> 'ADMIN' then raise exception 'ROLE_NOT_ALLOWED'; end if;
-  if p_declared_as_of is null or p_declared_as_of > current_date then raise exception 'DECLARED_DATE_INVALID'; end if;
+  -- «Hoy» es el día del municipio, no el de la base (que corre en UTC).
+  if p_declared_as_of is null or p_declared_as_of > (now() at time zone 'America/Argentina/Cordoba')::date then
+    raise exception 'DECLARED_DATE_INVALID';
+  end if;
   if exists (select 1 from public.import_batch b where b.tenant = p_tenant) then raise exception 'PORTFOLIO_ALREADY_REGISTERED'; end if;
   if not exists (select 1 from public.debtor d where d.tenant = p_tenant) then raise exception 'PORTFOLIO_EMPTY'; end if;
 
@@ -73,6 +78,9 @@ end $function$;
 
 comment on function public.register_inherited_portfolio(bigint, bigint, date, text) is
   'Registra una sola vez la cartera cargada antes de import_batch como lote CARTERA_HEREDADA: huella y conteos calculados, fecha declarada por una persona ADMIN.';
+
+-- Cierre por restricción, además del cerrojo de la función: un solo lote heredado por municipio.
+create unique index if not exists import_batch_one_inherited on public.import_batch (tenant) where source = 'CARTERA_HEREDADA';
 
 -- Solo quien administra la base: ni la aplicación ni la Data API.
 revoke all on function public.register_inherited_portfolio(bigint, bigint, date, text) from public, anon, authenticated, service_role;

@@ -157,8 +157,12 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
   it('abrir un caso no deja registro en nivel base y no necesita la credencial de servidor', async () => {
     session()
     createWriter.mockReturnValue(null)
+    const noted = vi.spyOn(console, 'info').mockImplementation(() => undefined)
     await expect(recordAccessAudit(context, { action: 'CASE_OPEN', target: '101' })).resolves.toBeUndefined()
     expect(logged).not.toHaveBeenCalled()
+    // Queda constancia en el registro del servidor, sin el caso: sirve para detectar un módulo instalado que la
+    // Data API todavía no sirve.
+    expect(noted.mock.calls).toEqual([['Apertura sin registro: NIVEL_BASE (CASE_OPEN)']])
   })
 
   it.each(['REPORT_EXPORT', 'ANALYTICS_VIEW'] as const)('una acción que no es abrir un caso (%s) sigue fallando cerrada en nivel base', async action => {
@@ -185,8 +189,10 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     session()
     const rpc = vi.fn(async () => ({ data: { audit_id: 9, created: true }, error: null }))
     createWriter.mockReturnValue({ rpc })
+    const noted = vi.spyOn(console, 'info').mockImplementation(() => undefined)
     await recordAccessAudit(context, { action: 'CASE_OPEN', target: '101' })
     expect(rpc).toHaveBeenCalledTimes(1)
+    expect(noted).not.toHaveBeenCalled()
   })
 
   it('las decisiones registradas no son una lectura fallida: no hay módulo', async () => {

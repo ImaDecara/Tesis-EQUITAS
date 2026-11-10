@@ -18,7 +18,7 @@ Un espejo no es producción. La lista de qué reproduce con evidencia y qué asu
 Se llama **nivel base** y se probó en el espejo, en navegador real, con cuentas ADMIN y USER:
 
 - Funcionan el ingreso, el tablero, los listados, la búsqueda, los grupos de trabajo, el puntaje, la recomendación automática y la ficha del caso.
-- **La aplicación no escribe nada**: los contadores de escritura de la base quedaron idénticos antes y después del recorrido.
+- **La aplicación no escribe nada en los datos** (el esquema `public`): los contadores de escritura quedaron idénticos antes y después del recorrido, con y sin la credencial de servidor configurada. El ingreso deja su rastro en el servicio de autenticación, igual que con `main`.
 - Como esa base no registra una fecha de corte, los cálculos usan la fecha del día y la línea de arriba lo dice: «Sin fecha de cartera registrada: se calcula con la fecha de hoy».
 - Cargar CSV, la pestaña Decisión, Pendientes y Reportes dicen «no disponible en esta base», con la explicación. No aparecen como errores.
 - El nivel se deduce de lo que la base tiene (faltan las cuatro tablas del módulo), en el servidor y en cada pedido. No hay ninguna bandera de configuración.
@@ -27,7 +27,7 @@ Consecuencia: **publicar esta candidata sobre la base original, sin ningún camb
 
 Dos cosas del nivel base que conviene saber:
 
-- La apertura de un caso no deja registro, porque no existe dónde guardarlo. Es lo mismo que pasa hoy con `main`.
+- La apertura de un caso no deja registro de accesos, porque no existe dónde guardarlo. Es lo mismo que pasa hoy con `main`. Queda una línea en el registro del servidor de la aplicación.
 - Sin fecha de corte, el atraso de cada obligación crece con el calendario: los puntajes cambian de un día para otro sin que cambien los datos.
 
 ## 3. Para registrar decisiones y obtener reportes: una propuesta mínima de base

@@ -37,7 +37,15 @@ Lo genera `scripts/espejo/generar_paquete.py` leyendo las definiciones vigentes 
 | `read_case_review_reason_text` | Lectura del motivo libre para el rol que lo permite. | Solo lee. | Con USER falla con `ROLE_NOT_ALLOWED`. |
 | `record_access_audit` | Única vía para escribir el registro de accesos. | Inserta en `access_audit`. | Abrir un caso deja una fila `CASE_OPEN`. |
 
-**Diferencia declarada con el esquema local del repositorio.** Allí las políticas de lectura de `import_batch`, `case_review` y `case_review_approval` delegan en la política de `tenant`. En una base cuyas políticas siguen abiertas, delegar dejaría las decisiones legibles por cualquier usuario autenticado. El paquete comprueba la membresía activa de forma explícita. Con las políticas de membresía instaladas, las dos formas dan lo mismo.
+**Diferencias declaradas con el esquema local del repositorio.**
+
+- Allí las políticas de lectura de `import_batch`, `case_review` y `case_review_approval` delegan en la política de `tenant`. En una base cuyas políticas siguen abiertas, delegar dejaría las decisiones legibles por cualquier usuario autenticado. El paquete comprueba la membresía activa de forma explícita. Con las políticas de membresía instaladas, las dos formas dan lo mismo.
+- El paquete **no otorga nada a `anon` ni a `service_role`** sobre las tablas nuevas. El esquema local sí les otorga lectura (sin política, ven cero filas); la aplicación no lee con ninguno de los dos.
+
+**Dos límites que el paquete no resuelve solo, mientras las políticas de lectura sigan abiertas:**
+
+- **Quién es ADMIN depende de las tablas de membresía.** Las funciones confían en `tenant_user`, `user`, `role` y `tenant`. La foto de octubre muestra que `authenticated` tiene permiso de escritura sobre ellas y que lo único que lo frena es que RLS está activo sin ninguna política de escritura. Si eso cambió, una persona podría darse el rol ADMIN y aprobar su propia propuesta con otra cuenta. Por eso el paquete **se niega a instalarse** (`PAQUETE_BASE_INSEGURA`) si alguna de esas cuatro tablas tiene RLS apagado o una política de escritura para roles de cliente, y el script de verificación lo muestra. `politicas-lectura.sql` retira además esos permisos.
+- **Los identificadores de quien decidió son legibles por cualquier miembro.** `reviewer`, `approver` y `created_by` son números de usuario; la aplicación solo muestra «vos» u «otra persona». Pero con la tabla `user` abierta a cualquier usuario autenticado, quien consulte la Data API directamente puede traducir ese número a un nombre. Queda así hasta aplicar las políticas de lectura.
 
 ### Evidencia en el espejo
 
@@ -51,10 +59,15 @@ Lo genera `scripts/espejo/generar_paquete.py` leyendo las definiciones vigentes 
 | Segunda corrida | Sin errores y **sin ninguna diferencia** en la verificación. |
 | Reversa | La verificación vuelve a ser idéntica a la de «antes» y `verificar-esquema` vuelve a coincidir con la foto de octubre. |
 | Reaplicación | Sin errores. |
+| Base con las tablas de membresía escribibles (una política de escritura para `authenticated`, o RLS apagado en `role`) | El paquete se niega con `PAQUETE_BASE_INSEGURA` y no instala nada. |
+| Reversa con una fila en el módulo | Se niega sin confirmación, con «si» y con otro número; con el número exacto (1) revierte, y la verificación vuelve a ser idéntica a la de «antes». |
+| Restricción de `debtor` que ya existía antes del paquete | La reversa no la quita. |
 
-La reversa (`paquete-minimo-revertir.sql`) **se niega** a correr si alguna tabla del módulo tiene filas, salvo que se confirme en la misma sesión con `set equitas.confirmar_borrado = 'si';`. Borrar decisiones es irreversible.
+La reversa (`paquete-minimo-revertir.sql`) bloquea las cuatro tablas, cuenta sus filas y **se niega** a seguir si hay alguna, salvo que se confirme en la misma sesión con el número exacto de filas que informó (`set equitas.confirmar_borrado = '<cantidad>';`). La confirmación se limpia al terminar. Borrar decisiones es irreversible. La restricción única de `debtor` se quita solo si la creó el paquete: al crearla queda marcada, y una que ya existía no se toca.
 
-El script termina con `notify pgrst, 'reload schema'`. Sin eso la Data API puede seguir respondiendo un rato que las tablas no existen, y durante ese rato la aplicación se comportaría como en nivel base (fichas sin registro de apertura). En un proyecto alojado la foto de octubre muestra un disparador de evento que hace esa recarga solo; el aviso explícito no depende de él.
+El script termina con `notify pgrst, 'reload schema'`. Sin eso la Data API puede seguir respondiendo que las tablas no existen, y mientras tanto la aplicación se comportaría como en nivel base: abriría casos sin dejar registro. En un proyecto alojado la foto de octubre muestra un disparador de evento que hace esa recarga solo; el aviso explícito no depende de él.
+
+**Último paso de la instalación, obligatorio:** pedir `GET <url del proyecto>/rest/v1/access_audit?select=id&limit=0` con la clave pública. Sin sesión tiene que responder 401 con el código `42501` (permiso denegado: la tabla ya es conocida); con la sesión de una cuenta, 200. Si responde 404 con `PGRST205`, la Data API todavía no sirve el módulo: repetir el `notify` y volver a probar antes de usar la aplicación. En el espejo respondió 401 sin sesión y 200 con una sesión ADMIN, enseguida después de instalar. Además, cada apertura de caso sin registro deja una línea en el registro del servidor de la aplicación (`Apertura sin registro: NIVEL_BASE`): si aparece después de instalar el paquete, la Data API todavía no lo sirve.
 
 ## 2. Registro de la cartera ya cargada
 
@@ -66,7 +79,8 @@ El script termina con `notify pgrst, 'reload schema'`. Sin eso la Data API puede
 - Registra un lote de origen `CARTERA_HEREDADA`, en estado publicado.
 - La **huella y los conteos los calcula la función** sobre el contenido real en ese momento (objetos, obligaciones y vínculos; sin nombres, documentos ni contactos). La clave de la huella se llama `contenido_al_registrar`: no pretende ser la huella de un archivo.
 - La **fecha de corte la declara** una persona con rol ADMIN y membresía activa en el municipio, y queda marcada como declarada (`fecha_declarada`). La aplicación la muestra como «fecha declarada».
-- Solo la ejecuta quien administra la base: no está expuesta a la aplicación ni a la Data API.
+- Solo la ejecuta quien administra la base: no está expuesta a la aplicación ni a la Data API. Por eso el responsable que queda guardado es una **atribución declarada** por quien la ejecuta, no un actor autenticado: la función comprueba que esa persona exista y sea ADMIN activa del municipio.
+- «Fecha futura» se mide con el día del municipio (Córdoba), no con el de la base. Un índice único impide un segundo lote heredado en el mismo municipio aunque dos ejecuciones se crucen.
 
 Comprobado en el espejo con `cartera-heredada-probar.sql` (todo en una transacción que termina en `rollback`):
 

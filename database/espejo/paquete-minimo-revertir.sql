@@ -2,11 +2,24 @@
 -- Probada SOLO en el espejo local. Deja la base como estaba antes del paquete.
 --
 -- SEGURO: si alguna tabla del módulo tiene filas (decisiones, aprobaciones, lotes o registros de acceso), la
--- reversa FALLA sin cambiar nada. Para borrarlas a sabiendas hay que ejecutar antes, en la misma sesión:
---     set equitas.confirmar_borrado = 'si';
--- Borrar esas filas es irreversible: son el registro de lo que decidieron personas.
+-- reversa FALLA sin cambiar nada y dice cuántas son. Para borrarlas a sabiendas hay que ejecutar antes, en la
+-- misma sesión, con ESE número exacto:
+--     set equitas.confirmar_borrado = '<cantidad de filas que informó el intento anterior>';
+-- Borrar esas filas es irreversible: son el registro de lo que decidieron personas. La confirmación se limpia al
+-- terminar para que no quede puesta en una conexión reutilizada.
 
 begin;
+
+-- Nadie puede registrar nada mientras se cuenta y se borra.
+do $$
+declare t text;
+begin
+  foreach t in array array['case_review_approval', 'case_review', 'access_audit', 'import_batch'] loop
+    if to_regclass('public.' || t) is not null then
+      execute format('lock table public.%I in access exclusive mode', t);
+    end if;
+  end loop;
+end $$;
 
 do $$
 declare t text; n bigint; total bigint := 0;
@@ -17,7 +30,7 @@ begin
       total := total + n;
     end if;
   end loop;
-  if total > 0 and coalesce(current_setting('equitas.confirmar_borrado', true), '') <> 'si' then
+  if total > 0 and coalesce(current_setting('equitas.confirmar_borrado', true), '') <> total::text then
     raise exception 'REVERSA_CON_DATOS: las tablas del módulo tienen % fila(s). No se cambió nada. Ver el encabezado del archivo.', total;
   end if;
 end $$;
@@ -56,9 +69,17 @@ begin
   end if;
 end $$;
 
--- El único cambio sobre una tabla existente. Si esta restricción ya existía ANTES del paquete, quitar esta línea.
-alter table public.debtor drop constraint if exists debtor_tenant_id_key;
+-- El único cambio sobre una tabla existente: se quita SOLO si lo creó el paquete (lleva su marca). Si la
+-- restricción ya existía antes, no tiene la marca y se deja como estaba.
+do $$ begin
+  if exists (select 1 from pg_constraint c where c.conrelid = 'public.debtor'::regclass and c.conname = 'debtor_tenant_id_key'
+               and obj_description(c.oid, 'pg_constraint') = 'equitas:paquete-minimo') then
+    alter table public.debtor drop constraint debtor_tenant_id_key;
+  end if;
+end $$;
 
 commit;
+
+reset equitas.confirmar_borrado;
 
 notify pgrst, 'reload schema';
