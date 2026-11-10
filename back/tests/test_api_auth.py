@@ -6,7 +6,6 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import httpx
 import jwt
@@ -18,20 +17,18 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     PublicFormat,
 )
-from fastapi.routing import APIRoute
-from fastapi.testclient import TestClient
 from fake_supabase_http import (
-    AUTH_CONSULTA,
-    AUTH_IMPORTADOR,
+    AUTH_ADMIN,
+    AUTH_ADMIN_OTRO_MUNICIPIO,
     AUTH_INACTIVO,
     AUTH_MULTI,
-    AUTH_OPERADOR,
-    AUTH_OTRO_OPERADOR,
     AUTH_REVOCADO,
+    AUTH_ROL_NO_RECONOCIDO,
     AUTH_SIN_MEMBRESIA,
     AUTH_SIN_USUARIO,
     AUTH_SISTEMA,
-    AUTH_SUPERVISOR,
+    AUTH_USER,
+    AUTH_USER_OTRO_MUNICIPIO,
     IMPORT_JWT,
     ISSUER,
     PUBLISHABLE_KEY,
@@ -39,6 +36,8 @@ from fake_supabase_http import (
     URL,
     FakeSupabase,
 )
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 
 from api import auth, main
 
@@ -108,6 +107,7 @@ def test_inventory_covers_scoring_health_and_imports():
         "/imports",
         "/imports/1",
         "/imports/1/discard",
+        "/imports/load",
     }
 
 
@@ -180,7 +180,7 @@ def alg_none(supabase):
 def tampered(supabase):
     head, payload, signature = supabase.token().split(".")
     claims = jwt.utils.base64url_encode(
-        jwt.api_jws.json.dumps(supabase.claims(AUTH_SUPERVISOR)).encode()
+        jwt.api_jws.json.dumps(supabase.claims(AUTH_ADMIN)).encode()
     ).decode()
     assert claims != payload
     return f"{head}.{claims}.{signature}"
@@ -269,7 +269,7 @@ def test_session_rejected_by_auth_is_401(client, supabase, status):
 
 
 def test_auth_reporting_another_user_is_401(client, supabase):
-    supabase.auth_body = {"id": AUTH_SUPERVISOR}
+    supabase.auth_body = {"id": AUTH_ADMIN}
     assert client.get("/health", headers=bearer(supabase.token())).status_code == 401
     supabase.auth_body = {}
     assert client.get("/health", headers=bearer(supabase.token())).status_code == 401
@@ -429,7 +429,9 @@ def test_session_repr_hides_the_token():
         (AUTH_INACTIVO, 403, "MEMBERSHIP_REQUIRED"),
         (AUTH_SIN_USUARIO, 403, "MEMBERSHIP_REQUIRED"),
         (AUTH_MULTI, 409, "TENANT_SELECTION_REQUIRED"),
-        (AUTH_IMPORTADOR, 403, "ROLE_FORBIDDEN"),
+        # Antes: «el importador no lee la cartera». Con ADMIN/USER esa distinción no existe (ADMIN
+        # importa y lee): queda denegado el rol no reconocido, y la identidad de máquina.
+        (AUTH_ROL_NO_RECONOCIDO, 403, "ROLE_FORBIDDEN"),
         (AUTH_SISTEMA, 403, "ROLE_FORBIDDEN"),
     ],
 )
@@ -442,7 +444,7 @@ def test_scoring_denied_without_rows_or_counts(client, supabase, path, user, sta
 
 
 def test_revocation_applies_to_the_next_request(client, supabase):
-    headers = bearer(supabase.token(AUTH_OPERADOR))
+    headers = bearer(supabase.token(AUTH_USER))
     assert client.get("/case-groups", params=ASOF, headers=headers).status_code == 200
     next(m for m in supabase.tables["tenant_user"] if m["user"] == 2)["status"] = False
     assert client.get("/case-groups", params=ASOF, headers=headers).status_code == 403
@@ -478,6 +480,24 @@ def test_unknown_role_is_denied(client, supabase):
     assert response.status_code == 403
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["consulta", "operador", "supervisor", "importador", "admin", "user", "Admin", "ADMIN ", " USER", "tp_operator"],
+)
+def test_old_or_inexact_role_names_do_not_read(client, supabase, name):
+    """Los nombres se comparan exactos y los anteriores ya no otorgan permisos (noche 7, §4.4)."""
+    next(r for r in supabase.tables["role"] if r["id"] == 2)["name"] = name
+    response = client.get("/case-groups", params=ASOF, headers=bearer(supabase.token(AUTH_USER)))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+
+
+def test_permission_table_is_the_admin_user_matrix():
+    assert auth.PERMISSIONS == {"portfolio:read": ("ADMIN", "USER"), "import:write": ("ADMIN",)}
+    assert auth.READ_ROLES == ("ADMIN", "USER")
+    assert auth.IMPORT_ROLES == ("ADMIN",)
+
+
 @pytest.mark.parametrize("table", ["user", "tenant_user", "tenant", "role"])
 def test_context_read_failure_is_503_without_remote_payload(client, supabase, table):
     supabase.fail_tables.add(table)
@@ -495,9 +515,9 @@ def test_malformed_membership_row_fails_closed(client, supabase):
 # ---- Scoring con el contexto del usuario
 
 
-@pytest.mark.parametrize(
-    "user", [AUTH_CONSULTA, AUTH_OPERADOR, AUTH_SUPERVISOR]
-)
+# Matriz ADMIN/USER: antes consulta, operador y supervisor leían por igual; hoy ADMIN y USER
+# leen lo mismo (como en main).
+@pytest.mark.parametrize("user", [AUTH_ADMIN, AUTH_USER])
 def test_scoring_roles_see_only_their_tenant(client, supabase, user):
     response = client.get("/case-groups", params=ASOF, headers=bearer(supabase.token(user)))
     assert response.status_code == 200
@@ -510,9 +530,10 @@ def test_scoring_roles_see_only_their_tenant(client, supabase, user):
     assert summary.json()["total_cases"] == 1
 
 
-def test_other_tenant_user_sees_only_their_rows(client, supabase):
+@pytest.mark.parametrize("user", [AUTH_USER_OTRO_MUNICIPIO, AUTH_ADMIN_OTRO_MUNICIPIO])
+def test_other_tenant_user_sees_only_their_rows(client, supabase, user):
     response = client.get(
-        "/case-groups", params=ASOF, headers=bearer(supabase.token(AUTH_OTRO_OPERADOR))
+        "/case-groups", params=ASOF, headers=bearer(supabase.token(user))
     )
     assert [case["debtor_id"] for case in response.json()["items"]] == [22]
 
@@ -580,7 +601,7 @@ def test_importing_the_api_without_general_key_makes_no_client():
         "assert ETL.config._client_for_settings.cache_info().currsize == 0\n"
     )
     env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
-    done = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+    done = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
 
 
@@ -854,7 +875,7 @@ def test_auth_rejection_logs_only_a_code(client, supabase, caplog):
 def test_cli_scores_with_the_session_token_only(client, supabase, monkeypatch, capsys):
     from services import scoring_service as scoring
 
-    monkeypatch.setenv("EQUITAS_SESSION_TOKEN", supabase.token(AUTH_OPERADOR))
+    monkeypatch.setenv("EQUITAS_SESSION_TOKEN", supabase.token(AUTH_USER))
     monkeypatch.setattr("sys.argv", ["scoring_service", "--as-of", "2026-09-30"])
     scoring.main()
     output = capsys.readouterr().out
@@ -879,7 +900,7 @@ def test_cli_without_a_valid_session_stops_with_a_code(supabase, monkeypatch, ca
 def test_cli_denies_a_role_without_read_access(supabase, monkeypatch, capsys):
     from services import scoring_service as scoring
 
-    monkeypatch.setenv("EQUITAS_SESSION_TOKEN", supabase.token(AUTH_IMPORTADOR))
+    monkeypatch.setenv("EQUITAS_SESSION_TOKEN", supabase.token(AUTH_ROL_NO_RECONOCIDO))
     monkeypatch.setattr("sys.argv", ["scoring_service", "--as-of", "2026-09-30"])
     with pytest.raises(SystemExit):
         scoring.main()

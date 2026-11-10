@@ -8,10 +8,12 @@ import copy
 from unittest.mock import Mock
 
 import pytest
+import test_etl_semantic
 from oracle_lots import AS_OF, accepted_objects, derive_lot
-from test_etl_semantic import database  # noqa: F401
 
 from ETL import load, run_etl
+
+database = test_etl_semantic.database
 
 
 def test_etl_integrates_tsv_extraction_transformation_and_simulated_idempotent_load(tmp_path, database):

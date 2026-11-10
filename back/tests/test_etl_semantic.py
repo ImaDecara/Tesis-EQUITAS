@@ -22,7 +22,6 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from import_publication_fake import PublicationModel
-from reissue_lot import reissue_lot
 from oracle_lots import (
     AS_OF,
     FIXTURE,
@@ -37,6 +36,7 @@ from oracle_lots import (
     synthetic_profile,
     to_iso_dates,
 )
+from reissue_lot import reissue_lot
 
 from ETL import config, load, run_etl, transform, validate_source
 from ETL.config import ETLError
@@ -191,7 +191,7 @@ class FakeDatabase:
         self.tables.setdefault(table, []).append(row)
         return dict(row)
 
-    def post_rpc(self, url, *, headers, json, timeout, **_):  # noqa: A002
+    def post_rpc(self, url, *, headers, json, timeout, **_):
         if not url.endswith('/record_import_batch'):
             self.rpc_headers.append(headers)
             return self.publication.post(url.rsplit('/', 1)[-1], json, url)
@@ -811,7 +811,7 @@ def test_lote_csv_con_perfil_explicito_se_publica_igual(database, tmp_path):
 def test_contacto_marcador_o_ilegible_no_se_carga_y_el_inactivo_queda_inactivo(database, tmp_path):
     execute(derive_lot(tmp_path / 'contactos'))
     people = {row['external_id']: row['id'] for row in database.tables['person']}
-    by_person = lambda case: [row for row in database.tables['debtor_contact']  # noqa: E731
+    by_person = lambda case: [row for row in database.tables['debtor_contact']
                               if row['person'] == people[object_by_case(case)['personas'][0]]]
     assert by_person('contacto-placeholder') == []
     assert by_person('contacto-formato-invalido') == []

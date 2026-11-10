@@ -5,7 +5,8 @@ from fastapi.testclient import TestClient
 
 from api import auth, main
 
-CONTEXT = auth.TenantContext("usuario-auth", 10, 7, "operador")
+# Matriz ADMIN/USER: USER lee la cartera (antes «operador»).
+CONTEXT = auth.TenantContext("usuario-auth", 10, 7, "USER")
 DATA_CLIENT = object()
 
 

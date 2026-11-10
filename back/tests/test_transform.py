@@ -40,7 +40,13 @@ from ETL.transform import (
     parse_optional_decimal,
     with_catalog_ids,
 )
-from ETL.validate_source import SourceTable, ValidationError, load_contract, load_mapping, validate_batch
+from ETL.validate_source import (
+    SourceTable,
+    ValidationError,
+    load_contract,
+    load_mapping,
+    validate_batch,
+)
 
 CUT_OFF = date(2026, 9, 30)
 
@@ -63,7 +69,7 @@ def test_solo_es_ausencia_lo_vacio_o_un_nulo_real(value, expected):
 
 
 @pytest.mark.parametrize(('value', 'expected'), [
-    ('1234.56', Decimal('1234.56')), ('0', Decimal('0')), ('0.00', Decimal('0.00')), ('7', Decimal('7')),
+    ('1234.56', Decimal('1234.56')), ('0', Decimal(0)), ('0.00', Decimal('0.00')), ('7', Decimal(7)),
 ])
 def test_importe_canonico_y_cero_valido_se_conservan(value, expected):
     assert parse_decimal(value) == expected
@@ -90,14 +96,14 @@ def test_importe_con_formato_del_lote():
 
 def test_importe_opcional_vacio_es_no_informado_no_cero():
     assert parse_optional_decimal('') is None
-    assert parse_optional_decimal('0') == Decimal('0')
+    assert parse_optional_decimal('0') == Decimal(0)
     with pytest.raises(SemanticRejection):
         parse_optional_decimal('abc')
 
 
 def test_texto_monetario_exacto():
-    assert money_text(Decimal('1200')) == '1200.00'
-    assert money_text(Decimal('0')) == '0.00'
+    assert money_text(Decimal(1200)) == '1200.00'
+    assert money_text(Decimal(0)) == '0.00'
     assert money_text(Decimal('9999999999999999.99')) == '9999999999999999.99'
 
 

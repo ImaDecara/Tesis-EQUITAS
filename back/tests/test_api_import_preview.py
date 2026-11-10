@@ -6,16 +6,21 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+import test_api_imports as base
+from fake_supabase_http import (
+    AUTH_ADMIN_OTRO_MUNICIPIO,
+    AUTH_ROL_NO_RECONOCIDO,
+    AUTH_USER,
+)
 from fastapi import HTTPException
-from fake_supabase_http import AUTH_OPERADOR, AUTH_OTRO_IMPORTADOR
 from postgrest.exceptions import APIError
-from test_api_imports import auth_headers, client, supabase, upload  # noqa: F401
 
 from api import import_preview as preview
 from ETL.publication import effective_mapping
 from ETL.transform import canonical_json_hash
 from services.paginated_reader import DataReadError
 
+supabase,client,auth_headers,upload=base.supabase,base.client,base.auth_headers,base.upload
 PROFILE=json.loads((Path(__file__).resolve().parents[2]/'contracts/source-mapping.sintetico-v1.json').read_text())
 
 
@@ -29,9 +34,11 @@ def test_anonymous_cannot_prepare_or_read(client,method):
     assert getattr(client,method)('/imports/1/preview').status_code==401
 
 
+@pytest.mark.parametrize('user',[AUTH_USER,AUTH_ROL_NO_RECONOCIDO])
 @pytest.mark.parametrize('method',['get','post'])
-def test_operator_forbidden(client,supabase,method):
-    assert getattr(client,method)('/imports/1/preview',headers=auth_headers(supabase,AUTH_OPERADOR)).status_code==403
+def test_operator_forbidden(client,supabase,method,user):
+    # Matriz ADMIN/USER: USER (antes «operador») y un rol no reconocido no importan.
+    assert getattr(client,method)('/imports/1/preview',headers=auth_headers(supabase,user)).status_code==403
 
 
 @pytest.mark.parametrize('path',['0001','999999999','920000001','9223372036854775808','CENTINELA','0','-1'])
@@ -43,7 +50,7 @@ def test_unknown_and_manipulated_id(client,supabase,path):
 
 def test_other_tenant_cannot_read(client,supabase):
     root=upload(client,supabase).json()['root_id']
-    assert client.get(f'/imports/{root}/preview',headers=auth_headers(supabase,AUTH_OTRO_IMPORTADOR)).status_code==404
+    assert client.get(f'/imports/{root}/preview',headers=auth_headers(supabase,AUTH_ADMIN_OTRO_MUNICIPIO)).status_code==404
 
 
 @pytest.mark.parametrize('query',['kind=person','page=0','page=1.5','page=01','page=6001','page=1&page=2','tenant=9','revision=secret'])

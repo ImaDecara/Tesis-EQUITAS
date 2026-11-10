@@ -18,17 +18,15 @@ from pathlib import Path
 import httpx
 import jwt
 import pytest
-from fastapi.testclient import TestClient
 from fake_supabase_http import (
-    AUTH_CONSULTA,
-    AUTH_IMPORTADOR,
+    AUTH_ADMIN,
+    AUTH_ADMIN_OTRO_MUNICIPIO,
     AUTH_MULTI,
-    AUTH_OPERADOR,
-    AUTH_OTRO_IMPORTADOR,
     AUTH_REVOCADO,
+    AUTH_ROL_NO_RECONOCIDO,
     AUTH_SIN_MEMBRESIA,
     AUTH_SISTEMA,
-    AUTH_SUPERVISOR,
+    AUTH_USER,
     IMPORT_JWT,
     PUBLISHABLE_KEY,
     TENANT_A,
@@ -36,6 +34,7 @@ from fake_supabase_http import (
     URL,
     FakeSupabase,
 )
+from fastapi.testclient import TestClient
 
 from api import auth, imports, main
 from api import upload_store as store_module
@@ -104,7 +103,7 @@ def store(tmp_path) -> UploadStore:
     return UploadStore(tmp_path / "almacen")
 
 
-def auth_headers(supabase, user=AUTH_IMPORTADOR) -> dict[str, str]:
+def auth_headers(supabase, user=AUTH_ADMIN) -> dict[str, str]:
     return {"Authorization": f"Bearer {supabase.token(user)}"}
 
 
@@ -112,7 +111,7 @@ def new_key() -> dict[str, str]:
     return {"Idempotency-Key": str(uuid.uuid4())}
 
 
-def upload(client, supabase, body=None, *, user=AUTH_IMPORTADOR, headers=None, **kwargs):
+def upload(client, supabase, body=None, *, user=AUTH_ADMIN, headers=None, **kwargs):
     return client.post(
         "/imports",
         content=batch_form() if body is None else body,
@@ -465,9 +464,10 @@ def test_tenant_sent_by_the_client_is_ignored(client, supabase, store, extra):
 @pytest.mark.parametrize(
     ("user", "status", "code"),
     [
-        (AUTH_CONSULTA, 403, "ROLE_FORBIDDEN"),
-        (AUTH_OPERADOR, 403, "ROLE_FORBIDDEN"),
-        (AUTH_SUPERVISOR, 403, "ROLE_FORBIDDEN"),
+        # Matriz ADMIN/USER: USER no importa (antes consulta, operador y supervisor); un rol
+        # no reconocido tampoco; la identidad de máquina no entra por esta API.
+        (AUTH_USER, 403, "ROLE_FORBIDDEN"),
+        (AUTH_ROL_NO_RECONOCIDO, 403, "ROLE_FORBIDDEN"),
         (AUTH_SISTEMA, 403, "ROLE_FORBIDDEN"),
         (AUTH_SIN_MEMBRESIA, 403, "MEMBERSHIP_REQUIRED"),
         (AUTH_REVOCADO, 403, "MEMBERSHIP_REQUIRED"),
@@ -802,7 +802,7 @@ def test_upload_logs_carry_no_sentinels(client, supabase, caplog):
 
 def test_batch_reads_filter_by_the_resolved_tenant_with_the_user_token(client, supabase):
     identifier = upload(client, supabase).json()["id"]
-    token = supabase.token(AUTH_IMPORTADOR)
+    token = supabase.token(AUTH_ADMIN)
     supabase.calls.clear()
     client.get(f"/imports/{identifier}", headers={"Authorization": f"Bearer {token}"})
     reads = [c for c in supabase.calls if c.url.path.endswith("/import_batch")]
@@ -826,7 +826,7 @@ def test_get_returns_the_batch_without_private_fields(client, supabase):
 
 def test_other_tenant_batch_looks_like_a_missing_one(client, supabase):
     identifier = upload(client, supabase).json()["id"]
-    other = auth_headers(supabase, AUTH_OTRO_IMPORTADOR)
+    other = auth_headers(supabase, AUTH_ADMIN_OTRO_MUNICIPIO)
     foreign = client.get(f"/imports/{identifier}", headers=other)
     missing = client.get("/imports/999999", headers=other)
     assert foreign.status_code == missing.status_code == 404
@@ -838,7 +838,7 @@ def test_other_tenant_batch_looks_like_a_missing_one(client, supabase):
 
 def test_multi_tenant_rls_does_not_widen_the_batch_lookup(client, supabase):
     """Aunque RLS muestre la fila, el filtro explícito por el municipio resuelto manda."""
-    identifier = supabase.add_batch(TENANT_B, 5, "importador")
+    identifier = supabase.add_batch(TENANT_B, 5, "ADMIN")
     next(m for m in supabase.tables["tenant_user"] if m["user"] == 4)["status"] = True
     supabase.tables["tenant_user"].append(
         {"id": 90, "tenant": TENANT_B, "user": 4, "role": 2, "status": False}
@@ -847,7 +847,7 @@ def test_multi_tenant_rls_does_not_widen_the_batch_lookup(client, supabase):
     assert response.status_code == 404
 
 
-@pytest.mark.parametrize("user", [AUTH_CONSULTA, AUTH_OPERADOR, AUTH_SUPERVISOR])
+@pytest.mark.parametrize("user", [AUTH_USER, AUTH_ROL_NO_RECONOCIDO, AUTH_SISTEMA])
 def test_other_roles_cannot_read_or_discard(client, supabase, user):
     identifier = upload(client, supabase).json()["id"]
     headers = auth_headers(supabase, user)
@@ -863,8 +863,8 @@ def test_invalid_ids_do_not_reach_the_database(client, supabase, identifier):
 
 
 def test_get_follows_the_chain_from_any_event(client, supabase):
-    first = supabase.add_batch(TENANT_A, 4, "importador")
-    second = supabase.add_batch(TENANT_A, 4, "importador", status="VALIDADO", supersedes=first)
+    first = supabase.add_batch(TENANT_A, 4, "ADMIN")
+    second = supabase.add_batch(TENANT_A, 4, "ADMIN", status="VALIDADO", supersedes=first)
     headers = auth_headers(supabase)
     for identifier in (first, second):
         body = client.get(f"/imports/{identifier}", headers=headers).json()
@@ -882,21 +882,21 @@ def test_get_read_failure_is_503(client, supabase):
 
 
 def test_broken_chain_is_503_and_not_a_shorter_history(client, supabase):
-    identifier = supabase.add_batch(TENANT_A, 4, "importador", supersedes=999)
+    identifier = supabase.add_batch(TENANT_A, 4, "ADMIN", supersedes=999)
     response = client.get(f"/imports/{identifier}", headers=auth_headers(supabase))
     assert response.status_code == 503
 
 
 def test_a_cycle_in_the_chain_fails_closed(client, supabase):
-    first = supabase.add_batch(TENANT_A, 4, "importador")
-    second = supabase.add_batch(TENANT_A, 4, "importador", supersedes=first)
+    first = supabase.add_batch(TENANT_A, 4, "ADMIN")
+    second = supabase.add_batch(TENANT_A, 4, "ADMIN", supersedes=first)
     supabase.tables["import_batch"][0]["supersedes"] = second
     response = client.get(f"/imports/{second}", headers=auth_headers(supabase))
     assert response.status_code == 503
 
 
 def test_malformed_chain_row_is_503(client, supabase):
-    identifier = supabase.add_batch(TENANT_A, 4, "importador")
+    identifier = supabase.add_batch(TENANT_A, 4, "ADMIN")
     supabase.tables["import_batch"][0]["supersedes"] = "no-es-id"
     response = client.get(f"/imports/{identifier}", headers=auth_headers(supabase))
     assert response.status_code == 503
@@ -904,7 +904,7 @@ def test_malformed_chain_row_is_503(client, supabase):
 
 def test_row_of_another_tenant_invalidates_the_read(client, supabase, monkeypatch):
     """Si un filtro o una política fallan, la fila ajena no se muestra."""
-    identifier = supabase.add_batch(TENANT_B, 5, "importador")
+    identifier = supabase.add_batch(TENANT_B, 5, "ADMIN")
     original = FakeSupabase._filter
     monkeypatch.setattr(
         FakeSupabase,
@@ -967,8 +967,8 @@ def test_repeated_discard_is_idempotent(client, supabase):
 
 @pytest.mark.parametrize("status", ["VALIDADO", "REQUIERE_NUEVO_PREVIEW"])
 def test_open_states_can_be_discarded(client, supabase, status):
-    first = supabase.add_batch(TENANT_A, 4, "importador")
-    supabase.add_batch(TENANT_A, 4, "importador", status=status, supersedes=first)
+    first = supabase.add_batch(TENANT_A, 4, "ADMIN")
+    supabase.add_batch(TENANT_A, 4, "ADMIN", status=status, supersedes=first)
     response = client.post(f"/imports/{first}/discard", headers=auth_headers(supabase))
     assert response.status_code == 200
     assert response.json()["status"] == "DESCARTADO"
@@ -977,8 +977,8 @@ def test_open_states_can_be_discarded(client, supabase, status):
 
 @pytest.mark.parametrize("status", ["CONFIRMADO", "PUBLICADO", "FALLIDO"])
 def test_closed_states_cannot_be_discarded(client, supabase, store, status):
-    first = supabase.add_batch(TENANT_A, 4, "importador")
-    supabase.add_batch(TENANT_A, 4, "importador", status=status, supersedes=first)
+    first = supabase.add_batch(TENANT_A, 4, "ADMIN")
+    supabase.add_batch(TENANT_A, 4, "ADMIN", status=status, supersedes=first)
     response = client.post(f"/imports/{first}/discard", headers=auth_headers(supabase))
     assert response.status_code == 409
     assert response.json() == {"detail": "BATCH_NOT_DISCARDABLE"}
@@ -1153,7 +1153,7 @@ def test_b1_retry_does_not_bring_back_a_discarded_batch(client, supabase, store)
 @pytest.mark.parametrize("status", ["CONFIRMADO", "PUBLICADO", "FALLIDO"])
 def test_b1_retry_does_not_touch_the_copy_of_a_closed_batch(client, supabase, store, status):
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
-    supabase.add_batch(TENANT_A, 4, "importador", status=status, supersedes=1)
+    supabase.add_batch(TENANT_A, 4, "ADMIN", status=status, supersedes=1)
     store.release(TENANT_A, 1)
     retry = upload(client, supabase, headers={"Idempotency-Key": KEY})
     assert retry.status_code == 200
@@ -1169,7 +1169,7 @@ def test_b1_retry_restores_the_copy_of_an_open_batch(client, supabase, store, st
     supabase.add_batch(
         TENANT_A,
         4,
-        "importador",
+        "ADMIN",
         status=status,
         supersedes=1,
         file_hashes=root["file_hashes"],
@@ -1191,7 +1191,7 @@ def test_b1_discard_that_wins_the_race_with_a_restore_leaves_no_copy(
     original = UploadStore.commit
 
     def discard_meanwhile(self, *args):
-        supabase.add_batch(TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1)
+        supabase.add_batch(TENANT_A, 4, "ADMIN", status="DESCARTADO", supersedes=1)
         return original(self, *args)
 
     monkeypatch.setattr(UploadStore, "commit", discard_meanwhile)
@@ -1330,7 +1330,7 @@ def test_b1_get_with_an_incomplete_set_of_files_reports_no_copy(client, supabase
 
 def test_b1_missing_class_counts_even_without_a_declared_size(client, supabase, store):
     identifier = supabase.add_batch(
-        TENANT_A, 4, "importador", file_hashes={"cabecera": "a" * 64, "detalle": "b" * 64}
+        TENANT_A, 4, "ADMIN", file_hashes={"cabecera": "a" * 64, "detalle": "b" * 64}
     )
     token = store.begin()
     with store.open_part(token, "cabecera") as handle:
@@ -1341,7 +1341,7 @@ def test_b1_missing_class_counts_even_without_a_declared_size(client, supabase, 
 
 
 def test_b1_batch_without_a_declared_size_is_judged_by_its_files(client, supabase, store):
-    identifier = supabase.add_batch(TENANT_A, 4, "importador")
+    identifier = supabase.add_batch(TENANT_A, 4, "ADMIN")
     token = store.begin()
     with store.open_part(token, "cabecera") as handle:
         handle.write(b"x")
@@ -1635,7 +1635,7 @@ def test_r1_retry_removes_the_copy_left_by_an_interrupted_discard(client, supaba
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
     root = supabase.tables["import_batch"][0]
     supabase.add_batch(
-        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        TENANT_A, 4, "ADMIN", status="DESCARTADO", supersedes=1,
         file_hashes=root["file_hashes"], counts=root["counts"],
     )
     assert len(stored_files(store.root)) == 2
@@ -1649,7 +1649,7 @@ def test_r1_get_removes_the_copy_left_by_an_interrupted_discard(client, supabase
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
     root = supabase.tables["import_batch"][0]
     supabase.add_batch(
-        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        TENANT_A, 4, "ADMIN", status="DESCARTADO", supersedes=1,
         file_hashes=root["file_hashes"], counts=root["counts"],
     )
     body = client.get("/imports/1", headers=auth_headers(supabase)).json()
@@ -1662,7 +1662,7 @@ def test_r1_repeated_discard_removes_the_copy_left_by_an_interrupted_one(client,
     assert upload(client, supabase, headers={"Idempotency-Key": KEY}).status_code == 201
     root = supabase.tables["import_batch"][0]
     supabase.add_batch(
-        TENANT_A, 4, "importador", status="DESCARTADO", supersedes=1,
+        TENANT_A, 4, "ADMIN", status="DESCARTADO", supersedes=1,
         file_hashes=root["file_hashes"], counts=root["counts"],
     )
     response = client.post("/imports/1/discard", headers=auth_headers(supabase))
@@ -1690,9 +1690,9 @@ def test_r1_response_of_a_retry_is_a_consistent_snapshot(client, supabase, store
 
 def test_r1_a_key_that_points_to_a_later_event_fails_closed(client, supabase, store):
     """La clave de un envío siempre es del evento de origen: otra cosa no se da por buena."""
-    first = supabase.add_batch(TENANT_A, 4, "importador")
+    first = supabase.add_batch(TENANT_A, 4, "ADMIN")
     second = supabase.add_batch(
-        TENANT_A, 4, "importador", supersedes=first, idempotency_key=KEY,
+        TENANT_A, 4, "ADMIN", supersedes=first, idempotency_key=KEY,
         file_hashes={
             "cabecera": hashlib.sha256(CABECERA).hexdigest(),
             "detalle": hashlib.sha256(DETALLE).hexdigest(),
@@ -1751,9 +1751,8 @@ class hold_lock:
 
 def test_lock_excludes_other_threads_and_is_reentrant_in_the_same_one(store):
     with store.lock(TENANT_A, 1):
-        with store.lock(TENANT_A, 1):
-            with pytest.raises(store_module.UploadStoreBusy):
-                _other_thread_tries_the_lock(store, TENANT_A, 1)
+        with store.lock(TENANT_A, 1), pytest.raises(store_module.UploadStoreBusy):
+            _other_thread_tries_the_lock(store, TENANT_A, 1)
         with pytest.raises(store_module.UploadStoreBusy):
             _other_thread_tries_the_lock(store, TENANT_A, 1)
     _other_thread_tries_the_lock(store, TENANT_A, 1)
@@ -1791,9 +1790,8 @@ def test_lock_excludes_other_processes_and_dies_with_its_holder(store):
     """Con más de un worker también rige. Un proceso que muere no deja el lote tomado."""
     process = _holder_process(store)
     try:
-        with pytest.raises(store_module.UploadStoreBusy):
-            with store.lock(1, 1, wait=0):
-                pass
+        with pytest.raises(store_module.UploadStoreBusy), store.lock(1, 1, wait=0):
+            pass
     finally:
         process.kill()
         process.wait()
@@ -1835,9 +1833,8 @@ def test_lock_file_planted_as_symlink_is_refused(store, tmp_path):
         path = store.root / "bloqueos" / f"{index:02d}.lock"
         path.unlink(missing_ok=True)
         path.symlink_to(outside)
-    with pytest.raises(OSError):
-        with store.lock(1, 1, wait=0):
-            pass
+    with pytest.raises(OSError), store.lock(1, 1, wait=0):
+        pass
     assert outside.read_bytes() == b"x"
 
 
@@ -2156,7 +2153,7 @@ def test_r3_lookup_is_resolved_over_more_than_one_page(client, supabase, monkeyp
     """Sin filtro por id hay que leer todo lo del municipio, sin cortarse en una página."""
     first = None
     for index in range(1, 2502):
-        last = supabase.add_batch(TENANT_A, 4, "importador")
+        last = supabase.add_batch(TENANT_A, 4, "ADMIN")
         first = first or last
     response = client.get(f"/imports/{last}", headers=auth_headers(supabase))
     assert response.status_code == 200
@@ -2177,7 +2174,7 @@ def test_r3_scoring_filters_of_the_client_never_reach_an_outgoing_request(client
             "severity_band": NUMBER,
             "tag": NUMBER,
         },
-        headers=auth_headers(supabase, AUTH_OPERADOR),
+        headers=auth_headers(supabase, AUTH_USER),
     )
     assert response.status_code == 200
     assert supabase.calls

@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pytest
 from oracle_lots import derive_lot
+
+from api.upload_store import UploadStore, UploadStoreBusy
 from ETL.config import ETLError
 from services import import_preview_process as process
 from services.import_preview_worker import prepare
-from api.upload_store import UploadStore, UploadStoreBusy
 
 PROFILE=json.loads((Path(__file__).resolve().parents[2]/'contracts/source-mapping.sintetico-v1.json').read_text())
 
@@ -60,9 +61,8 @@ def test_lifeline_death_releases_inherited_slot_only_after_worker_exits(tmp_path
         os.close(read_fd);read_fd=-1
         # A paused child still owns the slot even after the API's descriptor closes.
         os.kill(child.pid,signal.SIGSTOP)
-        with pytest.raises(UploadStoreBusy):
-            with UploadStore(store.root).processing_slot():
-                pytest.fail('A live worker must retain capacity')
+        with pytest.raises(UploadStoreBusy), UploadStore(store.root).processing_slot():
+            pytest.fail('A live worker must retain capacity')
         os.close(write_fd);write_fd=-1
         os.kill(child.pid,signal.SIGCONT)
         assert child.wait(timeout=5)==-signal.SIGKILL

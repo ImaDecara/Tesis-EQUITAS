@@ -1,6 +1,4 @@
 """Preview effects and coherence; the independent SQL oracle is in tests_real."""
-import copy
-from datetime import date
 from importlib import import_module
 
 import pytest

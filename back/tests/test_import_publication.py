@@ -4,12 +4,15 @@ import copy
 
 import httpx
 import pytest
+import test_etl_semantic
 from oracle_lots import AS_OF, derive_lot
-from test_etl_semantic import database  # noqa: F401 -- mismo aislamiento de red y catálogos
 
 from ETL import publication, run_etl
 from ETL.config import ETLError
 from ETL.transform import canonical_json_hash
+
+# Mismo aislamiento de red y catálogos que la carga semántica.
+database = test_etl_semantic.database
 
 
 @pytest.fixture

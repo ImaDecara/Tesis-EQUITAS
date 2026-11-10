@@ -14,7 +14,6 @@ from unittest.mock import Mock
 import httpx
 import pandas as pd
 import pytest
-
 from oracle_lots import AS_OF, accepted_objects, derive_lot
 
 from ETL import config, extract, load, publication, run_etl

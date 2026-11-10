@@ -30,7 +30,7 @@ function Summary({ outcome }: { outcome: LoadOutcome }) {
       <div><dt className="text-xs opacity-80">Fecha de corte</dt><dd className="font-semibold">{outcome.body.fecha_corte ? formatDate(outcome.body.fecha_corte) : 'No disponible'}</dd></div>
       <div><dt className="text-xs opacity-80">Objetos incorporados</dt><dd className="font-semibold">{count(summary.objetos_aceptados)} de {count(summary.objetos)}</dd></div>
       <div><dt className="text-xs opacity-80">Obligaciones en el archivo</dt><dd className="font-semibold">{count(summary.obligaciones)}</dd></div>
-      <div><dt className="text-xs opacity-80">Personas</dt><dd className="font-semibold">{count(summary.personas)}</dd></div>
+      <div><dt className="text-xs opacity-80">Personas en el archivo</dt><dd className="font-semibold">{count(summary.personas)}</dd></div>
       <div className="col-span-2 sm:col-span-4">
         <dt className="text-xs opacity-80">En cuarentena</dt>
         <dd>
@@ -90,7 +90,7 @@ export function ImportResult({ outcome, onRetry, retrying = false }: { outcome: 
 
       {structure && (
         <p className="text-sm" data-structure-error>
-          {structure.descripcion}
+          {findingMessage(structure.codigo, structure.descripcion)}
           {structure.archivo ? ` Archivo: ${fileTitle(structure.archivo)}.` : ''}
           {structure.linea ? ` Fila: ${structure.linea}.` : ''}
           {structure.columna ? ` Columna: ${structure.columna}.` : ''}

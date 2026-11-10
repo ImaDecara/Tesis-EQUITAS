@@ -82,6 +82,7 @@ STRUCTURAL_MESSAGES = {
     "ARCHIVO_NO_LEIBLE": "El archivo no se pudo leer con la codificación y el separador del formato.",
     "CONTENIDO_NO_TEXTO": "El archivo no es un CSV de texto (parece binario o tiene otra codificación).",
     "ESTRUCTURA_INVALIDA": "La estructura no coincide: revisá el separador, las comillas y que todas las filas tengan las mismas columnas que el encabezado.",
+    "COLUMNA_OBLIGATORIA_AUSENTE": "Falta una columna obligatoria en el encabezado del archivo. Revisá también que el separador sea el del formato.",
     "LIMITE_ARCHIVO_EXCEDIDO": "El archivo supera los límites de tamaño, filas, columnas o longitud de celda.",
     "TIEMPO_LECTURA_EXCEDIDO": "El archivo tardó demasiado en leerse.",
     "FORMATO_NO_SOPORTADO": "El formato no está soportado: en esta versión el lote son dos archivos CSV.",
@@ -358,8 +359,10 @@ def _prepare(form: imports.ReceivedForm, as_of: str, context: TenantContext, ses
         raise HTTPException(503, imports.STORE_UNAVAILABLE) from None
     except ETLError as error:
         if str(error) in ("PREVIEW_TIME_LIMIT", "PREVIEW_WORK_LIMIT"):
+            # Un lote que supera un límite es un rechazo del lote: el intento queda registrado y cerrado, como los demás.
+            registered = _register_rejection(session, context, form, as_of, {})
             return _outcome(422, REJECTED, f"El lote es demasiado grande para procesarlo en esta versión (tiempo o memoria). {NOT_MODIFIED}",
-                            fecha_corte=as_of, motivos=[{"codigo": "LIMITE_PROCESO_EXCEDIDO", "descripcion": "Se superó el límite de 180 segundos o de memoria del procesamiento."}])
+                            fecha_corte=as_of, intento_registrado=registered, motivos=[{"codigo": "LIMITE_PROCESO_EXCEDIDO", "descripcion": "Se superó el límite de 180 segundos o de memoria del procesamiento."}])
         return _not_completed(f"No se pudo procesar el lote. {NOT_MODIFIED} No es un problema del archivo: repetí la misma carga.", "PROCESO_NO_DISPONIBLE")
     return prepared
 
@@ -379,8 +382,9 @@ def _load(form: imports.ReceivedForm, as_of: str, revision: str | None, context:
                                 fecha_corte=as_of, intento_registrado=registered,
                                 motivos=_blockers(prepared["validation"]["motivos_bloqueo"]), **report)
             if len(prepared["rows"]) > MAX_STAGED_ROWS:
+                registered = _register_rejection(session, context, form, as_of, prepared["document"]["counts"])
                 return _outcome(422, REJECTED, f"El lote supera el máximo de {MAX_STAGED_ROWS} registros (personas más objetos) de esta versión. {NOT_MODIFIED}",
-                                fecha_corte=as_of, resumen=report["resumen"],
+                                fecha_corte=as_of, intento_registrado=registered, resumen=report["resumen"],
                                 motivos=[{"codigo": "LIMITE_REGISTROS_EXCEDIDO", "descripcion": "Dividir el lote no es posible: cada lote es la cartera completa. Es un límite de esta versión."}])
             try:
                 missing = _check_catalogs(client, prepared["detail"]["catalogos"])

@@ -24,11 +24,11 @@ class PublicationModel:
         doc = job['document']
         params = doc['identity']['parameters']
         self.db.next_id += 1
-        event = dict(id=self.db.next_id, p_actor_user=job['actor'], p_tenant=doc['identity']['tenant'],
-                     p_source=doc['source'], p_file_hashes=doc['file_hashes'], p_as_of=params['as_of'],
-                     p_source_updated_at=doc['source_updated_at'], p_rules_version=params['rules_version'],
-                     p_status=status, p_counts=copy.deepcopy(counts) | {'publicacion_atomica': 1},
-                     p_supersedes=job.get('head'), p_idempotency_key=str(uuid.uuid4()))
+        event = {'id': self.db.next_id, 'p_actor_user': job['actor'], 'p_tenant': doc['identity']['tenant'],
+                 'p_source': doc['source'], 'p_file_hashes': doc['file_hashes'], 'p_as_of': params['as_of'],
+                 'p_source_updated_at': doc['source_updated_at'], 'p_rules_version': params['rules_version'],
+                 'p_status': status, 'p_counts': copy.deepcopy(counts) | {'publicacion_atomica': 1},
+                 'p_supersedes': job.get('head'), 'p_idempotency_key': str(uuid.uuid4())}
         self.db.batches.append(event)
         job.update(head=event['id'], status=status)
         return event['id']
@@ -77,8 +77,8 @@ class PublicationModel:
             key = transform.canonical_json_hash(document['identity'])
             if key in self.jobs:
                 return response(self.receipt(self.jobs[key]))
-            job = dict(document=document, rows=body['p_rows'], actor=body['p_actor_user'],
-                       counts=copy.deepcopy(document['counts']), idempotency_key=key, revision=key)
+            job = {'document': document, 'rows': body['p_rows'], 'actor': body['p_actor_user'],
+                   'counts': copy.deepcopy(document['counts']), 'idempotency_key': key, 'revision': key}
             self.jobs[key] = job
             job['batch_id'] = self.event(job, 'RECIBIDO', job['counts'])
             absent, relations, contacts = self.missing(job)
