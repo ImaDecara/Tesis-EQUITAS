@@ -23,7 +23,11 @@ export const EXPORTABLE_INTERVENTIONS: ReadonlySet<string> = new Set([
   ...Object.values(RULES_CONTRACTS).flatMap(rules => Object.keys(rules.intervenciones)), ...costs.acciones.map(action => action.id),
 ])
 
-const EXPORTABLE_ROLES: ReadonlySet<string> = new Set(WEB_ROLES)
+// Noche 7. Los roles vigentes son ADMIN y USER; los registros guardados antes conservan el nombre de
+// entonces y se exportan con ese nombre (lista cerrada: no lleva datos de una persona). La columna
+// legible los marca «(rol anterior)» con `roleLabel`.
+export const HISTORICAL_ROLES = ['consulta', 'operador', 'supervisor', 'importador', 'importador_sistema', 'tp_operator'] as const
+const EXPORTABLE_ROLES: ReadonlySet<string> = new Set([...WEB_ROLES, ...HISTORICAL_ROLES])
 
 export function controlledCode(value: unknown, allowed: ReadonlySet<string>) {
   return typeof value === 'string' && allowed.has(value) ? value : NOT_CATALOGUED

@@ -9,6 +9,7 @@ import { buildQueueReport } from '@/lib/reports/queue-report'
 import { EXPORTABLE_INTERVENTIONS, EXPORTABLE_REASON_CODES, NOT_CATALOGUED } from '@/lib/reports/report-codes'
 import { assertReadsComplete, describeFilters, isCalendarDate, readParams, ReportFilterError, ReportReadError } from '@/lib/reports/report-format'
 import { buildReviewLedger, cutoffSpan, parseReviewFilters, versionSet } from '@/lib/reports/review-ledger'
+import { NEW_COLUMNS } from '@/lib/reports/report-definitions'
 import { buildSupervisionReport } from '@/lib/reports/supervision-report'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { buildPresenceRawData } from '@/tests/helpers/equitas-fixtures'
@@ -188,14 +189,23 @@ describe('ALIGN-028: el catalogo define cada columna e indicador (regla de incor
     'reporte-accesos': parse(buildAccessAuditReport([{ id: 1, actor: 2, actor_role: 'supervisor', action: 'CASE_OPEN', target: '3', created_at: '2026-11-02T10:00:00Z' }], {}, NOW)),
   }
 
+  // Noche 7: una columna nueva se define en el catalogo o, hasta que se actualice, en NEW_COLUMNS
+  // (lib/reports/report-definitions.ts). Ninguna queda sin definicion.
+  const defined = (name: string) => catalog.includes(`\`${name}\``) || Object.hasOwn(NEW_COLUMNS, name)
+
   it.each(Object.entries(reports))('%s: ancla, enlace y columnas', (anchor, file) => {
     expect(catalog).toContain(`<a id="${anchor}"></a>`)
     expect(file.rows.every(row => row.definiciones === `docs/tesis/catalogo-indicadores-v1.md#${anchor}`)).toBe(true)
-    for (const column of file.header) expect(catalog, column).toContain(`\`${column}\``)
+    for (const column of file.header) expect(defined(column), column).toBe(true)
   })
 
   it.each(['reporte-supervision', 'reporte-calidad'] as const)('%s: indicadores', anchor => {
-    for (const row of reports[anchor].rows) expect(catalog, row.indicador).toContain(`\`${row.indicador}\``)
+    for (const row of reports[anchor].rows) expect(defined(row.indicador), row.indicador).toBe(true)
+  })
+
+  it('NEW_COLUMNS solo lista columnas que los reportes emiten', () => {
+    const emitted = new Set(Object.values(reports).flatMap(file => [...file.header, ...file.rows.map(row => row.indicador)]))
+    for (const name of Object.keys(NEW_COLUMNS)) expect(emitted.has(name), name).toBe(true)
   })
 
   it('el catalogo no promete columnas de personas ni texto libre en los reportes', () => {

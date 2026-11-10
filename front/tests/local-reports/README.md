@@ -9,6 +9,15 @@ Las pruebas con transporte simulado están en `tests/integration/reports.integra
 | `run-http.mjs` | Inicia sesiones reales y guarda cada respuesta, también las de las pantallas |
 | `verify_reports.py` | Compara con el módulo `csv` de Python: autorización, formato, conciliación con SQL y con las pantallas, ausencia de datos personales y de otro municipio |
 
+## Noche 7: qué cambió y por qué
+
+- **Roles.** El producto tiene ADMIN y USER (migración `20261110100000_admin_user_access`). Las cuentas de ALIGN-018 conservan su etiqueta, que es el nombre de la cuenta; `fixture.sql` les asigna el rol: `consulta` = USER, `operador` y `supervisor` = ADMIN, `otro-operador` = USER en B, `otro-supervisor` = ADMIN en B y USER en A, `inactivo` = ADMIN con la membresía inactiva. `importador` conserva su rol anterior y no ingresa (rol no reconocido).
+- **Permisos esperados.** Cola, calidad y decisiones: ADMIN y USER. Supervisión y accesos: solo ADMIN. USER también recibe el identificador del caso (exportar lo que ya se ve no amplía el acceso).
+- **Fecha de la cartera.** El lector usa el lote publicado (`2026-10-15` en la fixture): `fecha_cartera` y, en cola y calidad, `fecha_corte` son esa fecha y `fecha_calculo_usada` es `NO_APLICA`. Las dos comprobaciones que esperaban `NO_INTEGRADO` y una fecha del reloj se reemplazaron.
+- **Selección incompleta (H16).** Si `/priority-cases` dice «No disponible» para un filtro (por ejemplo `?risk=ALTO` con casos sin puntaje), el CSV responde `422` con `SELECCION_INCOMPLETA` en lugar de un archivo con cero filas.
+- **Reglas 1.1.0.** La fixture agrega una obligación pagada: suma al total registrado y no a la deuda pendiente. `expected.sql` calcula `deuda_pendiente`, la fecha de la cartera, las decisiones al día y el identificador de cada caso.
+- **Nuevo:** reporte de accesos (apertura de un caso con su identificador; `quien` = PROPIO u OTRA_PERSONA), la deuda pendiente contra `/` y `/debt-aging`, y la pantalla `/reports` para ADMIN y USER.
+
 ## Procedimiento
 
 Con `PATH` en npm 11.21.1 y el stack de `docs/tesis/entorno-aislado.md` levantado, desde la raíz del worktree:

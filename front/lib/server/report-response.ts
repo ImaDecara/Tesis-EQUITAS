@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { CSV_CONTENT_TYPE } from '@/lib/reports/csv'
-import { ReportFilterError, ReportReadError } from '@/lib/reports/report-format'
+import { ReportFilterError, ReportReadError, ReportSelectionError } from '@/lib/reports/report-format'
 import { AccessAuditError, recordAccessAudit } from '@/lib/server/audit'
 import { DataAccessError, requireTenantAccess, type DalPermission } from '@/lib/server/dal'
 
@@ -31,6 +31,10 @@ export async function csvReportResponse(request: Request, fileName: string, perm
   } catch (error) {
     if (error instanceof DataAccessError) return failure(error.status, { error: error.code })
     if (error instanceof ReportFilterError) return failure(400, { error: 'FILTRO_INVALIDO', filtro: error.param })
+    // Noche 7 (H16): la pantalla dice «No disponible» para esta seleccion; no se entrega un archivo vacio.
+    if (error instanceof ReportSelectionError) {
+      return failure(422, { error: 'SELECCION_INCOMPLETA', mensaje: 'Faltan datos para evaluar los filtros en algunos casos: no se puede saber qué casos cumplen esta selección.' })
+    }
     if (error instanceof ReportReadError) return failure(503, { error: 'LECTURA_FALLIDA', tablas: error.tables })
     if (error instanceof AccessAuditError) return failure(503, { error: 'AUDITORIA_NO_DISPONIBLE' })
     // Sin el mensaje: podria traer valores de una fila.

@@ -1,6 +1,6 @@
 import { serializeCsv, type CsvValue } from '@/lib/reports/csv'
 import { NOT_CATALOGUED } from '@/lib/reports/report-codes'
-import { AGGREGATE_COLUMNS, definitionsLink, describeFilters, shareRow, tally, totalRow, type AggregateColumn, type ReportMeta } from '@/lib/reports/report-format'
+import { AGGREGATE_COLUMNS, currentMeta, definitionsLink, describeFilters, shareRow, tally, totalRow, UNKNOWN_PORTFOLIO, type AggregateColumn, type PortfolioReference, type ReportMeta } from '@/lib/reports/report-format'
 import { APPROVAL_DECISIONS, cutoffSpan, filterReviewEvents, parseReviewFilters, REVIEW_DECISIONS, versionSet, type ReviewEvent, type ReviewFilters } from '@/lib/reports/review-ledger'
 
 // ALIGN-028. Solo conteos por codigo de lista cerrada: sin objetos, personas ni identidad de quien decidio.
@@ -17,13 +17,14 @@ function discrepancyRow(meta: ReportMeta, numerator: number, denominator: number
   }
 }
 
-export function buildSupervisionReport(ledger: readonly ReviewEvent[], filters: ReviewFilters, generatedAt: string) {
+export function buildSupervisionReport(ledger: readonly ReviewEvent[], filters: ReviewFilters, generatedAt: string, reference: Pick<PortfolioReference, 'fechaCartera'> = UNKNOWN_PORTFOLIO) {
   const events = filterReviewEvents(ledger, filters)
   const current = events.filter(event => event.current)
   const required = current.filter(event => event.requiresApproval)
   const objected = current.filter(event => event.approval === 'OBJETA')
   const uncatalogued = current.filter(event => event.decision === NOT_CATALOGUED).length
   const meta: ReportMeta = {
+    ...currentMeta(reference),
     fecha_corte: cutoffSpan(events),
     version_reglas: versionSet(events),
     filtros: describeFilters(filters),

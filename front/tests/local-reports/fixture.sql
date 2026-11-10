@@ -1,6 +1,10 @@
 -- ALIGN-028. SOLO base local, con turno. Datos totalmente sinteticos, sobre case-review-fixtures.sql (ALIGN-018).
 -- Cartera evaluable con celdas hostiles en el municipio A, y filas marcadas del municipio B para detectar fugas.
 -- IDs reservados 928001..928999. Para limpiar: db reset.
+-- Noche 7: los roles del producto son ADMIN y USER (migracion 20261110100000_admin_user_access). Las cuentas de
+-- ALIGN-018 conservan su etiqueta (consulta, operador, ...), que es el nombre de la CUENTA, no del rol: abajo se les
+-- asigna ADMIN o USER. `importador` queda con su rol anterior y ya no ingresa (rol no reconocido). Las revisiones
+-- guardadas conservan `reviewer_role = 'operador'`: son el dato historico que los reportes exportan como tal.
 begin;
 do $$ begin
   if (select count(*) from public.tenant where id in (920001, 920002)) <> 2 then
@@ -8,13 +12,28 @@ do $$ begin
   end if;
 end $$;
 
--- Dos membresias: supervisor en B (semilla) y consulta en A. Sin seleccion no entra.
-insert into public.tenant_user(id, tenant, "user", role, status) values (928001, 920001, 920008, 920001, true);
+-- Roles del producto, por nombre exacto. La inicializacion local puede haberlos sembrado ya.
+insert into public.role(id, name, description)
+select v.id, v.name, v.description
+from (values (928011::bigint, 'ADMIN', 'Administrador'), (928012::bigint, 'USER', 'Usuario')) as v(id, name, description)
+where not exists(select 1 from public.role r where r.name = v.name);
+
+-- Cuenta -> rol. A: consulta USER; operador ADMIN (registra); supervisor ADMIN (aprueba); inactivo ADMIN con la
+-- membresia inactiva. B: otro-operador USER; otro-supervisor ADMIN. importador conserva el rol anterior.
+update public.tenant_user set role = (select id from public.role where name = 'ADMIN') where id in (920002, 920003, 920006, 920008);
+update public.tenant_user set role = (select id from public.role where name = 'USER') where id in (920001, 920007);
+
+-- Dos membresias: ADMIN en B (semilla) y USER en A. Sin seleccion no entra.
+insert into public.tenant_user(id, tenant, "user", role, status)
+values (928001, 920001, 920008, (select id from public.role where name = 'USER'), true);
 
 insert into public.debtor_type(id, key, value) values (928001, 'A028', 'Tributo sintetico; "A028"');
 insert into public.contact_type(id, key, value) values (928001, 'A028', 'Email sintetico');
 insert into public.debt_status(id, key, value)
   select 928001, 'OVERDUE', 'Vencida' where not exists(select 1 from public.debt_status where key = 'OVERDUE');
+-- Reglas 1.1.0: una obligacion pagada suma al total registrado y no a la deuda pendiente ni a la vencida.
+insert into public.debt_status(id, key, value)
+  select 928002, 'PAID', 'Pagada' where not exists(select 1 from public.debt_status where key = 'PAID');
 
 insert into public.debtor(id, tenant, external_id, type, identifier, description) values
   (928101, 920001, 928101, 928001, 'TP-A028-CONTACTO', 'TP-A028-DESCRIPCION-SECRETA'),
@@ -40,6 +59,9 @@ from (values
   (928201, 928201, 777000, '2026-03-01')
 ) as rows(id, debtor, amount, due);
 
+insert into public.debt(id, external_id, debtor, original_amount, current_amount, due_date, status)
+values (928109, 928109, 928101, 700, 700, '2026-02-01', (select d.id from public.debt_status d where d.key = 'PAID'));
+
 insert into public.person(id, external_id, full_name, document_number) values
   (928301, 928301, 'TP-A028-PERSONA-UNO', 'TP-A028-DOC-UNO'),
   (928302, 928302, 'TP-A028-PERSONA-DOS', 'TP-A028-DOC-DOS'),
@@ -59,10 +81,12 @@ insert into public.debtor_contact(id, person, type, value) values
   (928301, 928301, 928001, 'tp-a028-uno@example.test'),
   (928399, 928399, 928001, 'tp-a028-ajeno-b@example.test');
 
--- Un lote publicado que el lector de cartera todavia no usa: el reporte no debe adoptar su corte
--- mientras las reglas calculen con otra fecha.
+-- Lote publicado: desde la integracion de la fecha de la cartera, el lector y los cinco reportes usan su fecha
+-- (fecha_cartera y, en cola y calidad, fecha_corte). Es la fecha de la decision 928407 (reglas 1.1.0): esa queda
+-- al dia y las demas, registradas al 30/09 con las reglas 1.0.0, salen con datos_anteriores = SI.
+-- created_by_role conserva el rol de entonces: es un registro historico.
 insert into public.import_batch(tenant, source, file_hashes, as_of, rules_version, status, created_by, created_by_role, idempotency_key) values
-  (920001, 'WEB', jsonb_build_object('cartera', repeat('a', 64)), '2026-08-31', '1.0.0', 'PUBLICADO', 920004, 'importador', gen_random_uuid());
+  (920001, 'WEB', jsonb_build_object('cartera', repeat('a', 64)), '2026-10-15', '1.1.0', 'PUBLICADO', 920004, 'importador', gen_random_uuid());
 
 -- Revisiones. Los eventos reemplazados y la cadena de aprobacion cubren los casos de los reportes.
 insert into public.case_review(id, tenant, debtor, rules_version, as_of, inputs_hash, suggested_intervention, suggested_intensity, explanation,

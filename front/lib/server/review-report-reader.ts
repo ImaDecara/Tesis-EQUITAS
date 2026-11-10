@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
-import { assertReadsComplete } from '@/lib/reports/report-format'
+import { getDebtorsData } from '@/lib/equitas-data'
+import { assertReadsComplete, portfolioReference, type PortfolioReference } from '@/lib/reports/report-format'
 import { buildReviewLedger } from '@/lib/reports/review-ledger'
 import type { ReportAccess } from '@/lib/server/report-response'
 import type { DataWarning } from '@/types/equitas-domain'
@@ -19,4 +20,14 @@ export async function readReviewLedger({ supabase, context }: ReportAccess) {
   ])
   assertReadsComplete([reviews.warning, approvals.warning].filter((warning): warning is DataWarning => warning !== null))
   return buildReviewLedger(reviews.rows, approvals.rows)
+}
+
+// Noche 7. Fecha de la cartera vigente e identificador visible de cada caso, de la MISMA lectura que los
+// listados. Solo importan los casos y el lote: sin ellos no se puede afirmar ni la fecha ni el caso.
+const REFERENCE_READS = new Set(['debtor', 'import_batch'])
+
+export async function readPortfolioReference(): Promise<PortfolioReference> {
+  const { debtors, warnings, batch } = await getDebtorsData()
+  assertReadsComplete(warnings.filter(warning => REFERENCE_READS.has(warning.table)))
+  return portfolioReference(debtors, batch)
 }

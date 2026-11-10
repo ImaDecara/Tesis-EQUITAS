@@ -1,4 +1,5 @@
-import type { RawRow } from '@/types/equitas-domain'
+import smallCases from '../../../contracts/portfolio-small-cases.v1.json'
+import type { RawDebtorDataBundle, RawRow } from '@/types/equitas-domain'
 
 // ALIGN-028. Cartera sintetica de dos municipios, con filas evaluables (lote "VALIDADO")
 // y celdas hostiles. Los marcadores permiten buscar fugas en el texto del CSV.
@@ -10,6 +11,13 @@ export const PERSONAL_MARKERS = [
 export const FREE_TEXT_MARKER = 'TEXTO-LIBRE-SINTETICO-HOGAR'
 export const REVIEWER_MARKER = 777001
 export const HOSTILE_IDENTIFIERS = ['=HYPERLINK("http://x.example","y")', '  =1+1', '\t+1+1', '-2+3', '@SUM(A1)']
+
+// Fecha de corte fija: nunca coincide con el reloj de la prueba.
+export const REVIEW_CUTOFF = '2026-09-30'
+export const OTHER_CUTOFF = '2026-10-15'
+// La cartera vigente es la de OTHER_CUTOFF: la decision 7 (reglas 1.1.0, ese corte) esta al dia y las demas,
+// registradas con la cartera del 30/09 y las reglas 1.0.0, quedan «sobre datos anteriores».
+export const PORTFOLIO_AS_OF = OTHER_CUTOFF
 
 const debtScope = (tenant: number) => ({ __scope: { tenant } })
 const links = (tenant: number) => [{ active: true, debtor: tenant, __debtor: { tenant } }]
@@ -72,19 +80,20 @@ export function portfolioTables(): Record<string, RawRow[]> {
       { id: 399, person: 599, value: `${FOREIGN_MARKER}@example.test`, type: 1, active: true, __person: { __links: links(8) } },
     ],
     debtor_profile: [],
+    // Noche 7: la cartera vigente sale del lote publicado, como en la base (sin lote, el municipio no tiene cartera).
+    import_batch: [
+      { id: 1, tenant: 7, as_of: PORTFOLIO_AS_OF, source_updated_at: null, status: 'PUBLICADO', supersedes: null },
+      { id: 9, tenant: 8, as_of: '2026-01-31', source_updated_at: null, status: 'PUBLICADO', supersedes: null },
+    ],
   }
 }
-
-// Fecha de corte fija: nunca coincide con el reloj de la prueba.
-export const REVIEW_CUTOFF = '2026-09-30'
-export const OTHER_CUTOFF = '2026-10-15'
 
 function review(id: number, overrides: RawRow = {}): RawRow {
   return {
     id, tenant: 7, debtor: 101, rules_version: '1.0.0', as_of: REVIEW_CUTOFF,
     suggested_intervention: 'CONTACTO_PERSONAL_Y_PLAN', suggested_intensity: 2,
     decision: 'ACEPTA', decided_intervention: 'CONTACTO_PERSONAL_Y_PLAN', decided_intensity: 2,
-    reason_code: null, reviewer_role: 'operador', created_at: `2026-10-0${id % 9 + 1}T15:30:00+00:00`, supersedes: null,
+    reason_code: null, reviewer_role: 'ADMIN', created_at: `2026-10-0${id % 9 + 1}T15:30:00+00:00`, supersedes: null,
     // El transporte simulado devuelve la fila completa: si el reporte no filtra, se detecta.
     reason_text: FREE_TEXT_MARKER, reviewer: REVIEWER_MARKER, explanation: { texto: FREE_TEXT_MARKER },
     inputs_hash: 'f'.repeat(64), idempotency_key: 'sintetica', checklist: {},
@@ -94,13 +103,14 @@ function review(id: number, overrides: RawRow = {}): RawRow {
 
 function approval(id: number, caseReview: number, overrides: RawRow = {}): RawRow {
   return {
-    id, tenant: 7, case_review: caseReview, decision: 'APRUEBA', reason_code: null, approver_role: 'supervisor',
+    id, tenant: 7, case_review: caseReview, decision: 'APRUEBA', reason_code: null, approver_role: 'ADMIN',
     created_at: '2026-10-20T10:00:00+00:00', supersedes: null,
     approver: REVIEWER_MARKER, checklist: {}, idempotency_key: 'sintetica',
     ...overrides,
   }
 }
 
+// Roles: ADMIN, salvo la 5, guardada con el rol anterior `operador`.
 // 1 ACEPTA vigente; 2 MODIFICA reemplazada por 3 RECHAZA; 4 ≥3 pendiente; 5 ≥3 aprobada;
 // 6 ≥3 objetada con antecedente; 7 POSPONE de otro corte; 8 DERIVA sin intervencion decidida.
 export function reviewTables(): Record<string, RawRow[]> {
@@ -110,7 +120,8 @@ export function reviewTables(): Record<string, RawRow[]> {
       review(2, { debtor: 102, decision: 'MODIFICA', decided_intervention: 'RECORDATORIO_INFORMATIVO', decided_intensity: 1, reason_code: 'DATOS_INCOMPLETOS' }),
       review(3, { debtor: 102, decision: 'RECHAZA', decided_intervention: null, decided_intensity: null, reason_code: 'GESTION_EN_CURSO', supersedes: 2 }),
       review(4, { debtor: 103, decision: 'MODIFICA', decided_intervention: 'INTIMACION_ADMINISTRATIVA', decided_intensity: 3, reason_code: 'CRITERIO_DEL_SERVICIO' }),
-      review(5, { debtor: 104, decision: 'MODIFICA', decided_intervention: 'INTIMACION_ADMINISTRATIVA', decided_intensity: 3, reason_code: 'CRITERIO_DEL_SERVICIO' }),
+      // Registro historico: guardado con un rol anterior a ADMIN/USER, se exporta con ese nombre.
+      review(5, { debtor: 104, decision: 'MODIFICA', decided_intervention: 'INTIMACION_ADMINISTRATIVA', decided_intensity: 3, reason_code: 'CRITERIO_DEL_SERVICIO', reviewer_role: 'operador' }),
       review(6, { debtor: 105, decision: 'MODIFICA', decided_intervention: 'DERIVACION_PROCURACION', decided_intensity: 4, reason_code: '=FORMULA_EN_CODIGO' }),
       review(7, { debtor: 106, decision: 'POSPONE', decided_intervention: null, decided_intensity: null, reason_code: 'ESPERA_DE_INFORMACION', as_of: OTHER_CUTOFF, rules_version: '1.1.0' }),
       review(8, { debtor: 107, decision: 'DERIVA', decided_intervention: null, decided_intensity: null, reason_code: 'CORRESPONDE_A_OTRA_AREA', created_at: '2026-10-25T02:00:00+00:00' }),
@@ -122,5 +133,24 @@ export function reviewTables(): Record<string, RawRow[]> {
       approval(3, 6, { decision: 'OBJETA', reason_code: 'ALTERNATIVA_NO_OFRECIDA', supersedes: 2 }),
       approval(9, 9, { tenant: 8, reason_code: FOREIGN_MARKER }),
     ],
+  }
+}
+
+// Noche 7. Los casos chicos de contracts/portfolio-small-cases.v1.json como lectura cruda, para comparar
+// el total del reporte de cola con el del tablero y con la tabla calculada a mano.
+export function smallCasesBundle(): RawDebtorDataBundle {
+  const holders = smallCases.casos.flatMap(item => item.titulares.map(holder => ({ debtor: item.objeto.id, ...holder })))
+  return {
+    batch: { as_of: smallCases.fecha_cartera },
+    debtors: smallCases.casos.map(({ objeto }) => ({ id: objeto.id, identifier: objeto.identificador, type: 1 })),
+    debtorTypes: [{ id: 1, value: 'Objeto sintético' }],
+    debts: smallCases.casos.flatMap(({ objeto, obligaciones }) => obligaciones.map(({ id, importe, vencimiento, estado_id }) =>
+      ({ id, debtor: objeto.id, current_amount: importe, due_date: vencimiento, status: estado_id }))),
+    debtStatuses: smallCases.catalogo_debt_status,
+    debtorPeople: holders.map(({ id, debtor, porcentaje }) => ({ id, debtor, person: id, priority: porcentaje, active: true })),
+    people: holders.map(({ id }) => ({ id, full_name: `Titular sintético ${id}`, type: 'FISICA' })),
+    debtorContacts: holders.flatMap(({ id: person, contactos }) => contactos.map(({ id, valor }) => ({ id, person, type: 1, value: valor, active: true }))),
+    debtorProfiles: [],
+    warnings: [],
   }
 }

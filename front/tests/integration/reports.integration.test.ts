@@ -1,13 +1,14 @@
 import { isValidElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { serverClient, cookieStore } = vi.hoisted(() => ({ serverClient: vi.fn(), cookieStore: vi.fn() }))
+const { serverClient, cookieStore, auditRpc } = vi.hoisted(() => ({ serverClient: vi.fn(), cookieStore: vi.fn(), auditRpc: vi.fn() }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: serverClient }))
 vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('next/headers', () => ({ cookies: cookieStore }))
 // ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
-vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: () => ({ rpc: async () => ({ data: { audit_id: 1, created: true }, error: null }) }) }))
+vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: () => ({ rpc: auditRpc }) }))
 
+import { GET as getAccess } from '@/app/api/reports/access/route'
 import { GET as getDataQuality } from '@/app/api/reports/data-quality/route'
 import { GET as getDecisions } from '@/app/api/reports/decisions/route'
 import { GET as getQueue } from '@/app/api/reports/queue/route'
@@ -16,12 +17,12 @@ import DebtAgingPage from '@/app/debt-aging/page'
 import NoContactPage from '@/app/no-contact/page'
 import PriorityCasesPage from '@/app/priority-cases/page'
 import { buildRecommendationSummary } from '@/lib/equitas-view-selectors'
-import { getDebtorsData } from '@/lib/equitas-data'
+import { getDashboardData, getDebtorsData } from '@/lib/equitas-data'
 import { INTERVENTION_CODES } from '@/lib/services/debtor-recommendation-generator'
 import { formatCurrency } from '@/lib/utils'
 import { createPaginatedSupabase } from '@/tests/fixtures/paginated-supabase'
 import {
-  FOREIGN_MARKER, FREE_TEXT_MARKER, HOSTILE_IDENTIFIERS, OTHER_CUTOFF, PERSONAL_MARKERS, portfolioTables,
+  FOREIGN_MARKER, FREE_TEXT_MARKER, HOSTILE_IDENTIFIERS, OTHER_CUTOFF, PERSONAL_MARKERS, PORTFOLIO_AS_OF, portfolioTables,
   REVIEW_CUTOFF, REVIEWER_MARKER, reviewTables,
 } from '@/tests/fixtures/reports-portfolio'
 import { csvCents, csvNumber, parseCsvBytes, sumCents } from '@/tests/helpers/independent-csv-parser'
@@ -36,9 +37,11 @@ type Handler = (request: Request) => Promise<Response> | Response
 const REPORTS: [string, Handler][] = [
   ['queue', getQueue], ['decisions', getDecisions], ['supervision', getSupervision], ['data-quality', getDataQuality],
 ]
+// El reporte de accesos tiene su propia campaña (access-audit.integration.test.ts); aca solo lo nuevo de la noche 7.
+const ALL_REPORTS: [string, Handler][] = [...REPORTS, ['access', getAccess]]
 const IDENTITY = ['user', 'tenant_user', 'tenant', 'role']
 
-function client(tables: Record<string, RawRow[]> = {}, options: Parameters<typeof createPaginatedSupabase>[1] = {}, role = 'supervisor', signedIn = true) {
+function client(tables: Record<string, RawRow[]> = {}, options: Parameters<typeof createPaginatedSupabase>[1] = {}, role = 'ADMIN', signedIn = true) {
   const fixture = createPaginatedSupabase({
     user: [appUser], tenant_user: [membership], tenant: [{ id: 7, status: 'ACTIVE' }], role: [{ id: 3, name: role }],
     ...portfolioTables(), ...reviewTables(), ...tables,
@@ -51,7 +54,7 @@ function client(tables: Record<string, RawRow[]> = {}, options: Parameters<typeo
 }
 
 const request = (name: string, query = '') => new Request(`http://127.0.0.1/api/reports/${name}${query}`)
-const handler = (name: string) => REPORTS.find(([report]) => report === name)![1]
+const handler = (name: string) => ALL_REPORTS.find(([report]) => report === name)![1]
 
 async function download(name: string, query = '') {
   const response = await handler(name)(request(name, query))
@@ -77,8 +80,14 @@ function cardValues(node: ReactNode): Record<string, unknown> {
   if (!isValidElement<{ label?: string; value?: unknown; children?: ReactNode }>(node)) return {}
   return { ...(node.props.label ? { [node.props.label]: node.props.value } : {}), ...cardValues(node.props.children) }
 }
-const pageText = async (page: (props: never) => unknown, searchParams: Record<string, string> = {}) =>
-  textFromReactTree(await page({ searchParams: Promise.resolve(searchParams) } as never) as never).replace(/\s+/g, ' ')
+
+// Texto del contador de la pantalla (`data-total`): «N casos» o «No disponible».
+function selectionTotal(node: ReactNode): string | null {
+  if (Array.isArray(node)) return node.map(selectionTotal).find(value => value !== null) ?? null
+  if (!isValidElement<{ 'data-total'?: unknown; children?: ReactNode }>(node)) return null
+  if ('data-total' in node.props) return textFromReactTree(node.props.children).replace(/\s+/g, ' ').trim()
+  return selectionTotal(node.props.children)
+}
 
 // Lee los enlaces de las filas renderizadas, sin reutilizar el selector de la aplicación.
 function queueObjectIds(node: ReactNode): string[] {
@@ -93,12 +102,13 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(NOW) })
   cookieStore.mockResolvedValue({ get: () => undefined })
+  auditRpc.mockResolvedValue({ data: { audit_id: 1, created: true }, error: null })
 })
 afterEach(() => { vi.useRealTimers() })
 
 describe('ALIGN-028: autorizacion en cada Route Handler', () => {
   it.each(REPORTS)('%s sin sesion: 401, sin archivo y sin leer datos', async (name, get) => {
-    const { requests } = client({}, {}, 'supervisor', false)
+    const { requests } = client({}, {}, 'ADMIN', false)
     const response = await get(request(name))
     expect(response.status).toBe(401)
     expect(response.headers.get('content-type')).toContain('application/json')
@@ -106,14 +116,17 @@ describe('ALIGN-028: autorizacion en cada Route Handler', () => {
     expect(requests).toEqual([])
   })
 
-  // ALIGN-003: consulta solo lectura; supervisor ve supervision; importador no lee cartera.
+  // Noche 7 (encargo §4.2): cola, calidad y decisiones para todo miembro activo (ADMIN y USER);
+  // supervision solo ADMIN. Los nombres anteriores y cualquier rol no reconocido no ingresan.
   // tp_operator es compatibilidad de solo lectura de la cartera (ADR-001 §9).
   const ALLOWED: Record<string, string[]> = {
-    consulta: ['queue', 'decisions', 'data-quality'],
-    operador: ['queue', 'decisions', 'data-quality'],
-    supervisor: ['queue', 'decisions', 'supervision', 'data-quality'],
-    importador: [],
+    ADMIN: ['queue', 'decisions', 'supervision', 'data-quality'],
+    USER: ['queue', 'decisions', 'data-quality'],
     tp_operator: ['queue', 'data-quality'],
+    consulta: [],
+    operador: [],
+    supervisor: [],
+    importador: [],
     importador_sistema: [],
     admin: [],
   }
@@ -181,7 +194,7 @@ describe('ALIGN-028: autorizacion en cada Route Handler', () => {
   })
 
   it('un filtro invalido se valida despues de autorizar: sin sesion no se sabe si era valido', async () => {
-    client({}, {}, 'supervisor', false)
+    client({}, {}, 'ADMIN', false)
     expect((await getQueue(request('queue', '?risk=XYZ'))).status).toBe(401)
     client({}, {}, 'importador')
     expect((await getQueue(request('queue', '?risk=XYZ'))).status).toBe(403)
@@ -213,8 +226,9 @@ describe('ALIGN-028: una lectura fallida no sale como 0 ni como archivo vacio', 
   const READS: [string, string[]][] = [
     ['queue', ['debtor', 'debtor_type', 'debt', 'debt_status', 'debtor_person', 'person', 'debtor_contact', 'debtor_profile']],
     ['data-quality', ['debtor', 'debtor_type', 'debt', 'debt_status', 'debtor_person', 'person', 'debtor_contact', 'debtor_profile']],
-    ['decisions', ['case_review', 'case_review_approval']],
-    ['supervision', ['case_review', 'case_review_approval']],
+    // Noche 7: sin los casos o el lote no se puede afirmar la fecha de la cartera ni el identificador del caso.
+    ['decisions', ['case_review', 'case_review_approval', 'debtor', 'import_batch']],
+    ['supervision', ['case_review', 'case_review_approval', 'debtor', 'import_batch']],
   ]
   it.each(READS.flatMap(([name, tables]) => tables.map(table => [name, table] as const)))('%s con %s caida: 503 y sin CSV', async (name, table) => {
     client({}, { fail: item => item.table === table ? { code: '42501', message: 'detalle interno sintetico' } : null })
@@ -247,10 +261,13 @@ describe('ALIGN-028: formato y metadatos', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(response.headers.get('content-disposition')).toMatch(/^attachment; filename="equitas-[a-z-]+\.csv"$/)
-    expect(file.header.slice(0, 6)).toEqual(['fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones', 'tipo_fila'])
+    expect(file.header.slice(0, 8)).toEqual(['fecha_cartera', 'version_reglas_vigente', 'fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones', 'tipo_fila'])
     expect(file.rows.length).toBeGreaterThan(0)
     for (const row of file.rows) {
-      for (const column of ['fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones']) expect(row[column], column).toBeTruthy()
+      for (const column of ['fecha_cartera', 'version_reglas_vigente', 'fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones']) expect(row[column], column).toBeTruthy()
+      // Constantes en todo archivo: la cartera y las reglas vigentes, las del tablero.
+      expect(row.fecha_cartera).toBe(PORTFOLIO_AS_OF)
+      expect(row.version_reglas_vigente).toBe('1.1.0')
       expect(row.generado_en).toBe(NOW)
       expect(row.definiciones).toMatch(/^docs\/tesis\/catalogo-indicadores-v1\.md#reporte-[a-z-]+$/)
     }
@@ -263,7 +280,7 @@ describe('ALIGN-028: formato y metadatos', () => {
   })
 
   it('cartera: sin manifiesto el corte es NO_INTEGRADO y la fecha del reloj va rotulada aparte', async () => {
-    client()
+    client({ import_batch: [] })
     const { file } = await download('queue')
     for (const row of file.rows) {
       expect(row.fecha_corte).toBe('NO_INTEGRADO')
@@ -272,7 +289,16 @@ describe('ALIGN-028: formato y metadatos', () => {
     }
     expect(details(file.rows)[0].fecha_calculo_usada).toBe('2026-11-02')
     const quality = await download('data-quality')
-    expect(quality.file.rows.every(row => row.fecha_corte === 'NO_INTEGRADO')).toBe(true)
+    expect(quality.file.rows.every(row => row.fecha_corte === 'NO_INTEGRADO' && row.fecha_cartera === 'NO_INTEGRADO')).toBe(true)
+  })
+
+  // Noche 7: el lector de cartera usa el lote publicado. Las dos expectativas NO_INTEGRADO de la campaña
+  // de reportes (anteriores a esa integración) pasan a ser esta.
+  it.each(REPORTS)('%s: con lote publicado, fecha_cartera es su fecha en todas las filas', async name => {
+    client()
+    const { file } = await download(name)
+    expect(file.rows.every(row => row.fecha_cartera === PORTFOLIO_AS_OF && row.version_reglas_vigente === '1.1.0')).toBe(true)
+    if (name === 'queue') expect(file.rows.every(row => row.fecha_corte === PORTFOLIO_AS_OF && row.fecha_calculo_usada === 'NO_APLICA')).toBe(true)
   })
 
   it('decisiones: fecha_corte y version_reglas salen de la fila, no del reloj', async () => {
@@ -298,8 +324,9 @@ describe('ALIGN-028: formato y metadatos', () => {
 
   it('filtros: forma canonica; un filtro de texto libre no copia lo que se busco', async () => {
     client()
-    const { file, text } = await download('queue', '?risk=ALTO&contact=with&minAmount=10&q=Persona%20Sintetica%20Uno&page=2&pageSize=20')
-    expect(file.rows[0].filtros).toBe('contact=with|minAmount=10|q=TEXTO_OMITIDO|risk=ALTO')
+    // Noche 7: con risk=ALTO esta seleccion queda vacia con casos sin puntaje (422, ver H16): se usa BAJO.
+    const { file, text } = await download('queue', '?risk=BAJO&contact=with&minAmount=10&q=Persona%20Sintetica%20Uno&page=2&pageSize=20')
+    expect(file.rows[0].filtros).toBe('contact=with|minAmount=10|q=TEXTO_OMITIDO|risk=BAJO')
     expect(text).not.toContain('Persona Sintetica')
     expect((await download('queue')).file.rows[0].filtros).toBe('SIN_FILTROS')
     expect((await download('queue', '?type=AGUA')).file.rows[0].filtros).toBe('type=AGUA')
@@ -350,8 +377,8 @@ describe('ALIGN-028: filtros invalidos no parecen un archivo vacio correcto', ()
 })
 
 describe('ALIGN-028: minimizacion', () => {
-  it.each(REPORTS)('%s no lleva personas, contactos, documentos, domicilio ni descripcion, tampoco para consulta', async name => {
-    client({}, {}, name === 'supervision' ? 'supervisor' : 'consulta')
+  it.each(REPORTS)('%s no lleva personas, contactos, documentos, domicilio ni descripcion, tampoco para USER', async name => {
+    client({}, {}, name === 'supervision' ? 'ADMIN' : 'USER')
     const { text } = await download(name)
     for (const marker of PERSONAL_MARKERS) expect(text, marker).not.toContain(marker)
   })
@@ -457,7 +484,7 @@ describe('ALIGN-028 B1: un campo editable nunca llega crudo al CSV', () => {
   }
   const NOT_CATALOGUED = 'CODIGO_NO_CATALOGADO'
 
-  it.each(['consulta', 'operador', 'supervisor'])('decisiones para %s: ni motivo, ni intervencion, ni rol crudos, tampoco historicos', async role => {
+  it.each(['USER', 'ADMIN'])('decisiones para %s: ni motivo, ni intervencion, ni rol crudos, tampoco historicos', async role => {
     client(hostileTables(), {}, role)
     const { text, file } = await download('decisions')
     for (const marker of Object.values(HOSTILE)) expect(text, marker).not.toContain(marker)
@@ -465,6 +492,7 @@ describe('ALIGN-028 B1: un campo editable nunca llega crudo al CSV', () => {
     const row = (id: string) => details(file.rows).find(item => item.decision_id === id)!
     expect(row('4')).toMatchObject({
       codigo_motivo: NOT_CATALOGUED, intervencion_decidida: NOT_CATALOGUED, intervencion_sugerida: NOT_CATALOGUED, rol: NOT_CATALOGUED, intensidad_decidida: '3',
+      rol_rotulo: 'Rol no catalogado', motivo_rotulo: 'Código no catalogado', accion_decidida: 'Código no catalogado', accion_sugerida: 'Código no catalogado',
     })
     expect(row('2')).toMatchObject({ codigo_motivo: NOT_CATALOGUED, intervencion_decidida: NOT_CATALOGUED, vigente: 'NO' })
     expect(totalRow(file.rows)).toMatchObject({ decisiones: '8', vigentes: '7' })
@@ -490,7 +518,9 @@ describe('ALIGN-028 B1: un campo editable nunca llega crudo al CSV', () => {
     expect(aggregated(file.rows, 'motivos_objecion', 'ALTERNATIVA_NO_OFRECIDA').valor).toBe('1')
     const decisions = await download('decisions')
     expect(details(decisions.file.rows).find(row => row.decision_id === '5')).toMatchObject({
-      codigo_motivo: 'CRITERIO_DEL_SERVICIO', intervencion_decidida: 'INTIMACION_ADMINISTRATIVA', rol: 'operador',
+      codigo_motivo: 'CRITERIO_DEL_SERVICIO', intervencion_decidida: 'INTIMACION_ADMINISTRATIVA',
+      // Noche 7: un rol anterior guardado se exporta con su nombre y la marca de rol anterior, no como no catalogado.
+      rol: 'operador', rol_rotulo: 'operador (rol anterior)',
     })
     expect(details(decisions.file.rows).find(row => row.decision_id === '6')?.intervencion_decidida).toBe('DERIVACION_PROCURACION')
   })
@@ -514,7 +544,8 @@ describe('ALIGN-028 B1: un campo editable nunca llega crudo al CSV', () => {
     }
   })
 
-  it.each([['consulta', false], ['tp_operator', false], ['operador', true], ['supervisor', true]])('el identificador de origen es texto libre: %s lo recibe=%s', async (role, shown) => {
+  // Noche 7: exportar lo que ya se ve en pantalla no amplia el acceso; USER tambien recibe el identificador.
+  it.each([['USER', true], ['ADMIN', true], ['tp_operator', false]])('el identificador de origen: %s lo recibe=%s', async (role, shown) => {
     client({}, {}, role as string)
     const { file } = await download('queue')
     const row = details(file.rows).find(item => item.objeto_id === '101')!
@@ -541,18 +572,20 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
   it.each(FILTERS)('cola = /priority-cases con %j', async filters => {
     client()
     const query = `?${new URLSearchParams(filters)}`
-    const { file } = await download('queue', query)
-    const rows = details(file.rows)
-    const text = await pageText(PriorityCasesPage as never, filters)
-    const shown = /(\d[\d.]*) ?casos/.exec(text)
-    if (filters.risk === 'ALTO' && rows.length === 0) {
-      // Hay objetos sin puntaje: cero coincidencias observadas no prueba una cola vacía.
-      expect(text).toContain('No disponible: no se pudo determinar qué casos hay en esta cola.')
-      expect(shown).toBeNull()
-    } else {
-      expect(shown, 'la pantalla debe mostrar su contador').not.toBeNull()
-      expect(rows.length).toBe(Number(shown![1].replace(/\./g, '')))
+    const response = await getQueue(request('queue', query))
+    const shown = selectionTotal(await PriorityCasesPage({ searchParams: Promise.resolve(filters) } as never))
+    if (shown === 'No disponible') {
+      // H16: la pantalla no puede afirmar la selección (casos sin el dato del filtro): el CSV tampoco, y lo dice.
+      expect(response.status).toBe(422)
+      expect(await response.json()).toMatchObject({ error: 'SELECCION_INCOMPLETA' })
+      expect(response.headers.get('content-disposition')).toBeNull()
+      return
     }
+    expect(response.status, query).toBe(200)
+    const file = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
+    const rows = details(file.rows)
+    expect(shown, 'la pantalla debe mostrar su contador').toMatch(/^\d[\d.]* casos?$/)
+    expect(rows.length).toBe(Number(shown!.replace(/\D/g, '')))
     expect(csvNumber(totalRow(file.rows).objetos)).toBe(rows.length)
     // ALIGN-021 muestra una cola por vez. El CSV reúne todas, en ese mismo orden.
     const knownQueues = new Set<string>(INTERVENTION_CODES)
@@ -715,7 +748,7 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
   it('sin objetos: 0 derivado y metadatos, sin archivo mudo', async () => {
     client({ debtor: [], debt: [], debtor_person: [], person: [], debtor_contact: [] })
     const queue = await download('queue')
-    expect(totalRow(queue.file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', fecha_corte: 'NO_INTEGRADO' })
+    expect(totalRow(queue.file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', deuda_pendiente_ars: '0', fecha_corte: PORTFOLIO_AS_OF })
     const quality = await download('data-quality')
     expect(aggregated(quality.file.rows, 'objetos_leidos').valor).toBe('0')
   })
@@ -724,7 +757,7 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     client()
     const { file } = await download('decisions')
     const row = (id: string) => details(file.rows).find(item => item.decision_id === id)!
-    expect(row('1')).toMatchObject({ decision: 'ACEPTA', codigo_motivo: 'NO_APLICA', rol: 'operador', fecha: '2026-10-02T15:30:00.000Z', aprobacion: 'NO_REQUERIDA', vigente: 'SI' })
+    expect(row('1')).toMatchObject({ decision: 'ACEPTA', codigo_motivo: 'NO_APLICA', rol: 'ADMIN', fecha: '2026-10-02T15:30:00.000Z', aprobacion: 'NO_REQUERIDA', vigente: 'SI' })
     expect(row('2')).toMatchObject({ vigente: 'NO', aprobacion: 'NO_REQUERIDA', codigo_motivo: 'DATOS_INCOMPLETOS' })
     expect(row('3')).toMatchObject({ reemplaza_a: '2', intensidad_decidida: 'NO_APLICA', intervencion_decidida: 'NO_APLICA' })
     expect(row('4').aprobacion).toBe('PENDIENTE')
@@ -739,5 +772,129 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     const replaced = await download('decisions', '?vigente=no')
     expect(details(replaced.file.rows).map(row => row.decision_id)).toEqual(['2'])
     expect(totalRow(replaced.file.rows)).toMatchObject({ decisiones: '1', vigentes: '0' })
+  })
+})
+
+describe('Noche 7: reportes consistentes con el tablero', () => {
+  const ACCESS_ROWS: RawRow[] = [
+    { id: 11, tenant: 7, actor: 42, actor_role: 'ADMIN', action: 'CASE_OPEN', target: '101', created_at: '2026-11-01T10:00:00.000+00:00' },
+    { id: 12, tenant: 7, actor: 43, actor_role: 'supervisor', action: 'REPORT_EXPORT', target: 'supervision', created_at: '2026-11-01T11:00:00.000+00:00' },
+    { id: 13, tenant: 7, actor: 43, actor_role: 'ADMIN', action: 'IMPORT_CONFIRM', target: '1', created_at: '2026-11-01T12:00:00.000+00:00' },
+    { id: 14, tenant: 7, actor: 42, actor_role: 'SILVIA_PAZ', action: 'CASE_OPEN', target: '999', created_at: '2026-11-01T13:00:00.000+00:00' },
+    { id: 19, tenant: 8, actor: 99, actor_role: 'ADMIN', action: 'CASE_OPEN', target: '801', created_at: '2026-11-01T14:00:00.000+00:00' },
+  ]
+  const exports = () => auditRpc.mock.calls.filter(([name, args]) => name === 'record_access_audit' && args.p_action === 'REPORT_EXPORT')
+
+  it('H16: una seleccion vacia con casos sin el dato del filtro responde 422, sin archivo ni registro de descarga', async () => {
+    client()
+    const response = await getQueue(request('queue', '?risk=ALTO'))
+    expect(response.status).toBe(422)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(response.headers.get('content-disposition')).toBeNull()
+    expect(await response.json()).toEqual({ error: 'SELECCION_INCOMPLETA', mensaje: expect.stringContaining('Faltan datos para evaluar los filtros') })
+    expect(exports()).toHaveLength(0)
+    // La pantalla dice lo mismo para esa seleccion.
+    expect(selectionTotal(await PriorityCasesPage({ searchParams: Promise.resolve({ risk: 'ALTO' }) }))).toBe('No disponible')
+  })
+
+  it('H16: una seleccion vacia de un universo conocido sigue siendo un archivo valido con 0 casos', async () => {
+    client()
+    const { file } = await download('queue', '?type=TIPO-QUE-NO-EXISTE')
+    expect(details(file.rows)).toEqual([])
+    expect(totalRow(file.rows).objetos).toBe('0')
+    expect(exports()).toHaveLength(1)
+  })
+
+  it('un monto minimo negativo se rechaza como la pantalla, sin exportar otra seleccion', async () => {
+    client()
+    const response = await getQueue(request('queue', '?minAmount=-1'))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'FILTRO_INVALIDO', filtro: 'minAmount' })
+  })
+
+  it('el total de la cola (casos y deuda pendiente) es el del tablero, con las tres definiciones', async () => {
+    client()
+    const { file } = await download('queue')
+    const total = totalRow(file.rows)
+    const { dashboard } = await getDashboardData()
+    expect(csvNumber(total.objetos)).toBe(dashboard.totalDebtors)
+    expect(csvCents(total.deuda_pendiente_ars)).toBe(Math.round(dashboard.pendingDebt! * 100))
+    expect(csvCents(total.deuda_total_ars)).toBe(Math.round(dashboard.totalDebt! * 100))
+    expect(csvCents(total.deuda_vencida_ars)).toBe(Math.round(dashboard.overdueDebt! * 100))
+    expect(sumCents(details(file.rows), 'deuda_pendiente_ars')).toBe(csvCents(total.deuda_pendiente_ars))
+  })
+
+  it('una pagada suma al total registrado y no a la deuda pendiente ni a la vencida', async () => {
+    const tables = portfolioTables()
+    tables.debt.push({ ...tables.debt[0], id: 12, current_amount: 700, status: 3 })
+    client({ debt: tables.debt })
+    const row = details((await download('queue')).file.rows).find(item => item.objeto_id === '101')!
+    expect(csvCents(row.deuda_total_ars)! - csvCents(row.deuda_pendiente_ars)!).toBe(70000)
+    expect(csvCents(row.deuda_pendiente_ars)).toBe(Math.round((950000.5 + 1250.25) * 100))
+  })
+
+  it('decisiones: identificador del caso, rotulos de pantalla y datos anteriores con la regla de la ficha', async () => {
+    client()
+    const { file } = await download('decisions')
+    const row = (id: string) => details(file.rows).find(item => item.decision_id === id)!
+    expect(row('1')).toMatchObject({
+      objeto_id: '101', identificador: 'OBJ-CONTACTO', rol: 'ADMIN', rol_rotulo: 'Administrador',
+      decision_rotulo: 'Recomendación aceptada', motivo_rotulo: 'Sin motivo', accion_decidida: 'Contacto y plan (intensidad 2)',
+      aprobacion_rotulo: 'Decisión registrada', datos_anteriores: 'SI', fecha_cartera: PORTFOLIO_AS_OF,
+    })
+    expect(row('3')).toMatchObject({ decision_rotulo: 'Recomendación rechazada', accion_decidida: 'Sin acción decidida', motivo_rotulo: 'Ya hay una gestión en curso' })
+    expect(row('4')).toMatchObject({ aprobacion: 'PENDIENTE', aprobacion_rotulo: 'Propuesta pendiente de aprobación' })
+    expect(row('5')).toMatchObject({ aprobacion_rotulo: 'Propuesta aprobada', rol_rotulo: 'operador (rol anterior)' })
+    expect(row('6')).toMatchObject({ aprobacion_rotulo: 'Propuesta objetada' })
+    // La 7 se registro con la cartera vigente y las reglas vigentes: esta al dia.
+    expect(row('7')).toMatchObject({ datos_anteriores: 'NO', decision_rotulo: 'Decisión pospuesta' })
+    expect(totalRow(file.rows)).toMatchObject({ identificador: 'NO_APLICA', datos_anteriores: 'NO_APLICA' })
+  })
+
+  it('decisiones: un caso que ya no esta en la cartera vigente se declara, sin inventar su identificador', async () => {
+    const tables = portfolioTables()
+    client({ debtor: tables.debtor.filter(row => row.id !== 101) })
+    const { file } = await download('decisions')
+    expect(details(file.rows).find(item => item.decision_id === '1')?.identificador).toBe('NO_EN_CARTERA_VIGENTE')
+  })
+
+  it('USER recibe el mismo reporte de decisiones, con el identificador', async () => {
+    client({}, {}, 'USER')
+    const { file } = await download('decisions')
+    expect(details(file.rows).find(item => item.decision_id === '1')?.identificador).toBe('OBJ-CONTACTO')
+  })
+
+  it('accesos: la apertura de un caso lleva su identificador; quien actuo, como propio u otra persona y su rol', async () => {
+    client({ access_audit: ACCESS_ROWS })
+    const { file, text } = await download('access')
+    const row = (id: string) => details(file.rows).find(item => item.registro_id === id)!
+    expect(row('11')).toMatchObject({
+      accion: 'CASE_OPEN', accion_rotulo: 'Apertura de un caso', objetivo: '101', identificador: 'OBJ-CONTACTO',
+      actor_id: '42', quien: 'PROPIO', rol_actor: 'ADMIN', rol_actor_rotulo: 'Administrador', fecha_cartera: PORTFOLIO_AS_OF,
+    })
+    expect(row('12')).toMatchObject({ identificador: 'NO_APLICA', quien: 'OTRA_PERSONA', rol_actor: 'supervisor', rol_actor_rotulo: 'supervisor (rol anterior)' })
+    expect(row('13')).toMatchObject({ accion_rotulo: 'Confirmación de carga solicitada', identificador: 'NO_APLICA' })
+    expect(row('14')).toMatchObject({ identificador: 'NO_EN_CARTERA_VIGENTE', rol_actor: 'CODIGO_NO_CATALOGADO' })
+    expect(text).not.toContain('SILVIA_PAZ')
+    expect(details(file.rows).map(item => item.registro_id)).toEqual(['11', '12', '13', '14'])
+  })
+
+  it.each(['USER', 'operador', 'supervisor'])('accesos para %s: 403 sin leer el registro', async role => {
+    const { requests } = client({ access_audit: ACCESS_ROWS }, {}, role)
+    const response = await getAccess(request('access'))
+    expect(response.status).toBe(403)
+    expect(requests.some(item => item.table === 'access_audit')).toBe(false)
+  })
+
+  it.each(ALL_REPORTS)('%s: la descarga se registra antes de responder; sin registro no hay archivo', async name => {
+    client({ access_audit: ACCESS_ROWS })
+    await download(name)
+    expect(exports()).toHaveLength(1)
+    auditRpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'sin permiso' } })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const response = await handler(name)(request(name))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: 'AUDITORIA_NO_DISPONIBLE' })
+    expect(response.headers.get('content-disposition')).toBeNull()
   })
 })

@@ -1,18 +1,24 @@
 import { sumMoney, metric, unavailable } from '@/lib/data-presence'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
-import { buildDebtAgingSummary, getPriorityCases, matchesDebtorSearch } from '@/lib/equitas-view-selectors'
+import { buildDebtAgingSummary, getPriorityCases } from '@/lib/equitas-view-selectors'
+import { filterPortfolio } from '@/lib/portfolio-filters'
 import { serializeCsv, type CsvValue } from '@/lib/reports/csv'
-import { absentState, definitionsLink, describeFilters, META_COLUMNS, numericCell, portfolioCutoff, readParams, ReportFilterError } from '@/lib/reports/report-format'
+import {
+  absentState, definitionsLink, describeFilters, META_COLUMNS, MISSING_IN_SOURCE, numericCell, portfolioCutoff, readParams, ReportFilterError,
+  ReportSelectionError, sourceIdentifier,
+} from '@/lib/reports/report-format'
 import type { DataPresence, DebtorListItem, NumericData, RawDebtorDataBundle } from '@/types/equitas-domain'
 
 // ALIGN-028. Cola de trabajo: las mismas filas, el mismo orden y los mismos filtros de
 // /priority-cases, completas. Sin personas, contactos ni descripcion, para ningun rol.
-// El identificador de origen es texto libre: solo lo reciben quienes gestionan (permiso en la DAL).
+// Noche 7: el identificador es el mismo de los listados; exportarlo no amplia el acceso (ADMIN y USER
+// lo reciben, permiso `report:object-identifier` en la DAL). Las tres definiciones de importes salen del
+// mapeador (lib/domain/portfolio-totals.ts): el total del archivo es el del tablero.
 const COLUMNS = [
   ...META_COLUMNS,
   'posicion', 'objeto_id', 'identificador', 'tipo', 'intervencion_codigo', 'intervencion', 'intensidad', 'revision_requerida',
   'severidad_puntos', 'severidad_banda', 'severidad_estado', 'prioridad_puntos',
-  'deuda_total_ars', 'deuda_vencida_ars', 'monto_evaluable_ars', 'dias_atraso_max',
+  'deuda_total_ars', 'deuda_pendiente_ars', 'deuda_vencida_ars', 'monto_evaluable_ars', 'dias_atraso_max',
   'obligaciones', 'contactos_disponibles', 'con_contacto', 'banderas', 'fecha_calculo_usada', 'objetos', 'faltantes',
 ] as const
 type Column = (typeof COLUMNS)[number]
@@ -21,7 +27,6 @@ const RISKS = ['ALTO', 'MEDIO', 'BAJO'] as const
 const CONTACTS = ['with', 'without'] as const
 const MAX_FILTER_LENGTH = 200
 const NOT_APPLICABLE = 'NO_APLICA'
-const MISSING_IN_SOURCE = 'NO_INFORMADO_EN_ORIGEN'
 const OMITTED_BY_ROLE = 'OMITIDO_POR_ROL'
 const VALUE_NOT_CATALOGUED = 'VALOR_NO_CATALOGADO'
 
@@ -36,20 +41,20 @@ export function parseQueueFilters(params: URLSearchParams): QueueFilters {
   }
   if (filters.risk && !(RISKS as readonly string[]).includes(filters.risk)) throw new ReportFilterError('risk')
   if (filters.contact && !(CONTACTS as readonly string[]).includes(filters.contact)) throw new ReportFilterError('contact')
-  if (filters.minAmount && !Number.isFinite(Number(filters.minAmount))) throw new ReportFilterError('minAmount')
+  // Como la pantalla: un monto negativo o ilegible no define una seleccion.
+  if (filters.minAmount && !(Number.isFinite(Number(filters.minAmount)) && Number(filters.minAmount) >= 0)) throw new ReportFilterError('minAmount')
   return filters
 }
 
-// Misma condicion que la pantalla (`app/priority-cases/page.tsx`). La prueba de conciliacion
-// llama a esa pagina con los mismos filtros, asi una diferencia no pasa desapercibida.
+// La misma seleccion que la pantalla (`app/priority-cases/page.tsx` usa `filterPortfolio`), en el orden de
+// `getPriorityCases`. Si la pantalla diria «No disponible» (seleccion vacia con casos sin el dato para
+// evaluar el filtro), no hay archivo: un CSV con cero filas pareceria una seleccion vacia (H16).
+// Las lecturas ya se comprobaron completas antes de llegar aca (`assertReadsComplete`).
 export function filterQueueCases(debtors: DebtorListItem[], filters: QueueFilters) {
-  const minAmount = Number(filters.minAmount)
-  return getPriorityCases(debtors).filter(debtor =>
-    (!filters.risk || debtor.risk === filters.risk) &&
-    (!filters.contact || (filters.contact === 'with' ? debtor.hasContact === true : debtor.hasContact === false)) &&
-    (!filters.type || debtor.type === filters.type) &&
-    (!filters.minAmount || (debtor.totalDebt !== null && debtor.totalDebt >= minAmount)) &&
-    matchesDebtorSearch(debtor, filters.q ?? ''))
+  const selection = filterPortfolio(debtors, filters)
+  if (selection.failed) throw new ReportSelectionError()
+  const selected = new Set(selection.items.map(item => item.id))
+  return getPriorityCases(debtors).filter(debtor => selected.has(debtor.id))
 }
 
 // Lo que escribio la persona puede ser un nombre: filtra, pero no queda en el archivo. Un tipo
@@ -77,19 +82,20 @@ function missingLabel(entries: Readonly<Record<string, NumericData>>) {
 }
 
 function identifierCell(debtor: DebtorListItem, access: QueueAccess) {
-  if (!access.showIdentifier) return OMITTED_BY_ROLE
-  return debtor.identifier === `OBJ-${debtor.id}` ? MISSING_IN_SOURCE : debtor.identifier
+  return access.showIdentifier ? sourceIdentifier(debtor) : OMITTED_BY_ROLE
 }
 
 function rowValues(debtor: DebtorListItem, position: number, access: QueueAccess) {
   const decision = debtor.decision
   const state = absentState(metric(debtor, 'priorityScore').presence)
-  const amounts = { deuda_total_ars: metric(debtor, 'totalDebt'), deuda_vencida_ars: metric(debtor, 'overdueDebt'), monto_evaluable_ars: evaluableAmount(debtor) }
+  const amounts = {
+    deuda_total_ars: metric(debtor, 'totalDebt'), deuda_pendiente_ars: metric(debtor, 'pendingDebt'),
+    deuda_vencida_ars: metric(debtor, 'overdueDebt'), monto_evaluable_ars: evaluableAmount(debtor),
+  }
   return {
     tipo_fila: 'DETALLE',
     posicion: position,
     objeto_id: debtor.id,
-    // Contrato OB03 y OB04: el mapeador conserva rotulos de respaldo; el archivo declara la ausencia.
     identificador: identifierCell(debtor, access),
     tipo: debtor.type === 'Sin tipo' ? MISSING_IN_SOURCE : debtor.type,
     intervencion_codigo: decision?.intervencion.codigo ?? state,
@@ -101,6 +107,7 @@ function rowValues(debtor: DebtorListItem, position: number, access: QueueAccess
     severidad_estado: decision?.severidad.estado ?? state,
     prioridad_puntos: numericCell(metric(debtor, 'priorityScore')),
     deuda_total_ars: numericCell(amounts.deuda_total_ars),
+    deuda_pendiente_ars: numericCell(amounts.deuda_pendiente_ars),
     deuda_vencida_ars: numericCell(amounts.deuda_vencida_ars),
     monto_evaluable_ars: numericCell(amounts.monto_evaluable_ars),
     dias_atraso_max: numericCell(metric(debtor, 'maxDaysOverdue')),
@@ -118,6 +125,8 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
   const cases = filterQueueCases(universe, filters)
   const { fechaCorte, fechaCalculoUsada } = portfolioCutoff(universe, batch)
   const meta = {
+    fecha_cartera: fechaCorte,
+    version_reglas_vigente: RULES_VERSION,
     fecha_corte: fechaCorte,
     version_reglas: RULES_VERSION,
     filtros: filtersLabel(filters, universe),
@@ -135,6 +144,7 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
     intervencion_codigo: NOT_APPLICABLE, intervencion: NOT_APPLICABLE, intensidad: NOT_APPLICABLE, revision_requerida: NOT_APPLICABLE,
     severidad_puntos: NOT_APPLICABLE, severidad_banda: NOT_APPLICABLE, severidad_estado: NOT_APPLICABLE, prioridad_puntos: NOT_APPLICABLE,
     deuda_total_ars: numericCell(metrics.totalDebt),
+    deuda_pendiente_ars: numericCell(metrics.pendingDebt),
     deuda_vencida_ars: numericCell(metrics.overdueDebt),
     monto_evaluable_ars: numericCell(evaluable),
     dias_atraso_max: NOT_APPLICABLE,
@@ -142,7 +152,7 @@ export function buildQueueReport(universe: DebtorListItem[], filters: QueueFilte
     // Una persona con varios objetos contaria sus contactos varias veces: no se suman.
     contactos_disponibles: NOT_APPLICABLE, con_contacto: NOT_APPLICABLE, banderas: NOT_APPLICABLE,
     objetos: cases.length,
-    faltantes: missingLabel({ deuda_total_ars: metrics.totalDebt, deuda_vencida_ars: metrics.overdueDebt, monto_evaluable_ars: evaluable }),
+    faltantes: missingLabel({ deuda_total_ars: metrics.totalDebt, deuda_pendiente_ars: metrics.pendingDebt, deuda_vencida_ars: metrics.overdueDebt, monto_evaluable_ars: evaluable }),
   }
   return serializeCsv(COLUMNS, [...analyticalCases.map((debtor, index) => ({ ...meta, ...rowValues(debtor, index + 1, access) })), total])
 }

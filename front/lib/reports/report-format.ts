@@ -1,11 +1,16 @@
+import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import type { CsvValue } from '@/lib/reports/csv'
 import type { DataPresence, DataWarning, DebtorListItem, NumericData, RawDebtorDataBundle } from '@/types/equitas-domain'
 
-// ALIGN-028. Columnas y reglas comunes a los cuatro reportes.
-export const META_COLUMNS = ['fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones', 'tipo_fila'] as const
+// ALIGN-028. Columnas y reglas comunes a los cinco reportes.
+// Noche 7: cada archivo declara, en columnas constantes, la fecha de la cartera vigente y la versión de
+// reglas vigente (las del tablero). `fecha_corte` y `version_reglas` son las de la fila: en cola y
+// calidad coinciden con las vigentes; en decisiones son las de cada decisión.
+export const META_COLUMNS = ['fecha_cartera', 'version_reglas_vigente', 'fecha_corte', 'version_reglas', 'filtros', 'generado_en', 'definiciones', 'tipo_fila'] as const
 export const AGGREGATE_COLUMNS = [...META_COLUMNS, 'indicador', 'categoria', 'valor', 'numerador', 'denominador', 'unidad', 'estado'] as const
 export type AggregateColumn = (typeof AGGREGATE_COLUMNS)[number]
-export type ReportMeta = Pick<Record<(typeof META_COLUMNS)[number], string>, 'fecha_corte' | 'version_reglas' | 'filtros' | 'generado_en' | 'definiciones'>
+export type ReportMeta = Pick<Record<(typeof META_COLUMNS)[number], string>,
+  'fecha_cartera' | 'version_reglas_vigente' | 'fecha_corte' | 'version_reglas' | 'filtros' | 'generado_en' | 'definiciones'>
 
 // Sin sitio publico de documentacion: ruta del repositorio mas el ancla estable del catalogo.
 export const definitionsLink = (anchor: string) => `docs/tesis/catalogo-indicadores-v1.md#${anchor}`
@@ -15,6 +20,16 @@ export class ReportFilterError extends Error {
   constructor(readonly param: string) {
     super(`Filtro invalido: ${param}`)
     this.name = 'ReportFilterError'
+  }
+}
+
+// Noche 7 (H16). Misma regla que `filterPortfolio`: si el filtro dejó la selección vacía y hay casos sin
+// el dato para evaluarlo, la pantalla dice «No disponible». El reporte no entrega un archivo con cero
+// filas que parezca una selección vacía: responde 422.
+export class ReportSelectionError extends Error {
+  constructor() {
+    super('Seleccion incompleta: faltan datos para evaluar los filtros')
+    this.name = 'ReportSelectionError'
   }
 }
 
@@ -78,6 +93,41 @@ export function portfolioCutoff(universe: readonly DebtorListItem[], batch?: Raw
     fechaCalculoUsada: 'NO_APLICA',
   }
 }
+
+// Noche 7. Lo que decisiones, supervisión y accesos necesitan de la cartera vigente: su fecha y el
+// identificador visible de cada caso (el mismo de los listados). Sale de la misma lectura que las pantallas.
+export type PortfolioReference = Readonly<{
+  fechaCartera: string
+  // Fecha de la cartera vigente para `isStale`; null si no hay una (igual que `loadRecordedDecisions`).
+  currentAsOf: string | null
+  identifiers: ReadonlyMap<string, string>
+}>
+
+export const MISSING_IN_SOURCE = 'NO_INFORMADO_EN_ORIGEN'
+export const NOT_IN_PORTFOLIO = 'NO_EN_CARTERA_VIGENTE'
+
+// Contrato OB03 y OB04: el mapeador conserva el rótulo de respaldo `OBJ-<id>`; el archivo declara la ausencia.
+export function sourceIdentifier(debtor: Pick<DebtorListItem, 'id' | 'identifier'>) {
+  return debtor.identifier === `OBJ-${debtor.id}` ? MISSING_IN_SOURCE : debtor.identifier
+}
+
+export function portfolioReference(universe: readonly DebtorListItem[], batch?: RawDebtorDataBundle['batch']): PortfolioReference {
+  return {
+    fechaCartera: portfolioCutoff(universe, batch).fechaCorte,
+    currentAsOf: batch?.as_of ?? null,
+    identifiers: new Map(universe.map(debtor => [debtor.id, sourceIdentifier(debtor)])),
+  }
+}
+
+// Sin lectura de la cartera (pruebas de los constructores): nada se afirma.
+export const UNKNOWN_PORTFOLIO: PortfolioReference = { fechaCartera: 'NO_INTEGRADO', currentAsOf: null, identifiers: new Map() }
+
+export function caseIdentifier(reference: PortfolioReference, objectId: string) {
+  return reference.identifiers.get(objectId) ?? NOT_IN_PORTFOLIO
+}
+
+export const currentMeta = (reference: Pick<PortfolioReference, 'fechaCartera'>) =>
+  ({ fecha_cartera: reference.fechaCartera, version_reglas_vigente: RULES_VERSION })
 
 // Cantidad por clave, en orden estable: el mismo archivo para los mismos datos.
 export function tally(entries: readonly (readonly [string, number])[]) {

@@ -16,6 +16,7 @@ const PRESENCE_CATEGORIES = [PARTIAL, ...DATA_PRESENCE_STATES]
 const SEVERITY_STATES = ['COMPLETA', 'PARCIAL', 'NO_DISPONIBLE', 'SIN_DECISION']
 const PRESENCE_INDICATORS: [string, keyof DebtorListItem & string][] = [
   ['presencia_deuda_total', 'totalDebt'],
+  ['presencia_deuda_pendiente', 'pendingDebt'],
   ['presencia_deuda_vencida', 'overdueDebt'],
   ['presencia_contactos', 'contactCount'],
   ['presencia_atraso', 'maxDaysOverdue'],
@@ -35,6 +36,8 @@ export function buildDataQualityReport(debtors: readonly DebtorListItem[], gener
   const issues = debtors.flatMap(debtor => debtor.decisionIssues ?? [])
   const { fechaCorte } = portfolioCutoff(debtors, batch)
   const meta: ReportMeta = {
+    fecha_cartera: fechaCorte,
+    version_reglas_vigente: RULES_VERSION,
     fecha_corte: fechaCorte,
     version_reglas: RULES_VERSION,
     filtros: NO_FILTERS,

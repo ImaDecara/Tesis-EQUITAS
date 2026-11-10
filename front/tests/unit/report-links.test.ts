@@ -8,7 +8,7 @@ vi.mock('@/lib/server/dal', async importOriginal => ({ ...(await importOriginal<
 import { WEB_ROLES, E06_READ_ONLY_COMPAT_ROLE, type ResolvedRoleName } from '@/lib/auth/tenant-access'
 import { parseQueueFilters } from '@/lib/reports/queue-report'
 import { DataAccessError, roleHasPermission } from '@/lib/server/dal'
-import { availableReportLinks, queueReportLink, REPORT_LINKS, reportLinksForRole } from '@/lib/server/report-links'
+import { availableReportLinks, queueReportLink, REPORT_LINKS, reportLinksForRole, reportOffers } from '@/lib/server/report-links'
 
 const ROUTE_DIRS = { queue: 'queue', 'data-quality': 'data-quality', decisions: 'decisions', supervision: 'supervision', access: 'access' } as const
 
@@ -38,6 +38,14 @@ describe('N6: accesos visibles a los CSV existentes', () => {
         expect(reportLinksForRole(role).includes(link), `${role} ${link.id}`).toBe(roleHasPermission(role, link.permission))
       }
     }
+  })
+
+  it('la pantalla «Reportes» lista los cinco y marca los que el rol permite; sin sesión, ninguno', () => {
+    const allowed = (links: Parameters<typeof reportOffers>[0]) => reportOffers(links).filter(offer => offer.allowed).map(offer => offer.id)
+    expect(reportOffers(reportLinksForRole('USER')).map(offer => offer.id)).toEqual(REPORT_LINKS.map(link => link.id))
+    expect(allowed(reportLinksForRole('USER'))).toEqual(['queue', 'data-quality', 'decisions'])
+    expect(allowed(reportLinksForRole('ADMIN'))).toEqual(['queue', 'data-quality', 'decisions', 'supervision', 'access'])
+    expect(allowed(null)).toEqual([])
   })
 
   it('la sesión decide la lista; sin sesión verificable no se ofrece ningún enlace', async () => {

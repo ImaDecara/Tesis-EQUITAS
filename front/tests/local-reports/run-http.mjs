@@ -1,5 +1,8 @@
 // ALIGN-028. Pide los reportes a `next start` con sesiones reales del stack local, generadas por el mismo
 // @supabase/ssr de la web, y guarda las respuestas. No juzga el contenido: eso lo hace verify_reports.py.
+// Noche 7: las etiquetas son nombres de CUENTA de ALIGN-018; fixture.sql les asigna el rol del producto
+// (consulta = USER; operador y supervisor = ADMIN; otro-operador = USER en B; otro-supervisor = ADMIN en B y
+// USER en A; importador conserva el rol anterior y no ingresa). Se agrega el reporte de accesos.
 // Uso: node tests/local-reports/run-http.mjs <credenciales.psv> <http://127.0.0.1:PUERTO> <salida nueva en /tmp>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -34,7 +37,7 @@ async function sessionCookie(label) {
   return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
 }
 
-const REPORTS = ['queue', 'decisions', 'supervision', 'data-quality']
+const REPORTS = ['queue', 'decisions', 'supervision', 'data-quality', 'access']
 const results = []
 
 async function record(account, path, cookie, tenant, method = 'GET') {
@@ -81,18 +84,28 @@ for (const query of ['', '?contact=without', '?contact=with', '?risk=ALTO', '?mi
   await record('operador', `/priority-cases${query}`, cookies.operador)
 }
 await record('operador', '/debt-aging', cookies.operador)
+await record('operador', '/', cookies.operador)
+await record('operador', '/reports', cookies.operador)
+await record('consulta', '/reports', cookies.consulta)
 await record('operador', '/no-contact', cookies.operador)
 
 // Filtros rechazados y supervision filtrada.
-for (const query of ['?risk=XYZ', '?tenant=920002', '?nada=1']) await record('operador', `${reportPath('queue')}${query}`, cookies.operador)
+for (const query of ['?risk=XYZ', '?tenant=920002', '?nada=1', '?minAmount=-1']) await record('operador', `${reportPath('queue')}${query}`, cookies.operador)
 for (const query of ['?corte=2026-09-30', '?corte=2026-10-15', '?corte=2030-01-01']) {
   await record('supervisor', `${reportPath('supervision')}${query}`, cookies.supervisor)
   await record('supervisor', `${reportPath('decisions')}${query}`, cookies.supervisor)
 }
 
+// Accesos: una apertura de caso de operador (ADMIN) aparece con el identificador del caso; para supervisor
+// (otra cuenta ADMIN) es de otra persona y para operador es propia.
+await record('operador', '/debtors/928101', cookies.operador)
+await record('supervisor', `${reportPath('access')}?accion=CASE_OPEN`, cookies.supervisor)
+await record('operador', `${reportPath('access')}?accion=CASE_OPEN`, cookies.operador)
+
 // HEAD pasa por la misma autorizacion; un metodo de escritura no existe.
 await record('supervisor', reportPath('supervision'), cookies.supervisor, undefined, 'HEAD')
 await record('consulta', reportPath('supervision'), cookies.consulta, undefined, 'HEAD')
+await record('consulta', reportPath('access'), cookies.consulta, undefined, 'HEAD')
 await record('supervisor', reportPath('supervision'), cookies.supervisor, undefined, 'POST')
 
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 1))
