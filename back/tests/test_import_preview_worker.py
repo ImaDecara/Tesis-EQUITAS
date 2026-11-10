@@ -131,6 +131,16 @@ def test_more_than_five_hundred_findings_are_all_counted_and_five_hundred_shown(
     assert [f["linea"] for f in detail["hallazgos"]] == [i + 2 for i in range(500)]
 
 
+def test_errors_are_shown_before_warnings_when_the_limit_cuts():
+    """Si las primeras 500 filas del archivo solo traen advertencias, los errores no pueden quedar sin detalle."""
+    warnings = [finding(i, "CONTACTO_PLACEHOLDER", "Destinatario_Email", "cabecera") for i in range(600)]
+    errors = [finding(i) for i in range(3)]
+    detail = worker.detail(synthetic_batch(warnings + errors))
+    assert detail["totales"] == {"errores": {"IMPORTE_NO_NUMERICO": 3}, "advertencias": {"CONTACTO_PLACEHOLDER": 600}}
+    assert [f["codigo"] for f in detail["hallazgos"][:3]] == ["IMPORTE_NO_NUMERICO"] * 3
+    assert len(detail["hallazgos"]) == 500 and detail["hallazgos_total"] == 603
+
+
 def test_reduced_limit_on_a_real_lot(monkeypatch):
     monkeypatch.setattr(worker, "MAX_FINDINGS", 2)
     full = worker.prepare(request("2-cartera-2026-10-31-con-errores"))["detail"]

@@ -116,6 +116,16 @@ function catalogDatum(presence: DataPresence, key: string | undefined): RuleDatu
   return { estado: presence, valor: null }
 }
 
+// Presencia de la clave para las reglas. Con clave en el catálogo decide la clave, sin pasar por el rótulo ni
+// normalizarla (igual que el perfil SQL): UNKNOWN → no informado; cualquier otra → observada. Sin clave rige la
+// presencia del estado visible. En todos los casos que no son `PAID` observado la obligación se computa como
+// NO pagada, por importe y vencimiento; un catálogo ilegible (NO_INTEGRADO) impide evaluar el caso.
+function catalogKeyPresence(catalogFailed: boolean, key: string | undefined, labelPresence: DataPresence): DataPresence {
+  if (catalogFailed) return 'NO_INTEGRADO'
+  if (key === undefined) return labelPresence
+  return key.toUpperCase() === 'UNKNOWN' ? 'NO_INFORMADO_EN_ORIGEN' : 'OBSERVADO'
+}
+
 // Solo campos de origen explícitos: status y period heredados NO los sustituyen.
 function sourceDatum(row: RawRow, key: string): RuleDatum<string | number> {
   const value = selectValueFromRow(row, [key])
@@ -179,6 +189,13 @@ export function mapDebtorObjectsFromRawData(
     const label = debtStatusLabels.get(id)
     if (label) debtStatusCatalog.set(id, { key: selectTextFromRow(row, ['key']), label })
   }
+  // Clave del catálogo para las reglas (solo `PAID` excluye). Es independiente del rótulo y no se normaliza:
+  // una fila sin rótulo visible, o con un rótulo numérico, sigue teniendo su clave, igual que en el perfil SQL.
+  const debtStatusKeys = new Map<string, string>()
+  for (const row of raw.debtStatuses) {
+    const id = stringifyUnknownValue(selectValueFromRow(row, ['id', 'debt_status_id', 'status_id']))
+    if (id && typeof row.key === 'string' && row.key !== '') debtStatusKeys.set(id, row.key)
+  }
 
   const peopleById = new Map<string, RawRow>()
   for (const person of raw.people) {
@@ -239,7 +256,7 @@ export function mapDebtorObjectsFromRawData(
       due_date: dueDatum,
       estado_origen: recordMissing('estado_origen', sourceDatum(debt, 'estado_origen'), decisionIssues, 'ESTADO_ORIGEN_NO_EVALUABLE'),
       periodo_fiscal: recordMissing('periodo_fiscal', sourceDatum(debt, 'periodo_fiscal'), decisionIssues, 'PERIODO_FISCAL_NO_EVALUABLE'),
-      estado_catalogo: catalogDatum(statusPresence, catalogStatus?.key),
+      estado_catalogo: catalogDatum(catalogKeyPresence(catalogFailed, debtStatusKeys.get(debtStatusId), statusPresence), debtStatusKeys.get(debtStatusId)),
     }
     debtItem.decisionIssues = decisionIssues.map(issue => ({ ...issue, entityId: debtItem.id }))
 

@@ -473,6 +473,11 @@ class FakeSupabase:
         if isinstance(reply, httpx.Response):
             return reply
         if reply is not None:
+            if name == "stage_import_batch" and isinstance(reply, dict) and "idempotency_key" not in reply:
+                # La base siempre devuelve la huella de la identidad del lote; una respuesta forzada también.
+                from ETL.transform import canonical_json_hash
+
+                reply = {**reply, "idempotency_key": canonical_json_hash(body["p_document"]["identity"])}
             return httpx.Response(200, json=reply)
         rejection = (
             self._audit_rejection(body)
@@ -521,7 +526,8 @@ class FakeSupabase:
                     file_hashes=document["file_hashes"],
                     as_of=document["identity"]["parameters"]["as_of"],
                 ),
-                "idempotency_key": str(uuid.uuid4()),
+                # Como en la base: la clave del lote ES la huella de su identidad (import_publication.idempotency_key).
+                "idempotency_key": identity,
                 "identity": identity,
                 "revision": canonical_json_hash([document, body["p_rows"]]),
                 "status": "VALIDADO",
@@ -552,7 +558,8 @@ class FakeSupabase:
         job = self.publications.get(body["p_idempotency_key"])
         if job is None:
             return self._rejection("BATCH_NOT_FOUND")
-        return self._receipt(job)
+        # Como la función real: solo lo que hace falta para decidir un reintento.
+        return {key: job[key] for key in ("batch_id", "status", "revision")}
 
     def _audit_rejection(self, body: dict[str, Any]) -> str | None:
         if not any(

@@ -29,8 +29,11 @@ export type RecordedDecision = Readonly<{
   asOf: string
   rulesVersion: string
   reviewerRole: string
-  // Por identidad: quien mira es quien la registró. No se muestra ni viaja la identidad de otra persona.
+  // Por identidad: quien mira registró ESTA versión. No se muestra ni viaja la identidad de otra persona.
   mine: boolean
+  // Quien mira registró esta versión o una anterior de la misma cadena de reemplazos. Es la regla de la base
+  // para aprobar (APPROVER_IS_PROPONENT): quien participó de la propuesta no puede aprobarla.
+  participated: boolean
   // La cartera o las reglas cambiaron después: no se presenta como vigente.
   stale: boolean
 }>
@@ -73,7 +76,7 @@ export type PendingKind =
 export const PENDING_LABELS: Readonly<Record<PendingKind, { title: string; help: string }>> = {
   APPROVE: { title: 'Para aprobar u objetar', help: 'Propuestas de otra persona que esperan tu respuesta.' },
   OBJECT_ONLY: { title: 'Propuestas sobre datos anteriores', help: 'Las registró otra persona antes de que cambiara la cartera o las reglas: ya no se pueden aprobar. Podés objetarlas, o esa persona puede registrar una decisión nueva.' },
-  WAITING_OTHER: { title: 'Tus propuestas en espera', help: 'Las registraste vos: las tiene que aprobar otra persona con rol ADMIN. No podés aprobar tu propia propuesta; si en tu municipio no hay otra cuenta ADMIN, quedan pendientes.' },
+  WAITING_OTHER: { title: 'Propuestas en las que participaste, en espera', help: 'Las registraste vos, o registraste una versión anterior: las tiene que aprobar otra persona con rol ADMIN que no haya intervenido. No podés aprobar una propuesta en la que participaste; si en tu municipio no hay otra cuenta ADMIN, quedan pendientes.' },
   OBJECTED: { title: 'Tus propuestas objetadas', help: 'Otra persona las objetó. Abrí el caso para registrar una decisión nueva.' },
   REVIEW_AGAIN: { title: 'Tus decisiones registradas sobre datos anteriores', help: 'La cartera o las reglas cambiaron después de registrarlas. Abrí el caso para revisarlas con los datos vigentes.' },
 }
@@ -81,7 +84,7 @@ export const PENDING_ORDER: readonly PendingKind[] = ['APPROVE', 'OBJECTED', 'RE
 
 export function pendingKind(decision: RecordedDecision, viewer: { canRecord: boolean; canApprove: boolean }): PendingKind | null {
   if (decision.status === 'PENDIENTE_APROBACION') {
-    if (decision.mine) return viewer.canRecord ? 'WAITING_OTHER' : null
+    if (decision.participated) return viewer.canRecord ? 'WAITING_OTHER' : null
     if (!viewer.canApprove) return null
     return decision.stale ? 'OBJECT_ONLY' : 'APPROVE'
   }

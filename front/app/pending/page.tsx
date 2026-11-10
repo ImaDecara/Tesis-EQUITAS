@@ -60,7 +60,7 @@ function PendingSection({ kind, rows }: { kind: PendingKind; rows: PendingRow[] 
                   {RECORDED_STATUS_LABELS[decision.status]}
                   {decision.stale && <Badge variant="warning" className="ml-2">{STALE_LABEL}</Badge>}
                 </TableCell>
-                <TableCell>{formatDateTime(decision.decidedAt)} · {decision.mine ? 'por vos' : 'por otra persona'}</TableCell>
+                <TableCell>{formatDateTime(decision.decidedAt)} · {decision.mine ? 'por vos' : decision.participated ? 'por otra persona, sobre una versión tuya' : 'por otra persona'}</TableCell>
                 <TableCell>al {formatDate(decision.asOf)}</TableCell>
               </TableRow>
             ))}

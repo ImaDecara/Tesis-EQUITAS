@@ -93,7 +93,9 @@ BLOCKER_FALLBACK = "El lote no cumple una condición necesaria para publicarse."
 
 
 class _Rejected(Exception):
-    """La base rechazó la operación con un código estable. Nada de esa llamada quedó escrito."""
+    """La API de datos respondió un error. Con un código de las funciones de importación, nada de esa llamada
+    quedó escrito; pero un corte por tiempo o un error del gateway llegan igual por acá. Por eso, DESPUÉS de
+    pedir la publicación, ningún «no modificó» se apoya en esta excepción: se pregunta el recibo con `settle`."""
 
     def __init__(self, code: str) -> None:
         self.code = code
@@ -236,7 +238,9 @@ def _previous_attempt(session: Session, context: TenantContext, identity_key: st
     try:
         receipt = _rpc(session, "read_import_receipt", {"p_actor_user": context.user_id, "p_tenant": context.tenant_id,
                                                         "p_idempotency_key": identity_key})
-    except _Rejected:
+    except _Rejected as error:
+        if error.code in ROLE_REJECTIONS:
+            raise HTTPException(403, "ROLE_FORBIDDEN") from None
         return None
     if (receipt.get("status") in CLOSED_STATES and isinstance(receipt.get("revision"), str)
             and REVISION.fullmatch(receipt["revision"])):
@@ -265,10 +269,14 @@ def _stage(prepared: dict[str, Any], document: dict[str, Any], revision: str | N
             return _outcome(409, NEEDS_CONFIRMATION,
                             f"Este mismo lote ya se intentó cargar y ese intento no se completó. {NOT_MODIFIED} Si querés, reintentalo.",
                             fecha_corte=as_of, revision=previous["revision"], estado_anterior=previous["status"])
-        if error.code == "IMPORT_REVISION_CONFLICT":
+        if error.code == "IMPORT_REVISION_CONFLICT" and revision is not None:
             return _outcome(409, NEEDS_CONFIRMATION,
                             f"La referencia del reintento ya no sirve: el lote o la cartera cambiaron desde ese intento. {NOT_MODIFIED} Volvé a elegir los archivos y cargalos de nuevo.",
                             fecha_corte=as_of, revision=None, estado_anterior=None)
+        if error.code in ("IMPORT_REVISION_CONFLICT", "IMPORT_INPUT_INVALID"):
+            # Mismo lote con otro contenido preparado, o un documento que la base no acepta: repetir no lo arregla.
+            return _not_completed(f"El servicio no pudo preparar este lote para publicarlo. {NOT_MODIFIED} No es un error del archivo ni se resuelve repitiendo la carga: avisá a quien administra el sistema.",
+                                  "PREPARACION_RECHAZADA")
         if error.code == "SHARED_PERSON_OTHER_TENANT":
             return _outcome(422, REJECTED, f"El lote no se cargó: incluye personas que ya pertenecen a la cartera de otro municipio. {NOT_MODIFIED}",
                             fecha_corte=as_of,
@@ -290,6 +298,10 @@ def _publish(prepared: dict[str, Any], report: dict[str, Any], as_of: str, revis
     if isinstance(review, JSONResponse):
         return review
     status, batch_id = review.get("status"), review.get("batch_id")
+    if review.get("idempotency_key") != identity_key:
+        # La huella calculada acá y la de la base tienen que ser la misma: si no, publicar daría un resultado engañoso.
+        return _not_completed(f"La identidad del lote no coincide entre el servicio y la base. {NOT_MODIFIED} Avisá a quien administra el sistema.",
+                              "HUELLA_INCONSISTENTE")
     if status == "PUBLICADO":
         return _outcome(200, ALREADY_LOADED, "Este mismo lote ya estaba cargado con esa fecha. No cambió nada.",
                         fecha_corte=as_of, lote=batch_id, publicado=review.get("counts", {}), **report)

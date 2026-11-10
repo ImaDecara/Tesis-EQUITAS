@@ -35,6 +35,16 @@ function integer(value: unknown): number | null {
 export function buildRecordedDecisions(reviews: readonly RawRow[], approvals: readonly RawRow[], viewerUserId: string,
   current: { asOf: string | null; rulesVersion: string }): Map<string, RecordedDecision> {
   const approvalByReview = new Map(heads(approvals).map(row => [databaseId(row.case_review), row.decision]))
+  const byId = new Map(reviews.map(row => [databaseId(row.id), row]))
+  // Misma regla que `record_case_review_approval`: se recorre la cadena hacia atrás (los ids bajan en cada paso).
+  const participatedIn = (row: RawRow) => {
+    for (let current: RawRow | undefined = row, steps = 0; current && steps <= reviews.length; steps += 1) {
+      if (databaseId(current.reviewer) === viewerUserId) return true
+      const previous = databaseId(current.supersedes)
+      current = previous && BigInt(previous) < BigInt(String(current.id)) ? byId.get(previous) : undefined
+    }
+    return false
+  }
   const byDebtor = new Map<string, RecordedDecision>()
   // Vigente por caso = la que ninguna otra reemplaza; si hubiera más de una cadena, la más nueva.
   for (const row of heads(reviews).sort((left, right) => (BigInt(String(left.id)) < BigInt(String(right.id)) ? -1 : 1))) {
@@ -56,6 +66,7 @@ export function buildRecordedDecisions(reviews: readonly RawRow[], approvals: re
       ...basis,
       reviewerRole: String(row.reviewer_role),
       mine: databaseId(row.reviewer) === viewerUserId,
+      participated: participatedIn(row),
       stale: isStale(basis, current),
     })
   }

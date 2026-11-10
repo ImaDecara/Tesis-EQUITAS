@@ -37,14 +37,16 @@ def detail(batch):
     advertencias = lo que se carga igual."""
     report, contract = batch.report, source_contract()
     totals = {'errores': {}, 'advertencias': {}}
-    shown = []
+    found = {'errores': [], 'advertencias': []}
     for finding in report['hallazgos']:
         effect = finding_effect(contract, finding)
-        group = totals['advertencias' if effect == 'ALERTA' else 'errores']
-        group[finding['codigo']] = group.get(finding['codigo'], 0) + 1
-        if len(shown) < MAX_FINDINGS:
-            shown.append({'archivo': finding['archivo'], 'linea': finding['linea'], 'campo': finding['campo'],
-                          'codigo': finding['codigo'], 'efecto': effect})
+        name = 'advertencias' if effect == 'ALERTA' else 'errores'
+        totals[name][finding['codigo']] = totals[name].get(finding['codigo'], 0) + 1
+        if len(found[name]) < MAX_FINDINGS:
+            found[name].append({'archivo': finding['archivo'], 'linea': finding['linea'], 'campo': finding['campo'],
+                                'codigo': finding['codigo'], 'efecto': effect})
+    # Lo que la persona tiene que corregir va primero: las advertencias solo ocupan el lugar que sobra.
+    shown = (found['errores'] + found['advertencias'])[:MAX_FINDINGS]
     return {'filas': {kind: {name: rows[name] for name in ('leidas','aceptadas','rechazadas')}
                       for kind, rows in report['filas'].items()},
             'hallazgos': shown, 'hallazgos_total': len(report['hallazgos']),

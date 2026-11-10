@@ -587,7 +587,10 @@ def test_staging_that_finds_a_partial_portfolio_is_a_rejection(client, supabase,
 @pytest.mark.parametrize(
     ("message", "status", "result", "code"),
     [
-        ("IMPORT_REVISION_CONFLICT", 409, "REQUIERE_CONFIRMACION", None),
+        # Sin reintento pedido, un conflicto de contenido o una entrada que la base no acepta no se arreglan
+        # repitiendo: no se invita a repetir (el caso CON revisión está en test_stale_retry_reference_*).
+        ("IMPORT_REVISION_CONFLICT", 503, "NO_COMPLETADO", "PREPARACION_RECHAZADA"),
+        ("IMPORT_INPUT_INVALID", 503, "NO_COMPLETADO", "PREPARACION_RECHAZADA"),
         ("SHARED_PERSON_OTHER_TENANT", 422, "RECHAZADO", None),
         ("IMPORT_RETRY_REQUIRED", 503, "NO_COMPLETADO", "IMPORT_RETRY_REQUIRED"),
         ("CENTINELA_OTRO_RECHAZO", 503, "NO_COMPLETADO", "STAGING_NO_DISPONIBLE"),
@@ -602,8 +605,8 @@ def test_each_staging_rejection_has_its_outcome(client, supabase, prepared_calls
     assert body.get("codigo") == code
     assert_not_modified(response)
     assert "CENTINELA" not in response.text
-    if message == "IMPORT_REVISION_CONFLICT":
-        assert (body["revision"], body["estado_anterior"]) == (None, None)
+    if code == "PREPARACION_RECHAZADA":
+        assert "repetí" not in body["mensaje"].lower()
     if message == "SHARED_PERSON_OTHER_TENANT":
         assert body["motivos"][0]["codigo"] == "SHARED_PERSON_OTHER_TENANT"
     assert supabase.rpc_order() == ["stage_import_batch"]
@@ -678,7 +681,38 @@ def test_closed_receipt_offers_its_revision(client, supabase, prepared_calls, st
     assert "settle_import_batch" not in supabase.rpc_order()
 
 
-@pytest.mark.parametrize("receipt", ["BATCH_NOT_FOUND", "ROLE_NOT_ALLOWED", "red", "forma",
+@pytest.mark.parametrize("message", ["ROLE_NOT_ALLOWED", "ACTOR_NOT_ACTIVE_MEMBER"])
+def test_receipt_refused_by_role_is_403(client, supabase, prepared_calls, message):
+    supabase.rpc_reply["stage_import_batch"] = "IMPORT_REVALIDATION_REQUIRED"
+    supabase.rpc_reply["read_import_receipt"] = message
+    response = load(client, supabase, lot_form(lot_files(LOT_1)))
+    assert response.status_code == 403
+    assert response.json() == {"detail": "ROLE_FORBIDDEN"}
+    assert supabase.rpc_order() == ["stage_import_batch", "read_import_receipt"]
+
+
+def test_stale_retry_reference_asks_to_choose_the_files_again(client, supabase, prepared_calls):
+    supabase.rpc_reply["stage_import_batch"] = "IMPORT_REVISION_CONFLICT"
+    response = load(client, supabase, lot_form(lot_files(LOT_1), "2026-09-30", ("revision", b"c" * 64, None)))
+    assert response.status_code == 409
+    body = response.json()
+    assert body["resultado"] == "REQUIERE_CONFIRMACION"
+    assert (body["revision"], body["estado_anterior"]) == (None, None)
+    assert_not_modified(response)
+    assert supabase.rpc_order() == ["stage_import_batch"]
+
+
+def test_a_different_fingerprint_from_the_database_stops_before_publishing(client, supabase, prepared_calls):
+    supabase.rpc_reply["stage_import_batch"] = {"status": "VALIDADO", "batch_id": 1, "revision": "a" * 64,
+                                                "idempotency_key": "f" * 64}
+    response = load(client, supabase, lot_form(lot_files(LOT_1)))
+    assert response.status_code == 503
+    assert response.json()["codigo"] == "HUELLA_INCONSISTENTE"
+    assert_not_modified(response)
+    assert supabase.rpc_order() == ["stage_import_batch"]
+
+
+@pytest.mark.parametrize("receipt", ["BATCH_NOT_FOUND", "red", "forma",
                                      {"status": "VALIDADO", "revision": "b" * 64},
                                      {"status": "PUBLICADO", "revision": "b" * 64},
                                      {"status": "FALLIDO", "revision": "B" * 64},

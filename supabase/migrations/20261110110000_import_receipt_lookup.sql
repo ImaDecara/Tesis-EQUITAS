@@ -20,12 +20,14 @@ grant create on schema public to equitas_import_definer;
 -- (municipio, archivos, mapeo, contrato y parametros), unica por municipio (import_publication_idempotency_key).
 create function public.read_import_receipt(p_actor_user bigint, p_tenant bigint, p_idempotency_key text) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
-declare v_batch bigint;
+declare v_batch bigint; v_receipt jsonb;
 begin
   perform equitas_import_private.authorize(p_actor_user, p_tenant);
   select j.batch_id into v_batch from public.import_publication j where j.tenant = p_tenant and j.idempotency_key = p_idempotency_key;
   if not found then raise exception 'BATCH_NOT_FOUND'; end if;
-  return equitas_import_private.receipt(v_batch);
+  -- Solo lo que hace falta para decidir un reintento: ni conteos ni fechas por objeto.
+  v_receipt := equitas_import_private.receipt(v_batch);
+  return jsonb_build_object('batch_id', v_batch, 'status', v_receipt -> 'status', 'revision', v_receipt -> 'revision');
 end $$;
 
 alter function public.read_import_receipt(bigint, bigint, text) owner to equitas_import_definer;
@@ -37,5 +39,21 @@ grant execute on function public.read_import_receipt(bigint, bigint, text) to eq
 revoke create on schema public from equitas_import_definer;
 
 revoke equitas_import_definer from postgres;
+
+-- Comprobacion de cierre, como en 20261110100000.
+
+do $$
+declare f record;
+begin
+  select pg_get_userbyid(p.proowner) as owner, p.prosecdef, p.proconfig, p.oid into strict f
+  from pg_proc p where p.oid = 'public.read_import_receipt(bigint, bigint, text)'::regprocedure;
+  if f.owner <> 'equitas_import_definer' or not f.prosecdef or f.proconfig is distinct from array['search_path=""'] then
+    raise exception 'RECIBO: dueno, SECURITY DEFINER o search_path inesperados';
+  end if;
+  if has_function_privilege('anon', f.oid, 'execute') or has_function_privilege('authenticated', f.oid, 'execute')
+     or has_function_privilege('service_role', f.oid, 'execute') or not has_function_privilege('equitas_import_server', f.oid, 'execute') then
+    raise exception 'RECIBO: permisos de ejecucion inesperados';
+  end if;
+end $$;
 
 notify pgrst, 'reload schema';
