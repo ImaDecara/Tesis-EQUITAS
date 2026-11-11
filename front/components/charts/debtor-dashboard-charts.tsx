@@ -110,7 +110,7 @@ export function BarDistributionChart({
               cursor={{ fill: '#e2e8f0' }}
               contentStyle={{ borderRadius: 10, borderColor: '#cbd5e1' }}
             />
-            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+            <Bar dataKey="value" radius={[8, 8, 0, 0]} isAnimationActive={false}>
               {rows.map((row, index) => (
                 <Cell key={`${row.label}-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
               ))}
@@ -276,7 +276,7 @@ export function TopDebtHorizontalChart({
               formatter={(value) => formatCurrency(Number(value))}
               contentStyle={{ borderRadius: 10, borderColor: '#cbd5e1' }}
             />
-            <Bar dataKey="value" radius={[0, 8, 8, 0]} fill="#0f2f57" />
+            <Bar dataKey="value" radius={[0, 8, 8, 0]} fill="#0f2f57" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

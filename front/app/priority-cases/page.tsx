@@ -5,7 +5,7 @@ import { ContactAvailabilityBadge } from '@/components/debtors/contact-availabil
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { PaginationControls, PaginationSummary } from '@/components/equitas/pagination-controls'
 import { AppShell } from '@/components/layout/app-shell'
-import { DecisionsNotice, PriorityScoreBadge, RecordedDecisionCell } from '@/components/portfolio/case-cells'
+import { decisionsAvailable, DecisionColumnCell, DecisionColumnHead, DecisionsNotice, PriorityScoreBadge } from '@/components/portfolio/case-cells'
 import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { casesLabel, daysLabel, filterLine, filterNotes, GROUP_CRITERIA, SCORE_LABEL, SCORE_NOTE } from '@/components/portfolio/portfolio-text'
 import { Badge } from '@/components/ui/badge'
@@ -197,7 +197,7 @@ export default async function PriorityCasesPage({ searchParams }: { searchParams
                   <TableHead className="w-[22%] text-right md:w-[11%]">Deuda pendiente</TableHead>
                   <TableHead className="hidden w-[11%] text-right md:table-cell">Deuda vencida</TableHead>
                   <TableHead className="hidden w-[10%] md:table-cell">Contacto</TableHead>
-                  <TableHead className="w-[26%] md:w-[20%]">Decisión registrada</TableHead>
+                  <DecisionColumnHead decisions={decisions} className="w-[26%] md:w-[20%]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -210,11 +210,14 @@ export default async function PriorityCasesPage({ searchParams }: { searchParams
                     </TableCell>
                   </TableRow>
                 )}
-                {pagination.items.map(debtor => (
+                {pagination.items.map(debtor => {
+                  // Sin el módulo de decisiones la pestaña «Decisión» no tiene nada que hacer: se abre el resumen.
+                  const caseHref = portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, queue: selectedQueueParam })
+                  const detailHref = decisionsAvailable(decisions) ? `${caseHref}&tab=revision` : caseHref
+                  return (
                   <TableRow key={debtor.id}>
                     <TableCell className="align-top">
-                      <Link href={`${portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, queue: selectedQueueParam })}&tab=revision`}
-                        className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
+                      <Link href={detailHref} className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
                       <p className="text-xs text-slate-500 md:hidden">{debtor.type}</p>
                       {debtor.peopleNames.length > 0 && <p className="truncate text-xs text-slate-500" title={debtor.peopleNames.join(', ')}>{debtor.peopleNames.join(', ')}</p>}
                     </TableCell>
@@ -224,9 +227,10 @@ export default async function PriorityCasesPage({ searchParams }: { searchParams
                     <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                     <TableCell className="hidden text-right align-top md:table-cell">{formatCurrency(debtor.overdueDebt)}</TableCell>
                     <TableCell className="hidden align-top md:table-cell"><ContactAvailabilityBadge hasContact={debtor.hasContact} /></TableCell>
-                    <TableCell className="align-top"><RecordedDecisionCell decisions={decisions} debtorId={debtor.id} /></TableCell>
+                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} detailHref={detailHref} /></TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
             {selectedQueue.count !== null && (

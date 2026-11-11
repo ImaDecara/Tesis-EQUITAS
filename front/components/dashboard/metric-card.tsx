@@ -87,7 +87,7 @@ export function MetricCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-1 pt-0">
-        <p className="text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+        <p className="text-2xl font-semibold tracking-tight whitespace-nowrap tabular-nums text-slate-900 lg:text-lg xl:text-2xl">{value}</p>
         <p className="text-xs text-slate-500">{hint}</p>
       </CardContent>
     </Card>

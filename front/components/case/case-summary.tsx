@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 
 import {
   BAND_LABELS,
@@ -147,6 +148,40 @@ export function CaseTotals({ debtor }: { debtor: DebtorListItem }) {
         </p>
       </CardContent>
     </Card>
+  )
+}
+
+function SnapshotItem({ label, children, tone }: { label: string; children: ReactNode; tone?: 'danger' }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-[#d2dceb] bg-white px-3 py-2 shadow-sm">
+      <dt className="text-xs text-slate-600">{label}</dt>
+      <dd className={tone === 'danger' ? 'text-base font-semibold break-words text-[#8f3434]' : 'text-base font-semibold break-words text-slate-900'}>{children}</dd>
+    </div>
+  )
+}
+
+/** Síntesis económica y contacto principal, arriba de las pestañas (como en main), con las definiciones de N7. */
+export function CaseSnapshot({ debtor, contact, contactsHref }: {
+  debtor: DebtorListItem
+  contact: { state: 'unavailable' } | { state: 'none' } | { state: 'found'; channel: string; value: string; more: number }
+  contactsHref: string
+}) {
+  return (
+    <section aria-label="Síntesis del caso" data-case-section="snapshot">
+      <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <SnapshotItem label="Deuda pendiente">{amountWithMissing(metric(debtor, 'pendingDebt'))}</SnapshotItem>
+        <SnapshotItem label="Deuda vencida" tone="danger">{overdueText(debtor)}</SnapshotItem>
+        <SnapshotItem label="Atraso máximo">{maxDaysText(debtor)}</SnapshotItem>
+        <SnapshotItem label="Contacto principal">
+          {contact.state === 'unavailable' ? 'No disponible: no se pudieron leer los contactos'
+            : contact.state === 'none' ? 'Sin contacto activo cargado'
+            : <span className="font-medium" data-main-contact>{contact.channel} · <span className="break-all">{contact.value}</span></span>}
+          <Link href={contactsHref} className="mt-0.5 block text-xs font-normal text-[#163a63] underline">
+            {contact.state === 'found' && contact.more > 0 ? `Ver ${plural(contact.more, 'contacto más', 'contactos más')}` : 'Ver personas y contactos'}
+          </Link>
+        </SnapshotItem>
+      </dl>
+    </section>
   )
 }
 

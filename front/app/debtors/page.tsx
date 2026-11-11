@@ -6,7 +6,7 @@ import { DebtorsFiltersForm } from '@/components/debtors/debtors-filters-form'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { PaginationControls, PaginationSummary } from '@/components/equitas/pagination-controls'
 import { AppShell } from '@/components/layout/app-shell'
-import { DecisionsNotice, PriorityScoreBadge, RecordedDecisionCell } from '@/components/portfolio/case-cells'
+import { DecisionColumnCell, DecisionColumnHead, DecisionsNotice, PriorityScoreBadge } from '@/components/portfolio/case-cells'
 import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { bandLabel, casesLabel, filterLine, filterNotes, SCORE_LABEL, SCORE_NOTE } from '@/components/portfolio/portfolio-text'
 import { Badge } from '@/components/ui/badge'
@@ -97,7 +97,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                   <TableHead className="w-[24%] text-right md:w-[11%]">Deuda pendiente</TableHead>
                   <TableHead className="hidden w-[11%] text-right md:table-cell">Deuda vencida</TableHead>
                   <TableHead className="hidden w-[10%] md:table-cell">Contacto</TableHead>
-                  <TableHead className="w-[26%] md:w-[20%]">Decisión registrada</TableHead>
+                  <DecisionColumnHead decisions={decisions} className="w-[26%] md:w-[20%]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -110,11 +110,12 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                     </TableCell>
                   </TableRow>
                 )}
-                {pagination.items.map(debtor => (
+                {pagination.items.map(debtor => {
+                  const detailHref = portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, page: String(pagination.currentPage), pageSize: String(pagination.pageSize) })
+                  return (
                   <TableRow key={debtor.id}>
                     <TableCell className="align-top">
-                      <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, { ...filters, page: String(pagination.currentPage), pageSize: String(pagination.pageSize) })}
-                        className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
+                      <Link href={detailHref} className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
                       <p className="text-xs text-slate-500 md:hidden">{debtor.type}</p>
                       {debtor.peopleNames.length > 0 && <p className="truncate text-xs text-slate-500" title={debtor.peopleNames.join(', ')}>{debtor.peopleNames.join(', ')}</p>}
                     </TableCell>
@@ -124,9 +125,10 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                     <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                     <TableCell className="hidden text-right align-top md:table-cell">{formatCurrency(debtor.overdueDebt)}</TableCell>
                     <TableCell className="hidden align-top md:table-cell"><ContactAvailabilityBadge hasContact={debtor.hasContact} /></TableCell>
-                    <TableCell className="align-top"><RecordedDecisionCell decisions={decisions} debtorId={debtor.id} /></TableCell>
+                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} detailHref={detailHref} /></TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
             {!selection.failed && (

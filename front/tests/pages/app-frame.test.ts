@@ -115,3 +115,27 @@ describe('AppShell', () => {
     expect(renderedText(element)).toContain('Sesión no verificada')
   })
 })
+
+// Entrega final. Nivel BASE: «Modo consulta» una sola vez en la línea de contexto, y el menú marca lo que
+// en esa base no está, sin esconderlo. El aviso para lectores de pantalla no puede escapar del menú
+// desplazable a 390 px (un elemento absoluto sin ancestro posicionado desbordaba la página).
+describe('nivel BASE en el marco', () => {
+  const base = () => ({ ...viewerFixture('ADMIN', { kind: 'UNDATED', today: '2026-11-11' }), moduleMissing: true as const })
+
+  it('la línea de contexto distingue la fecha de cálculo de la actualización de la cartera y dice «Modo consulta»', () => {
+    const markup = markupOf(createElement(ContextLine, { viewer: base() }))
+    expect(portfolioLabel(base())).toBe('Cálculo al 11/11/2026 · Actualización de la cartera: no registrada')
+    expect(markup.match(/data-consultation-mode/g)).toHaveLength(1)
+    expect(renderedText(createElement(ContextLine, { viewer: base() }))).toContain('Decisiones, pendientes, reportes y carga de CSV no están disponibles en esta base')
+    expect(markupOf(createElement(ContextLine, { viewer: viewerFixture() }))).not.toContain('data-consultation-mode')
+  })
+
+  it('marca Pendientes, Cargar CSV y Reportes como no disponibles; Analítica sigue disponible', () => {
+    const markup = frame(base())
+    expect(markup.match(/data-nav-unavailable/g)).toHaveLength(3)
+    expect(markup.match(/\(no disponible en esta base\)/g)).toHaveLength(3)
+    expect(menuLinks(markup).map(([href]) => href)).toContain('/analytics')
+    for (const link of markup.match(/<a [^>]*class="[^"]*inline-flex shrink-0[^"]*"/g) ?? []) expect(link).toContain('relative')
+    expect(frame()).not.toContain('data-nav-unavailable')
+  })
+})

@@ -9,8 +9,9 @@ import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { CaseHeader } from '@/components/case/case-header'
-import { CaseTotals, PriorityBreakdown, TechnicalDetail } from '@/components/case/case-summary'
+import { CaseSnapshot, CaseTotals, PriorityBreakdown, TechnicalDetail } from '@/components/case/case-summary'
 import { recordedDecisionView } from '@/components/case/recorded-decision-summary'
+import { WhatsAppDraftPanel } from '@/components/case/whatsapp-draft-panel'
 import { DebtsTable } from '@/components/debtors/debts-table'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { AppShell } from '@/components/layout/app-shell'
@@ -32,6 +33,7 @@ import { getDebtorDetailData } from '@/lib/equitas-data'
 import { loadCaseReviewScreen } from '@/lib/server/case-review-screen'
 import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
 import { loadViewerContext } from '@/lib/server/viewer-context'
+import { buildDraftContext } from '@/lib/whatsapp/draft'
 import type { DataWarning, DebtorContactItem, DebtorPersonItem } from '@/types/equitas-domain'
 
 // Pestañas de la ficha. `?tab=revision` es el alias con que otras pantallas (Pendientes, grupos de
@@ -40,6 +42,8 @@ const TAB_ALIASES: Readonly<Record<string, string>> = {
   resumen: 'summary', summary: 'summary', obligaciones: 'debts', debts: 'debts',
   personas: 'people', people: 'people', revision: 'review', decision: 'review', 'decisión': 'review', review: 'review',
 }
+
+const withTab = (href: string, tab: string) => `${href}${href.includes('?') ? '&' : '?'}tab=${tab}`
 
 function StatePage({ title, children, back }: { title: string; children: ReactNode; back: string }) {
   return (
@@ -216,6 +220,24 @@ export default async function DebtorDetailPage({
   const debtor = withMaturityMetrics(sourceDebtor)
   const decisionReadFailed = !debtor.decision && (debtor.decisionIssues?.some(issue => issue.reason === 'LECTURA_FALLIDA') ?? false)
   const defaultTab = (requestedTab && TAB_ALIASES[requestedTab]) || 'summary'
+  const recorded = recordedDecisionView(recordedDecisions, debtor.id)
+  const contactsReadFailed = readingFailed(warnings, 'debtor', 'debtor_person', 'debtor_contact')
+  const activeContacts = contacts.filter(contact => contact.isActive)
+  const mainContact = contactsReadFailed ? { state: 'unavailable' as const }
+    : activeContacts.length === 0 ? { state: 'none' as const }
+    : { state: 'found' as const, channel: activeContacts[0].channel, value: activeContacts[0].value, more: activeContacts.length - 1 }
+  const intervention = debtor.decision?.intervencion
+  // El borrador usa solo lo que la ficha ya leyó. Sin fecha de corte acreditada no se inventa una.
+  const draft = buildDraftContext({
+    debtorId: debtor.id, identifier: debtor.identifier, type: debtor.type,
+    recommendation: intervention && debtor.decision ? {
+      intervention: intervention.codigo, intensity: intervention.intensidad,
+      templateId: debtor.decision.mensaje_borrador?.plantilla_id ?? null, reviewRequired: debtor.decision.revision.requiere_revision_humana,
+    } : null,
+    recorded,
+    portfolioAsOf: debtor.decisionAsOfSource === 'MANIFIESTO_LOTE' ? debtor.decisionAsOf?.valor ?? null : null,
+    moduleMissing, people, contacts, contactsReadFailed,
+  })
 
   // ALIGN-069: cada entrega de la ficha deja un registro. Si no se puede registrar, no se entrega.
   await auditCaseOpen(debtor.id)
@@ -230,13 +252,16 @@ export default async function DebtorDetailPage({
         Volver al listado
       </Link>
 
-      <CaseHeader debtor={debtor} recorded={recordedDecisionView(recordedDecisions, debtor.id)} readFailed={decisionReadFailed} />
+      <CaseHeader debtor={debtor} recorded={recorded} readFailed={decisionReadFailed} />
 
       <div className="space-y-5">
+        <CaseSnapshot debtor={debtor} contact={mainContact} contactsHref={withTab(portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters), 'personas')} />
+        <WhatsAppDraftPanel context={draft} />
         <DataWarnings warnings={warnings} />
         {reviewNotice && <p role="status" className="text-sm text-amber-800">{reviewNotice}</p>}
 
-        <Tabs defaultValue={defaultTab}>
+        {/* La clave hace que un enlace a otra pestaña (por ejemplo «Ver personas y contactos») la abra. */}
+        <Tabs key={defaultTab} defaultValue={defaultTab}>
           <TabsList aria-label="Secciones del caso">
             <TabsTrigger value="summary">Resumen</TabsTrigger>
             <TabsTrigger value="debts">Obligaciones</TabsTrigger>

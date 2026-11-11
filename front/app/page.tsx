@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import { CircleDollarSign, FileDown, FileWarning, PhoneOff, ShieldAlert, WalletCards } from 'lucide-react'
+import { CircleDollarSign, FileDown, FileWarning, ListChecks, PhoneOff, ShieldAlert, WalletCards } from 'lucide-react'
 
 import { BarDistributionChart, RiskDonutChart, TopDebtHorizontalChart } from '@/components/dashboard/chart-cards'
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { operationalSummary } from '@/components/dashboard/operational-summary'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { AppShell } from '@/components/layout/app-shell'
 import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
@@ -12,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatNumber, formatPercentage, percentageData } from '@/lib/data-presence'
 import { getDashboardData } from '@/lib/equitas-data'
+import { loadViewerContext } from '@/lib/server/viewer-context'
 import { RECOMMENDATION_KINDS } from '@/lib/equitas-view-selectors'
 import { normalizePortfolioSearchParams, portfolioHref, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -33,7 +35,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
   const empty = await emptyPortfolioScreen(TITLE)
   if (empty) return empty
   const filters = normalizePortfolioSearchParams(await searchParams ?? {})
-  const { dashboard, warnings: readWarnings } = await getDashboardData(filters)
+  const [{ dashboard, warnings: readWarnings }, viewer] = await Promise.all([getDashboardData(filters), loadViewerContext()])
   // Que la cartera no traiga el índice anterior por persona no es un error de lectura: el tablero no lo muestra.
   const warnings = readWarnings.filter(warning => !isEmptyLegacyIndexWarning(warning))
   const metrics = dashboard.metrics ?? {}
@@ -55,36 +57,42 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
     ['Casos con deuda vencida', metrics.overdueCases], ['Puntaje de prioridad', metrics.priorityCases], ['Contacto', metrics.withoutContactCases],
   ])
 
+  const summary = operationalSummary({ total, priorityCases: dashboard.priorityCases, overdueCases: dashboard.overdueCases, withoutContactCases: dashboard.withoutContactCases, groups })
+  const coverage = dashboard.coverage ?? {}
+
   return (
     <AppShell>
-      <PageHeading title={TITLE} description="Resumen de la cartera del municipio para decidir qué casos trabajar." />
+      <PageHeading title={TITLE} description="La cartera del municipio de un vistazo, para decidir qué casos trabajar."
+        action={<Link href={portfolioHref('/priority-cases', filters)} className={buttonVariants({ variant: 'default' })}><ListChecks className="size-4" />Trabajar por grupos</Link>} />
 
       <div className="space-y-5">
         <DataWarnings warnings={warnings} />
         {isFiltered(filters) && <p className="text-sm text-slate-700">{filterLine(total)}</p>}
         {missing && <p className="text-xs text-slate-600">Datos faltantes que afectan los cálculos. {missing}.</p>}
 
-        <section aria-label="Totales de la cartera" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <MetricCard label="Total registrado" value={formatCurrency(dashboard.totalDebt)}
-            hint={`Todas las obligaciones, cualquiera sea su estado. ${dashboard.coverage?.totalDebt ?? ''}`} icon={CircleDollarSign} tone="primary" />
-          <MetricCard label="Deuda pendiente" value={formatCurrency(dashboard.pendingDebt)}
-            hint={`Total registrado sin las obligaciones pagadas. ${dashboard.coverage?.pendingDebt ?? ''}`} icon={WalletCards} tone="accent" />
-          <MetricCard label="Deuda vencida" value={formatCurrency(dashboard.overdueDebt)}
-            hint={`Deuda pendiente con vencimiento anterior a la fecha de la cartera. ${dashboard.coverage?.overdueDebt ?? ''}`} icon={FileWarning} tone="danger" />
-          <MetricCard label="Casos con deuda vencida" value={formatNumber(dashboard.overdueCases)}
-            hint={`Al menos una obligación pendiente vencida. ${dashboard.coverage?.overdueCases ?? ''}`} icon={FileWarning} tone="warning" />
-          <MetricCard label="Casos con puntaje alto" value={formatNumber(dashboard.priorityCases)}
-            hint={`${SCORE_LABEL} desde 70. ${shareText(highRiskShare)} ${dashboard.coverage?.priorityCases ?? ''}`} icon={ShieldAlert} tone="critical" />
-          <MetricCard label="Casos sin contacto" value={formatNumber(dashboard.withoutContactCases)}
-            hint={`Sin un contacto activo cargado. ${dashboard.coverage?.withoutContactCases ?? ''}`} icon={PhoneOff} tone="warning" />
+        <section aria-label="Totales de la cartera" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MetricCard label="Total registrado" value={formatCurrency(dashboard.totalDebt)} hint="Todas las obligaciones." icon={CircleDollarSign} tone="primary" />
+          <MetricCard label="Deuda pendiente" value={formatCurrency(dashboard.pendingDebt)} hint="Sin las pagadas." icon={WalletCards} tone="accent" />
+          <MetricCard label="Deuda vencida" value={formatCurrency(dashboard.overdueDebt)} hint="Pendiente y ya vencida." icon={FileWarning} tone="danger" />
+          <MetricCard label="Casos con deuda vencida" value={formatNumber(dashboard.overdueCases)} hint="Al menos una vencida." icon={FileWarning} tone="warning" />
+          <MetricCard label="Casos con puntaje alto" value={formatNumber(dashboard.priorityCases)} hint={`${SCORE_LABEL} desde 70. ${shareText(highRiskShare)}`} icon={ShieldAlert} tone="critical" />
+          <MetricCard label="Casos sin contacto" value={formatNumber(dashboard.withoutContactCases)} hint="Sin contacto activo cargado." icon={PhoneOff} tone="warning" />
         </section>
+
+        <Card className="border-[#d2dceb]" data-operational-summary>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Resumen operativo</CardTitle></CardHeader>
+          <CardContent>
+            <ul className="grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-3">{summary.map(line => <li key={line}>{line}</li>)}</ul>
+          </CardContent>
+        </Card>
 
         <details className="rounded-lg border border-[#d2dceb] bg-white p-4 text-sm text-slate-700" data-definitions>
           <summary className="cursor-pointer font-semibold text-[#163a63]">¿Qué significan estas cifras?</summary>
           <dl className="mt-3 space-y-2">
-            <div><dt className="font-medium">Total registrado</dt><dd>El importe de todas las obligaciones de la cartera, cualquiera sea su estado.</dd></div>
-            <div><dt className="font-medium">Deuda pendiente</dt><dd>El total registrado sin las obligaciones pagadas.</dd></div>
-            <div><dt className="font-medium">Deuda vencida</dt><dd>Las obligaciones pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera.</dd></div>
+            <div><dt className="font-medium">Total registrado</dt><dd>El importe de todas las obligaciones de la cartera, cualquiera sea su estado. {coverage.totalDebt}</dd></div>
+            <div><dt className="font-medium">Deuda pendiente</dt><dd>El total registrado sin las obligaciones pagadas. {coverage.pendingDebt}</dd></div>
+            <div><dt className="font-medium">Deuda vencida</dt><dd>Las obligaciones pendientes con importe mayor que cero y vencimiento anterior a la fecha de la cartera. {coverage.overdueDebt}</dd></div>
+            <div><dt className="font-medium">Casos con deuda vencida, con puntaje alto y sin contacto</dt><dd>{[coverage.overdueCases, coverage.priorityCases, coverage.withoutContactCases].filter(Boolean).join(' ') || 'Cuentan casos, no personas.'}</dd></div>
             <div><dt className="font-medium">{SCORE_LABEL}</dt><dd>{SCORE_NOTE} {SCORE_RECIPE}</dd></div>
             <div><dt className="font-medium">Caso</dt><dd>Un objeto tributario (un inmueble, un rodado, una conexión), no una persona.</dd></div>
           </dl>
@@ -185,9 +193,12 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
         </section>
         {withoutScore > 0 && <p className="text-xs text-slate-600">{casesLabel(withoutScore)} sin {SCORE_LABEL.toLowerCase()} calculado: no entran en el gráfico de bandas.</p>}
 
-        <p>
-          <Link href="/reports" className={buttonVariants({ variant: 'outline', size: 'sm' })}><FileDown className="size-3.5" />Ver reportes</Link>
-        </p>
+        {/* Sin el módulo los reportes no existen en esta base: no se ofrece un enlace que no lleva a nada. */}
+        {viewer?.moduleMissing !== true && (
+          <p>
+            <Link href="/reports" className={buttonVariants({ variant: 'outline', size: 'sm' })}><FileDown className="size-3.5" />Ver reportes</Link>
+          </p>
+        )}
       </div>
     </AppShell>
   )
