@@ -224,7 +224,7 @@ describe('ALIGN-019: contexto, permisos y aislamiento en cada lectura', () => {
       expect(result.rows.map(row => row.id), table).toEqual([1, 3])
       expect(result.rows.every(row => Object.keys(row).every(key => !key.startsWith('__')))).toBe(true)
       const calls = requests.filter(request => request.table === table)
-      expect(calls).toHaveLength(3)
+      expect(calls).toHaveLength(table === 'debt' ? 2 : 3)
       for (const call of calls) {
         expect(Object.keys(call.filters), table).toEqual(filters)
         if (table !== 'debtor') expect(call.select).toContain('!inner(')

@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { E06_READ_ONLY_COMPAT_ROLE, resolveTenantAccessWithRoleName, TENANT_COOKIE, type AuthValidationErrorCode, type ResolvedRoleName, type TenantAccessContext } from '@/lib/auth/tenant-access'
 import { isAuthServiceUnavailable } from '@/lib/auth/session-routing'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { debtorReadScope, isDebtorScoped, tenantReadScope, type PortfolioTable } from '@/lib/server/tenant-read-scope'
 
@@ -84,6 +85,7 @@ export async function requireTenantAccess(options: { permission?: DalPermission;
 // de consulta conservan DataWarning; una denegacion nunca se convierte en filas [].
 export async function createTenantReader() {
   const { supabase, context } = await requireTenantAccess()
+  let level: ReturnType<typeof loadDatabaseLevel> | undefined
   return {
     context,
     // Metadatos mínimos del corte, con la misma sesión y municipio que la cartera.
@@ -101,7 +103,17 @@ export async function createTenantReader() {
       const scope = debtorId !== undefined && isDebtorScoped(table)
         ? debtorReadScope(table, context.tenantId, debtorId) : tenantReadScope(table, context.tenantId)
       if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'Esa lectura no está habilitada.')
-      return loadAllTableRows(table, supabase, scope)
+      const result = await loadAllTableRows(table, supabase, { ...scope, parallel: table === 'debt' })
+      if (!result.warning && result.rows.length === 0) {
+        // Con BASE no hay una fuente que certifique ausencia: RLS también devuelve [].
+        // No convertir una tabla oculta por políticas en cero deuda o «sin contacto».
+        level ??= loadDatabaseLevel()
+        if (await level === 'BASE') return { rows: [], warning: {
+          table, code: 'BASE_VISIBILITY_UNKNOWN', needsSelectPolicy: false,
+          message: 'No se ven filas en esta lectura. No se puede distinguir ausencia de datos de una limitación de permisos.',
+        } }
+      }
+      return result
     },
   }
 }

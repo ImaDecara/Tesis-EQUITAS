@@ -430,7 +430,7 @@ describe('ALIGN-020: recordCaseDecision', () => {
     expect(healthy.rpc).not.toHaveBeenCalled()
     const { rpc } = session({ fail: request => request.table === table ? { message: 'detalle interno de la base', code: '42501' } : null })
     const result = await recordCaseDecision(input)
-    expect(result).toMatchObject({ ok: false, code: 'SUGGESTION_UNAVAILABLE' })
+    expect(result).toMatchObject({ ok: false, code: ['import_batch', 'case_review'].includes(table) ? 'WRITE_UNAVAILABLE' : 'SUGGESTION_UNAVAILABLE' })
     expect(JSON.stringify(result)).not.toContain('detalle interno')
     expect(rpc).not.toHaveBeenCalled()
   })
@@ -658,7 +658,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     await expect(approveCaseDecision(approveInput('123456'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     expect(rpc).not.toHaveBeenCalled()
-    expect(requests.filter(request => request.table === 'case_review').every(request => request.filters.id === undefined && request.filters.tenant === `eq.${TENANT}`)).toBe(true)
+    expect(requests.filter(request => request.table === 'case_review' && request.limit !== 0).every(request => request.filters.id === undefined && request.filters.tenant === `eq.${TENANT}`)).toBe(true)
     expect(requests.every(request => !Object.values(request.filters).includes('eq.123456') && !Object.values(request.filters).includes('eq.700'))).toBe(true)
   })
 
@@ -668,7 +668,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const { requests, rpc } = session({ role: 'ADMIN', userId: APPROVER, tables, serverMaxRows: 1 })
     await expect(approveCaseDecision(approveInput(reviewId))).resolves.toMatchObject({ ok: true, caseReviewId: reviewId })
     expect(rpc).toHaveBeenCalledOnce()
-    const selection = requests.filter(request => request.table === 'case_review' && request.filters.debtor === undefined)
+    const selection = requests.filter(request => request.table === 'case_review' && request.limit !== 0 && request.filters.debtor === undefined)
     expect(selection.map(request => request.after)).toEqual([null, '50', reviewId])
     expect(selection.every(request => request.filters.id === undefined && request.filters.tenant === `eq.${TENANT}`)).toBe(true)
   })
@@ -687,7 +687,7 @@ describe('ALIGN-020: approveCaseDecision', () => {
     const { requests, rpc } = session({ role: 'ADMIN', userId: APPROVER, tables, enforceFilters: false })
     await expect(approveCaseDecision(approveInput('700'))).resolves.toMatchObject({ ok: false, code: 'REVIEW_NOT_IN_TENANT' })
     expect(rpc).not.toHaveBeenCalled()
-    expect(requests.some(request => request.table === 'case_review_approval' || request.table === 'debtor')).toBe(false)
+    expect(requests.some(request => request.limit !== 0 && (request.table === 'case_review_approval' || request.table === 'debtor'))).toBe(false)
   })
 
   it('una decision menor a 3 no se aprueba', async () => {

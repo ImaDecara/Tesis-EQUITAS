@@ -5,7 +5,7 @@ import { ReportFilterError, ReportReadError, ReportSelectionError } from '@/lib/
 import { AccessAuditError, recordAccessAudit } from '@/lib/server/audit'
 import { MODULE_MISSING_EXPLANATION } from '@/lib/domain/database-level-text'
 import { DataAccessError, requireTenantAccess, type DalPermission } from '@/lib/server/dal'
-import { loadDatabaseLevel } from '@/lib/server/database-level'
+import { DatabaseLevelError, loadDatabaseLevel } from '@/lib/server/database-level'
 
 // ALIGN-028. Cada Route Handler de reporte pasa por aca: autoriza antes de leer o validar
 // filtros, y el CSV se arma entero antes de responder, asi una falla nunca deja un archivo cortado.
@@ -35,6 +35,7 @@ export async function csvReportResponse(request: Request, fileName: string, perm
       headers,
     })
   } catch (error) {
+    if (error instanceof DatabaseLevelError) return failure(503, { error: 'BASE_NO_VERIFICADA' })
     if (error instanceof DataAccessError) return failure(error.status, { error: error.code })
     if (error instanceof ReportFilterError) return failure(400, { error: 'FILTRO_INVALIDO', filtro: error.param })
     // Noche 7 (H16): la pantalla dice «No disponible» para esta seleccion; no se entrega un archivo vacio.

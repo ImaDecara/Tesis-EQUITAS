@@ -78,8 +78,8 @@ describe('loadViewerContext', () => {
 
   // Misma selección que `resolvePortfolioCutoff`: lo que el tablero toma por cartera vigente.
   it.each([
-    ['sin ninguna carga', [], 'EMPTY'],
-    ['solo una carga descartada', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'DESCARTADO', supersedes: null }], 'EMPTY'],
+    ['sin ninguna carga', [], 'UNAVAILABLE'],
+    ['solo una carga descartada', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'DESCARTADO', supersedes: null }], 'UNAVAILABLE'],
     ['una validación sin publicación atómica', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'VALIDADO', supersedes: null }], 'UNAVAILABLE'],
     ['un estado desconocido', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'INVENTADO', supersedes: null }], 'UNAVAILABLE'],
     ['una publicación con fecha inválida', [
@@ -96,7 +96,7 @@ describe('loadViewerContext', () => {
     expect(viewer?.portfolio.kind).toBe(kind)
     const cutoff = resolvePortfolioCutoff(batches.map(row => ({ ...row, counts: { publicacion_atomica: null } })), null)
     if (kind === 'LOADED') expect(viewer?.portfolio).toEqual({ kind, asOf: cutoff.batch?.as_of })
-    else expect(Boolean(cutoff.warning)).toBe(kind === 'UNAVAILABLE')
+    else expect(kind).toBe('UNAVAILABLE')
   })
 
   it('una lectura fallida de las cargas es «no disponible», nunca «sin cartera»', async () => {
@@ -203,7 +203,7 @@ describe('loadRecordedDecisions', () => {
     if (!result.ok) throw new Error('lectura fallida')
     expect([...result.byDebtor.keys()]).toEqual(['99'])
     for (const table of ['case_review', 'case_review_approval', 'import_batch']) {
-      expect(requests.filter(request => request.table === table).every(request => request.filters.tenant === `eq.${TENANT}`), table).toBe(true)
+      expect(requests.filter(request => request.table === table && request.limit !== 0).every(request => request.filters.tenant === `eq.${TENANT}`), table).toBe(true)
     }
     expect(requests.find(request => request.table === 'case_review')?.select).not.toMatch(/reason_text|\*/)
   })
@@ -232,7 +232,6 @@ describe('loadRecordedDecisions', () => {
   it('si falla la lectura de las cargas no hay cartera vigente: todas quedan sobre datos anteriores', async () => {
     session('ADMIN', { case_review: [review(1)] }, { fail: request => request.table === 'import_batch' ? { message: 'caída', code: '57014' } : null })
     const result = await loadRecordedDecisions()
-    expect(result).toMatchObject({ ok: true, current: { asOf: null } })
-    expect(result.ok && result.byDebtor.get('99')?.stale).toBe(true)
+    expect(result).toEqual({ ok: false, reason: 'UNAVAILABLE' })
   })
 })

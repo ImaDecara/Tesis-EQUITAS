@@ -215,7 +215,7 @@ describe('ALIGN-028: aislamiento entre municipios', () => {
     const { file } = await download('decisions')
     expect(details(file.rows).map(row => row.decision_id)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
     for (const table of ['case_review', 'case_review_approval']) {
-      const calls = requests.filter(item => item.table === table)
+      const calls = requests.filter(item => item.table === table && item.limit !== 0)
       expect(calls.length).toBeGreaterThan(1)
       expect(calls.every(item => item.filters.tenant === 'eq.7')).toBe(true)
     }
@@ -237,12 +237,13 @@ describe('ALIGN-028: una lectura fallida no sale como 0 ni como archivo vacio', 
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(response.headers.get('content-disposition')).toBeNull()
     const body = await response.text()
-    expect(JSON.parse(body)).toEqual({ error: 'LECTURA_FALLIDA', tablas: [table] })
+    expect(JSON.parse(body)).toEqual(['case_review', 'case_review_approval', 'import_batch'].includes(table)
+      ? { error: 'BASE_NO_VERIFICADA' } : { error: 'LECTURA_FALLIDA', tablas: [table] })
     expect(body).not.toContain('detalle interno')
   })
 
   it('una falla en la segunda pagina tampoco deja un archivo parcial', async () => {
-    client({}, { serverMaxRows: 2, fail: item => item.table === 'debt' && item.after !== null ? { message: 'corte' } : null })
+    client({}, { serverMaxRows: 2, fail: item => item.table === 'debt' && (item.after !== null || item.offset > 0) ? { message: 'corte' } : null })
     expect((await getQueue(request('queue'))).status).toBe(503)
   })
 
@@ -745,12 +746,13 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     expect(totalRow(decisions.file.rows)).toMatchObject({ decisiones: '0', vigentes: '0', fecha_corte: 'NO_APLICA' })
   })
 
-  it('sin objetos: 0 derivado y metadatos, sin archivo mudo', async () => {
+  it('sin objetos visibles: no afirma cero ni entrega un reporte que podría estar limitado por RLS', async () => {
     client({ debtor: [], debt: [], debtor_person: [], person: [], debtor_contact: [] })
-    const queue = await download('queue')
-    expect(totalRow(queue.file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', deuda_pendiente_ars: '0', fecha_corte: PORTFOLIO_AS_OF })
-    const quality = await download('data-quality')
-    expect(aggregated(quality.file.rows, 'objetos_leidos').valor).toBe('0')
+    for (const name of ['queue', 'data-quality']) {
+      const response = await handler(name)(request(name))
+      expect(response.status).toBe(503)
+      expect(response.headers.get('content-disposition')).toBeNull()
+    }
   })
 
   it('decisiones: sin intervencion decidida es NO_APLICA, nunca intensidad 0; aprobacion por estado', async () => {

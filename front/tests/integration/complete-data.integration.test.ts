@@ -96,7 +96,8 @@ describe('R-DAT-01: limites, fallos y relaciones de la lectura completa', () => 
 
       expect(result.ids).toEqual(rows.map((row) => String(row.id)))
       expect(new Set(result.ids).size).toBe(count)
-      expect(result.warnings).toEqual([])
+      if (route === 'objetos' && count === 0) expect(result.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
+      else expect(result.warnings).toEqual([])
       const calls = requests.filter((request) => request.table === (route === 'objetos' ? 'debtor' : 'person'))
       expect(calls).toHaveLength(Math.ceil(count / 1000) + 1)
       expect(calls.every((call) => call.order === 'id.asc')).toBe(true)
@@ -120,7 +121,7 @@ describe('R-DAT-01: limites, fallos y relaciones de la lectura completa', () => 
     const { client, requests } = createPaginatedSupabase({
       debtor: [{ id: 1, external_id: 'OBJ-E03' }],
       debt: primaryRows(1200).map((row) => ({ ...row, debtor: 1, original_amount: 2 })),
-    }, { fail: (request) => request.table === 'debt' && request.after !== null
+    }, { fail: (request) => request.table === 'debt' && (request.after !== null || request.offset > 0)
       ? { message: 'permission denied for debt', code: '42501' } : null })
     createServerSupabaseClientMock.mockResolvedValue(client)
 

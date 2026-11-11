@@ -48,10 +48,10 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(result.debtorTypes).toEqual([])
     expect(result.warnings).toEqual([])
     // Cuatro de autorización, ocho tablas, dos páginas terminales y corte antes/después.
-    expect(client.from).toHaveBeenCalledTimes(16)
+    expect(client.from).toHaveBeenCalledTimes(19)
   })
 
-  it('acepta respuestas vacias como listados validos sin alerta', async () => {
+  it('una lectura sin filas no demuestra ausencia de cartera bajo RLS', async () => {
     const client = buildSupabaseClient({})
     createServerSupabaseClientMock.mockResolvedValue(client)
 
@@ -59,7 +59,7 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
 
     expect(result.debtors).toEqual([])
     expect(result.debts).toEqual([])
-    expect(result.warnings).toEqual([])
+    expect(result.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
   })
 
   it('convierte un error de conexion informado por Supabase en una alerta', async () => {

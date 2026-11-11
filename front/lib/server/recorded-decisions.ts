@@ -85,9 +85,10 @@ async function readRecordedDecisions(): Promise<RecordedDecisions> {
       loadAllTableRows('import_batch', supabase, { select: BATCH_COLUMNS, filters }),
     ])
     if (await levelAfter(reviews.warning) === 'BASE') return { ok: false, reason: 'NO_MODULE' }
-    if (reviews.warning || approvals.warning) return { ok: false, reason: 'UNAVAILABLE' }
+    if (reviews.warning || approvals.warning || batches.warning) return { ok: false, reason: 'UNAVAILABLE' }
     const cutoff = resolvePortfolioCutoff(
       batches.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })), batches.warning)
+    if (cutoff.warning) return { ok: false, reason: 'UNAVAILABLE' }
     const current = { asOf: cutoff.warning ? null : cutoff.batch?.as_of ?? null, rulesVersion: RULES_VERSION }
     return { ok: true, current, byDebtor: buildRecordedDecisions(reviews.rows, approvals.rows, context.appUserId, current) }
   } catch (error) {
