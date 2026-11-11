@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
 import { formatNumber } from '@/lib/data-presence'
 import { cn, formatCurrency } from '@/lib/utils'
 
@@ -39,9 +39,12 @@ export function Section({ title, children, id, className }: { title: string; chi
 export function SimpleTable({ headers, rows, numeric = [], caption }: {
   headers: readonly string[]; rows: readonly (readonly ReactNode[])[]; numeric?: readonly number[]; caption?: string
 }) {
+  // Hasta tres columnas entran a 390 px; las más anchas se desplazan dentro de su marco y lo avisan.
+  const wide = headers.length >= 4
   return (
     <div className="overflow-x-auto">
-      <Table className="min-w-[32rem]">
+      {wide && <TableScrollHint />}
+      <Table className={wide ? 'min-w-[32rem]' : undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <TableHeader>
           <TableRow>{headers.map((header, index) => <TableHead key={header} className={numeric.includes(index) ? 'text-right' : undefined}>{header}</TableHead>)}</TableRow>

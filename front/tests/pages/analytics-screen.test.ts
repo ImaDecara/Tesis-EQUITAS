@@ -194,6 +194,18 @@ describe('experimento supervisado', () => {
   })
 })
 
+describe('ancho angosto (390 px)', () => {
+  it('tablas de hasta tres columnas no fijan un ancho mínimo; las más anchas avisan que se desplazan', () => {
+    const { markup } = clustering(clusteringFixture())
+    const exclusions = markup.match(/<div class="overflow-x-auto">(?:(?!<\/table>)[\s\S])*Casos excluidos: motivo[\s\S]*?<\/table>/)?.[0] ?? ''
+    expect(exclusions).not.toContain('min-w-')
+    expect(exclusions).not.toContain('data-table-scroll-hint')
+    const candidates = markup.match(/<div class="overflow-x-auto">(?:(?!<\/table>)[\s\S])*Grupos \(k\)[\s\S]*?<\/table>/)?.[0] ?? ''
+    expect(candidates).toContain('min-w-[32rem]')
+    expect(candidates).toContain('data-table-scroll-hint')
+  })
+})
+
 describe('formatos', () => {
   it('decimales, proporciones y unidades sin inventar valores', () => {
     expect(decimal(null)).toBe('No disponible')
