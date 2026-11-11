@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import shlex
 import signal
 import socket
@@ -17,6 +16,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONT = ROOT / 'front'

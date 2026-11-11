@@ -1,9 +1,9 @@
 """Pruebas sin red ni credenciales: las guardas no arrancan ni detienen procesos ajenos."""
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('original', Path(__file__).with_name('equitas_original.py'))
