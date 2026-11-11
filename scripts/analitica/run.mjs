@@ -13,6 +13,7 @@ const args = process.argv.slice(2)
 const argument = name => args[args.indexOf(name) + 1]
 const benchmark = args.includes('--benchmark')
 let loader
+let source = 'SYNTHETIC_SCALE'
 const python = (module, input) => {
   const child = spawnSync(join(root, 'back/.venv/bin/python'), ['-m', module], { cwd: root, env: { ...process.env, PYTHONPATH: join(root, 'back'), OMP_NUM_THREADS: '1', OPENBLAS_NUM_THREADS: '1' }, input, encoding: 'utf8', maxBuffer: 80 * 1024 * 1024 })
   if (child.status !== 0) throw new Error('Falló la referencia Python')
@@ -30,6 +31,7 @@ try {
     const key = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.PUBLISHABLE_KEY ?? env.ANON_KEY
     if (!key || (!key.startsWith('sb_publishable_') && JSON.parse(Buffer.from(key.split('.')[1], 'base64url')).role !== 'anon')) throw new Error('Clave pública requerida')
     const transport = readOnlyFetch(origin)
+    source = origin === 'http://127.0.0.1:55321' ? 'SYNTHETIC_LOCAL_DEMO' : 'PRIVATE_READ_ONLY'
     const accounts = JSON.parse(await readFile(resolve(argument('--account')), 'utf8'))
     const account = accounts.email ? accounts : accounts[argument('--account-key')]
     if (!account?.email || !account?.password) throw new Error('Cuenta no disponible')
@@ -51,25 +53,43 @@ try {
   const { mapDebtorObjectsFromRawData } = await loader.ssrLoadModule('/lib/mappers/debtor-object-mapper.ts')
   const { prepareCases } = await loader.ssrLoadModule('/lib/ml/features.ts')
   const { analyzeMatrix } = await loader.ssrLoadModule('/lib/ml/engine.ts')
+  const readStart = performance.now()
   const raw = benchmark ? python('analytics.benchmark') : await (await loader.ssrLoadModule('/lib/data/raw-debtor-loader.ts')).loadRawDebtorData()
   if (raw.warnings.length) throw new Error('Lectura incompleta')
+  const readMilliseconds = performance.now() - readStart
+  const mapStart = performance.now()
   const mapped = mapDebtorObjectsFromRawData(raw)
   if (mapped.debtors.length !== raw.debtors.length) throw new Error('Mapeo incompleto')
   const { entries, exclusions } = prepareCases(mapped.debtors)
-  const rows = entries.map(entry => entry.values)
+  let rows = entries.map(entry => entry.values)
+  let casesTotal = mapped.debtors.length
+  if (benchmark && args.includes('--benchmark-cases')) {
+    const count = Number(argument('--benchmark-cases'))
+    if (!Number.isSafeInteger(count) || count < 30 || count > 50000) throw new Error('Tamaño sintético inválido')
+    const { random } = await loader.ssrLoadModule('/lib/ml/numerics.ts')
+    const next = random(20261111)
+    rows = Array.from({ length: count }, (_, i) => {
+      const row = rows[i % rows.length]
+      return [row[0] * (.95 + next() * .1), Math.max(1, Math.round(row[1] * (.9 + next() * .2))), row[2]]
+    }).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2])
+    exclusions.forEach(exclusion => { exclusion.count = 0 })
+    casesTotal = count
+    source = 'SYNTHETIC_LARGE_TABLE'
+  }
+  const mappingMilliseconds = performance.now() - mapStart
   const start = performance.now()
   const { result, labels } = analyzeMatrix(rows)
   const milliseconds = performance.now() - start
   const comparison = python('analytics.compare', JSON.stringify({ rows, ts: { status: result.status, selectedK: result.selectedK, silhouette: result.separation.silhouette, stability: result.stability.medianAdjustedRand, labels, candidates: result.candidates } }))
-  const report = { generatedAt: new Date().toISOString(), source: benchmark ? 'SYNTHETIC_SCALE' : 'PRIVATE_READ_ONLY', casesTotal: mapped.debtors.length, casesIncluded: rows.length, exclusions,
-    status: result.status, selectedK: result.selectedK, silhouette: result.separation.silhouette, stability: result.stability.medianAdjustedRand, sizes: result.clusters.map(c => c.size), milliseconds, comparison }
+  const report = { generatedAt: new Date().toISOString(), source, casesTotal, casesIncluded: rows.length, exclusions,
+    status: result.status, selectedK: result.selectedK, silhouette: result.separation.silhouette, stability: result.stability.medianAdjustedRand, sizes: result.clusters.map(c => c.size), milliseconds, readMilliseconds, mappingMilliseconds, comparison }
   if (benchmark) console.log(JSON.stringify(report, null, 2))
   else {
     const folder = join(homedir(), '.equitas-original/analitica')
     await mkdir(folder, { recursive: true, mode: 0o700 }); await chmod(folder, 0o700)
     const file = join(folder, `comparacion-${Date.now()}.json`)
     await writeFile(file, JSON.stringify(report, null, 2) + '\n', { mode: 0o600, flag: 'wx' })
-    console.log('Comparación terminada. Reporte privado guardado en ~/.equitas-original/analitica/.')
+    console.log(`Comparación terminada. Reporte privado: ${file}`)
   }
   if (!comparison.parity) process.exitCode = 2
 } catch {
