@@ -81,11 +81,15 @@ export function ForbiddenState({ title, children }: { title: string; children: R
   return <StateCard state="forbidden" tone="warning" icon={Lock} title={title}>{children}</StateCard>
 }
 
-export function PageHeading({ title, description }: { title: string; description?: string }) {
+/** Título de la pantalla, una frase de qué es y, si corresponde, su única acción principal. */
+export function PageHeading({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <header className="mb-5 space-y-1">
-      <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">{title}</h1>
-      {description && <p className="max-w-3xl text-sm text-slate-600">{description}</p>}
+    <header className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">{title}</h1>
+        {description && <p className="max-w-3xl text-sm text-slate-600">{description}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
     </header>
   )
 }

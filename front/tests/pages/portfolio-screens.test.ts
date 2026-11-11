@@ -267,3 +267,39 @@ describe('textos y componentes compartidos', () => {
     expect(renderedText(PaginationSummary({ ...props, totalItems: 0 }))).toContain('0 casos.')
   })
 })
+
+// Entrega final. Nivel BASE (la base no tiene el módulo de decisiones): se dice una sola vez, en la línea
+// de contexto, y ninguna pantalla ofrece lo que en esa base no existe.
+describe('nivel BASE en el tablero y los listados', () => {
+  const NO_MODULE = { ok: false as const, reason: 'NO_MODULE' as const }
+  const baseViewer = () => ({ ...viewerFixture('ADMIN', { kind: 'UNDATED', today: '2026-11-11' }), moduleMissing: true as const,
+    capabilities: { canImport: false, canRecordDecision: false, canApprove: false, canSeeSupervision: false, canSeeAudit: false } })
+
+  it('tablero: acción principal, resumen operativo con cifras de la selección y sin enlace a Reportes', async () => {
+    configure()
+    session.viewer.mockResolvedValue(baseViewer())
+    const markup = markupOf(await HomePage())
+    const text = renderedText(await HomePage())
+    expect(markup).toMatch(/href="\/priority-cases"[^>]*>.*Trabajar por grupos/)
+    expect(markup).toContain('data-operational-summary')
+    expect(text).toMatch(/Resumen operativo \d+ casos? con deuda vencida \(\d+% de la cartera\)/)
+    expect(markup).not.toContain('href="/reports"')
+    expect(text).not.toMatch(/módulo de decisiones|No disponible en esta base/)
+  })
+
+  it.each([
+    ['Casos', () => DebtorsPage({ searchParams: Promise.resolve({}) })],
+    ['Casos sin contacto', () => NoContactPage({ searchParams: Promise.resolve({}) })],
+    ['Grupos de trabajo', () => PriorityCasesPage({ searchParams: Promise.resolve({ queue: 'MEJORAR_DATOS' }) })],
+  ] as const)('%s: la columna de decisiones se reemplaza por «Ver detalle», sin aviso repetido', async (_name, render) => {
+    configure()
+    session.viewer.mockResolvedValue(baseViewer())
+    session.decisions.mockResolvedValue(NO_MODULE)
+    const markup = markupOf(await render())
+    expect(markup).toContain('>Detalle</th>')
+    expect(markup).not.toContain('Decisión registrada</th>')
+    expect(markup).toMatch(/<a [^>]*href="\/debtors\/[^"]+"[^>]*data-case-detail[^>]*>Ver detalle<\/a>|<a [^>]*data-case-detail[^>]*href="\/debtors\/[^"]+"[^>]*>Ver detalle<\/a>/)
+    expect(markup).not.toContain('tab=revision')
+    expect(markup).not.toContain('data-decisions-notice')
+  })
+})
