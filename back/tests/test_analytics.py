@@ -10,9 +10,39 @@ from analytics import clustering as c
 from analytics import supervised as s
 
 
+def assert_same(actual, expected, where='resultado'):
+    """Estructura, textos, enteros y booleanos idénticos; los decimales, con tolerancia.
+
+    Los archivos versionados se generaron en una plataforma y el CI corre en otra: las sumas y
+    productos de BLAS cambian el último dígito (se observó en la 16.ª cifra). Eso no es una
+    diferencia del resultado. La tolerancia es mil millones de veces más fina que lo que se muestra.
+    """
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict) and actual.keys() == expected.keys(), where
+        for key in expected:
+            assert_same(actual[key], expected[key], f'{where}.{key}')
+    elif isinstance(expected, list):
+        assert isinstance(actual, list) and len(actual) == len(expected), where
+        for index, item in enumerate(expected):
+            assert_same(actual[index], item, f'{where}[{index}]')
+    elif isinstance(expected, float) or isinstance(actual, float):
+        assert not isinstance(actual, bool) and not isinstance(expected, bool), where
+        assert actual == pytest.approx(expected, rel=1e-9, abs=1e-12), where
+    else:
+        assert type(actual) is type(expected) and actual == expected, where
+
+
+def test_same_tolerates_only_the_last_digits():
+    assert_same({'a': [1, 0.7438469715812953, 'x', True]}, {'a': [1, 0.743846971581294, 'x', True]})
+    for actual, expected in [({'a': 0.7438}, {'a': 0.7439}), ({'a': 3}, {'a': 4}), ({'a': 'x'}, {'a': 'y'}),
+                             ({'a': True}, {'a': 1}), ({'a': [1]}, {'a': [1, 2]}), ({'a': 1}, {'b': 1})]:
+        with pytest.raises(AssertionError):
+            assert_same(actual, expected)
+
+
 def test_clustering_fixture_regenerates():
     stored = json.loads((c.ROOT / 'front/tests/fixtures/ml/parity.v1.json').read_text())
-    assert c.generate_fixture() == stored
+    assert_same(c.generate_fixture(), stored)
     assert adjusted_rand_score(stored['expected']['labels'], c.analyze(stored['rows'])['labels']) == 1
 
 
@@ -47,7 +77,9 @@ def test_supervised_artifact_regenerates_and_is_reproducible():
         # La versión de parche del intérprete es dato del entorno de la corrida, no del resultado:
         # numpy, scipy y scikit-learn (fijadas) sí tienen que coincidir.
         del artifact['libraries']['python']
-    assert result == stored == repeated
+    # Dos corridas en la misma máquina son idénticas; contra el archivo versionado, con tolerancia.
+    assert result == repeated
+    assert_same(result, stored)
     assert result['controls'][0]['passed']
     assert not result['realHistory']['suitable']
     assert result['label'] == s.LABEL

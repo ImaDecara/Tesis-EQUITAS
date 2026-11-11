@@ -95,6 +95,8 @@ node scripts/analitica/run.mjs --env ~/.equitas-original/app.env --account ~/.eq
 
 El `.env` contiene `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; el JSON privado, `{"email":"…","password":"…"}`. Si la cuenta tiene varios municipios, agregar `--tenant ID` (el resolvedor vuelve a verificar su membresía). No usar claves secretas ni `service_role`. No subir reportes reales a Git, aunque solo tengan agregados.
 
+Los dos archivos versionados (la tabla de paridad y las métricas del experimento) se generaron en macOS arm64 y el CI los regenera en Linux x86-64. Dos corridas en una misma máquina dan resultados idénticos; entre plataformas cambia el último dígito de algunas sumas (se observó en la 16.ª cifra), así que las pruebas comparan estructura, textos, enteros y booleanos de forma exacta y los decimales con una tolerancia relativa de 1e-9.
+
 Las pruebas de analítica entran en las suites normales de CI: paridad, determinismo, límites, estados, caché, acceso revocado, lectura incompleta, variables prohibidas, identidad de prioridades/recomendaciones/intensidades/mensajes y de estados de aprobación/pendientes/huellas con y sin analítica. También verifican que ningún módulo de dominio, mapeadores, servicios o servidor de decisiones importe ML. Python regenera el fixture y el artefacto (excepto `generatedAt`), comprueba embargo, disponibilidad de etiquetas, límites temporales y preprocesamiento sin evaluación.
 
 Cambios mínimos fuera de la propiedad de analítica, sin bajar umbrales ni quitar controles:

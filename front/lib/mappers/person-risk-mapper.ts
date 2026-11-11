@@ -211,6 +211,19 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     }
   }
 
+  // La suma de un objeto es la misma para todas las personas vinculadas a él: se calcula una vez por objeto.
+  // Sin esto, un objeto con miles de personas vinculadas repetía la suma completa por cada una.
+  const exposureFailed = readingFailed(raw.warnings, 'debt', 'debtor', 'debtor_person', 'person')
+  const exposureByDebtor = new Map<string, ReturnType<typeof sumMoney>>()
+  const exposureOfDebtor = (debtorId: string) => {
+    let amount = exposureByDebtor.get(debtorId)
+    if (!amount) {
+      amount = sumMoney(debtAmountsByDebtor.get(debtorId) ?? [], exposureFailed)
+      exposureByDebtor.set(debtorId, amount)
+    }
+    return amount
+  }
+
   const people: PersonListItem[] = []
   for (const personRow of raw.people) {
     const personId = stringifyUnknownValue(selectValueFromRow(personRow, ['id', 'person_id']))
@@ -235,9 +248,7 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     const debtorIdentifiers = debtorIds.map(
       (debtorId) => debtorIdentifierById.get(debtorId) ?? `OBJ-${debtorId}`
     )
-    const exposureFailed = readingFailed(raw.warnings, 'debt', 'debtor', 'debtor_person', 'person')
-    const debtExposure = debtorIds.map(debtorId => ({ debtorId,
-      amount: sumMoney(debtAmountsByDebtor.get(debtorId) ?? [], exposureFailed) }))
+    const debtExposure = debtorIds.map(debtorId => ({ debtorId, amount: exposureOfDebtor(debtorId) }))
     const exposureMetric = sumMoney(debtExposure.map(item => item.amount), exposureFailed)
     const totalDebtAssociated = exposureMetric.value
 
