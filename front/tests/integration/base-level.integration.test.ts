@@ -9,9 +9,9 @@ vi.mock('@/lib/supabase-config', () => ({ hasSupabaseCredentials: true }))
 vi.mock('next/headers', () => ({ cookies: cookieStore }))
 vi.mock('@/lib/server/case-review-writer', () => ({ createCaseReviewWriter: createWriter }))
 
-import { portfolioLabel } from '@/components/layout/app-frame'
+import { ContextLine, portfolioLabel } from '@/components/layout/app-frame'
 import { RecordedDecisionSummary, recordedDecisionView } from '@/components/case/recorded-decision-summary'
-import { DecisionsNotice, decisionView } from '@/components/portfolio/case-cells'
+import { decisionsAvailable, DecisionsNotice, decisionView } from '@/components/portfolio/case-cells'
 import { ModuleUnavailableCard } from '@/components/portfolio/portfolio-state'
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { MODULE_MISSING_EXPLANATION, moduleAvailable, undatedPortfolioText } from '@/lib/domain/database-level-text'
@@ -26,6 +26,7 @@ import { getDebtorDetailDataFromService } from '@/lib/services/debtor-data-servi
 import { createPaginatedSupabase } from '@/tests/fixtures/paginated-supabase'
 import { portfolioTables, reviewTables } from '@/tests/fixtures/reports-portfolio'
 import type { RawRow } from '@/types/equitas-domain'
+import { viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 // Noche 7 (encargo 10.2 y 10.6). Sesión contra una base donde faltan las tablas que se indiquen: para esas
 // la Data API responde lo mismo que la original (404 PGRST205); el resto lo sirve la cartera sintética.
@@ -87,7 +88,8 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(viewer?.capabilities).toEqual({ canImport: false, canRecordDecision: false, canApprove: false, canSeeSupervision: false, canSeeAudit: false })
     expect(viewer?.moduleMissing).toBe(true)
     expect(moduleAvailable(viewer!)).toBe(false)
-    expect(portfolioLabel(viewer!)).toMatch(/^Sin fecha de cartera registrada: se calcula con la fecha de hoy \(\d{1,2}\/\d{1,2}\/\d{4}\)$/)
+    // La pantalla distingue la fecha de cálculo de la de actualización de la cartera, que la base no registra.
+    expect(portfolioLabel(viewer!)).toMatch(/^Cálculo al \d{1,2}\/\d{1,2}\/\d{4} · Actualización de la cartera: no registrada$/)
     expect(undatedPortfolioText('10/11/2026')).toBe('Sin fecha de cartera registrada: se calcula con la fecha de hoy (10/11/2026)')
     expect(logged).not.toHaveBeenCalled()
   })
@@ -111,7 +113,7 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(viewer?.moduleMissing).toBeUndefined()
     expect(moduleAvailable(viewer!)).toBe(true)
     expect(viewer?.capabilities.canImport).toBe(true)
-    expect(portfolioLabel(viewer!)).toMatch(/^Sin fecha de cartera registrada/)
+    expect(portfolioLabel(viewer!)).toMatch(/^Cálculo al .* · Actualización de la cartera: no registrada$/)
     // Una sola consulta de una fila, filtrada por el municipio, para saber si hay casos.
     const probes = requests.filter(request => request.table === 'debtor')
     expect(probes.map(probe => [probe.select, probe.limit, probe.filters])).toEqual([['id', 1, { tenant: 'eq.7' }]])
@@ -247,14 +249,17 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(card).toContain('Reportes: no disponible en esta base')
     expect(card).toContain('La cartera se puede ver, buscar y analizar.')
     const noModule = { ok: false as const, reason: 'NO_MODULE' as const }
-    // Listados: «sin decisión» (no puede haber ninguna) y una sola nota; nunca «No disponible» en cada fila.
+    // Listados: «sin decisión» (no puede haber ninguna) y ninguna nota por pantalla: lo dice una sola vez la línea
+    // de contexto («Modo consulta»), y la columna de decisiones se reemplaza por «Ver detalle».
     expect(decisionView(noModule, '101')).toEqual({ kind: 'NONE' })
-    expect(renderToStaticMarkup(createElement(DecisionsNotice, { decisions: noModule }))).toContain('no tiene instalado el módulo de decisiones')
+    expect(renderToStaticMarkup(createElement(DecisionsNotice, { decisions: noModule }))).toBe('')
+    expect(decisionsAvailable(noModule)).toBe(false)
+    expect(renderToStaticMarkup(createElement(ContextLine, { viewer: { ...viewerFixture('ADMIN', { kind: 'UNDATED', today: '2026-11-10' }), moduleMissing: true } }))).toContain('Modo consulta')
     expect(recordedDecisionView(noModule, '101')).toEqual({ kind: 'no-module' })
     expect(renderToStaticMarkup(createElement(RecordedDecisionSummary, { view: { kind: 'no-module' } }))).toContain('No disponible en esta base')
     const viewer = { portfolio: { kind: 'UNDATED', today: '2026-11-10' }, moduleMissing: true } as ViewerContext
     expect(moduleAvailable(viewer)).toBe(false)
-    expect(portfolioLabel(viewer)).toBe('Sin fecha de cartera registrada: se calcula con la fecha de hoy (10/11/2026)')
+    expect(portfolioLabel(viewer)).toBe('Cálculo al 10/11/2026 · Actualización de la cartera: no registrada')
   })
 })
 

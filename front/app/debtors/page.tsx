@@ -125,7 +125,7 @@ export default async function DebtorsPage({ searchParams }: { searchParams: Prom
                     <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                     <TableCell className="hidden text-right align-top md:table-cell">{formatCurrency(debtor.overdueDebt)}</TableCell>
                     <TableCell className="hidden align-top md:table-cell"><ContactAvailabilityBadge hasContact={debtor.hasContact} /></TableCell>
-                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} href={detailHref} /></TableCell>
+                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} detailHref={detailHref} /></TableCell>
                   </TableRow>
                   )
                 })}

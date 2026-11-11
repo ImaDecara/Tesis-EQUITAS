@@ -60,9 +60,9 @@ export function DecisionColumnHead({ decisions, className }: { decisions: Record
   return <TableHead className={className}>{decisionsAvailable(decisions) ? 'Decisión registrada' : 'Detalle'}</TableHead>
 }
 
-export function DecisionColumnCell({ decisions, debtorId, href }: { decisions: RecordedDecisions; debtorId: string; href: string }) {
+export function DecisionColumnCell({ decisions, debtorId, detailHref }: { decisions: RecordedDecisions; debtorId: string; detailHref: string }) {
   if (decisionsAvailable(decisions)) return <RecordedDecisionCell decisions={decisions} debtorId={debtorId} />
-  return <Link href={href} className="text-sm font-medium text-[#163a63] underline" data-case-detail>Ver detalle</Link>
+  return <Link href={detailHref} className="text-sm font-medium text-[#163a63] underline" data-case-detail>Ver detalle</Link>
 }
 
 /** Una sola nota cuando la columna de decisiones no se pudo leer o el rol no las ve. Sin el módulo no se

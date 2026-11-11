@@ -108,7 +108,7 @@ export default async function NoContactPage({ searchParams }: { searchParams: Pr
                     <TableCell className="align-top"><PriorityScoreBadge debtor={debtor} /></TableCell>
                     <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                     <TableCell className="hidden text-right align-top md:table-cell">{daysLabel(debtor.maxDaysOverdue)}</TableCell>
-                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} /></TableCell>
+                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} detailHref={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
