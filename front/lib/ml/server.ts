@@ -42,7 +42,9 @@ export async function loadClusteringForViewer(): Promise<ClusteringResult> {
     return { ...result, source: { ...result.source, tenantName: viewer.tenantName ?? '', casesTotal: cases.length, casesIncluded: rows.length, exclusions,
       calculationDate, portfolioDate: raw.batch?.as_of ?? null,
       portfolioDateKind: raw.batch ? viewer.portfolio.kind === 'LOADED' && viewer.portfolio.declared ? 'DECLARED' : 'CUTOFF' : 'NOT_REGISTERED', computedAt: entry.computedAt, dataFingerprint: fingerprint },
-      freshness: reused ? { state: 'STALE', detail: 'Ajuste anterior reutilizado: las variables de la cartera se volvieron a leer y su huella no cambió. El cruce con las reglas es del pedido actual.' } : { state: 'CURRENT', detail: null } }
+      // La cartera se volvió a leer en este pedido y su huella es la misma: el ajuste reutilizado es el
+      // que daría recalcular (el cálculo es determinístico). No es un resultado desactualizado.
+      freshness: { state: 'CURRENT', detail: reused ? 'La cartera se volvió a leer y sus variables no cambiaron desde el último cálculo: se reutiliza ese ajuste. El cruce con los grupos de trabajo es del pedido actual.' : null } }
   } catch {
     return emptyResult('UNAVAILABLE', 'No se pudo autorizar, leer o calcular la analítica. Volvé a intentar.')
   }

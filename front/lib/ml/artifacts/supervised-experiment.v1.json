@@ -1,7 +1,7 @@
 {
   "contractVersion": "1.0.0",
   "label": "Experimento con datos sintéticos; no predice pagos reales de La Falda",
-  "generatedAt": "2026-11-11T19:13:03.474499+00:00",
+  "generatedAt": "2026-11-11T19:33:33.045729+00:00",
   "codeVersion": "analytics-reduced-v1",
   "seed": 20261111,
   "libraries": {
@@ -33,7 +33,7 @@
         "label": "Pagos anteriores en 180 días"
       },
       {
-        "key": "payment_90d",
+        "key": "prior_payment_90d",
         "label": "Algún pago anterior en 90 días"
       }
     ],
@@ -115,7 +115,7 @@
         "brier": 0.24027695432291635,
         "logLoss": 0.6735916745347379
       },
-      "expected": "AUC en 0,5 ± 0.045697 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
+      "expected": "AUC en 0,5 ± 0,045697 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
       "passed": true
     },
     {
@@ -128,7 +128,7 @@
         "brier": 0.2496127456201251,
         "logLoss": 0.6923768109701546
       },
-      "expected": "AUC en 0,5 ± 0.044833 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
+      "expected": "AUC en 0,5 ± 0,044833 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
       "passed": true
     }
   ],

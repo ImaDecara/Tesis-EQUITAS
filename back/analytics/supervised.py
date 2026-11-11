@@ -23,7 +23,7 @@ LABEL = 'Experimento con datos sintéticos; no predice pagos reales de La Falda'
 ROOT = Path(__file__).resolve().parents[2]
 FEATURES = [('overdue_amount', 'Deuda vencida sintética'), ('max_overdue_days', 'Atraso máximo sintético'),
             ('obligation_count', 'Obligaciones sintéticas'), ('payments_180d', 'Pagos anteriores en 180 días'),
-            ('payment_90d', 'Algún pago anterior en 90 días')]
+            ('prior_payment_90d', 'Algún pago anterior en 90 días')]
 
 
 def features_at(observation):
@@ -92,7 +92,7 @@ def control_result(code, label, description, y, probabilities):
     n1, n0 = int(y.sum()), int(len(y) - y.sum())
     margin = 3.29 * np.sqrt((n1 + n0 + 1) / (12 * n1 * n0))
     return {'id': code, 'label': label, 'description': description, 'metrics': measured,
-            'expected': f'AUC en 0,5 ± {margin:.6f} (3,29 errores estándar bajo independencia, fijado antes de evaluar).',
+            'expected': f'AUC en 0,5 ± {margin:.6f}'.replace('.', ',') + ' (3,29 errores estándar bajo independencia, fijado antes de evaluar).',
             'passed': bool(abs(measured['rocAuc'] - .5) <= margin)}
 
 

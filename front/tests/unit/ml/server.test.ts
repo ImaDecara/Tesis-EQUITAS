@@ -12,14 +12,16 @@ beforeEach(async () => {
   mocks.raw.mockResolvedValue(raw())
   server = await import('@/lib/ml/server')
 })
-it('autoriza siempre, memoiza por municipio y huella, y expone antigüedad', async () => {
+it('autoriza siempre, memoiza por municipio y huella, y dice cuándo reutiliza el ajuste', async () => {
   const first = await server.loadClusteringForViewer()
-  expect(first.status).toBe('OK'); expect(first.freshness.state).toBe('CURRENT')
+  expect(first.status).toBe('OK'); expect(first.freshness).toEqual({ state: 'CURRENT', detail: null })
   const second = await server.loadClusteringForViewer()
-  expect(second.freshness.state).toBe('STALE'); expect(second.source.computedAt).toBe(first.source.computedAt)
+  // Misma huella sobre una lectura nueva: es el mismo resultado, no uno desactualizado.
+  expect(second.freshness.state).toBe('CURRENT'); expect(second.freshness.detail).toContain('se reutiliza')
+  expect(second.source.computedAt).toBe(first.source.computedAt)
   expect(mocks.access).toHaveBeenCalledTimes(2); expect(mocks.raw).toHaveBeenCalledTimes(2)
   mocks.access.mockResolvedValue({ context: { tenantId: '2' } })
-  expect((await server.loadClusteringForViewer()).freshness.state).toBe('CURRENT')
+  expect((await server.loadClusteringForViewer()).freshness.detail).toBeNull()
   const changed = raw(); changed.debts[0].current_amount = '123.45'; mocks.raw.mockResolvedValue(changed)
   expect((await server.loadClusteringForViewer()).source.dataFingerprint).not.toBe(first.source.dataFingerprint)
 })
@@ -27,10 +29,11 @@ it('TTL y límite de municipios no reutilizan indefinidamente', async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-11T12:00:00Z'))
   await server.loadClusteringForViewer()
   vi.setSystemTime(new Date('2026-11-11T12:16:00Z'))
-  expect((await server.loadClusteringForViewer()).freshness.state).toBe('CURRENT')
+  // `detail` nulo = se recalculó; con texto = se reutilizó el ajuste memoizado.
+  expect((await server.loadClusteringForViewer()).freshness.detail).toBeNull()
   for (let i = 2; i <= 18; i++) { mocks.access.mockResolvedValue({ context: { tenantId: String(i) } }); await server.loadClusteringForViewer() }
   mocks.access.mockResolvedValue({ context: { tenantId: '1' } })
-  expect((await server.loadClusteringForViewer()).freshness.state).toBe('CURRENT')
+  expect((await server.loadClusteringForViewer()).freshness.detail).toBeNull()
   vi.useRealTimers()
 })
 it.each(['sin sesión', 'sin contexto', 'cartera incierta', 'advertencia', 'corte cambió', 'mapeo incompleto', 'fecha inválida'])('UNAVAILABLE sin lanzar: %s', async kind => {
