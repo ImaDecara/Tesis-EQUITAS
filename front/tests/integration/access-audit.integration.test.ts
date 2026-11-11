@@ -69,6 +69,7 @@ beforeEach(() => {
   cookieStore.mockResolvedValue({ get: () => undefined })
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
   getDebtorDetailData.mockResolvedValue({ detail: buildDebtorDetail(), warnings: [] })
+  session()
 })
 afterEach(() => { vi.restoreAllMocks() })
 
@@ -87,7 +88,7 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
     // Noche 7: además de la identidad, una sola consulta SIN filas para saber si la base tiene el módulo.
     const probes = requests.filter(read => read.table === 'import_batch')
     expect(probes.map(probe => [probe.select, probe.limit])).toEqual([['id', 0]])
-    expect(requests.every(read => ['user', 'tenant_user', 'tenant', 'role', 'import_batch'].includes(read.table))).toBe(true)
+    expect(requests.every(read => ['user', 'tenant_user', 'tenant', 'role', 'import_batch', 'case_review', 'case_review_approval', 'access_audit'].includes(read.table))).toBe(true)
   })
 
   it.each(REPORTS)('%s: HEAD no requiere la credencial de escritura de auditoria', async (name, get) => {
@@ -169,7 +170,7 @@ describe('ALIGN-069: cada exportacion entregada deja exactamente un registro', (
     session('ADMIN', true, {}, { fail: read => read.table === 'access_audit' ? { message: 'caida', code: '57014' } : null })
     const response = await getAccess(request('access'))
     expect(response.status).toBe(503)
-    expect(await response.json()).toMatchObject({ error: 'LECTURA_FALLIDA', tablas: ['access_audit'] })
+    expect(await response.json()).toMatchObject({ error: 'BASE_NO_VERIFICADA' })
     expect(rpc).not.toHaveBeenCalled()
   })
 })

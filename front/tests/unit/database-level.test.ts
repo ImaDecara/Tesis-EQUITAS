@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const { serverClient } = vi.hoisted(() => ({ serverClient: vi.fn() }))
 vi.mock('@/lib/supabase-server', () => ({ createServerSupabaseClient: serverClient }))
 
-import { levelFromProbes, loadDatabaseLevel, MODULE_TABLES, TABLE_NOT_IN_SCHEMA, type TableProbe } from '@/lib/server/database-level'
+import { DatabaseLevelError, levelFromProbes, loadDatabaseLevel, MODULE_TABLES, TABLE_NOT_IN_SCHEMA, type TableProbe } from '@/lib/server/database-level'
 
 const missing: TableProbe = { status: 404, error: { code: 'PGRST205' } }
 const present: TableProbe = { status: 200, error: null }
@@ -50,11 +50,11 @@ describe('nivel de la base (encargo 10.2)', () => {
     }
   })
 
-  it('con el módulo presente alcanza una consulta sin filas y no deja nada en el registro', async () => {
+  it('con el módulo presente comprueba las cuatro tablas sin filas y no deja nada en el registro', async () => {
     const calls = client({})
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await expect(loadDatabaseLevel()).resolves.toBe('CON_MODULO')
-    expect(calls).toEqual([{ table: 'import_batch', select: 'id', limit: 0 }])
+    expect(calls).toEqual(MODULE_TABLES.map(table => ({ table, select: 'id', limit: 0 })))
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -62,8 +62,9 @@ describe('nivel de la base (encargo 10.2)', () => {
     const calls = client(all(missing))
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await expect(loadDatabaseLevel()).resolves.toBe('BASE')
-    expect(calls.map(call => call.table).sort()).toEqual([...MODULE_TABLES].sort())
-    expect(calls.every(call => call.select === 'id' && call.limit === 0)).toBe(true)
+    expect(calls.slice(0, 4).map(call => call.table).sort()).toEqual([...MODULE_TABLES].sort())
+    expect(calls).toHaveLength(13)
+    expect(calls.every(call => call.limit === 0)).toBe(true)
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -74,7 +75,7 @@ describe('nivel de la base (encargo 10.2)', () => {
   ])('ante la duda es CON_MODULO y queda un código en el registro, sin nombres de tabla: %s', async (_, answers) => {
     client(answers)
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await expect(loadDatabaseLevel()).resolves.toBe('CON_MODULO')
+    await expect(loadDatabaseLevel()).rejects.toBeInstanceOf(DatabaseLevelError)
     expect(log).toHaveBeenCalledWith('Nivel de base incierto: NIVEL_INDETERMINADO')
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/import_batch|case_review|access_audit/)
   })
@@ -82,12 +83,12 @@ describe('nivel de la base (encargo 10.2)', () => {
   it('una falla de conexión o un servicio sin configurar no se leen como «falta el módulo»', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     client({ ...all(missing), case_review_approval: new Error('ECONNRESET') })
-    await expect(loadDatabaseLevel()).resolves.toBe('CON_MODULO')
-    expect(log).toHaveBeenCalledWith('Nivel de base incierto: SIN_CONEXION')
+    await expect(loadDatabaseLevel()).rejects.toBeInstanceOf(DatabaseLevelError)
+    expect(log).toHaveBeenCalledWith('Nivel de base incierto: NIVEL_INDETERMINADO')
     client({ import_batch: { status: 0, error: { code: '' } } })
-    await expect(loadDatabaseLevel()).resolves.toBe('CON_MODULO')
+    await expect(loadDatabaseLevel()).rejects.toBeInstanceOf(DatabaseLevelError)
     serverClient.mockResolvedValue(null)
-    await expect(loadDatabaseLevel()).resolves.toBe('CON_MODULO')
+    await expect(loadDatabaseLevel()).rejects.toBeInstanceOf(DatabaseLevelError)
   })
 
   it('el código de «tabla fuera del esquema» vive en un solo archivo de la aplicación', () => {

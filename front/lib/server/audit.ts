@@ -33,6 +33,13 @@ export class AccessAuditError extends Error {
 
 // Sin clave, cada llamada es una accion nueva: la clave solo la pasa quien puede reintentar la misma.
 export async function recordAccessAudit(context: Pick<DalContext, 'appUserId' | 'tenantId'>, event: AccessAuditEvent) {
+  // Antes de crear el cliente escritor: BASE nunca intenta un RPC, aun con JWT configurado.
+  let level
+  try { level = await loadDatabaseLevel() } catch { throw new AccessAuditError() }
+  if (level === 'BASE') {
+    if (UNAUDITED_WITHOUT_MODULE.has(event.action)) return
+    throw new AccessAuditError()
+  }
   const writer = createCaseReviewWriter()
   let failure: string | null = writer ? null : 'SIN_CREDENCIAL'
   if (writer) {
@@ -51,16 +58,6 @@ export async function recordAccessAudit(context: Pick<DalContext, 'appUserId' | 
     }
   }
   if (failure) {
-    // Noche 7 (encargo 10.2). Única excepción a «sin registro no hay entrega»: la base no tiene el módulo
-    // (faltan sus cuatro tablas, comprobado en esta misma solicitud) y la acción es abrir un caso, que en
-    // esa base tampoco se registraba antes. Una descarga de reporte nunca entra acá. Ante cualquier otra
-    // causa (credencial, red, función, una sola tabla ausente) el nivel no es BASE y se sigue fallando cerrado.
-    if (UNAUDITED_WITHOUT_MODULE.has(event.action) && await loadDatabaseLevel() === 'BASE') {
-      // Queda constancia en el registro del servidor, sin el destino: si esto aparece en una base donde el módulo
-      // ya se instaló, la Data API todavía no lo está sirviendo (hay que recargar su esquema).
-      console.info(`Apertura sin registro: NIVEL_BASE (${event.action})`)
-      return
-    }
     // Sin el mensaje de la base ni el destino: solo accion y codigo.
     console.error(`Auditoria no registrada: ${event.action} ${failure}`)
     throw new AccessAuditError()

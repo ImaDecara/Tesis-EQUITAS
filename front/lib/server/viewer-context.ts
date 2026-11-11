@@ -7,7 +7,7 @@ import { requireTenantAccess, roleHasPermission } from '@/lib/server/dal'
 import { ROLE_LABELS, roleLabel } from '@/lib/domain/role-labels'
 import { resolvePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
-import { levelAfter } from '@/lib/server/database-level'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 
 // Noche 7. Lo que la línea fija de contexto y el menú necesitan saber de quien está mirando:
 // municipio, fecha de la cartera, quién usa la aplicación y qué funciones nuevas tiene.
@@ -23,7 +23,7 @@ export type PortfolioState =
   // Hay cartera pero ninguna fecha de corte registrada (la base no tiene el módulo, o los datos se cargaron
   // por otra vía y no hay ningún lote publicado): los cálculos usan la fecha del día y la pantalla lo dice.
   | { kind: 'UNDATED'; today: string }
-  // El municipio todavía no tiene ninguna cartera publicada: no es un error.
+  // Reservado para una fuente que certifique ausencia: una respuesta vacía bajo RLS no alcanza.
   | { kind: 'EMPTY' }
   // No se pudo determinar (lectura fallida o publicación incompleta): nunca se muestra como vacío.
   | { kind: 'UNAVAILABLE' }
@@ -77,7 +77,7 @@ function text(value: unknown): string | null {
 async function portfolioWithoutBatch(supabase: Awaited<ReturnType<typeof requireTenantAccess>>['supabase'], tenantId: string): Promise<PortfolioState> {
   const { data, error } = await supabase.from('debtor').select('id').eq('tenant', tenantId).limit(1)
   if (error || !Array.isArray(data)) return { kind: 'UNAVAILABLE' }
-  return data.length > 0 ? { kind: 'UNDATED', today: todayInCordoba() } : { kind: 'EMPTY' }
+  return data.length > 0 ? { kind: 'UNDATED', today: todayInCordoba() } : { kind: 'UNAVAILABLE' }
 }
 
 async function readViewerContext(): Promise<ViewerContext | null> {
@@ -90,13 +90,15 @@ async function readViewerContext(): Promise<ViewerContext | null> {
         select: 'id,as_of,source,source_updated_at,status,supersedes,publicacion_atomica:counts->publicacion_atomica', filters: [['tenant', context.tenantId]],
       }),
     ])
-    const hasModule = await levelAfter(batches.warning) !== 'BASE'
+    let hasModule = false
+    let verified = true
+    try { hasModule = await loadDatabaseLevel() !== 'BASE' } catch { verified = false }
     const cutoff = resolvePortfolioCutoff(
       batches.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })), batches.warning)
     // La fecha vigente es la del último lote publicado; si ese lote registra una cartera ya cargada, es declarada.
     const declared = batches.rows.some(row => row.source === INHERITED_SOURCE && row.status === 'PUBLICADO' && row.as_of === cutoff.batch?.as_of
       && !batches.rows.some(other => other.supersedes !== null && String(other.supersedes) === String(row.id)))
-    const portfolio: PortfolioState = !hasModule ? { kind: 'UNDATED', today: todayInCordoba() }
+    const portfolio: PortfolioState = !verified ? { kind: 'UNAVAILABLE' } : !hasModule ? await portfolioWithoutBatch(supabase, context.tenantId)
       : cutoff.warning ? { kind: 'UNAVAILABLE' }
       : cutoff.batch?.as_of ? { kind: 'LOADED', asOf: cutoff.batch.as_of, ...(declared ? { declared } : {}) }
       : await portfolioWithoutBatch(supabase, context.tenantId)
@@ -106,7 +108,7 @@ async function readViewerContext(): Promise<ViewerContext | null> {
       roleLabel: roleLabel(context.roleName),
       tenantName: tenant.error ? null : text(tenant.data?.[0]?.name),
       portfolio,
-      ...(hasModule ? {} : { moduleMissing: true as const }),
+      ...(!hasModule && verified ? { moduleMissing: true as const } : {}),
       capabilities: capabilitiesFor(context.roleName, hasModule),
     }
   } catch {

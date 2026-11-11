@@ -106,7 +106,7 @@ describe('sugerencia', () => {
 describe('historial', () => {
   it('ninguna lectura pide reason_text ni usa *, y el texto solo sale de la función', async () => {
     const { requests } = await ready('ADMIN', { case_review: [review(1, { decided_intensity: 3, decided_intervention: 'INTIMACION_ADMINISTRATIVA', decision: 'MODIFICA', checklist: CHECKLIST })], case_review_approval: [approval(1, 1, 'APRUEBA')] })
-    const reads = requests.filter(request => ['case_review', 'case_review_approval'].includes(request.table))
+    const reads = requests.filter(request => request.limit !== 0 && ['case_review', 'case_review_approval'].includes(request.table))
     expect(reads.length).toBeGreaterThan(1)
     for (const request of reads) {
       expect(request.select).not.toContain('reason_text')
@@ -183,7 +183,7 @@ describe('historial', () => {
   it('intensidad <3 queda registrada y no consulta aprobaciones', async () => {
     const { screen, requests } = await ready('USER', { case_review: [review(1, { decision: 'MODIFICA', decided_intervention: 'SEGUIMIENTO', decided_intensity: 2 })] })
     expect(screen.history).toMatchObject({ ok: true, entries: [{ status: 'REGISTRADA', approvals: [] }] })
-    expect(requests.some(request => request.table === 'case_review_approval')).toBe(false)
+    expect(requests.some(request => request.table === 'case_review_approval' && request.limit !== 0)).toBe(false)
   })
 
   describe('propuesta de intensidad ≥3', () => {
@@ -217,7 +217,7 @@ describe('historial', () => {
     it('si fallan las aprobaciones no afirma "pendiente": queda desconocido', async () => {
       const { requests } = setup('ADMIN', { case_review: [intense()] }, request => request.table === 'case_review_approval' ? { message: 'denegado', code: '42501' } : null)
       const screen = await loadCaseReviewScreen(String(DEBTOR))
-      expect(screen).toMatchObject({ kind: 'ready', history: { ok: false } })
+      expect(screen).toMatchObject({ kind: 'unavailable' })
       expect(requests.some(request => request.table === 'case_review_approval')).toBe(true)
     })
   })

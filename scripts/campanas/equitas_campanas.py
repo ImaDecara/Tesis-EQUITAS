@@ -50,7 +50,7 @@ FORBIDDEN_IDS = ('equitas-tp-testing', 'equitas-n7-local', 'equitas-n7-espejo')
 FORBIDDEN_HOMES = ('.equitas-demo', '.equitas-n7', '.equitas-n7-espejo')
 REMOTE_MARKERS = ('supabase.co', 'supabase.com', 'folyslqzqvnpolexcxjo', 'iylwghgvtydpmwidojdo')
 CLI = ('npx', '--yes', 'supabase@2.108.0')
-NPM_BIN = '/Users/jirustaroure/.t3/tools/equitas-npm-11.21.1/bin'
+NPM_BIN = str(Path.home() / '.t3/tools/equitas-npm-11.21.1/bin')
 PYTHON = ROOT / 'back/.venv/bin/python'
 SYSTEM_PYTHON = '/opt/homebrew/bin/python3.12'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -204,7 +204,7 @@ class Run:
     def psql(self, name: str, sql: bytes | str, *, capture: bool = True, user: str = 'postgres') -> str:
         container = guard_container(DB_CONTAINER)
         argv = ['docker', 'exec', '-i', container, 'psql', '-X', '-U', user, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q', '-At', '-F', '|']
-        result = subprocess.run(argv, input=sql.encode() if isinstance(sql, str) else sql, capture_output=True, timeout=600)
+        result = subprocess.run(argv, check=False, input=sql.encode() if isinstance(sql, str) else sql, capture_output=True, timeout=600)
         write_private(self.raw / f'{name}.out', result.stdout + result.stderr)
         self.results['steps'].append({'name': name, 'command': argv, 'exit': result.returncode, 'at_utc': utc(), 'output': 'privada'})
         if result.returncode != 0:
@@ -293,7 +293,7 @@ def prepare_project(copy: Path) -> None:
 
 
 def stack_running() -> bool:
-    result = subprocess.run(['docker', 'inspect', '-f', '{{.State.Running}}', guard_container(DB_CONTAINER)], capture_output=True, text=True)
+    result = subprocess.run(['docker', 'inspect', '-f', '{{.State.Running}}', guard_container(DB_CONTAINER)], check=False, capture_output=True, text=True)
     return result.returncode == 0 and result.stdout.strip() == 'true'
 
 
@@ -303,7 +303,7 @@ def project_stop(run: Run | None) -> int:
     argv = cli('stop', '--no-backup')
     if run:
         return run.step('supabase-stop', argv, timeout=600)
-    return subprocess.run(argv, env=base_env(), capture_output=True, timeout=600).returncode
+    return subprocess.run(argv, check=False, env=base_env(), capture_output=True, timeout=600).returncode
 
 
 def project_fresh(run: Run, copy: Path) -> dict[str, str]:
@@ -329,7 +329,7 @@ def project_fresh(run: Run, copy: Path) -> dict[str, str]:
 
 
 def project_env() -> dict[str, str]:
-    result = subprocess.run(cli('status', '-o', 'env'), env=base_env(), capture_output=True, text=True, timeout=300)
+    result = subprocess.run(cli('status', '-o', 'env'), check=False, env=base_env(), capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
         raise CampaignError('supabase status falló')
     values = {}
@@ -441,7 +441,7 @@ def stop_orphan_next() -> bool:
     if not pid_file.exists():
         return False
     pid = int(pid_file.read_text())
-    cwd = subprocess.run(['lsof', '-a', '-p', str(pid), '-d', 'cwd', '-Fn'], capture_output=True, text=True).stdout
+    cwd = subprocess.run(['lsof', '-a', '-p', str(pid), '-d', 'cwd', '-Fn'], check=False, capture_output=True, text=True).stdout
     if str(HOME / 'copias') in cwd:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(pid, signal.SIGTERM)
@@ -656,7 +656,7 @@ def campaign_revision(run: Run) -> int:
             files = [target]
         for f in files:
             name = str(f.relative_to(copy))
-            committed = subprocess.run(['git', 'show', f'HEAD:{name}'], cwd=ROOT, capture_output=True).stdout
+            committed = subprocess.run(['git', 'show', f'HEAD:{name}'], check=False, cwd=ROOT, capture_output=True).stdout
             overlay[name] = {'sha256': hashlib.sha256(f.read_bytes()).hexdigest(), 'igual_a_HEAD': f.read_bytes() == committed}
     run.results['revision_overlay'] = {'declarado': 'archivos de campaña del árbol de trabajo superpuestos a git archive HEAD',
                                        'archivos': overlay}

@@ -1,7 +1,7 @@
 import { databaseId } from '@/lib/auth/tenant-access'
 import { RAW_DEBTOR_TABLE_LOAD_ORDER } from '@/lib/data/table-names'
 import { createTenantReader } from '@/lib/server/dal'
-import { levelAfter } from '@/lib/server/database-level'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 import { resolvePortfolioCutoff, unavailablePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import type { DataWarning, RawDebtorDataBundle } from '@/types/equitas-domain'
 
@@ -13,7 +13,11 @@ async function withCutoff(reader: Reader, readPortfolio: () => Promise<Read[]>) 
   const initial = await reader.readImportBatches()
   // Noche 7 (encargo 10.2): una base sin el módulo no registra fecha de corte. No es una lectura fallida:
   // la cartera se calcula con la fecha del día (el adaptador ya tiene ese camino) y la pantalla lo dice.
-  const base = await levelAfter(initial.warning) === 'BASE'
+  let base: boolean
+  try { base = await loadDatabaseLevel() === 'BASE' } catch {
+    const cutoff = unavailablePortfolioCutoff('DATABASE_LEVEL_UNKNOWN')
+    return { cutoff, results: [], warnings: [initial.warning ?? cutoff.warning!] }
+  }
   const before = base ? { key: 'SIN_FECHA_REGISTRADA' } : resolvePortfolioCutoff(initial.rows, initial.warning)
   const results = await readPortfolio()
   let cutoff: ReturnType<typeof resolvePortfolioCutoff> = before
@@ -27,6 +31,10 @@ async function withCutoff(reader: Reader, readPortfolio: () => Promise<Read[]>) 
   const warnings = results
     .map((result) => result.warning)
     .filter((warning): warning is DataWarning => Boolean(warning))
+  if (results[0]?.rows.length === 0 && !results[0].warning && !cutoff.warning) warnings.push({
+    table: 'debtor', code: 'PORTFOLIO_VISIBILITY_UNKNOWN', needsSelectPolicy: false,
+    message: 'No se ven casos del municipio. No se puede distinguir una cartera vacía de una lectura limitada por permisos.',
+  })
   if (cutoff.warning) warnings.push(cutoff.warning)
   return { cutoff, results, warnings }
 }

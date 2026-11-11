@@ -7,7 +7,7 @@ import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
 import { RULES_VERSION } from '@/lib/domain/decision-rules-v1'
 import { isStale, recordedStatus, type RecordedDecision } from '@/lib/domain/recorded-decision'
 import { DataAccessError, requireTenantAccess } from '@/lib/server/dal'
-import { levelAfter } from '@/lib/server/database-level'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 import { resolvePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import type { RawRow } from '@/types/equitas-domain'
 
@@ -84,10 +84,11 @@ async function readRecordedDecisions(): Promise<RecordedDecisions> {
       loadAllTableRows('case_review_approval', supabase, { select: APPROVAL_COLUMNS, filters }),
       loadAllTableRows('import_batch', supabase, { select: BATCH_COLUMNS, filters }),
     ])
-    if (await levelAfter(reviews.warning) === 'BASE') return { ok: false, reason: 'NO_MODULE' }
-    if (reviews.warning || approvals.warning) return { ok: false, reason: 'UNAVAILABLE' }
+    if (await loadDatabaseLevel() === 'BASE') return { ok: false, reason: 'NO_MODULE' }
+    if (reviews.warning || approvals.warning || batches.warning) return { ok: false, reason: 'UNAVAILABLE' }
     const cutoff = resolvePortfolioCutoff(
       batches.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })), batches.warning)
+    if (cutoff.warning) return { ok: false, reason: 'UNAVAILABLE' }
     const current = { asOf: cutoff.warning ? null : cutoff.batch?.as_of ?? null, rulesVersion: RULES_VERSION }
     return { ok: true, current, byDebtor: buildRecordedDecisions(reviews.rows, approvals.rows, context.appUserId, current) }
   } catch (error) {

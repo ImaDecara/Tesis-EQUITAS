@@ -22,6 +22,8 @@ import {
   type ReasonTextView,
 } from '@/lib/domain/case-review-history'
 import { currentOf, getCaseReviewSnapshot } from '@/lib/server/case-review-service'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
+import { MODULE_MISSING_EXPLANATION } from '@/lib/domain/database-level-text'
 import { createCaseReviewWriter } from '@/lib/server/case-review-writer'
 import { DataAccessError, requireTenantAccess, roleHasPermission, type DalContext } from '@/lib/server/dal'
 import type { RawRow } from '@/types/equitas-domain'
@@ -127,6 +129,7 @@ async function loadHistory(supabase: SupabaseClient, context: DalContext, rawDeb
 export async function loadCaseReviewScreen(debtorId: string): Promise<CaseReviewScreen> {
   try {
     const { supabase, context } = await requireTenantAccess({ permission: 'review:read' })
+    if (await loadDatabaseLevel() === 'BASE') return { kind: 'unavailable', message: MODULE_MISSING_EXPLANATION }
     const canRecord = roleHasPermission(context.roleName, 'decision:record')
     const canApprove = roleHasPermission(context.roleName, 'decision:approve')
     const canReadReasonText = canRecord || canApprove

@@ -16,7 +16,7 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
   ]
   switch (table) {
     case 'debtor':
-      return { select: '*', filters: [['tenant', tenantId]] }
+      return { select: 'id,tenant,external_id,type,identifier,description,status', filters: [['tenant', tenantId]] }
     case 'debt':
       return { select: `id,external_id,debtor,type,description,original_amount::text,current_amount::text,updated_amount::text,currency,issue_date,due_date,last_collection_date,period,status,${debtor}`, filters: [['__scope.tenant', tenantId]] }
     case 'debtor_person':
@@ -26,7 +26,7 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
     case 'person':
       return { select: `id,external_id,document_type,document_number,full_name,type,status,${links}`, filters: [['__links.active', true], ['__links.__debtor.tenant', tenantId]] }
     case 'debtor_contact':
-      return { select: `*,${person}`, filters: personFilters }
+      return { select: `id,person,type,value,active,${person}`, filters: personFilters }
     case 'debtor_profile_detail':
       return {
         select: `id,debtor_profile,person,risk_value,active,__scope:debtor_profile!inner(__debtor:debtor!inner(tenant)),${person}`,
@@ -34,7 +34,7 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
       }
     case 'debtor_type':
     case 'debt_status':
-      return { select: '*', filters: [] } // Catalogos compartidos, solo tras autorizar.
+      return { select: 'id,key,value', filters: [] } // Catalogos compartidos, solo tras autorizar.
     default:
       return null
   }

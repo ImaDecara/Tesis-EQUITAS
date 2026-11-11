@@ -188,23 +188,14 @@ async function insertDecision(supabase: SupabaseClient, context: DalContext, inp
   }
 }
 
-// Noche 7 (encargo 10.2). En una base sin el módulo de decisiones la acción ya falla sin escribir (no hay
-// tablas ni funciones). Acá solo se le pone nombre a esa falla, comprobando el nivel en el servidor: la
-// pantalla no ofrece el formulario, pero la acción no depende de eso.
-const MAYBE_NO_MODULE: ReadonlySet<CaseReviewErrorCode> = new Set(['SUGGESTION_UNAVAILABLE', 'CUTOFF_NOT_AVAILABLE', 'WRITE_NOT_CONFIGURED', 'WRITE_UNAVAILABLE'])
-
-async function namedByLevel<T extends CaseReviewFailure | { ok: true }>(result: T): Promise<T | CaseReviewFailure> {
-  if (result.ok || !MAYBE_NO_MODULE.has(result.code)) return result
-  return await loadDatabaseLevel() === 'BASE' ? caseReviewFailure('MODULE_NOT_AVAILABLE') : result
-}
-
 export async function recordCaseDecisionInSession(raw: unknown): Promise<RecordCaseDecisionResult> {
-  return namedByLevel(await recordDecision(raw))
+  return recordDecision(raw)
 }
 
 async function recordDecision(raw: unknown): Promise<RecordCaseDecisionResult> {
   return failClosed<RecordCaseDecisionResult>(async () => {
     const { supabase, context } = await requireTenantAccess({ permission: 'decision:record' })
+    if (await loadDatabaseLevel() === 'BASE') return caseReviewFailure('MODULE_NOT_AVAILABLE')
     const parsed = parseRecordCaseDecisionInput(raw)
     if (!parsed.ok) return caseReviewFailure(parsed.code)
     const input = parsed.value
@@ -259,12 +250,13 @@ async function insertApproval(supabase: SupabaseClient, context: DalContext, inp
 }
 
 export async function approveCaseDecisionInSession(raw: unknown): Promise<ApproveCaseDecisionResult> {
-  return namedByLevel(await approveDecision(raw))
+  return approveDecision(raw)
 }
 
 async function approveDecision(raw: unknown): Promise<ApproveCaseDecisionResult> {
   return failClosed<ApproveCaseDecisionResult>(async () => {
     const { supabase, context } = await requireTenantAccess({ permission: 'decision:approve' })
+    if (await loadDatabaseLevel() === 'BASE') return caseReviewFailure('MODULE_NOT_AVAILABLE')
     const parsed = parseApproveCaseDecisionInput(raw)
     if (!parsed.ok) return caseReviewFailure(parsed.code)
 

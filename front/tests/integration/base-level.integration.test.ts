@@ -18,7 +18,7 @@ import { MODULE_MISSING_EXPLANATION, moduleAvailable, undatedPortfolioText } fro
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { AccessAuditError, recordAccessAudit } from '@/lib/server/audit'
 import { approveCaseDecisionInSession, recordCaseDecisionInSession } from '@/lib/server/case-review-service'
-import { levelAfter, MODULE_TABLES } from '@/lib/server/database-level'
+import { loadDatabaseLevel, MODULE_TABLES } from '@/lib/server/database-level'
 import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
 import { csvReportResponse } from '@/lib/server/report-response'
 import { INHERITED_SOURCE, loadViewerContext, type ViewerContext } from '@/lib/server/viewer-context'
@@ -68,15 +68,11 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('nivel base: la base no tiene el módulo de decisiones, cargas y registro de accesos', () => {
-  it('la comprobación completa solo se dispara cuando una lectura normal dijo «la tabla no está en el esquema»', async () => {
+  it('comprueba las cuatro tablas y el esquema base antes de declarar compatibilidad', async () => {
     const { probes, requests } = session()
-    await expect(levelAfter(null)).resolves.toBe('CON_MODULO')
-    await expect(levelAfter({ code: '42501' })).resolves.toBe('CON_MODULO')
-    await expect(levelAfter({})).resolves.toBe('CON_MODULO')
-    expect(probes).toEqual([])
-    expect(requests).toEqual([])
-    await expect(levelAfter({ code: 'PGRST205' })).resolves.toBe('BASE')
+    await expect(loadDatabaseLevel()).resolves.toBe('BASE')
     expect(probes.sort()).toEqual(MODULE_TABLES.map(table => `${table}?limit=0`).sort())
+    expect(requests.every(request => request.limit === 0)).toBe(true)
   })
 
   it('quien mira: sin fecha de cartera registrada, se usa la de hoy y ninguna función nueva está disponible, ni para ADMIN', async () => {
@@ -117,9 +113,9 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(probes.map(probe => [probe.select, probe.limit, probe.filters])).toEqual([['id', 1, { tenant: 'eq.7' }]])
   })
 
-  it('«sin cartera cargada» solo cuando de verdad no hay ningún caso; si no se pudo saber, no se afirma', async () => {
+  it('sin filas visibles no se afirma que no haya cartera', async () => {
     session({ missing: [], tables: { import_batch: [], debtor: [{ id: 801, tenant: 8, type: 6, identifier: 'AJENO' }] } })
-    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'EMPTY' })
+    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'UNAVAILABLE' })
     session({ missing: ['debtor'], tables: { import_batch: [] } })
     expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'UNAVAILABLE' })
   })
@@ -135,11 +131,11 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'LOADED', asOf: '2026-10-31' })
   })
 
-  it('la cartera se lee sin lote y sin aviso de lectura fallida: los cálculos usan la fecha del día', async () => {
+  it('la cartera se lee sin lote; una tabla sin filas queda incierta y los cálculos usan la fecha del día', async () => {
     const { requests } = session()
     const raw = await loadRawDebtorData()
     expect(raw.batch).toBeUndefined()
-    expect(raw.warnings).toEqual([])
+    expect(raw.warnings).toEqual([expect.objectContaining({ table: 'debtor_profile', code: 'BASE_VISIBILITY_UNKNOWN' })])
     expect(raw.debtors.length).toBe(10)
     expect(requests.some(request => request.table === 'import_batch')).toBe(false)
     const mapped = mapDebtorObjectsFromRawData(raw)
@@ -162,7 +158,8 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(logged).not.toHaveBeenCalled()
     // Queda constancia en el registro del servidor, sin el caso: sirve para detectar un módulo instalado que la
     // Data API todavía no sirve.
-    expect(noted.mock.calls).toEqual([['Apertura sin registro: NIVEL_BASE (CASE_OPEN)']])
+    expect(noted).not.toHaveBeenCalled()
+    expect(createWriter).not.toHaveBeenCalled()
   })
 
   it.each(['REPORT_EXPORT', 'ANALYTICS_VIEW'] as const)('una acción que no es abrir un caso (%s) sigue fallando cerrada en nivel base', async action => {
@@ -182,16 +179,17 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     const rpc = vi.fn(async () => ({ data: null, error: { code: 'PGRST202', message: 'function not found' } }))
     createWriter.mockReturnValue({ rpc })
     await expect(recordAccessAudit(context, { action: 'CASE_OPEN', target: '101' })).rejects.toBeInstanceOf(AccessAuditError)
-    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledTimes(missing.length ? 0 : 1)
   })
 
-  it('en nivel base el registro se intenta igual si hay credencial: nunca se omite uno que se podía escribir', async () => {
+  it('en nivel base no se crea el escritor ni se intenta un RPC aun con credencial', async () => {
     session()
     const rpc = vi.fn(async () => ({ data: { audit_id: 9, created: true }, error: null }))
     createWriter.mockReturnValue({ rpc })
     const noted = vi.spyOn(console, 'info').mockImplementation(() => undefined)
     await recordAccessAudit(context, { action: 'CASE_OPEN', target: '101' })
-    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).not.toHaveBeenCalled()
+    expect(createWriter).not.toHaveBeenCalled()
     expect(noted).not.toHaveBeenCalled()
   })
 
@@ -314,7 +312,7 @@ describe('la ficha lee solo los datos de su caso (encargo 10.6)', () => {
     const { requests } = session({ missing: [] })
     const { detail } = await getDebtorDetailDataFromService(debtorId)
     expect(detail).toBeNull()
-    const portfolioReads = new Set(requests.map(request => request.table).filter(table => !['user', 'tenant_user', 'tenant', 'role', 'import_batch', 'contact_type'].includes(table)))
+    const portfolioReads = new Set(requests.filter(request => request.limit !== 0).map(request => request.table).filter(table => !['user', 'tenant_user', 'tenant', 'role', 'import_batch', 'contact_type'].includes(table)))
     expect([...portfolioReads]).toEqual(['debtor'])
     expect(JSON.stringify(requests)).not.toContain(debtorId)
   })

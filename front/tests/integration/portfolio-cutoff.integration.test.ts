@@ -51,7 +51,8 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(csv.rows.every(row => row.fecha_corte === '2026-09-30' && row.fecha_calculo_usada === 'NO_APLICA')).toBe(true)
     // Noche 7: antes de armar un reporte se comprueba el nivel de la base con una consulta que no pide filas.
     const probes = requests.filter(request => request.table === 'import_batch' && request.limit === 0)
-    expect(probes.map(probe => [probe.select, probe.filters])).toEqual([['id', {}]])
+    expect(probes).toHaveLength(6)
+    expect(probes.every(probe => probe.select === 'id' && Object.keys(probe.filters).length === 0)).toBe(true)
     const reads = requests.filter(request => request.table === 'import_batch' && request.limit !== 0)
     expect(reads.some(read => read.after === '1000')).toBe(true)
     for (const read of reads) {
@@ -164,16 +165,13 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(csv.rows.every(row => row.fecha_corte === 'NO_INTEGRADO' && /^\d{4}-\d{2}-\d{2}$/.test(row.fecha_calculo_usada))).toBe(true)
   })
 
-  it('conserva el corte conocido en una cartera vacía y en su fila TOTAL', async () => {
+  it('conserva el corte conocido pero no certifica ausencia con una lectura vacía bajo RLS', async () => {
     const { tables } = fixture([event(1)])
     tables.debtor.length = 0; tables.debt.length = 0
-    const { dashboard } = await getDashboardDataFromService()
-    expect(dashboard.context).toContain('Corte del manifiesto: 2026-09-30')
-    const response = await exportQueue()
-    expect(response.status).toBe(200)
-    const csv = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
-    expect(csv.rows).toHaveLength(1)
-    expect(csv.rows[0]).toMatchObject({ fecha_corte: '2026-09-30', objetos: '0', deuda_total_ars: '0' })
+    const raw = await loadRawDebtorData()
+    expect(raw.batch?.as_of).toBe('2026-09-30')
+    expect(raw.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
+    expect((await exportQueue()).status).toBe(503)
   })
 
   it('una publicación incompleta con cero filas no se presenta como cartera vacía confirmada', async () => {
