@@ -7,7 +7,7 @@ import { requireTenantAccess, roleHasPermission } from '@/lib/server/dal'
 import { ROLE_LABELS, roleLabel } from '@/lib/domain/role-labels'
 import { resolvePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import { loadAllTableRows } from '@/lib/data/paginated-table-reader'
-import { levelAfter } from '@/lib/server/database-level'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 
 // Noche 7. Lo que la línea fija de contexto y el menú necesitan saber de quien está mirando:
 // municipio, fecha de la cartera, quién usa la aplicación y qué funciones nuevas tiene.
@@ -92,7 +92,7 @@ async function readViewerContext(): Promise<ViewerContext | null> {
     ])
     let hasModule = false
     let verified = true
-    try { hasModule = await levelAfter(batches.warning) !== 'BASE' } catch { verified = false }
+    try { hasModule = await loadDatabaseLevel() !== 'BASE' } catch { verified = false }
     const cutoff = resolvePortfolioCutoff(
       batches.rows.map(({ publicacion_atomica, ...row }) => ({ ...row, counts: { publicacion_atomica } })), batches.warning)
     // La fecha vigente es la del último lote publicado; si ese lote registra una cartera ya cargada, es declarada.

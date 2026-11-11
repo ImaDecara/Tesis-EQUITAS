@@ -51,7 +51,7 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(csv.rows.every(row => row.fecha_corte === '2026-09-30' && row.fecha_calculo_usada === 'NO_APLICA')).toBe(true)
     // Noche 7: antes de armar un reporte se comprueba el nivel de la base con una consulta que no pide filas.
     const probes = requests.filter(request => request.table === 'import_batch' && request.limit === 0)
-    expect(probes).toHaveLength(4)
+    expect(probes).toHaveLength(6)
     expect(probes.every(probe => probe.select === 'id' && Object.keys(probe.filters).length === 0)).toBe(true)
     const reads = requests.filter(request => request.table === 'import_batch' && request.limit !== 0)
     expect(reads.some(read => read.after === '1000')).toBe(true)

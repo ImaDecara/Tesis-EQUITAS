@@ -48,7 +48,7 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(result.debtorTypes).toEqual([])
     expect(result.warnings).toEqual([])
     // Cuatro de autorización, ocho tablas, dos páginas terminales y corte antes/después.
-    expect(client.from).toHaveBeenCalledTimes(19)
+    expect(client.from).toHaveBeenCalledTimes(23)
   })
 
   it('una lectura sin filas no demuestra ausencia de cartera bajo RLS', async () => {

@@ -18,7 +18,7 @@ import { MODULE_MISSING_EXPLANATION, moduleAvailable, undatedPortfolioText } fro
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { AccessAuditError, recordAccessAudit } from '@/lib/server/audit'
 import { approveCaseDecisionInSession, recordCaseDecisionInSession } from '@/lib/server/case-review-service'
-import { levelAfter, MODULE_TABLES } from '@/lib/server/database-level'
+import { loadDatabaseLevel, MODULE_TABLES } from '@/lib/server/database-level'
 import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
 import { csvReportResponse } from '@/lib/server/report-response'
 import { INHERITED_SOURCE, loadViewerContext, type ViewerContext } from '@/lib/server/viewer-context'
@@ -68,13 +68,11 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('nivel base: la base no tiene el módulo de decisiones, cargas y registro de accesos', () => {
-  it('comprueba el nivel aun cuando la lectura anterior no informó una tabla ausente', async () => {
-    for (const warning of [null, { code: '42501' }, {}, { code: 'PGRST205' }]) {
-      const { probes, requests } = session()
-      await expect(levelAfter(warning)).resolves.toBe('BASE')
-      expect(probes.sort()).toEqual(MODULE_TABLES.map(table => `${table}?limit=0`).sort())
-      expect(requests.every(request => request.limit === 0)).toBe(true)
-    }
+  it('comprueba las cuatro tablas y el esquema base antes de declarar compatibilidad', async () => {
+    const { probes, requests } = session()
+    await expect(loadDatabaseLevel()).resolves.toBe('BASE')
+    expect(probes.sort()).toEqual(MODULE_TABLES.map(table => `${table}?limit=0`).sort())
+    expect(requests.every(request => request.limit === 0)).toBe(true)
   })
 
   it('quien mira: sin fecha de cartera registrada, se usa la de hoy y ninguna función nueva está disponible, ni para ADMIN', async () => {
@@ -133,11 +131,11 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'LOADED', asOf: '2026-10-31' })
   })
 
-  it('la cartera se lee sin lote y sin aviso de lectura fallida: los cálculos usan la fecha del día', async () => {
+  it('la cartera se lee sin lote; una tabla sin filas queda incierta y los cálculos usan la fecha del día', async () => {
     const { requests } = session()
     const raw = await loadRawDebtorData()
     expect(raw.batch).toBeUndefined()
-    expect(raw.warnings).toEqual([])
+    expect(raw.warnings).toEqual([expect.objectContaining({ table: 'debtor_profile', code: 'BASE_VISIBILITY_UNKNOWN' })])
     expect(raw.debtors.length).toBe(10)
     expect(requests.some(request => request.table === 'import_batch')).toBe(false)
     const mapped = mapDebtorObjectsFromRawData(raw)

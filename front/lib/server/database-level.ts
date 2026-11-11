@@ -19,7 +19,7 @@ export type DatabaseLevel = 'BASE' | 'CON_MODULO'
 export const MODULE_TABLES = ['import_batch', 'case_review', 'case_review_approval', 'access_audit'] as const
 
 // Único lugar donde vive este código: es la respuesta de PostgREST «la tabla no está en el esquema».
-// Una versión de PostgREST que responda otra cosa deja el nivel en CON_MODULO (falla cerrado).
+// Otra respuesta deja el nivel indeterminado y falla cerrado.
 export const TABLE_NOT_IN_SCHEMA = { status: 404, code: 'PGRST205' } as const
 
 export type TableProbe = { status?: number; error: { code?: string } | null }
@@ -74,8 +74,3 @@ async function readDatabaseLevel(): Promise<DatabaseLevel> {
 // Al renderizar una página, React comparte el resultado dentro de esa solicitud. En una ruta de reporte o en una
 // acción de servidor no hay memoización: el nivel se comprueba en cada llamada. Nada se guarda entre solicitudes.
 export const loadDatabaseLevel = cache(readDatabaseLevel)
-
-/** Comprueba también esquemas parciales aunque la primera lectura haya salido bien. */
-export async function levelAfter(..._warnings: readonly ({ code?: string } | null | undefined)[]): Promise<DatabaseLevel> {
-  return loadDatabaseLevel()
-}

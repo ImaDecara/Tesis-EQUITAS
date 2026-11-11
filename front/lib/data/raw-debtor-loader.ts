@@ -1,7 +1,7 @@
 import { databaseId } from '@/lib/auth/tenant-access'
 import { RAW_DEBTOR_TABLE_LOAD_ORDER } from '@/lib/data/table-names'
 import { createTenantReader } from '@/lib/server/dal'
-import { levelAfter } from '@/lib/server/database-level'
+import { loadDatabaseLevel } from '@/lib/server/database-level'
 import { resolvePortfolioCutoff, unavailablePortfolioCutoff } from '@/lib/server/portfolio-cutoff'
 import type { DataWarning, RawDebtorDataBundle } from '@/types/equitas-domain'
 
@@ -14,7 +14,7 @@ async function withCutoff(reader: Reader, readPortfolio: () => Promise<Read[]>) 
   // Noche 7 (encargo 10.2): una base sin el módulo no registra fecha de corte. No es una lectura fallida:
   // la cartera se calcula con la fecha del día (el adaptador ya tiene ese camino) y la pantalla lo dice.
   let base: boolean
-  try { base = await levelAfter(initial.warning) === 'BASE' } catch {
+  try { base = await loadDatabaseLevel() === 'BASE' } catch {
     const cutoff = unavailablePortfolioCutoff('DATABASE_LEVEL_UNKNOWN')
     return { cutoff, results: [], warnings: [initial.warning ?? cutoff.warning!] }
   }
