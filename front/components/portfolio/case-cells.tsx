@@ -1,4 +1,7 @@
+import Link from 'next/link'
+
 import { Badge } from '@/components/ui/badge'
+import { TableHead } from '@/components/ui/table'
 import { scoreView } from '@/components/portfolio/portfolio-text'
 import { reviewActionLabel } from '@/lib/domain/case-review-form'
 import { RECORDED_STATUS_LABELS, STALE_LABEL, type RecordedDecision } from '@/lib/domain/recorded-decision'
@@ -49,14 +52,27 @@ export function RecordedDecisionCell({ decisions, debtorId }: { decisions: Recor
   )
 }
 
-/** Una sola nota cuando la columna de decisiones no se pudo leer o el rol no las ve. */
+/** false: la base no tiene el módulo de decisiones. La columna se reemplaza por «Ver detalle». */
+export const decisionsAvailable = (decisions: RecordedDecisions) => decisions.ok || decisions.reason !== 'NO_MODULE'
+
+/** Última columna de los listados: la decisión registrada o, si la base no tiene decisiones, «Ver detalle». */
+export function DecisionColumnHead({ decisions, className }: { decisions: RecordedDecisions; className?: string }) {
+  return <TableHead className={className}>{decisionsAvailable(decisions) ? 'Decisión registrada' : 'Detalle'}</TableHead>
+}
+
+export function DecisionColumnCell({ decisions, debtorId, href }: { decisions: RecordedDecisions; debtorId: string; href: string }) {
+  if (decisionsAvailable(decisions)) return <RecordedDecisionCell decisions={decisions} debtorId={debtorId} />
+  return <Link href={href} className="text-sm font-medium text-[#163a63] underline" data-case-detail>Ver detalle</Link>
+}
+
+/** Una sola nota cuando la columna de decisiones no se pudo leer o el rol no las ve. Sin el módulo no se
+ * repite nada: la línea de contexto ya lo dice («Modo consulta»). */
 export function DecisionsNotice({ decisions }: { decisions: RecordedDecisions }) {
+  if (!decisionsAvailable(decisions)) return null
   if (decisions.ok) return null
   return (
     <p role="status" data-decisions-notice={decisions.reason} className="text-sm text-amber-800">
-      {decisions.reason === 'NO_MODULE'
-        ? 'Esta base no tiene instalado el módulo de decisiones: ningún caso tiene una decisión registrada.'
-        : decisions.reason === 'FORBIDDEN'
+      {decisions.reason === 'FORBIDDEN'
         ? 'Tu cuenta no puede ver las decisiones registradas: la columna «Decisión registrada» muestra «No disponible».'
         : 'No se pudieron leer las decisiones registradas: la columna «Decisión registrada» muestra «No disponible». Recargá la página; esto no significa que no haya decisiones.'}
     </p>

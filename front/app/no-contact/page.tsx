@@ -5,7 +5,7 @@ import { MetricCard } from '@/components/dashboard/metric-card'
 import { DataWarnings } from '@/components/equitas/data-warnings'
 import { PaginationControls, PaginationSummary } from '@/components/equitas/pagination-controls'
 import { AppShell } from '@/components/layout/app-shell'
-import { DecisionsNotice, PriorityScoreBadge, RecordedDecisionCell } from '@/components/portfolio/case-cells'
+import { DecisionColumnCell, DecisionColumnHead, DecisionsNotice, PriorityScoreBadge } from '@/components/portfolio/case-cells'
 import { EmptyFilterState, emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
 import { daysLabel, filterLine, filterNotes, missingLines, SCORE_LABEL } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -79,7 +79,7 @@ export default async function NoContactPage({ searchParams }: { searchParams: Pr
                   <TableHead className="w-[24%] md:w-[13%]">{SCORE_LABEL}</TableHead>
                   <TableHead className="w-[22%] text-right md:w-[13%]">Deuda pendiente</TableHead>
                   <TableHead className="hidden w-[11%] text-right md:table-cell">Atraso máximo</TableHead>
-                  <TableHead className="w-[26%] md:w-[25%]">Decisión registrada</TableHead>
+                  <DecisionColumnHead decisions={decisions} className="w-[26%] md:w-[25%]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -108,7 +108,7 @@ export default async function NoContactPage({ searchParams }: { searchParams: Pr
                     <TableCell className="align-top"><PriorityScoreBadge debtor={debtor} /></TableCell>
                     <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                     <TableCell className="hidden text-right align-top md:table-cell">{daysLabel(debtor.maxDaysOverdue)}</TableCell>
-                    <TableCell className="align-top"><RecordedDecisionCell decisions={decisions} debtorId={debtor.id} /></TableCell>
+                    <TableCell className="align-top"><DecisionColumnCell decisions={decisions} debtorId={debtor.id} href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
