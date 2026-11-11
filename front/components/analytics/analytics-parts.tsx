@@ -47,12 +47,12 @@ export function SimpleTable({ headers, rows, numeric = [], caption }: {
       <Table className={wide ? 'min-w-[32rem]' : undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <TableHeader>
-          <TableRow>{headers.map((header, index) => <TableHead key={header} className={numeric.includes(index) ? 'text-right' : undefined}>{header}</TableHead>)}</TableRow>
+          <TableRow>{headers.map((header, index) => <TableHead key={header} className={cn('px-2 sm:px-4', numeric.includes(index) && 'text-right')}>{header}</TableHead>)}</TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((row, rowIndex) => (
             <TableRow key={rowIndex}>
-              {row.map((cell, index) => <TableCell key={index} className={cn('align-top', numeric.includes(index) && 'text-right')}>{cell}</TableCell>)}
+              {row.map((cell, index) => <TableCell key={index} className={cn('px-2 align-top sm:px-4', numeric.includes(index) && 'text-right')}>{cell}</TableCell>)}
             </TableRow>
           ))}
         </TableBody>
