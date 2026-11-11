@@ -103,7 +103,7 @@ function ClusteringBody({ result }: { result: ClusteringResult }) {
       {clusters.length > 0 && (
         <Section title="Perfil de cada grupo" id="profiles">
           {result.orderingRule && <p className="text-xs text-slate-600">Numeración: {result.orderingRule}</p>}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4">
             {clusters.map(cluster => (
               <article key={cluster.clusterId} data-cluster={cluster.clusterId} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <h3 className="font-semibold text-slate-900">Cluster {cluster.clusterId} · {formatNumber(cluster.size)} {cluster.size === 1 ? 'caso' : 'casos'} ({share(cluster.share)})</h3>

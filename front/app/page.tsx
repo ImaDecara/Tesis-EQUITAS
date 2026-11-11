@@ -70,7 +70,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
         {isFiltered(filters) && <p className="text-sm text-slate-700">{filterLine(total)}</p>}
         {missing && <p className="text-xs text-slate-600">Datos faltantes que afectan los cálculos. {missing}.</p>}
 
-        <section aria-label="Totales de la cartera" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <section aria-label="Totales de la cartera" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard label="Total registrado" value={formatCurrency(dashboard.totalDebt)} hint="Todas las obligaciones." icon={CircleDollarSign} tone="primary" />
           <MetricCard label="Deuda pendiente" value={formatCurrency(dashboard.pendingDebt)} hint="Sin las pagadas." icon={WalletCards} tone="accent" />
           <MetricCard label="Deuda vencida" value={formatCurrency(dashboard.overdueDebt)} hint="Pendiente y ya vencida." icon={FileWarning} tone="danger" />
