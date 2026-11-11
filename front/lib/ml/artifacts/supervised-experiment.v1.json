@@ -1,0 +1,150 @@
+{
+  "contractVersion": "1.0.0",
+  "label": "Experimento con datos sintéticos; no predice pagos reales de La Falda",
+  "generatedAt": "2026-11-11T19:13:03.474499+00:00",
+  "codeVersion": "analytics-reduced-v1",
+  "seed": 20261111,
+  "libraries": {
+    "python": "3.12.14",
+    "numpy": "2.5.4",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.1"
+  },
+  "dataset": {
+    "kind": "SYNTHETIC",
+    "generator": "analytics.supervised.generate/v1; cohortes independientes mensuales",
+    "units": 6300,
+    "observations": 6300,
+    "features": [
+      {
+        "key": "overdue_amount",
+        "label": "Deuda vencida sintética"
+      },
+      {
+        "key": "max_overdue_days",
+        "label": "Atraso máximo sintético"
+      },
+      {
+        "key": "obligation_count",
+        "label": "Obligaciones sintéticas"
+      },
+      {
+        "key": "payments_180d",
+        "label": "Pagos anteriores en 180 días"
+      },
+      {
+        "key": "payment_90d",
+        "label": "Algún pago anterior en 90 días"
+      }
+    ],
+    "target": {
+      "key": "payment_90d",
+      "definition": "Algún evento de pago sintético en (instante de predicción, instante +90 días]; etiqueta disponible a los 100 días.",
+      "windowDays": 90
+    },
+    "positiveRate": 0.47015873015873016
+  },
+  "split": {
+    "kind": "TEMPORAL",
+    "train": {
+      "from": "2024-01",
+      "to": "2024-12",
+      "observations": 3600,
+      "positives": 1678
+    },
+    "embargo": {
+      "from": "2025-01",
+      "to": "2025-03",
+      "observations": 900,
+      "positives": 426
+    },
+    "test": {
+      "from": "2025-04",
+      "to": "2025-09",
+      "observations": 1800,
+      "positives": 858
+    },
+    "note": "Corte de ajuste 2025-04-01. Solo etiquetas disponibles estrictamente antes del corte; embargo enero–marzo 2025. Eventos de variables estrictamente anteriores al instante. Cohortes sin objetos compartidos. Toda evaluación madura al 2025-12-10."
+  },
+  "models": [
+    {
+      "id": "BASE_RATE",
+      "label": "Tasa base",
+      "isBaseline": true,
+      "description": "Frecuencia positiva del entrenamiento, constante en evaluación.",
+      "metrics": {
+        "rocAuc": 0.5,
+        "prAuc": 0.4766666666666667,
+        "brier": 0.24956697530864208,
+        "logLoss": 0.6922815664404346
+      }
+    },
+    {
+      "id": "HEURISTIC",
+      "label": "Heurística de pago reciente",
+      "isBaseline": true,
+      "description": "Tasa por presencia de pago previo en 90 días, ajustada solo en entrenamiento con suavizado de Laplace.",
+      "metrics": {
+        "rocAuc": 0.633271717666622,
+        "prAuc": 0.5574876696979701,
+        "brier": 0.23072291964364663,
+        "logLoss": 0.6538532045427395
+      }
+    },
+    {
+      "id": "LOGISTIC_REGRESSION",
+      "label": "Regresión logística",
+      "isBaseline": false,
+      "description": "Pipeline log1p, StandardScaler y regresión logística L2, C=1. Sin búsqueda de hiperparámetros.",
+      "metrics": {
+        "rocAuc": 0.8051089038350185,
+        "prAuc": 0.7949615184259573,
+        "brier": 0.1799676293318457,
+        "logLoss": 0.5378922283299015
+      }
+    }
+  ],
+  "controls": [
+    {
+      "id": "NO_SIGNAL",
+      "label": "Control sin señal",
+      "description": "Mismo generador, probabilidad futura constante 0,4 independiente de todas las variables; pipeline reajustado en su entrenamiento.",
+      "metrics": {
+        "rocAuc": 0.5166236266949801,
+        "prAuc": 0.41911976851699795,
+        "brier": 0.24027695432291635,
+        "logLoss": 0.6735916745347379
+      },
+      "expected": "AUC en 0,5 ± 0.045697 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
+      "passed": true
+    },
+    {
+      "id": "SHUFFLED_LABELS",
+      "label": "Control con etiquetas mezcladas",
+      "description": "Etiquetas permutadas por separado dentro de entrenamiento y evaluación (semillas +17 y +18); preserva prevalencias, rompe la señal y reajusta el pipeline. No mezcla particiones.",
+      "metrics": {
+        "rocAuc": 0.5193309874838536,
+        "prAuc": 0.4819994398586029,
+        "brier": 0.2496127456201251,
+        "logLoss": 0.6923768109701546
+      },
+      "expected": "AUC en 0,5 ± 0.044833 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
+      "passed": true
+    }
+  ],
+  "verdict": {
+    "modelBeatsBaseline": true,
+    "text": "La logística supera al mejor baseline por log-loss en esta evaluación sintética. No mide desempeño real ni utilidad de una intervención."
+  },
+  "realHistory": {
+    "suitable": false,
+    "text": "El esquema observado registra obligaciones y estados actuales, vencimientos y last_collection_date; no acredita eventos históricos de pago, importes pagados ni instantáneas anteriores. No permite reconstruir variables al instante ni resultados futuros sin fuga. Haría falta un historial prospectivo fechado y auditable; no se afirma que existan fuentes externas no inspeccionadas."
+  },
+  "limitations": [
+    "Alcance reducido autorizado por el usuario el 11/11/2026; el protocolo previo sigue como borrador pendiente de aprobación íntegra.",
+    "Una semilla, un escenario con señal y dos controles (sin señal y etiquetas mezcladas); sin 20 réplicas, bootstrap, simulación causal ni auditoría de equidad completa.",
+    "Se reutilizan ventana de 90 días, rezago de 10 días, historia previa de 180 días, embargo temporal y control nulo del protocolo; no se implementa todo su mundo sintético.",
+    "Señal impuesta por el generador; AUC-PR se informa como average precision. La comparación principal usa log-loss.",
+    "No se guarda ni se aplica el modelo a contribuyentes reales. Las métricas son de una sola evaluación sintética."
+  ]
+}

@@ -259,7 +259,7 @@ def evaluate_gates(artifacts, root=ROOT, policy_path=POLICY):
                                     ('backend', back_total['covered_lines'], back_total['num_statements'])]:
             metric = ratio(covered, total, policy['minimum_statements_pct'])
             check(name + '_statements', metric['passed'], metric, 'Statements >= 60%, declared full scope')
-        diff = git(root, 'diff', '--no-ext-diff', '--no-renames', '--unified=0', base, head, '--', 'front/app', 'front/components', 'front/lib', 'back/ETL', 'back/api', 'back/services')
+        diff = git(root, 'diff', '--no-ext-diff', '--no-renames', '--unified=0', base, head, '--', 'front/app', 'front/components', 'front/lib', 'back/ETL', 'back/api', 'back/services', 'back/analytics')
         changes = added_lines(diff)
         report['diff_sha256'] = hashlib.sha256(diff.encode('utf-8')).hexdigest()
         for name in ('frontend', 'backend'):

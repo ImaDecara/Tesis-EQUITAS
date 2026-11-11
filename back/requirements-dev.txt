@@ -2,3 +2,5 @@
 pytest==8.4.2
 pytest-cov==6.3.0
 ruff==0.17.1
+
+-r requirements-analytics.txt
