@@ -297,6 +297,29 @@ describe('la ficha lee solo los datos de su caso (encargo 10.6)', () => {
     }
   })
 
+  it('en nivel base la ficha dice lo mismo que el listado: un caso sin contactos o sin perfil no es una lectura incierta', async () => {
+    const tables = tablesWithRealLinks()
+    session({ tables })
+    const full = mapDebtorObjectsFromRawData(await loadRawDebtorData())
+    expect(full.warnings).toEqual([])
+    const withoutContacts = TENANT_DEBTORS.filter(id => (full.contactsByDebtor.get(id) ?? []).length === 0)
+    expect(withoutContacts.length).toBeGreaterThan(0)
+    for (const debtorId of TENANT_DEBTORS) {
+      const { detail, warnings } = await getDebtorDetailDataFromService(debtorId)
+      expect(warnings, debtorId).toEqual([])
+      expect(stable(detail?.debtor), debtorId).toEqual(stable(full.debtors.find(debtor => debtor.id === debtorId)))
+      expect(detail?.contacts.map(contact => contact.id), debtorId).toEqual((full.contactsByDebtor.get(debtorId) ?? []).map(contact => contact.id))
+    }
+  })
+
+  it('en nivel base, si la tabla entera no muestra filas del municipio, la ficha tampoco afirma ausencia', async () => {
+    session({ tables: { ...tablesWithRealLinks(), debtor_contact: [] } })
+    const full = await loadRawDebtorData()
+    expect(full.warnings).toEqual([expect.objectContaining({ table: 'debtor_contact', code: 'BASE_VISIBILITY_UNKNOWN' })])
+    const { warnings } = await getDebtorDetailDataFromService('101')
+    expect(warnings).toEqual([expect.objectContaining({ table: 'debtor_contact', code: 'BASE_VISIBILITY_UNKNOWN' })])
+  })
+
   it('pide obligaciones, personas, contactos y perfil filtrados por ese caso, no los de todo el municipio', async () => {
     const { requests } = session({ missing: [], tables: tablesWithRealLinks() })
     await getDebtorDetailDataFromService('101')

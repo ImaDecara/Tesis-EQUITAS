@@ -130,6 +130,14 @@ describe('clustering: estados', () => {
     expect(clustering(null).text).toContain('No se pudo obtener el resultado de la analítica.')
   })
 
+  it('un cálculo reutilizado sobre la misma cartera es vigente: lo dice sin aviso de resultado anterior', () => {
+    const { markup, text } = clustering(clusteringFixture({ freshness: { state: 'CURRENT', detail: 'La cartera se volvió a leer y sus variables no cambiaron: se reutiliza ese ajuste.' } }))
+    expect(markup).not.toContain('data-analytics-notice="STALE"')
+    expect(text).toContain('Estado del resultado Vigente (cálculo reutilizado)')
+    expect(text).toContain('se reutiliza ese ajuste')
+    expect(text).not.toContain('Resultado anterior')
+  })
+
   it('STALE: aviso visible de resultado anterior, con la fecha de cálculo', () => {
     const { markup, text } = clustering(clusteringFixture({ freshness: { state: 'STALE', detail: 'La cartera cambió después.' } }))
     expect(markup).toContain('data-analytics-notice="STALE"')

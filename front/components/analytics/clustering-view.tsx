@@ -68,8 +68,9 @@ function ClusteringBody({ result }: { result: ClusteringResult }) {
           ['Fecha de cálculo del atraso', formatDate(source.calculationDate)],
           ['Fecha de la cartera', portfolioDateText(source)],
           ['Calculado el', source.computedAt ? formatDateTime(source.computedAt) : 'No disponible'],
-          ['Estado del resultado', result.freshness.state === 'STALE' ? 'Resultado anterior' : 'Calculado en esta consulta'],
+          ['Estado del resultado', result.freshness.state === 'STALE' ? 'Resultado anterior' : result.freshness.detail ? 'Vigente (cálculo reutilizado)' : 'Calculado en esta consulta'],
         ]} />
+        {result.freshness.state === 'CURRENT' && result.freshness.detail && <p className="text-xs text-slate-600" data-freshness-detail>{result.freshness.detail}</p>}
         {source.portfolioDateKind === 'NOT_REGISTERED' && (
           <p className="text-xs text-slate-600">La base no registra una fecha de corte: el atraso se calcula al {formatDate(source.calculationDate)}, que no es la fecha de actualización de la cartera.</p>
         )}

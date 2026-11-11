@@ -86,6 +86,19 @@ export async function requireTenantAccess(options: { permission?: DalPermission;
 export async function createTenantReader() {
   const { supabase, context } = await requireTenantAccess()
   let level: ReturnType<typeof loadDatabaseLevel> | undefined
+  // Una fila alcanza, con el mismo alcance municipal que la lectura completa. Se pregunta una vez por tabla.
+  const visible = new Map<PortfolioTable, Promise<boolean>>()
+  const tenantHasVisibleRows = (table: PortfolioTable) => {
+    let known = visible.get(table)
+    if (!known) {
+      const scope = tenantReadScope(table, context.tenantId)!
+      let query = supabase.from(table).select(scope.select).limit(1)
+      for (const [column, value] of scope.filters) query = query.eq(column, value)
+      known = Promise.resolve(query).then(({ data, error }) => !error && Array.isArray(data) && data.length > 0, () => false)
+      visible.set(table, known)
+    }
+    return known
+  }
   return {
     context,
     // Metadatos mínimos del corte, con la misma sesión y municipio que la cartera.
@@ -108,10 +121,16 @@ export async function createTenantReader() {
         // Con BASE no hay una fuente que certifique ausencia: RLS también devuelve [].
         // No convertir una tabla oculta por políticas en cero deuda o «sin contacto».
         level ??= loadDatabaseLevel()
-        if (await level === 'BASE') return { rows: [], warning: {
-          table, code: 'BASE_VISIBILITY_UNKNOWN', needsSelectPolicy: false,
-          message: 'No se ven filas en esta lectura. No se puede distinguir ausencia de datos de una limitación de permisos.',
-        } }
+        if (await level === 'BASE') {
+          // En la lectura de un caso (la ficha), no tener contactos, perfil u obligaciones es un dato normal
+          // siempre que la tabla sí muestre filas del municipio: lo incierto es una tabla entera sin filas.
+          // Así la ficha dice lo mismo que el listado para ese caso.
+          if (debtorId !== undefined && isDebtorScoped(table) && await tenantHasVisibleRows(table)) return result
+          return { rows: [], warning: {
+            table, code: 'BASE_VISIBILITY_UNKNOWN', needsSelectPolicy: false,
+            message: 'No se ven filas en esta lectura. No se puede distinguir ausencia de datos de una limitación de permisos.',
+          } }
+        }
       }
       return result
     },
