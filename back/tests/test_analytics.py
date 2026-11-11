@@ -44,6 +44,9 @@ def test_supervised_artifact_regenerates_and_is_reproducible():
     repeated = s.experiment()
     for artifact in [stored, result, repeated]:
         del artifact['generatedAt']
+        # La versión de parche del intérprete es dato del entorno de la corrida, no del resultado:
+        # numpy, scipy y scikit-learn (fijadas) sí tienen que coincidir.
+        del artifact['libraries']['python']
     assert result == stored == repeated
     assert result['controls'][0]['passed']
     assert not result['realHistory']['suitable']
