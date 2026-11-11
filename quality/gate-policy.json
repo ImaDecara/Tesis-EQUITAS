@@ -10,7 +10,7 @@
   },
   "scope": {
     "frontend": ["front/app/", "front/components/", "front/lib/"],
-    "backend": ["back/ETL/", "back/api/", "back/services/"]
+    "backend": ["back/ETL/", "back/api/", "back/services/", "back/analytics/"]
   },
   "meaning": "Critical is a project classification of selected analyzer rules, not a native Ruff severity or a proof that all functional/security bugs are absent. Dependencies use npm-audit-policy.json separately."
 }

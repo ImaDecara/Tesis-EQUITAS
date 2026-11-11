@@ -144,7 +144,7 @@ def component_run(component, output, install):
                 '--coverage.reportOnFailure=true'])
             control('lint', [npm, 'run', 'lint', '--', '--format', 'json', '--output-file', f'{relative}/eslint.json'])
             control('build', [npm, 'run', 'build'])
-            scope = ['app', 'components', 'lib', '../back/ETL', '../back/api', '../back/services']
+            scope = ['app', 'components', 'lib', '../back/ETL', '../back/api', '../back/services', '../back/analytics']
             control('duplication', [npm, 'exec', '--no', '--', 'jscpd', *scope,
                 '--min-lines', '5', '--min-tokens', '50', '--reporters', 'console,json',
                 '--output', f'{relative}/duplication', '--no-colors'])
@@ -165,10 +165,10 @@ def component_run(component, output, install):
                 '--output-format', 'json', '--output-file', f'{relative}/infrastructure-ruff.json'])
             control('versions', [python, '-m', 'pip', 'freeze'])
             control('dependencies', [python, '-m', 'pip', 'check'])
-            control('tests', [python, '-m', 'pytest', '--cov', '--cov-report=term-missing',
+            control('tests', [python, '-m', 'pytest', '--cov=ETL', '--cov=api', '--cov=services', '--cov=analytics', '--cov-report=term-missing',
                 f'--cov-report=json:{relative}/coverage.json', f'--cov-report=xml:{relative}/coverage.xml',
                 f'--cov-report=html:{relative}/coverage-html', f'--junitxml={relative}/tests.xml'])
-            control('lint', [python, '-m', 'ruff', 'check', 'ETL', 'api', 'services',
+            control('lint', [python, '-m', 'ruff', 'check', 'ETL', 'api', 'services', 'analytics',
                 '--output-format', 'json', '--output-file', f'{relative}/ruff.json'])
     try:
         report['metrics'] = collect_metrics(component, output)
