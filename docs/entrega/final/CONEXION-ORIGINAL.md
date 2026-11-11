@@ -47,9 +47,18 @@ La sonda importa `tenant-read-scope.ts` y `paginated-table-reader.ts` actuales m
 
 Un ensayo preliminar de rangos posteriores sobre un resultado vacío devolvió 416. Es un rango fuera del resultado, no evidencia de columna incompatible: el lector probado se detiene en la primera página cuando el conteo es cero. Los rangos siguientes se comprobaron con filas sintéticas en el espejo y con pruebas unitarias; no se atribuyen a producción.
 
+## Ajustes hechos al integrar
+
+Posteriores a la sonda de arriba; cada uno tiene su prueba.
+
+- **Catálogo de estados.** `debt_status` vuelve a pedir `description`, que el mapeador usa como rótulo de respaldo cuando `value` viene vacío. Se comprobó con lecturas anónimas de cero filas que la columna existe en la original, y que ninguna otra columna alternativa que el mapeador aceptaría existe sin estar pedida en `debtor`, `debtor_contact`, `debtor_type` y `debt_status` (64 lecturas, todas GET, cero filas).
+- **Qué cuenta como «no se puede saber» en nivel BASE.** Solo una tabla que no muestra ninguna fila del municipio. En la ficha, que un caso no tenga contactos, perfil u obligaciones es un dato normal mientras esa tabla sí muestre filas del municipio: así la ficha dice lo mismo que el listado. Si la tabla entera no muestra filas, la ficha tampoco afirma ausencia.
+- **Índice anterior por persona.** `debtor_profile_detail` sin filas conserva el aviso propio de la noche 7 («dato que no existe para nadie») también en nivel BASE. No se informa como lectura fallida.
+- **Municipio sin cartera, con el módulo instalado.** Sigue siendo un estado real (ahí empieza la carga de CSV), y un corte publicado sin casos sigue informando cero. En nivel BASE, donde nada certifica la ausencia, una cartera que no muestra casos es «no disponible».
+
 ## Comportamiento y rendimiento comprobados localmente
 
-BASE se decide **antes** de crear el escritor: abrir una ficha no llama RPC, incluso si hay JWT de servidor configurado. Decisiones y reportes del módulo quedan no disponibles. CON_MODULO conserva auditoría obligatoria: si el registro falla, no se entrega la acción. Un esquema parcial, 401/403, columna faltante o fallo de conexión queda incierto/error; una lectura vacía bajo RLS no se presenta como ausencia confirmada. La ausencia del módulo no oculta las filas de cartera visibles.
+BASE se decide **antes** de crear el escritor: abrir una ficha no llama RPC, incluso si hay JWT de servidor configurado. Decisiones y reportes del módulo quedan no disponibles. CON_MODULO conserva auditoría obligatoria: si el registro falla, no se entrega la acción. Un esquema parcial, 401/403, columna faltante o fallo de conexión queda incierto/error; una tabla que no muestra ninguna fila del municipio no se presenta como ausencia confirmada (con las precisiones de «Ajustes hechos al integrar»). La ausencia del módulo no oculta las filas de cartera visibles.
 
 `base-read-only-transport.integration.test.ts` registra método/ruta con el SDK real y transporte simulado en tablero, listados, búsqueda, personas, ficha, acciones y cinco reportes, con/sin JWT de servidor. También prueba las 14 combinaciones de módulo parcial, fallos y tablas ocultas. La analítica de este checkout todavía es un stub; su implementación posterior requiere repetir el recorrido al integrar.
 

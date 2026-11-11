@@ -50,12 +50,12 @@ Reglas:
 
 Todos los comandos se ejecutan desde la **raíz del worktree** (donde está `supabase/`).
 En la máquina del equipo, npm 11.21.1 está en
-`/Users/jirustaroure/.t3/tools/equitas-npm-11.21.1/bin`.
+`$HOME/.t3/tools/equitas-npm-11.21.1/bin`.
 
 ### 3.1 Precondiciones
 
 ```sh
-export PATH=/Users/jirustaroure/.t3/tools/equitas-npm-11.21.1/bin:$PATH
+export PATH=$HOME/.t3/tools/equitas-npm-11.21.1/bin:$PATH
 export DO_NOT_TRACK=1 SUPABASE_TELEMETRY_DISABLED=1
 (
   docker info >/dev/null 2>&1 || { echo "DETENERSE: Docker no responde"; exit 1; }
