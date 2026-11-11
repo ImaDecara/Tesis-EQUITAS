@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FRONT = ROOT / 'front'
 ORIGINAL_URL = 'https://folyslqzqvnpolexcxjo.supabase.co'
 PORT = 3200
-BUILD = FRONT / '.quality/original-next'
+BUILD = FRONT / 'build/original-next'
 PUBLIC = {'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'}
 
 
