@@ -6,7 +6,7 @@ import { loadViewerContext } from '@/lib/server/viewer-context'
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
 import { type ClusteringResult, type SupervisedExperimentResult } from './contract'
-import { analyzeMatrix, emptyResult } from './engine'
+import { analyzeMatrix, emptyResult, MAXIMUM_CASES } from './engine'
 import { prepareCases } from './features'
 import { withRuleGroups } from './presentation'
 import { validateExperiment } from './validation'
@@ -22,6 +22,7 @@ export async function loadClusteringForViewer(): Promise<ClusteringResult> {
     if (!viewer || viewer.portfolio.kind === 'UNAVAILABLE') return emptyResult('UNAVAILABLE', 'No se pudo verificar el contexto municipal y la cartera.')
     const raw = await loadRawDebtorData()
     if (raw.warnings.length) return emptyResult('UNAVAILABLE', 'La lectura de la cartera tiene advertencias; no se agrupan datos parciales.')
+    if (raw.debtors.length > MAXIMUM_CASES) return emptyResult('UNAVAILABLE', `La cartera supera el límite de ${MAXIMUM_CASES} casos para el cálculo en línea.`)
     const now = new Date(), computedAt = now.toISOString()
     const cases = mapDebtorObjectsFromRawData(raw, { computedAt }).debtors
     if (cases.length !== raw.debtors.length) return emptyResult('UNAVAILABLE', 'No se pudo mapear la cartera completa.')
@@ -35,7 +36,7 @@ export async function loadClusteringForViewer(): Promise<ClusteringResult> {
     const entry = reused ? cached : { fingerprint, at: now.getTime(), computedAt, analysis: analyzeMatrix(rows) }
     if (!reused) {
       if (memo.size >= 16) memo.delete(memo.keys().next().value!)
-      memo.set(context.tenantId, entry)
+      if (entry.analysis.result.status !== 'UNAVAILABLE') memo.set(context.tenantId, entry)
     }
     const result = withRuleGroups(entry.analysis.result, entry.analysis.labels, entries, cases)
     return { ...result, source: { ...result.source, tenantName: viewer.tenantName ?? '', casesTotal: cases.length, casesIncluded: rows.length, exclusions,

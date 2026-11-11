@@ -87,6 +87,15 @@ def split_part(observations):
             'observations': len(observations), 'positives': sum(target_at(o) for o in observations)}
 
 
+def control_result(code, label, description, y, probabilities):
+    measured = metrics(y, probabilities)
+    n1, n0 = int(y.sum()), int(len(y) - y.sum())
+    margin = 3.29 * np.sqrt((n1 + n0 + 1) / (12 * n1 * n0))
+    return {'id': code, 'label': label, 'description': description, 'metrics': measured,
+            'expected': f'AUC en 0,5 ± {margin:.6f} (3,29 errores estándar bajo independencia, fijado antes de evaluar).',
+            'passed': bool(abs(measured['rocAuc'] - .5) <= margin)}
+
+
 @threadpool_limits.wrap(limits=1)
 def experiment(seed=SEED):
     data = generate(seed)
@@ -108,10 +117,14 @@ def experiment(seed=SEED):
     null_train, _, null_test = split(generate(seed, no_signal=True))
     nx, ny = arrays(null_train)
     tx, ty = arrays(null_test)
-    control = metrics(ty, pipeline().fit(nx, ny).predict_proba(tx)[:, 1])
-    n1, n0 = int(ty.sum()), int(len(ty) - ty.sum())
-    margin = 3.29 * np.sqrt((n1 + n0 + 1) / (12 * n1 * n0))
-    passed = bool(abs(control['rocAuc'] - .5) <= margin)
+    no_signal = control_result('NO_SIGNAL', 'Control sin señal',
+                               'Mismo generador, probabilidad futura constante 0,4 independiente de todas las variables; pipeline reajustado en su entrenamiento.',
+                               ty, pipeline().fit(nx, ny).predict_proba(tx)[:, 1])
+    shuffled_train = np.random.default_rng(seed + 17).permutation(y_train)
+    shuffled_test = np.random.default_rng(seed + 18).permutation(y_test)
+    shuffled = control_result('SHUFFLED_LABELS', 'Control con etiquetas mezcladas',
+                              'Etiquetas permutadas por separado dentro de entrenamiento y evaluación (semillas +17 y +18); preserva prevalencias, rompe la señal y reajusta el pipeline. No mezcla particiones.',
+                              shuffled_test, pipeline().fit(x_train, shuffled_train).predict_proba(x_test)[:, 1])
     best = min(result['metrics']['logLoss'] for result in results if result['isBaseline'])
     beats = results[-1]['metrics']['logLoss'] < best
     return {'contractVersion': '1.0.0', 'label': LABEL, 'generatedAt': datetime.now(UTC).isoformat(),
@@ -124,12 +137,11 @@ def experiment(seed=SEED):
             'split': {'kind': 'TEMPORAL', 'train': split_part(train), 'embargo': split_part(embargo), 'test': split_part(test),
                       'note': 'Corte de ajuste 2025-04-01. Solo etiquetas disponibles estrictamente antes del corte; embargo enero–marzo 2025. Eventos de variables estrictamente anteriores al instante. Cohortes sin objetos compartidos. Toda evaluación madura al 2025-12-10.'},
             'models': results,
-            'controls': [{'id': 'NO_SIGNAL', 'label': 'Control sin señal', 'description': 'Mismo generador, probabilidad futura constante 0,4 independiente de todas las variables; pipeline reajustado en su entrenamiento.',
-                          'metrics': control, 'expected': f'AUC en 0,5 ± {margin:.6f} (3,29 errores estándar bajo independencia, fijado antes de evaluar).', 'passed': passed}],
+            'controls': [no_signal, shuffled],
             'verdict': {'modelBeatsBaseline': bool(beats), 'text': f'La logística {"supera" if beats else "no supera"} al mejor baseline por log-loss en esta evaluación sintética. No mide desempeño real ni utilidad de una intervención.'},
             'realHistory': {'suitable': False, 'text': 'El esquema observado registra obligaciones y estados actuales, vencimientos y last_collection_date; no acredita eventos históricos de pago, importes pagados ni instantáneas anteriores. No permite reconstruir variables al instante ni resultados futuros sin fuga. Haría falta un historial prospectivo fechado y auditable; no se afirma que existan fuentes externas no inspeccionadas.'},
             'limitations': ['Alcance reducido autorizado por el usuario el 11/11/2026; el protocolo previo sigue como borrador pendiente de aprobación íntegra.',
-                            'Una semilla, un escenario con señal y un control; sin 20 réplicas, bootstrap, simulación causal ni auditoría de equidad completa.',
+                            'Una semilla, un escenario con señal y dos controles (sin señal y etiquetas mezcladas); sin 20 réplicas, bootstrap, simulación causal ni auditoría de equidad completa.',
                             'Se reutilizan ventana de 90 días, rezago de 10 días, historia previa de 180 días, embargo temporal y control nulo del protocolo; no se implementa todo su mundo sintético.',
                             'Señal impuesta por el generador; AUC-PR se informa como average precision. La comparación principal usa log-loss.',
                             'No se guarda ni se aplica el modelo a contribuyentes reales. Las métricas son de una sola evaluación sintética.']}

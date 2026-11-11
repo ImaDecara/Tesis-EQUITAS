@@ -92,3 +92,32 @@ describe('dependencias unidireccionales', () => {
     }
   })
 })
+
+it('límite de tamaño y presupuesto cooperativo: sin resultados parciales ni excepciones', () => {
+  expect(analyzeMatrix(Array.from({ length: 10001 }, () => [1, 2, 3])).result.status).toBe('UNAVAILABLE')
+  let clock = 0
+  const expired = analyzeMatrix(fixture.rows, () => clock++ * 1500)
+  expect(expired.result.status).toBe('UNAVAILABLE'); expect(expired.result.clusters).toEqual([])
+  expect(expired.result.statusDetail).toContain('tiempo')
+  expect(analyzeMatrix([[1], ...Array.from({ length: 35 }, () => [NaN])]).result.status).not.toBe('OK')
+  let reads = 0
+  expect(analyzeMatrix(fixture.rows, () => { if (reads++ > 0) throw new Error('fallo'); return 0 }).result.status).toBe('UNAVAILABLE')
+})
+
+it('las aprobaciones, pendientes y huellas de decisión tampoco dependen de la analítica', async () => {
+  const { recordedStatus, pendingKind } = await import('@/lib/domain/recorded-decision')
+  const { computeInputsHash } = await import('@/lib/server/case-review-snapshot')
+  const mapped = mapDebtorObjectsFromRawData(raw(), { computedAt: '2026-11-11T12:00:00.000Z' })
+  const decisions = () => mapped.debtors.map(item => ({ decision: item.decision, recommendation: item.recommendation,
+    hash: computeInputsHash(item.decisionInput!),
+    approvals: ([null, 'APRUEBA', 'OBJETA'] as const).map(approval => {
+      const status = recordedStatus(3, approval)
+      return { status, pending: pendingKind({ status, participated: false, mine: true, stale: false } as Parameters<typeof pendingKind>[0], { canRecord: true, canApprove: true }) }
+    }),
+  }))
+  const before = structuredClone(decisions())
+  const prepared = prepareCases(mapped.debtors), analysis = analyzeMatrix(prepared.entries.map(e => e.values))
+  withRuleGroups(analysis.result, analysis.labels, prepared.entries, mapped.debtors)
+  expect(decisions()).toEqual(before)
+  expect(before[0].approvals.map(a => a.status)).toEqual(['PENDIENTE_APROBACION', 'APROBADA', 'OBJETADA'])
+})

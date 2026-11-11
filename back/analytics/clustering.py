@@ -11,6 +11,7 @@ SEED = 20261111
 MAX_ITERATIONS = 150
 SAMPLE_SIZE = 384
 RESAMPLES = 5
+MAXIMUM_CASES = 10000
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -79,6 +80,8 @@ def stability(rows, labels, k):
 
 @threadpool_limits.wrap(limits=1)
 def analyze(rows):
+    if len(rows) > MAXIMUM_CASES:
+        return {'status': 'UNAVAILABLE', 'labels': [], 'candidates': [], 'selectedK': None}
     rows = np.array(rows, dtype=float)
     if len(rows) < 30:
         return {'status': 'INSUFFICIENT_DATA', 'labels': [], 'candidates': [], 'selectedK': None}

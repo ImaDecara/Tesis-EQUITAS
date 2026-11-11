@@ -56,3 +56,18 @@ it('sin corte registrado, declarado y cartera vacía', async () => {
   expect((await server.loadClusteringForViewer()).status).toBe('INSUFFICIENT_DATA')
   expect((await server.loadSupervisedExperiment()).status).toBe('OK')
 })
+
+it.each([0, 5, 29, 30, 10001])('servidor con %i casos, vacíos, escasos, constantes o fuera del límite', async count => {
+  const data = raw()
+  data.debtors = Array.from({ length: count }, (_, i) => ({ id: i + 1 }))
+  data.debts = data.debtors.map((_, i) => ({ id: i + 1, debtor: i + 1, current_amount: '100', due_date: '2026-01-01', status: 1 }))
+  mocks.raw.mockResolvedValue(data)
+  const result = await server.loadClusteringForViewer()
+  expect(result.status).toBe(count > 10000 ? 'UNAVAILABLE' : count < 30 ? 'INSUFFICIENT_DATA' : 'DEGENERATE')
+  expect(result.clusters).toEqual([])
+})
+it('una sesión revocada no recibe el ajuste cacheado', async () => {
+  expect((await server.loadClusteringForViewer()).status).toBe('OK')
+  mocks.access.mockRejectedValue(new Error('revocada'))
+  expect((await server.loadClusteringForViewer()).status).toBe('UNAVAILABLE')
+})

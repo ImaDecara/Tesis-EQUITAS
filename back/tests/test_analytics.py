@@ -78,3 +78,37 @@ def test_preprocessing_fits_training_only():
     before = scaler.mean_.copy()
     model.predict_proba(tx * 1e9)
     assert np.array_equal(scaler.mean_, before)
+
+
+def test_both_negative_controls_and_failed_control_remain_visible():
+    result = s.experiment()
+    assert {control['id'] for control in result['controls']} == {'NO_SIGNAL', 'SHUFFLED_LABELS'}
+    assert all(control['passed'] for control in result['controls'])
+    y = np.array([0, 1] * 100)
+    assert not s.control_result('PROBE', 'Ensayo', 'Predicción perfecta', y, y)['passed']
+
+
+def test_comparison_checks_candidates_labels_and_numeric_agreement():
+    from analytics.compare import compare
+    rows = c.synthetic_table()
+    reference = c.analyze(rows)
+    assert compare({'rows': rows, 'ts': reference})['parity']
+    changed = {**reference, 'silhouette': reference['silhouette'] + .01}
+    assert not compare({'rows': rows, 'ts': changed})['parity']
+    changed = {**reference, 'labels': [0] * len(rows)}
+    assert not compare({'rows': rows, 'ts': changed})['parity']
+    assert not compare({'rows': rows, 'ts': {**reference, 'candidates': []}})['parity']
+    for rows in [[], [[1, 1, 1]] * 30, [[1, 1, 1]] * 39 + [[1000, 30, 5]]]:
+        assert compare({'rows': rows, 'ts': c.analyze(rows)})['parity']
+
+
+def test_scale_adapter_uses_existing_synthetic_generator():
+    from analytics.benchmark import raw_scale
+    raw = raw_scale()
+    assert len(raw['debtors']) == 2933
+    assert len(raw['debts']) == 56286
+    assert raw['batch']['as_of'] == '2026-09-30'
+
+
+def test_reference_declares_online_size_limit():
+    assert c.analyze([[1, 2, 3]] * 10001)['status'] == 'UNAVAILABLE'

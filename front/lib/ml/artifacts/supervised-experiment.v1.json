@@ -1,7 +1,7 @@
 {
   "contractVersion": "1.0.0",
   "label": "Experimento con datos sintéticos; no predice pagos reales de La Falda",
-  "generatedAt": "2026-11-11T09:32:27.776309+00:00",
+  "generatedAt": "2026-11-11T19:13:03.474499+00:00",
   "codeVersion": "analytics-reduced-v1",
   "seed": 20261111,
   "libraries": {
@@ -117,6 +117,19 @@
       },
       "expected": "AUC en 0,5 ± 0.045697 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
       "passed": true
+    },
+    {
+      "id": "SHUFFLED_LABELS",
+      "label": "Control con etiquetas mezcladas",
+      "description": "Etiquetas permutadas por separado dentro de entrenamiento y evaluación (semillas +17 y +18); preserva prevalencias, rompe la señal y reajusta el pipeline. No mezcla particiones.",
+      "metrics": {
+        "rocAuc": 0.5193309874838536,
+        "prAuc": 0.4819994398586029,
+        "brier": 0.2496127456201251,
+        "logLoss": 0.6923768109701546
+      },
+      "expected": "AUC en 0,5 ± 0.044833 (3,29 errores estándar bajo independencia, fijado antes de evaluar).",
+      "passed": true
     }
   ],
   "verdict": {
@@ -129,7 +142,7 @@
   },
   "limitations": [
     "Alcance reducido autorizado por el usuario el 11/11/2026; el protocolo previo sigue como borrador pendiente de aprobación íntegra.",
-    "Una semilla, un escenario con señal y un control; sin 20 réplicas, bootstrap, simulación causal ni auditoría de equidad completa.",
+    "Una semilla, un escenario con señal y dos controles (sin señal y etiquetas mezcladas); sin 20 réplicas, bootstrap, simulación causal ni auditoría de equidad completa.",
     "Se reutilizan ventana de 90 días, rezago de 10 días, historia previa de 180 días, embargo temporal y control nulo del protocolo; no se implementa todo su mundo sintético.",
     "Señal impuesta por el generador; AUC-PR se informa como average precision. La comparación principal usa log-loss.",
     "No se guarda ni se aplica el modelo a contribuyentes reales. Las métricas son de una sola evaluación sintética."

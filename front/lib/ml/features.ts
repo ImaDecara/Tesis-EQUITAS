@@ -23,8 +23,8 @@ export function prepareCases(cases: readonly DebtorListItem[]) {
   cases.forEach((item, sourceIndex) => {
     const amount = item.metrics?.overdueDebt, days = item.metrics?.maxDaysOverdue
     const reason = !complete(amount) || amount!.value! < 0 ? 'MISSING_AMOUNT'
-      : !complete(days) || days!.value! < 0 ? 'MISSING_DATE'
       : amount!.value! === 0 ? 'NO_OVERDUE_DEBT'
+      : !complete(days) || days!.value! < 0 ? 'MISSING_DATE'
       : !Number.isSafeInteger(item.debtCount) || item.debtCount! <= 0 ? 'MISSING_COUNT' : null
     if (reason) exclusions.find(item => item.reason === reason)!.count++
     else entries.push({ values: [amount!.value!, days!.value!, item.debtCount!], sourceIndex })
