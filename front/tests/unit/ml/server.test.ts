@@ -49,6 +49,17 @@ it.each(['sin sesión', 'sin contexto', 'cartera incierta', 'advertencia', 'cort
   const result = await server.loadClusteringForViewer()
   expect(result.status).toBe('UNAVAILABLE'); expect(JSON.stringify(result)).not.toContain('privado')
 })
+it.each(['debtor_person', 'person', 'debtor_contact', 'debtor_profile', 'debtor_profile_detail'])('una advertencia en %s no alimenta ninguna variable y no impide agrupar', async table => {
+  const data = raw(); data.warnings.push({ table, code: 'BASE_VISIBILITY_UNKNOWN', message: 'privado', needsSelectPolicy: false })
+  mocks.raw.mockResolvedValue(data)
+  const result = await server.loadClusteringForViewer()
+  expect(result.status).toBe('OK'); expect(JSON.stringify(result)).not.toContain('privado')
+})
+it.each(['debtor', 'debt', 'debt_status', 'debtor_type', 'import_batch', 'tabla_desconocida'])('una advertencia en %s sí impide agrupar', async table => {
+  const data = raw(); data.warnings.push({ table, message: 'privado', needsSelectPolicy: false })
+  mocks.raw.mockResolvedValue(data)
+  expect((await server.loadClusteringForViewer()).status).toBe('UNAVAILABLE')
+})
 it('sin corte registrado, declarado y cartera vacía', async () => {
   const data = raw(); delete data.batch; mocks.raw.mockResolvedValue(data)
   mocks.viewer.mockResolvedValue({ tenantName: null, portfolio: { kind: 'UNDATED' } })

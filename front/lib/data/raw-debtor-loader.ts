@@ -31,10 +31,8 @@ async function withCutoff(reader: Reader, readPortfolio: () => Promise<Read[]>) 
   const warnings = results
     .map((result) => result.warning)
     .filter((warning): warning is DataWarning => Boolean(warning))
-  if (results[0]?.rows.length === 0 && !results[0].warning && !cutoff.warning) warnings.push({
-    table: 'debtor', code: 'PORTFOLIO_VISIBILITY_UNKNOWN', needsSelectPolicy: false,
-    message: 'No se ven casos del municipio. No se puede distinguir una cartera vacía de una lectura limitada por permisos.',
-  })
+  // Una cartera sin casos no agrega aviso acá. En nivel BASE ya lo agrega el lector (nada certifica la
+  // ausencia). Con el módulo, «todavía no hay cartera» es un estado real: ahí empieza la carga de CSV.
   if (cutoff.warning) warnings.push(cutoff.warning)
   return { cutoff, results, warnings }
 }

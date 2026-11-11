@@ -51,7 +51,7 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(client.from).toHaveBeenCalledTimes(23)
   })
 
-  it('una lectura sin filas no demuestra ausencia de cartera bajo RLS', async () => {
+  it('con el módulo, acepta respuestas vacias como listados validos sin alerta', async () => {
     const client = buildSupabaseClient({})
     createServerSupabaseClientMock.mockResolvedValue(client)
 
@@ -59,7 +59,7 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
 
     expect(result.debtors).toEqual([])
     expect(result.debts).toEqual([])
-    expect(result.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
+    expect(result.warnings).toEqual([])
   })
 
   it('convierte un error de conexion informado por Supabase en una alerta', async () => {

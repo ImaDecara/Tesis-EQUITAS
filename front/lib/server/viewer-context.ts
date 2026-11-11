@@ -23,7 +23,8 @@ export type PortfolioState =
   // Hay cartera pero ninguna fecha de corte registrada (la base no tiene el módulo, o los datos se cargaron
   // por otra vía y no hay ningún lote publicado): los cálculos usan la fecha del día y la pantalla lo dice.
   | { kind: 'UNDATED'; today: string }
-  // Reservado para una fuente que certifique ausencia: una respuesta vacía bajo RLS no alcanza.
+  // El municipio todavía no tiene ninguna cartera publicada: no es un error. Solo con el módulo, que lo certifica;
+  // en nivel BASE una respuesta vacía no alcanza y el estado es UNAVAILABLE.
   | { kind: 'EMPTY' }
   // No se pudo determinar (lectura fallida o publicación incompleta): nunca se muestra como vacío.
   | { kind: 'UNAVAILABLE' }
@@ -74,10 +75,15 @@ function text(value: unknown): string | null {
 // Sin ningún lote publicado: «sin cartera» solo si de verdad no hay ningún caso. Si los hay (se cargaron por
 // otra vía, como en la base original), se muestran con la fecha del día: nunca se oculta una cartera que existe.
 // Una consulta de una sola fila, y solo en este caso.
-async function portfolioWithoutBatch(supabase: Awaited<ReturnType<typeof requireTenantAccess>>['supabase'], tenantId: string): Promise<PortfolioState> {
+//
+// Cuando no se ve ningún caso: con el módulo, sus lotes certifican que todavía no se publicó nada y «sin cartera»
+// es un estado real (ahí empieza la carga de CSV). En nivel BASE nada lo certifica: una lectura vacía también puede
+// ser una limitación de permisos, y no se afirma que el municipio no tenga cartera.
+async function portfolioWithoutBatch(supabase: Awaited<ReturnType<typeof requireTenantAccess>>['supabase'], tenantId: string, hasModule: boolean): Promise<PortfolioState> {
   const { data, error } = await supabase.from('debtor').select('id').eq('tenant', tenantId).limit(1)
   if (error || !Array.isArray(data)) return { kind: 'UNAVAILABLE' }
-  return data.length > 0 ? { kind: 'UNDATED', today: todayInCordoba() } : { kind: 'UNAVAILABLE' }
+  if (data.length > 0) return { kind: 'UNDATED', today: todayInCordoba() }
+  return hasModule ? { kind: 'EMPTY' } : { kind: 'UNAVAILABLE' }
 }
 
 async function readViewerContext(): Promise<ViewerContext | null> {
@@ -98,10 +104,10 @@ async function readViewerContext(): Promise<ViewerContext | null> {
     // La fecha vigente es la del último lote publicado; si ese lote registra una cartera ya cargada, es declarada.
     const declared = batches.rows.some(row => row.source === INHERITED_SOURCE && row.status === 'PUBLICADO' && row.as_of === cutoff.batch?.as_of
       && !batches.rows.some(other => other.supersedes !== null && String(other.supersedes) === String(row.id)))
-    const portfolio: PortfolioState = !verified ? { kind: 'UNAVAILABLE' } : !hasModule ? await portfolioWithoutBatch(supabase, context.tenantId)
+    const portfolio: PortfolioState = !verified ? { kind: 'UNAVAILABLE' } : !hasModule ? await portfolioWithoutBatch(supabase, context.tenantId, false)
       : cutoff.warning ? { kind: 'UNAVAILABLE' }
       : cutoff.batch?.as_of ? { kind: 'LOADED', asOf: cutoff.batch.as_of, ...(declared ? { declared } : {}) }
-      : await portfolioWithoutBatch(supabase, context.tenantId)
+      : await portfolioWithoutBatch(supabase, context.tenantId, true)
     return {
       userName: user.error ? null : text(user.data?.[0]?.full_name),
       roleName: context.roleName,

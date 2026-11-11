@@ -12,6 +12,13 @@ import { withRuleGroups } from './presentation'
 import { validateExperiment } from './validation'
 import artifact from './artifacts/supervised-experiment.v1.json'
 
+// Las tres variables salen de los objetos, sus obligaciones y el catálogo de estados. Una advertencia en
+// cualquier otra lectura (incluidos el corte y una tabla desconocida) impide el cálculo. Estas cinco no
+// alimentan ninguna variable: una advertencia ahí —por ejemplo una tabla de perfiles sin filas en una base
+// sin el módulo— no vuelve parciales los datos que se agrupan. El cruce con los grupos de trabajo sí puede
+// verse afectado y aparece como «no disponible» en el propio cruce, que es descriptivo.
+const NOT_USED_BY_FEATURES: ReadonlySet<string> = new Set(['debtor_person', 'person', 'debtor_contact', 'debtor_profile', 'debtor_profile_detail'])
+
 // Solo proceso servidor, máximo 16 municipios, TTL 15 minutos. No es caché pública de Next.
 const memo = new Map<string, { fingerprint: string; at: number; computedAt: string; analysis: ReturnType<typeof analyzeMatrix> }>()
 export async function loadClusteringForViewer(): Promise<ClusteringResult> {
@@ -21,7 +28,7 @@ export async function loadClusteringForViewer(): Promise<ClusteringResult> {
     const viewer = await loadViewerContext()
     if (!viewer || viewer.portfolio.kind === 'UNAVAILABLE') return emptyResult('UNAVAILABLE', 'No se pudo verificar el contexto municipal y la cartera.')
     const raw = await loadRawDebtorData()
-    if (raw.warnings.length) return emptyResult('UNAVAILABLE', 'La lectura de la cartera tiene advertencias; no se agrupan datos parciales.')
+    if (raw.warnings.some(warning => !NOT_USED_BY_FEATURES.has(warning.table))) return emptyResult('UNAVAILABLE', 'La lectura de la cartera tiene advertencias; no se agrupan datos parciales.')
     if (raw.debtors.length > MAXIMUM_CASES) return emptyResult('UNAVAILABLE', `La cartera supera el límite de ${MAXIMUM_CASES} casos para el cálculo en línea.`)
     const now = new Date(), computedAt = now.toISOString()
     const cases = mapDebtorObjectsFromRawData(raw, { computedAt }).debtors

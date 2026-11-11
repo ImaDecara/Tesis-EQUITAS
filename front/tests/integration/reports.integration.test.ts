@@ -746,13 +746,12 @@ describe('ALIGN-028: conciliacion con la vista, parser independiente', () => {
     expect(totalRow(decisions.file.rows)).toMatchObject({ decisiones: '0', vigentes: '0', fecha_corte: 'NO_APLICA' })
   })
 
-  it('sin objetos visibles: no afirma cero ni entrega un reporte que podría estar limitado por RLS', async () => {
+  it('con el módulo y un corte publicado, sin objetos: 0 derivado y metadatos, sin archivo mudo', async () => {
     client({ debtor: [], debt: [], debtor_person: [], person: [], debtor_contact: [] })
-    for (const name of ['queue', 'data-quality']) {
-      const response = await handler(name)(request(name))
-      expect(response.status).toBe(503)
-      expect(response.headers.get('content-disposition')).toBeNull()
-    }
+    const queue = await download('queue')
+    expect(totalRow(queue.file.rows)).toMatchObject({ objetos: '0', deuda_total_ars: '0', deuda_pendiente_ars: '0', fecha_corte: PORTFOLIO_AS_OF })
+    const quality = await download('data-quality')
+    expect(aggregated(quality.file.rows, 'objetos_leidos').valor).toBe('0')
   })
 
   it('decisiones: sin intervencion decidida es NO_APLICA, nunca intensidad 0; aprobacion por estado', async () => {

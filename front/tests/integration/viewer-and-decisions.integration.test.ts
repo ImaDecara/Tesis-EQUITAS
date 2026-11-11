@@ -78,8 +78,8 @@ describe('loadViewerContext', () => {
 
   // Misma selección que `resolvePortfolioCutoff`: lo que el tablero toma por cartera vigente.
   it.each([
-    ['sin ninguna carga', [], 'UNAVAILABLE'],
-    ['solo una carga descartada', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'DESCARTADO', supersedes: null }], 'UNAVAILABLE'],
+    ['sin ninguna carga', [], 'EMPTY'],
+    ['solo una carga descartada', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'DESCARTADO', supersedes: null }], 'EMPTY'],
     ['una validación sin publicación atómica', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'VALIDADO', supersedes: null }], 'UNAVAILABLE'],
     ['un estado desconocido', [{ id: 1, tenant: TENANT, as_of: '2026-09-30', status: 'INVENTADO', supersedes: null }], 'UNAVAILABLE'],
     ['una publicación con fecha inválida', [
@@ -96,7 +96,7 @@ describe('loadViewerContext', () => {
     expect(viewer?.portfolio.kind).toBe(kind)
     const cutoff = resolvePortfolioCutoff(batches.map(row => ({ ...row, counts: { publicacion_atomica: null } })), null)
     if (kind === 'LOADED') expect(viewer?.portfolio).toEqual({ kind, asOf: cutoff.batch?.as_of })
-    else expect(kind).toBe('UNAVAILABLE')
+    else expect(Boolean(cutoff.warning)).toBe(kind === 'UNAVAILABLE')
   })
 
   it('una lectura fallida de las cargas es «no disponible», nunca «sin cartera»', async () => {

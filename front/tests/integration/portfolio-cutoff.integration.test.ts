@@ -165,13 +165,16 @@ describe('ALIGN-014: corte publicado común a cartera y CSV (reproducción coord
     expect(csv.rows.every(row => row.fecha_corte === 'NO_INTEGRADO' && /^\d{4}-\d{2}-\d{2}$/.test(row.fecha_calculo_usada))).toBe(true)
   })
 
-  it('conserva el corte conocido pero no certifica ausencia con una lectura vacía bajo RLS', async () => {
+  it('conserva el corte conocido en una cartera vacía y en su fila TOTAL', async () => {
     const { tables } = fixture([event(1)])
     tables.debtor.length = 0; tables.debt.length = 0
-    const raw = await loadRawDebtorData()
-    expect(raw.batch?.as_of).toBe('2026-09-30')
-    expect(raw.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
-    expect((await exportQueue()).status).toBe(503)
+    const { dashboard } = await getDashboardDataFromService()
+    expect(dashboard.context).toContain('Corte del manifiesto: 2026-09-30')
+    const response = await exportQueue()
+    expect(response.status).toBe(200)
+    const csv = parseCsvBytes(new Uint8Array(await response.arrayBuffer()))
+    expect(csv.rows).toHaveLength(1)
+    expect(csv.rows[0]).toMatchObject({ fecha_corte: '2026-09-30', objetos: '0', deuda_total_ars: '0' })
   })
 
   it('una publicación incompleta con cero filas no se presenta como cartera vacía confirmada', async () => {

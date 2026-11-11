@@ -113,9 +113,9 @@ describe('nivel base: la base no tiene el módulo de decisiones, cargas y regist
     expect(probes.map(probe => [probe.select, probe.limit, probe.filters])).toEqual([['id', 1, { tenant: 'eq.7' }]])
   })
 
-  it('sin filas visibles no se afirma que no haya cartera', async () => {
+  it('con el módulo, «sin cartera cargada» solo cuando de verdad no hay ningún caso; si no se pudo saber, no se afirma', async () => {
     session({ missing: [], tables: { import_batch: [], debtor: [{ id: 801, tenant: 8, type: 6, identifier: 'AJENO' }] } })
-    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'UNAVAILABLE' })
+    expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'EMPTY' })
     session({ missing: ['debtor'], tables: { import_batch: [] } })
     expect((await loadViewerContext())?.portfolio).toEqual({ kind: 'UNAVAILABLE' })
   })

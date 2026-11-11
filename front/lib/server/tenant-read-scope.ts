@@ -32,9 +32,12 @@ export function tenantReadScope(table: PortfolioTable, tenantId: string): TableR
         select: `id,debtor_profile,person,risk_value,active,__scope:debtor_profile!inner(__debtor:debtor!inner(tenant)),${person}`,
         filters: [['__scope.__debtor.tenant', tenantId], ...personFilters],
       }
+    // Catalogos compartidos, solo tras autorizar.
     case 'debtor_type':
+      return { select: 'id,key,value', filters: [] }
     case 'debt_status':
-      return { select: 'id,key,value', filters: [] } // Catalogos compartidos, solo tras autorizar.
+      // `description` es el rótulo de respaldo del mapeador cuando `value` viene vacío; la base original la tiene.
+      return { select: 'id,key,value,description', filters: [] }
     default:
       return null
   }

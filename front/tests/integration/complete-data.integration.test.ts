@@ -96,8 +96,7 @@ describe('R-DAT-01: limites, fallos y relaciones de la lectura completa', () => 
 
       expect(result.ids).toEqual(rows.map((row) => String(row.id)))
       expect(new Set(result.ids).size).toBe(count)
-      if (route === 'objetos' && count === 0) expect(result.warnings).toEqual([expect.objectContaining({ code: 'PORTFOLIO_VISIBILITY_UNKNOWN' })])
-      else expect(result.warnings).toEqual([])
+      expect(result.warnings).toEqual([])
       const calls = requests.filter((request) => request.table === (route === 'objetos' ? 'debtor' : 'person'))
       expect(calls).toHaveLength(Math.ceil(count / 1000) + 1)
       expect(calls.every((call) => call.order === 'id.asc')).toBe(true)
