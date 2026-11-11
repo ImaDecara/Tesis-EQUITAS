@@ -181,7 +181,7 @@ function TopBar({ consultation }: { consultation: boolean }) {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs',
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs',
                 active ? 'border-[#c7b176] bg-[#f6efdc] text-[#5f4a19]' : 'border-slate-200 bg-white text-slate-600',
                 unavailableHere(item, consultation) && !active && 'text-slate-400'
               )}
