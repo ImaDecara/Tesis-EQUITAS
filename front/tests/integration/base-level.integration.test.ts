@@ -23,6 +23,7 @@ import { loadRecordedDecisions } from '@/lib/server/recorded-decisions'
 import { csvReportResponse } from '@/lib/server/report-response'
 import { INHERITED_SOURCE, loadViewerContext, type ViewerContext } from '@/lib/server/viewer-context'
 import { getDebtorDetailDataFromService } from '@/lib/services/debtor-data-service'
+import { getPeopleDataFromService } from '@/lib/services/person-data-service'
 import { createPaginatedSupabase } from '@/tests/fixtures/paginated-supabase'
 import { portfolioTables, reviewTables } from '@/tests/fixtures/reports-portfolio'
 import type { RawRow } from '@/types/equitas-domain'
@@ -310,6 +311,12 @@ describe('la ficha lee solo los datos de su caso (encargo 10.6)', () => {
       expect(stable(detail?.debtor), debtorId).toEqual(stable(full.debtors.find(debtor => debtor.id === debtorId)))
       expect(detail?.contacts.map(contact => contact.id), debtorId).toEqual((full.contactsByDebtor.get(debtorId) ?? []).map(contact => contact.id))
     }
+  })
+
+  it('en nivel base el índice anterior por persona sin filas conserva su aviso propio: no es una lectura fallida', async () => {
+    session({ tables: tablesWithRealLinks() })
+    const { warnings } = await getPeopleDataFromService()
+    expect(warnings).toEqual([expect.objectContaining({ table: 'debtor_profile_detail', code: 'EMPTY_LEGACY_INDEX' })])
   })
 
   it('en nivel base, si la tabla entera no muestra filas del municipio, la ficha tampoco afirma ausencia', async () => {

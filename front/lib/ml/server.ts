@@ -29,7 +29,7 @@ export async function loadClusteringForViewer(): Promise<ClusteringResult> {
     if (!viewer || viewer.portfolio.kind === 'UNAVAILABLE') return emptyResult('UNAVAILABLE', 'No se pudo verificar el contexto municipal y la cartera.')
     const raw = await loadRawDebtorData()
     if (raw.warnings.some(warning => !NOT_USED_BY_FEATURES.has(warning.table))) return emptyResult('UNAVAILABLE', 'La lectura de la cartera tiene advertencias; no se agrupan datos parciales.')
-    if (raw.debtors.length > MAXIMUM_CASES) return emptyResult('UNAVAILABLE', `La cartera supera el límite de ${MAXIMUM_CASES} casos para el cálculo en línea.`)
+    if (raw.debtors.length > MAXIMUM_CASES) return emptyResult('UNAVAILABLE', `La cartera supera el límite de ${new Intl.NumberFormat('es-AR').format(MAXIMUM_CASES)} casos para calcular en la pantalla.`)
     const now = new Date(), computedAt = now.toISOString()
     const cases = mapDebtorObjectsFromRawData(raw, { computedAt }).debtors
     if (cases.length !== raw.debtors.length) return emptyResult('UNAVAILABLE', 'No se pudo mapear la cartera completa.')

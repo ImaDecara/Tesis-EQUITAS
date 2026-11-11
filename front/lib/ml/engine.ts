@@ -5,6 +5,8 @@ import { SEED, MAX_ITERATIONS, RESAMPLES, SAMPLE_SIZE, fitPreprocessing, transfo
 export const MINIMUM_CASES = 30
 export const MAXIMUM_CASES = 10_000
 export const COMPUTE_BUDGET_MS = 1500
+const CASES_LIMIT_TEXT = new Intl.NumberFormat('es-AR').format(MAXIMUM_CASES)
+const OVER_LIMIT = `La cartera supera el límite de ${CASES_LIMIT_TEXT} casos para calcular en la pantalla.`
 class ComputationLimit extends Error {}
 export function emptyResult(status: ClusteringResult['status'], detail: string | null): ClusteringResult {
   return {
@@ -12,15 +14,15 @@ export function emptyResult(status: ClusteringResult['status'], detail: string |
     method: { algorithm: 'KMEANS', engine: 'TypeScript (servidor)', engineVersion: '1.0.0', validatedAgainst: 'scikit-learn 1.9.1', seed: SEED, initialization: 'Primer centro LCG; siguientes: punto más lejano (empate por orden canónico). Un inicio por k.', maxIterations: MAX_ITERATIONS },
     source: { tenantName: '', casesTotal: 0, casesIncluded: 0, exclusions: [], minimumCases: MINIMUM_CASES, calculationDate: '', portfolioDate: null, portfolioDateKind: 'NOT_REGISTERED', computedAt: '', dataFingerprint: '' },
     freshness: { state: 'CURRENT', detail: null }, features: FEATURES, candidates: [], selectedK: null,
-    selectionRule: 'k=2…6; cada grupo debe tener al menos max(5, techo(5% de casos)). Mayor silueta; empate dentro de 1e-10: menor k.',
-    orderingRule: 'Mediana de deuda vencida ascendente; empate: índice interno del centro.',
+    selectionRule: 'Se prueban de 2 a 6 grupos. Cada grupo debe reunir al menos el 5% de los casos, y nunca menos de 5. Entre los que cumplen gana la mayor silueta; si empatan, la menor cantidad de grupos.',
+    orderingRule: 'De menor a mayor mediana de deuda vencida.',
     separation: { silhouette: null, reading: 'NOT_AVAILABLE', text: 'Separación no evaluable.' },
     stability: { method: 'Cinco submuestras sin reemplazo del 80%, con preprocesamiento reajustado; ARI de las predicciones de toda la población contra la referencia.', resamples: RESAMPLES, medianAdjustedRand: null, reading: 'NOT_AVAILABLE', text: 'Estabilidad no evaluable.' }, clusters: [],
-    limitations: [`Hasta ${MAXIMUM_CASES} casos; presupuesto de cómputo ${COMPUTE_BUDGET_MS} ms con controles cooperativos. Si se supera, se devuelve UNAVAILABLE sin mostrar grupos parciales. No incluye la espera de red.`, `Silueta sobre una submuestra determinística de hasta ${SAMPLE_SIZE} casos (distancias dentro de la submuestra).`, 'Se excluyen faltantes; no se imputan importes ni fechas. Recorte superior p99, log1p y estandarización poblacional; varianza cero usa escala 1.', 'Los grupos describen esta cartera. No predicen pagos, no son categorías sociales ni cambian decisiones.', 'Un único inicio y cinco remuestras: evaluación acotada; puede haber otras particiones válidas.'],
+    limitations: [`Se calcula con hasta ${CASES_LIMIT_TEXT} casos y en no más de ${(COMPUTE_BUDGET_MS / 1000).toLocaleString('es-AR')} segundos. Si se supera alguno de los dos límites, la pantalla dice «No disponible» y no muestra grupos parciales. El tiempo de lectura de la cartera no cuenta para ese límite.`, `La silueta se calcula sobre una muestra fija de hasta ${SAMPLE_SIZE} casos, no sobre toda la cartera.`, 'Los casos con datos faltantes se excluyen: no se completan importes ni fechas. Antes de agrupar, cada variable se recorta en su percentil 99, se pasa a logaritmo y se lleva a una escala común.', 'Los grupos describen esta cartera. No predicen pagos, no son categorías sociales ni cambian decisiones.', 'Se prueba un solo punto de partida por cantidad de grupos y cinco submuestras: es una evaluación acotada y puede haber otras particiones válidas.'],
   }
 }
 export function analyzeMatrix(rows: number[][], clock = () => performance.now()) {
-  if (rows.length > MAXIMUM_CASES) return { result: emptyResult('UNAVAILABLE', `La cartera supera el límite de ${MAXIMUM_CASES} casos para el cálculo en línea.`), labels: [] as number[] }
+  if (rows.length > MAXIMUM_CASES) return { result: emptyResult('UNAVAILABLE', OVER_LIMIT), labels: [] as number[] }
   const deadline = clock() + COMPUTE_BUDGET_MS
   const check = () => { if (clock() >= deadline) throw new ComputationLimit() }
   try {
@@ -47,7 +49,7 @@ function computeMatrix(rows: number[][], check: () => void) {
     fit?.labels.forEach(label => counts[label]++)
     const score = fit ? silhouette(scaled, fit.labels, check) : null
     const eligible = !!fit && Math.min(...counts) >= Math.max(5, Math.ceil(rows.length * 0.05)) && score !== null
-    const candidate = { k, silhouette: score, smallestShare: Math.min(...counts) / rows.length, inertia: fit?.inertia ?? 0, eligible, note: eligible ? null : 'Grupo vacío, pequeño o silueta no evaluable.' }
+    const candidate = { k, silhouette: score, smallestShare: Math.min(...counts) / rows.length, inertia: fit?.inertia ?? 0, eligible, note: eligible ? null : !fit ? 'Quedó un grupo vacío.' : score === null ? 'No se pudo calcular la silueta.' : 'Algún grupo queda con menos del mínimo de casos.' }
     result.candidates.push(candidate)
     if (eligible && (!best || score! > best.candidate.silhouette! + 1e-10)) best = { fit: fit!, candidate }
   }

@@ -81,6 +81,11 @@ export async function requireTenantAccess(options: { permission?: DalPermission;
   return { supabase, context }
 }
 
+// El índice anterior por persona no existe en una cartera cargada desde CSV: que no tenga filas es un dato
+// conocido y la noche 7 ya le dio su propio aviso (EMPTY_LEGACY_INDEX, «dato que no existe para nadie»).
+// No se lo trata como lectura incierta en nivel BASE: haría aparecer un aviso de falla en cada pantalla.
+const EMPTY_IS_ORDINARY: ReadonlySet<PortfolioTable> = new Set<PortfolioTable>(['debtor_profile_detail'])
+
 // Solo devuelve filas de tablas declaradas y del municipio verificado. Los errores
 // de consulta conservan DataWarning; una denegacion nunca se convierte en filas [].
 export async function createTenantReader() {
@@ -117,7 +122,7 @@ export async function createTenantReader() {
         ? debtorReadScope(table, context.tenantId, debtorId) : tenantReadScope(table, context.tenantId)
       if (!scope) throw new DataAccessError('TABLE_FORBIDDEN', 'Esa lectura no está habilitada.')
       const result = await loadAllTableRows(table, supabase, { ...scope, parallel: table === 'debt' })
-      if (!result.warning && result.rows.length === 0) {
+      if (!result.warning && result.rows.length === 0 && !EMPTY_IS_ORDINARY.has(table)) {
         // Con BASE no hay una fuente que certifique ausencia: RLS también devuelve [].
         // No convertir una tabla oculta por políticas en cero deuda o «sin contacto».
         level ??= loadDatabaseLevel()
