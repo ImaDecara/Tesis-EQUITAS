@@ -52,4 +52,9 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
   return <td className={cn('px-4 py-3 align-middle text-slate-700', className)} {...props} />
 }
 
-export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell }
+/** En pantallas angostas una tabla ancha se desplaza dentro de su marco: se avisa, porque no es evidente. */
+function TableScrollHint() {
+  return <p data-table-scroll-hint className="pb-1 text-xs text-slate-500 xl:hidden">Deslizá la tabla hacia los lados para ver las demás columnas.</p>
+}
+
+export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableScrollHint }

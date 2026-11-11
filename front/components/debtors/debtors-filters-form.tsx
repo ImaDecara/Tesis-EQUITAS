@@ -7,20 +7,11 @@ import { Search } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
+// Bandas del puntaje de prioridad (un solo concepto en toda la aplicación).
+const BAND_FILTER_LABELS: Record<string, string> = { ALTO: 'Alta (70 a 100)', MEDIO: 'Media (40 a 69)', BAJO: 'Baja (0 a 39)' }
+
 function getRiskFilterLabel(risk: string) {
-  if (risk === 'BAJO') {
-    return 'Bajo (0-39)'
-  }
-
-  if (risk === 'MEDIO') {
-    return 'Medio (40-69)'
-  }
-
-  if (risk === 'ALTO') {
-    return 'Alto (70-100)'
-  }
-
-  return risk
+  return BAND_FILTER_LABELS[risk] ?? risk
 }
 
 type DebtorsFiltersFormProps = {
@@ -31,6 +22,8 @@ type DebtorsFiltersFormProps = {
     type: string
     contact: string
     personId: string
+    minAmount?: string
+    queue?: string
   }
   riskOptions: string[]
   statusOptions: string[]
@@ -67,6 +60,10 @@ export function DebtorsFiltersForm({
     if (contact) params.set('contact', contact)
     if (personId) params.set('personId', personId)
 
+    for (const key of ['minAmount', 'queue']) {
+      const value = String(formData.get(key) ?? '').trim()
+      if (value) params.set(key, value)
+    }
     const href = params.toString() ? `${pathname}?${params.toString()}` : pathname
 
     startTransition(() => {
@@ -83,9 +80,11 @@ export function DebtorsFiltersForm({
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
       {initialValues.personId && <input type="hidden" name="personId" value={initialValues.personId} />}
+      {initialValues.minAmount && <input type="hidden" name="minAmount" value={initialValues.minAmount} />}
+      {initialValues.queue && <input type="hidden" name="queue" value={initialValues.queue} />}
       <div className="xl:col-span-2">
         <label htmlFor="q" className="mb-1 block text-xs font-semibold text-slate-600">
-          Buscar por objeto o persona
+          Buscar por identificador o persona
         </label>
         <div className="relative">
           <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-slate-400" />
@@ -93,15 +92,16 @@ export function DebtorsFiltersForm({
             id="q"
             name="q"
             defaultValue={initialValues.q}
-            placeholder="Ej: OBJ-001 o Perez"
+            placeholder="Ej.: OBJ-001 o Pérez"
             className="h-9 w-full rounded-md border border-slate-300 bg-white pr-3 pl-8 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition focus:ring-4"
           />
         </div>
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Riesgo</label>
+        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">Puntaje de prioridad</label>
         <select
+          id="risk"
           name="risk"
           defaultValue={initialValues.risk}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -116,8 +116,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Estado</label>
+        <label htmlFor="status" className="mb-1 block text-xs font-semibold text-slate-600">Estado</label>
         <select
+          id="status"
           name="status"
           defaultValue={initialValues.status}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -132,8 +133,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
+        <label htmlFor="type" className="mb-1 block text-xs font-semibold text-slate-600">Tipo</label>
         <select
+          id="type"
           name="type"
           defaultValue={initialValues.type}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -148,8 +150,9 @@ export function DebtorsFiltersForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
+        <label htmlFor="contact" className="mb-1 block text-xs font-semibold text-slate-600">Contacto</label>
         <select
+          id="contact"
           name="contact"
           defaultValue={initialValues.contact}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
@@ -166,7 +169,7 @@ export function DebtorsFiltersForm({
           disabled={isPending}
           className={cn(buttonVariants({ variant: 'default' }), 'h-9')}
         >
-          {isPending ? 'Aplicando...' : 'Aplicar filtros'}
+          {isPending ? 'Aplicando…' : 'Aplicar filtros'}
         </button>
         <button
           type="button"

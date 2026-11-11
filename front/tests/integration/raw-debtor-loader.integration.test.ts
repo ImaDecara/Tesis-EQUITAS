@@ -4,6 +4,7 @@ const { createServerSupabaseClientMock } = vi.hoisted(() => ({
   createServerSupabaseClientMock: vi.fn(),
 }))
 
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
 vi.mock('@/lib/supabase-config', () => ({
   hasSupabaseCredentials: true,
 }))
@@ -14,7 +15,7 @@ vi.mock('@/lib/supabase-server', () => ({
 
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import type { RawRow } from '@/types/equitas-domain'
-import { createPaginatedSupabase } from '../fixtures/paginated-supabase'
+import { createAuthorizedPaginatedSupabase as createPaginatedSupabase } from '../fixtures/paginated-supabase'
 
 type SupabaseQueryResult = {
   data: unknown
@@ -46,11 +47,11 @@ describe('integracion simulada de lectura de objetos de deuda', () => {
     expect(result.debts).toEqual([{ id: 11, debtor: 1 }])
     expect(result.debtorTypes).toEqual([])
     expect(result.warnings).toEqual([])
-    // Ocho tablas y una consulta terminal adicional por cada tabla con datos.
-    expect(client.from).toHaveBeenCalledTimes(10)
+    // Cuatro de autorización, ocho tablas, dos páginas terminales y corte antes/después.
+    expect(client.from).toHaveBeenCalledTimes(23)
   })
 
-  it('acepta respuestas vacias como listados validos sin alerta', async () => {
+  it('con el módulo, acepta respuestas vacias como listados validos sin alerta', async () => {
     const client = buildSupabaseClient({})
     createServerSupabaseClientMock.mockResolvedValue(client)
 

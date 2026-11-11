@@ -89,6 +89,10 @@ database/data/
 database/imports/
 *.xlsx
 *.csv
+# Única excepción: los lotes de ejemplo SINTÉTICOS de «Cargar CSV», generados y comprobables byte a byte
+# con scripts/local/cartera_ejemplo.py --check. Ningún otro CSV entra al repositorio.
+!front/public/ejemplos/carga-csv/*/cabecera.csv
+!front/public/ejemplos/carga-csv/*/detalle.csv
 *.dump
 *.backup
 *.bak

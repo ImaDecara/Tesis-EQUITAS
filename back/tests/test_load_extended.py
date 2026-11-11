@@ -75,7 +75,6 @@ def test_loader_base_operations_use_mocked_supabase_responses(monkeypatch: pytes
         (load.load_city, {'province': 1, 'name': 'Rosario', 'postal_code': '2000'}, load.CITY_TABLE, {'province': 1, 'name': 'Rosario', 'postal_code': '2000'}),
         (load.load_address, {'person': 1}, load.ADDRESS_TABLE, {'person': 1}),
         (load.load_debtor_contact, {'person': 1, 'type': 1, 'value': '341'}, load.DEBTOR_CONTACT_TABLE, {'person': 1, 'type': 1, 'value': '341'}),
-        (load.load_debtor_profile, {'debtor': 2}, load.DEBTOR_PROFILE_TABLE, {'debtor': 2}),
         (load.load_debtor_profile_detail, {'debtor_profile': 3, 'person': 1}, load.DEBTOR_PROFILE_DETAIL_TABLE, {'debtor_profile': 3, 'person': 1}),
     ],
 )
@@ -92,6 +91,7 @@ def test_specific_loaders_keep_their_deduplication_contracts(
         table_name: str,
         payload: dict[str, Any],
         lookup_filters: dict[str, Any],
+        ignored_columns: tuple[str, ...] = (),
     ) -> dict[str, int]:
         captured.update({
             'table_name': table_name,
@@ -111,14 +111,14 @@ def test_specific_loaders_keep_their_deduplication_contracts(
 
 
 def test_loader_rejects_invalid_payloads_and_response_shapes() -> None:
-    with pytest.raises(ValueError, match='sin external_id'):
+    with pytest.raises(ValueError, match='codigo=PERSON_EXTERNAL_ID_MISSING'):
         load.load_person({})
 
-    with pytest.raises(ValueError, match='sin type'):
+    with pytest.raises(ValueError, match='codigo=DEBTOR_TYPE_MISSING'):
         load.load_debtor({'tenant': 1, 'external_id': 2})
 
-    with pytest.raises(RuntimeError, match='Respuesta vac'):
+    with pytest.raises(RuntimeError, match='codigo=RESPONSE_EMPTY_OR_INVALID'):
         load.get_first_response_row([], 'person', 'select')
 
-    with pytest.raises(RuntimeError, match='no es un objeto'):
+    with pytest.raises(RuntimeError, match='codigo=RESPONSE_ROW_INVALID'):
         load.get_first_response_row([1], 'person', 'select')

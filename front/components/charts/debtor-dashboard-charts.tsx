@@ -20,6 +20,7 @@ import { type ChartBucket } from '@/types/equitas-domain'
 
 type ChartProps = {
   title: string
+  emptyMessage?: string
   data: ChartBucket[]
   legendLayout?: 'side' | 'bottom'
   size?: 'default' | 'compact'
@@ -60,17 +61,24 @@ function ChartSkeleton({ title }: { title: string }) {
   )
 }
 
+function EmptyChart({ title, message = 'Sin datos disponibles' }: { title: string; message?: string }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+    <CardContent>{message}</CardContent></Card>
+}
+
 export function BarDistributionChart({
   title,
   data,
+  emptyMessage,
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 0 }]
+  const rows = data
   const contentHeightClass = size === 'compact' ? 'h-56' : 'h-72'
   const maxValue = Math.max(...rows.map((row) => row.value), 0)
   const yAxisWidth = maxValue >= 10000 ? 58 : 34
 
+  if (!rows.length) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -102,7 +110,7 @@ export function BarDistributionChart({
               cursor={{ fill: '#e2e8f0' }}
               contentStyle={{ borderRadius: 10, borderColor: '#cbd5e1' }}
             />
-            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+            <Bar dataKey="value" radius={[8, 8, 0, 0]} isAnimationActive={false}>
               {rows.map((row, index) => (
                 <Cell key={`${row.label}-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
               ))}
@@ -117,15 +125,17 @@ export function BarDistributionChart({
 export function RiskDonutChart({
   title,
   data,
+  emptyMessage,
   legendLayout = 'side',
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 1 }]
+  const rows = data
   const total = rows.reduce((acc, row) => acc + row.value, 0)
   const isBottomLegend = legendLayout === 'bottom'
   const isCompact = size === 'compact'
 
+  if (!rows.length || total === 0) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -151,9 +161,12 @@ export function RiskDonutChart({
                 nameKey="label"
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={95}
+                // Radios relativos al contenedor: la dona entra entera en la tarjeta compacta (H15).
+                innerRadius="55%"
+                outerRadius="85%"
                 paddingAngle={4}
+                // Sin animación de entrada: el anillo está dibujado desde el primer cuadro.
+                isAnimationActive={false}
               >
                 {rows.map((row, index) => (
                   <Cell key={`${row.label}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
@@ -164,7 +177,7 @@ export function RiskDonutChart({
           </ResponsiveContainer>
         </div>
 
-        <div className={isBottomLegend ? 'grid grid-cols-1 gap-2' : isCompact ? 'space-y-2' : 'space-y-3'}>
+        <div className={isBottomLegend ? (isCompact ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-1 gap-2') : isCompact ? 'space-y-2' : 'space-y-3'}>
           {rows.map((row, index) => {
             const color = PIE_COLORS[index % PIE_COLORS.length]
             const percentage = total > 0 ? (row.value / total) * 100 : 0
@@ -174,7 +187,7 @@ export function RiskDonutChart({
                 key={`${row.label}-${index}-legend`}
                 className={
                   isBottomLegend
-                    ? 'flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2'
+                    ? (isCompact ? 'rounded-lg border border-slate-200 bg-slate-50 px-2 py-2' : 'flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2')
                     : isCompact
                       ? 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2'
                       : 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5'
@@ -214,12 +227,14 @@ export function RiskDonutChart({
 export function TopDebtHorizontalChart({
   title,
   data,
+  emptyMessage,
   size = 'default',
 }: ChartProps) {
   const isReady = useChartReady()
-  const rows = data.length > 0 ? data : [{ label: 'Sin datos', value: 0 }]
+  const rows = data
   const contentHeightClass = size === 'compact' ? 'h-56' : 'h-72'
 
+  if (!rows.length) return <EmptyChart title={title} message={emptyMessage} />
   if (!isReady) {
     return <ChartSkeleton title={title} />
   }
@@ -261,7 +276,7 @@ export function TopDebtHorizontalChart({
               formatter={(value) => formatCurrency(Number(value))}
               contentStyle={{ borderRadius: 10, borderColor: '#cbd5e1' }}
             />
-            <Bar dataKey="value" radius={[0, 8, 8, 0]} fill="#0f2f57" />
+            <Bar dataKey="value" radius={[0, 8, 8, 0]} fill="#0f2f57" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

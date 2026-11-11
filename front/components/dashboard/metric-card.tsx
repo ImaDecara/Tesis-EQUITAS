@@ -66,7 +66,7 @@ export function MetricCard({
   return (
     <Card
       className={cn(
-        'overflow-hidden bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md',
+        'overflow-hidden bg-white shadow-sm',
         toneStyles.border
       )}
     >
@@ -87,7 +87,7 @@ export function MetricCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-1 pt-0">
-        <p className="text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+        <p className="text-2xl font-semibold tracking-tight whitespace-nowrap tabular-nums text-slate-900 lg:text-lg xl:text-2xl">{value}</p>
         <p className="text-xs text-slate-500">{hint}</p>
       </CardContent>
     </Card>

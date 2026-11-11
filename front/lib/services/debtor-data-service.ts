@@ -1,6 +1,7 @@
 import { loadRawDebtorData } from '@/lib/data/raw-debtor-loader'
 import { mapDebtorObjectsFromRawData } from '@/lib/mappers/debtor-object-mapper'
-import { calculateDaysSinceDate } from '@/lib/parsers/date-value-parser'
+import { loadContactTypeCatalog } from '@/lib/server/contact-type-catalog'
+import { daysSinceData, readingFailed } from '@/lib/data-presence'
 import type { DebtorDetailData } from '@/types/equitas-domain'
 
 // Construye el detalle a partir del resultado ya mapeado.
@@ -30,10 +31,12 @@ function mapDebtorDetailFromMappedObjects(
     contacts,
     debts,
     profile: {
+      metrics: debtor.metrics,
       totalDebt: debtor.totalDebt,
+      pendingDebt: debtor.pendingDebt,
       overdueDebt: debtor.overdueDebt,
       debtCount: debtor.debtCount,
-      antiquityDays: calculateDaysSinceDate(oldestDebt),
+      antiquityDays: readingFailed(mapped.warnings, 'debt') ? null : daysSinceData(oldestDebt).value,
       associatedPeople: debtor.peopleCount,
       availableContacts: debtor.contactCount,
       risk: debtor.risk,
@@ -51,13 +54,20 @@ export async function getDebtorsDataFromService() {
   return {
     debtors: mapped.debtors,
     warnings: mapped.warnings,
+    batch: rawData.batch,
   }
 }
 
 // Caso de uso del detalle de un objeto de deuda.
 export async function getDebtorDetailDataFromService(debtorId: string) {
-  const rawData = await loadRawDebtorData()
-  const mapped = mapDebtorObjectsFromRawData(rawData)
+  // Solo los datos de ese caso: la ficha no necesita el resto de la cartera.
+  const rawData = await loadRawDebtorData(debtorId)
+  const contactTypes = await loadContactTypeCatalog()
+  const mapped = mapDebtorObjectsFromRawData({
+    ...rawData,
+    contactTypes: contactTypes.rows,
+    warnings: contactTypes.warning ? [...rawData.warnings, contactTypes.warning] : rawData.warnings,
+  })
   const detail = mapDebtorDetailFromMappedObjects(debtorId, mapped)
 
   return {

@@ -1,3 +1,5 @@
+// Noche 7: textos de las pantallas actuales (Tablero, Casos, Personas, Correo, Contraseña, «Iniciar sesión», «Cerrar sesión»,
+// «No se pudieron leer algunos datos», «No hay casos que cumplan los filtros elegidos.»). Mismas cinco comprobaciones.
 import { chromium, expect as baseExpect } from '@playwright/test'
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -109,47 +111,47 @@ try {
     report.screenshots.push(name + '.png')
   }
   const noVisibleError = async () => {
-    await expect(page.getByText('Tablas con acceso restringido o errores de lectura')).toHaveCount(0)
-    await expect(page.getByText('Validando sesion...', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('No se pudieron leer algunos datos')).toHaveCount(0)
+    await expect(page.getByText('Validando sesión…', { exact: true })).toHaveCount(0)
     if (pageErrors.length || consoleErrors.length) throw Error('Se detectaron errores JavaScript/console; ver diagnostico sanitizado.')
   }
   timer = setTimeout(() => { void browser.close().catch(() => {}) }, policy.case_timeout_seconds * 1000)
   await page.goto(new URL('/login', base).href)
-  await expect(page.getByLabel('Email', { exact: true })).toBeVisible()
-  await page.getByLabel('Email', { exact: true }).fill(account.email)
-  await page.getByLabel('Password', { exact: true }).fill(account.password)
-  await page.getByRole('button', { name: 'Iniciar sesion', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Dashboard ejecutivo', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Correo', { exact: true })).toBeVisible()
+  await page.getByLabel('Correo', { exact: true }).fill(account.email)
+  await page.getByLabel('Contraseña', { exact: true }).fill(account.password)
+  await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Tablero', exact: true })).toBeVisible()
   await expect(page).toHaveURL(base.origin + '/')
   await noVisibleError()
   report.checks.push({ id: 'login', passed: true, observed: 'Dashboard autenticado disponible.' })
 
   const expectedAmount = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(policy.expected.debt_amount)
-  const metric = page.getByText('Deuda total', { exact: true }).locator('..').locator('..').locator('..')
+  const metric = page.getByText('Total registrado', { exact: true }).first().locator('..').locator('..').locator('..')
   await expect(metric).toContainText(expectedAmount)
   await expect(page.locator('body')).not.toContainText(policy.expected.other_debtor_identifier)
   await capture('dashboard')
   report.checks.push({ id: 'dashboard', passed: true, observed: { debt_amount: policy.expected.debt_amount, other_tenant_visible: false } })
 
-  await page.getByRole('link', { name: 'Objetos de deuda', exact: true }).first().click()
-  await expect(page.getByRole('heading', { name: 'Objetos de deuda', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Casos', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Casos', exact: true })).toBeVisible()
   const ownDebtor = page.getByRole('table').getByRole('link', { name: new RegExp('^' + policy.expected.debtor_identifier + '\\b') })
   await expect(ownDebtor).toBeVisible()
-  await page.getByLabel('Buscar por objeto o persona').fill(policy.expected.unmatched_filter)
+  await page.getByLabel('Buscar por identificador o persona').fill(policy.expected.unmatched_filter)
   await page.getByRole('button', { name: 'Aplicar filtros', exact: true }).click()
   await expect(page).toHaveURL(new RegExp('q=' + policy.expected.unmatched_filter))
-  await expect(page.getByText('No hay objetos que cumplan los filtros actuales.', { exact: true })).toBeVisible()
+  await expect(page.getByText('No hay casos que cumplan los filtros elegidos.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Limpiar', exact: true }).click()
   await expect(ownDebtor).toBeVisible()
   await expect(page).toHaveURL(base.origin + '/debtors')
-  await expect(page.getByLabel('Buscar por objeto o persona')).toHaveValue('')
+  await expect(page.getByLabel('Buscar por identificador o persona')).toHaveValue('')
   await noVisibleError()
   await capture('objetos-filtro-restaurado')
-  await page.getByRole('link', { name: 'Personas / Deudores', exact: true }).first().click()
+  await page.getByRole('link', { name: 'Personas', exact: true }).first().click()
   await expect(page).toHaveURL(base.origin + '/people')
-  await expect(page.getByRole('heading', { name: 'Personas / Deudores', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Personas', exact: true, level: 1 })).toBeVisible()
   const peopleTable = page.getByRole('table').filter({
-    has: page.getByRole('columnheader', { name: 'Deuda total asociada', exact: true }),
+    has: page.getByRole('columnheader', { name: 'Total registrado asociado', exact: true }),
   })
   const ownPerson = peopleTable.getByRole('row').filter({ hasText: policy.expected.person_name })
   await expect(ownPerson).toBeVisible()
@@ -159,12 +161,12 @@ try {
   await capture('personas')
   report.checks.push({ id: 'navigation_filter', passed: true, observed: 'Objeto A, filtro sin resultados, limpieza y listado /people con persona A y ARS 1250 comprobados; B ausente.' })
 
-  await page.getByRole('button', { name: 'Cerrar sesion', exact: true }).first().click()
+  await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).first().click()
   await expect.poll(() => new URL(page.url()).pathname).toBe('/login')
-  await expect(page.getByLabel('Email', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Correo', { exact: true })).toBeVisible()
   await page.goto(new URL('/debtors', base).href)
   await expect(page).toHaveURL(/\/login\?next=/)
-  await expect(page.getByLabel('Email', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Correo', { exact: true })).toBeVisible()
   await expect(page.getByRole('table')).toHaveCount(0)
   await noVisibleError()
   await capture('logout-protegido')

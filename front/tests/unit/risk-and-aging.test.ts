@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import golden from '../../../contracts/decision-rules.v1.1.golden.json'
+import type { Decision } from '@/lib/domain/decision-rules-v1'
 
 import {
   calculateDaysSinceDate,
@@ -9,8 +11,8 @@ import {
   mapRiskLevel,
 } from '@/lib/services/debtor-risk-calculator'
 
-describe('clasificacion de riesgo', () => {
-  it('clasifica los limites de la escala oficial de riesgo', () => {
+describe('bandas heredadas de personas y alias de severidad v1 de objetos', () => {
+  it('conserva los límites del índice heredado de personas', () => {
     const results = [
       mapRiskLevel(0),
       mapRiskLevel(39),
@@ -29,28 +31,17 @@ describe('clasificacion de riesgo', () => {
     expect(results).toEqual(['BAJO', 'BAJO', 'ALTO'])
   })
 
-  it('prioriza un puntaje informado por el perfil', () => {
-    const assessment = calculateDebtorRiskAssessment({
-      providedRisk: '71',
-      totalDebt: 10,
-      overdueDebt: 0,
-      hasContact: true,
-    })
-
-    expect(assessment).toEqual({ risk: 'ALTO', riskScore: 71 })
+  it.each(golden.casos)('$id: el alias del objeto coincide con la severidad, sin perfil ni inferencia', sample => {
+    const decision = sample.esperado as Decision
+    const assessment = calculateDebtorRiskAssessment(decision)
+    expect(assessment.riskScore).toBe(decision.severidad.valor)
+    expect(assessment.risk).toBe(({ ALTA: 'ALTO', MEDIA: 'MEDIO', BAJA: 'BAJO', NO_DISPONIBLE: null } as Record<string, string | null>)[decision.severidad.banda])
   })
 
-  it('estima riesgo medio cuando no hay perfil y faltan contactos', () => {
-    const assessment = calculateDebtorRiskAssessment({
-      providedRisk: null,
-      totalDebt: 50,
-      overdueDebt: 0,
-      hasContact: false,
-      maxDaysOverdue: 0,
-    })
-
-    expect(assessment).toEqual({ risk: 'MEDIO', riskScore: 55 })
+  it('sin evaluación no inventa un riesgo medio ni cero', () => {
+    expect(calculateDebtorRiskAssessment(null)).toEqual({ risk: null, riskScore: null })
   })
+
 })
 
 describe('calculo de mora', () => {

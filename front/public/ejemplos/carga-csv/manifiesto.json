@@ -1,0 +1,661 @@
+{
+  "version": "ejemplos-carga-csv-v1",
+  "generador": "scripts/local/cartera_ejemplo.py",
+  "determinismo": "Sin azar: casos, importes y fechas escritos en el generador.",
+  "perfil_de_formato": {
+    "ruta": "contracts/source-mapping.sintetico-csv.v1.json",
+    "sha256": "5b910acd5bd3c05e0b42774dfdcda0acc1db3339234c040185d84f07d9f0f419"
+  },
+  "origen_de_los_datos": "Sintético. Ninguna persona, documento, teléfono ni correo pertenece a alguien.",
+  "definiciones": {
+    "total_registrado": "importe de todas las obligaciones, cualquiera sea su estado",
+    "deuda_pendiente": "suma de las obligaciones no pagadas",
+    "deuda_vencida": "obligaciones no pagadas con importe mayor que cero y vencimiento anterior a la fecha de la cartera"
+  },
+  "lotes": {
+    "1-cartera-2026-09-30": {
+      "resultado_esperado": "se carga",
+      "fecha_corte": "2026-09-30",
+      "objetos_en_el_archivo": 20,
+      "objetos_publicados": 19,
+      "objetos_en_cuarentena": [
+        "DEMO6-3-60019"
+      ],
+      "obligaciones_publicadas": 35,
+      "personas": 19,
+      "total_registrado_ars": "11856000.00",
+      "deuda_pendiente_ars": "11742450.00",
+      "deuda_vencida_ars": "11222450.00",
+      "objetos_con_deuda_vencida": 16,
+      "casos": [
+        {
+          "identificador": "DEMO6-3-60001",
+          "caso": "contacto-completo-mora-media",
+          "obligaciones": 3,
+          "titulares": 1,
+          "total_registrado_ars": "654500.00",
+          "deuda_pendiente_ars": "654500.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 3,
+          "deuda_vencida_ars": "654500.00",
+          "atraso_maximo_dias": 564,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60002",
+          "caso": "solo-email",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "105700.00",
+          "deuda_pendiente_ars": "105700.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "105700.00",
+          "atraso_maximo_dias": 263,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-1-60003",
+          "caso": "importe-alto",
+          "obligaciones": 4,
+          "titulares": 1,
+          "total_registrado_ars": "4600000.00",
+          "deuda_pendiente_ars": "4600000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 4,
+          "deuda_vencida_ars": "4600000.00",
+          "atraso_maximo_dias": 953,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60004",
+          "caso": "sin-contacto",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "824000.00",
+          "deuda_pendiente_ars": "824000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "824000.00",
+          "atraso_maximo_dias": 878,
+          "notas": [
+            "sin teléfono, celular ni correo"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60005",
+          "caso": "contacto-no-utilizable",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "41800.00",
+          "deuda_pendiente_ars": "41800.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "41800.00",
+          "atraso_maximo_dias": 110,
+          "notas": [
+            "marcadores 0, - y NO POSEE: no cuentan como contacto"
+          ]
+        },
+        {
+          "identificador": "DEMO6-1-60006",
+          "caso": "dos-titulares",
+          "obligaciones": 2,
+          "titulares": 2,
+          "total_registrado_ars": "1402000.00",
+          "deuda_pendiente_ars": "1402000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "1402000.00",
+          "atraso_maximo_dias": 365,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60007",
+          "caso": "persona-con-dos-objetos-1",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "165000.00",
+          "deuda_pendiente_ars": "165000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "165000.00",
+          "atraso_maximo_dias": 241,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60008",
+          "caso": "persona-con-dos-objetos-2",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "113900.00",
+          "deuda_pendiente_ars": "113900.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "113900.00",
+          "atraso_maximo_dias": 152,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60009",
+          "caso": "vencimiento-antiguo",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "752000.00",
+          "deuda_pendiente_ars": "752000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "752000.00",
+          "atraso_maximo_dias": 2761,
+          "notas": [
+            "más de cinco años de atraso al corte"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60010",
+          "caso": "mora-reciente-baja",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "12000.00",
+          "deuda_pendiente_ars": "12000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "12000.00",
+          "atraso_maximo_dias": 15,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60011",
+          "caso": "vence-despues-del-corte",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "520000.00",
+          "deuda_pendiente_ars": "520000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "ninguna obligación vencida al corte"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60012",
+          "caso": "estados-de-origen",
+          "obligaciones": 3,
+          "titulares": 1,
+          "total_registrado_ars": "141350.00",
+          "deuda_pendiente_ars": "93350.00",
+          "obligaciones_pagadas": 1,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "93350.00",
+          "atraso_maximo_dias": 263,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-1-60013",
+          "caso": "persona-juridica",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "1950000.00",
+          "deuda_pendiente_ars": "1950000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "1950000.00",
+          "atraso_maximo_dias": 472,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60014",
+          "caso": "datos-opcionales-faltantes",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "350000.00",
+          "deuda_pendiente_ars": "350000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "350000.00",
+          "atraso_maximo_dias": 284,
+          "notas": [
+            "sin estado, porcentaje, intereses, capital de cabecera, períodos, fecha de actualización ni domicilio"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60015",
+          "caso": "objeto-inactivo-en-origen",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "33000.00",
+          "deuda_pendiente_ars": "33000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "33000.00",
+          "atraso_maximo_dias": 213,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60016",
+          "caso": "solo-pagadas",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "65550.00",
+          "deuda_pendiente_ars": "0.00",
+          "obligaciones_pagadas": 2,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "todas las obligaciones pagadas: deuda pendiente 0 y ninguna vencida"
+          ]
+        },
+        {
+          "identificador": "DEMO6-3-60017",
+          "caso": "vencida-con-importe-cero",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "0.00",
+          "deuda_pendiente_ars": "0.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "vencimiento anterior a la fecha de la cartera e importe cero: no cuenta como vencida"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60018",
+          "caso": "estado-ausente",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "70400.00",
+          "deuda_pendiente_ars": "70400.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "70400.00",
+          "atraso_maximo_dias": 194,
+          "notas": [
+            "sin estado de origen: se computa por importe y vencimiento"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60020",
+          "caso": "anulada-en-origen",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "54800.00",
+          "deuda_pendiente_ars": "54800.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "54800.00",
+          "atraso_maximo_dias": 178,
+          "notas": [
+            "una obligación anulada en origen (Cancelada): se computa por importe y vencimiento, como antes"
+          ]
+        }
+      ]
+    },
+    "2-cartera-2026-10-31-con-errores": {
+      "resultado_esperado": "se rechaza: más del 5 % de los objetos con errores; la cartera anterior queda intacta",
+      "fecha_corte": "2026-10-31",
+      "errores_a_proposito": [
+        {
+          "archivo": "detalle",
+          "linea": 2,
+          "columna": "NOTD_vencimiento",
+          "codigo": "FECHA_IMPOSIBLE",
+          "identificador": "DEMO6-3-60001"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 9,
+          "columna": "NOTD_totalActualizado",
+          "codigo": "IMPORTE_NO_NUMERICO",
+          "identificador": "DEMO6-1-60003"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 18,
+          "columna": "NOTD_ESTA_id",
+          "codigo": "ESTADO_ORIGEN_DESCONOCIDO",
+          "identificador": "DEMO6-6-60008"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 15,
+          "columna": "Destinatario_Porcentaje",
+          "codigo": "PORCENTAJE_INVALIDO",
+          "identificador": "DEMO6-1-60013"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 17,
+          "columna": "Bien_Tipo_Id",
+          "codigo": "TIPO_BIEN_FUERA_DE_CATALOGO",
+          "identificador": "DEMO6-6-60015"
+        }
+      ]
+    },
+    "3-cartera-2026-10-31": {
+      "resultado_esperado": "se carga como cartera con fecha posterior",
+      "fecha_corte": "2026-10-31",
+      "objetos_en_el_archivo": 21,
+      "objetos_publicados": 20,
+      "objetos_en_cuarentena": [
+        "DEMO6-3-60019"
+      ],
+      "obligaciones_publicadas": 38,
+      "personas": 20,
+      "total_registrado_ars": "12953950.00",
+      "deuda_pendiente_ars": "12828400.00",
+      "deuda_vencida_ars": "12308400.00",
+      "objetos_con_deuda_vencida": 16,
+      "casos": [
+        {
+          "identificador": "DEMO6-3-60001",
+          "caso": "contacto-completo-mora-media",
+          "obligaciones": 3,
+          "titulares": 1,
+          "total_registrado_ars": "658500.00",
+          "deuda_pendiente_ars": "658500.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 3,
+          "deuda_vencida_ars": "658500.00",
+          "atraso_maximo_dias": 595,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60002",
+          "caso": "solo-email",
+          "obligaciones": 3,
+          "titulares": 1,
+          "total_registrado_ars": "157150.00",
+          "deuda_pendiente_ars": "157150.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 3,
+          "deuda_vencida_ars": "157150.00",
+          "atraso_maximo_dias": 294,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-1-60003",
+          "caso": "importe-alto",
+          "obligaciones": 4,
+          "titulares": 1,
+          "total_registrado_ars": "4600000.00",
+          "deuda_pendiente_ars": "4600000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 4,
+          "deuda_vencida_ars": "4600000.00",
+          "atraso_maximo_dias": 984,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60004",
+          "caso": "sin-contacto",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "824000.00",
+          "deuda_pendiente_ars": "824000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "824000.00",
+          "atraso_maximo_dias": 909,
+          "notas": [
+            "sin teléfono, celular ni correo"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60005",
+          "caso": "contacto-no-utilizable",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "41800.00",
+          "deuda_pendiente_ars": "41800.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "41800.00",
+          "atraso_maximo_dias": 141,
+          "notas": [
+            "marcadores 0, - y NO POSEE: no cuentan como contacto"
+          ]
+        },
+        {
+          "identificador": "DEMO6-1-60006",
+          "caso": "dos-titulares",
+          "obligaciones": 2,
+          "titulares": 2,
+          "total_registrado_ars": "1402000.00",
+          "deuda_pendiente_ars": "1402000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "1402000.00",
+          "atraso_maximo_dias": 396,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60007",
+          "caso": "persona-con-dos-objetos-1",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "165000.00",
+          "deuda_pendiente_ars": "165000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "165000.00",
+          "atraso_maximo_dias": 272,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60008",
+          "caso": "persona-con-dos-objetos-2",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "113900.00",
+          "deuda_pendiente_ars": "113900.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "113900.00",
+          "atraso_maximo_dias": 183,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60009",
+          "caso": "vencimiento-antiguo",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "752000.00",
+          "deuda_pendiente_ars": "752000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "752000.00",
+          "atraso_maximo_dias": 2792,
+          "notas": [
+            "más de cinco años de atraso al corte"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60010",
+          "caso": "mora-reciente-baja",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "12000.00",
+          "deuda_pendiente_ars": "0.00",
+          "obligaciones_pagadas": 1,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60011",
+          "caso": "vence-despues-del-corte",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "520000.00",
+          "deuda_pendiente_ars": "520000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "ninguna obligación vencida al corte"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60012",
+          "caso": "estados-de-origen",
+          "obligaciones": 3,
+          "titulares": 1,
+          "total_registrado_ars": "141350.00",
+          "deuda_pendiente_ars": "93350.00",
+          "obligaciones_pagadas": 1,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "93350.00",
+          "atraso_maximo_dias": 294,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-1-60013",
+          "caso": "persona-juridica",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "1950000.00",
+          "deuda_pendiente_ars": "1950000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "1950000.00",
+          "atraso_maximo_dias": 503,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-3-60014",
+          "caso": "datos-opcionales-faltantes",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "350000.00",
+          "deuda_pendiente_ars": "350000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "350000.00",
+          "atraso_maximo_dias": 315,
+          "notas": [
+            "sin estado, porcentaje, intereses, capital de cabecera, períodos, fecha de actualización ni domicilio"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60015",
+          "caso": "objeto-inactivo-en-origen",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "33000.00",
+          "deuda_pendiente_ars": "33000.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "33000.00",
+          "atraso_maximo_dias": 244,
+          "notas": []
+        },
+        {
+          "identificador": "DEMO6-6-60016",
+          "caso": "solo-pagadas",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "65550.00",
+          "deuda_pendiente_ars": "0.00",
+          "obligaciones_pagadas": 2,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "todas las obligaciones pagadas: deuda pendiente 0 y ninguna vencida"
+          ]
+        },
+        {
+          "identificador": "DEMO6-3-60017",
+          "caso": "vencida-con-importe-cero",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "0.00",
+          "deuda_pendiente_ars": "0.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 0,
+          "deuda_vencida_ars": "0.00",
+          "atraso_maximo_dias": null,
+          "notas": [
+            "vencimiento anterior a la fecha de la cartera e importe cero: no cuenta como vencida"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60018",
+          "caso": "estado-ausente",
+          "obligaciones": 1,
+          "titulares": 1,
+          "total_registrado_ars": "70400.00",
+          "deuda_pendiente_ars": "70400.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 1,
+          "deuda_vencida_ars": "70400.00",
+          "atraso_maximo_dias": 225,
+          "notas": [
+            "sin estado de origen: se computa por importe y vencimiento"
+          ]
+        },
+        {
+          "identificador": "DEMO6-6-60020",
+          "caso": "anulada-en-origen",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "54800.00",
+          "deuda_pendiente_ars": "54800.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "54800.00",
+          "atraso_maximo_dias": 209,
+          "notas": [
+            "una obligación anulada en origen (Cancelada): se computa por importe y vencimiento, como antes"
+          ]
+        },
+        {
+          "identificador": "DEMO6-1-60021",
+          "caso": "objeto-nuevo-en-octubre",
+          "obligaciones": 2,
+          "titulares": 1,
+          "total_registrado_ars": "1042500.00",
+          "deuda_pendiente_ars": "1042500.00",
+          "obligaciones_pagadas": 0,
+          "obligaciones_vencidas": 2,
+          "deuda_vencida_ars": "1042500.00",
+          "atraso_maximo_dias": 91,
+          "notas": []
+        }
+      ]
+    }
+  },
+  "archivos": {
+    "1-cartera-2026-09-30/cabecera.csv": {
+      "sha256": "0efaf9e5754d5e1616686bdf6445bff8a641d26e2de12913e4729c85ff06fa0b",
+      "bytes": 5647
+    },
+    "1-cartera-2026-09-30/detalle.csv": {
+      "sha256": "bb8bd07f0dac56d75afc9ff2a7bd111e84bd65ab53b9398bf48b8231ad1a089b",
+      "bytes": 3992
+    },
+    "2-cartera-2026-10-31-con-errores/cabecera.csv": {
+      "sha256": "f36ca8ece6da88303485aec3a32c5ccd90dc83b3e89a683a449f058abdc16735",
+      "bytes": 5901
+    },
+    "2-cartera-2026-10-31-con-errores/detalle.csv": {
+      "sha256": "bfc5ab470fc54b7cee3362cd3fa52a21951dab6beaa852856ddac11ff21861e2",
+      "bytes": 4308
+    },
+    "3-cartera-2026-10-31/cabecera.csv": {
+      "sha256": "07861c5b243bfa51ba20e84a1a3d4745fee8aa922a7e7119c3bf1f542a6302f9",
+      "bytes": 5901
+    },
+    "3-cartera-2026-10-31/detalle.csv": {
+      "sha256": "103caf01b980e45dd15a4344f7a8943f1d4ce3bad99ccd72a6d6d1e99f8441d5",
+      "bytes": 4312
+    }
+  }
+}

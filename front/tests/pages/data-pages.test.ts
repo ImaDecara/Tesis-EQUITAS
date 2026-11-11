@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -7,7 +8,8 @@ import {
   buildPeople,
   buildPeopleDashboard,
 } from '@/tests/helpers/equitas-fixtures'
-import { textFromReactTree } from '@/tests/helpers/react-tree'
+import { panelOf } from '@/tests/helpers/case-page'
+import { decisionsFixture, markupOf, renderedText, viewerFixture } from '@/tests/helpers/viewer-fixtures'
 
 const {
   getDashboardDataMock,
@@ -15,7 +17,9 @@ const {
   getPeopleDataMock,
   getDebtorDetailDataMock,
   notFoundMock,
+  session,
 } = vi.hoisted(() => ({
+  session: { viewer: vi.fn(), decisions: vi.fn() },
   getDashboardDataMock: vi.fn(),
   getDebtorsDataMock: vi.fn(),
   getPeopleDataMock: vi.fn(),
@@ -25,6 +29,8 @@ const {
   }),
 }))
 
+// La pestaña Revisión tiene sus propias pruebas (review-tab.test.ts).
+vi.mock('@/lib/server/case-review-screen', () => ({ loadCaseReviewScreen: async () => ({ kind: 'restricted', message: 'Revisión fuera de esta prueba.' }) }))
 vi.mock('@/lib/equitas-data', () => ({
   getDashboardData: getDashboardDataMock,
   getDebtorsData: getDebtorsDataMock,
@@ -33,8 +39,15 @@ vi.mock('@/lib/equitas-data', () => ({
 }))
 
 vi.mock('next/navigation', () => ({
-  notFound: notFoundMock,
+  notFound: notFoundMock, usePathname: () => '/', useRouter: () => ({ replace: vi.fn() }),
 }))
+vi.mock('next/image', () => ({ default: () => null }))
+vi.mock('@/components/layout/app-shell', () => ({ AppShell: ({ children }: { children: ReactNode }) => children }))
+// N7: el marco y la sesión se simulan; las pantallas leen la fecha de la cartera y las decisiones.
+vi.mock('@/lib/server/viewer-context', async original => ({ ...(await original<typeof import('@/lib/server/viewer-context')>()), loadViewerContext: session.viewer }))
+vi.mock('@/lib/server/recorded-decisions', async original => ({ ...(await original<typeof import('@/lib/server/recorded-decisions')>()), loadRecordedDecisions: session.decisions }))
+// ALIGN-069: la auditoria tiene sus propias pruebas (access-audit.integration.test.ts).
+vi.mock('@/lib/server/audit', () => ({ auditCaseOpen: async () => undefined }))
 
 import DebtAgingPage from '@/app/debt-aging/page'
 import DebtorDetailPage from '@/app/debtors/[debtorId]/page'
@@ -49,6 +62,8 @@ import RiskAnalysisPage from '@/app/risk-analysis/page'
 describe('pantallas con datos de gestion simulados', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    session.viewer.mockResolvedValue(viewerFixture())
+    session.decisions.mockResolvedValue(decisionsFixture())
     getDashboardDataMock.mockResolvedValue({
       dashboard: buildDashboard(),
       peopleDashboard: buildPeopleDashboard(),
@@ -63,14 +78,18 @@ describe('pantallas con datos de gestion simulados', () => {
     getDebtorDetailDataMock.mockResolvedValue({ detail: buildDebtorDetail(), warnings: [] })
   })
 
-  it('calcula y presenta el resumen ejecutivo del dashboard', async () => {
-    const page = await HomePage()
-    const text = textFromReactTree(page)
+  // N7: «Tablero» reemplaza a «Dashboard ejecutivo»; las cifras usan las tres definiciones únicas.
+  it('calcula y presenta el resumen del tablero', async () => {
+    const text = renderedText(await HomePage())
 
     expect(getDashboardDataMock).toHaveBeenCalledOnce()
-    expect(text).toContain('Dashboard ejecutivo')
-    expect(text).toMatch(/33\s*%\s*de los objetos estan en riesgo alto/)
-    expect(text).toContain('Llamado prioritario')
+    expect(text).toContain('Tablero')
+    expect(text).not.toContain('Dashboard')
+    // 1 de 3 casos con puntaje alto: 33 %.
+    expect(text).toMatch(/Puntaje de prioridad desde 70\.\s*33%\s*de los casos/)
+    expect(text).toMatch(/Total registrado\s*\$\s*1\.700/)
+    expect(text).toMatch(/Deuda pendiente\s*\$\s*1\.700/)
+    expect(text).toMatch(/Deuda vencida\s*\$\s*1\.300/)
     expect(text).toContain('AG-1001')
   })
 
@@ -78,11 +97,14 @@ describe('pantallas con datos de gestion simulados', () => {
     const page = await DebtAgingPage({
       searchParams: Promise.resolve({ page: '2', pageSize: '1' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
     expect(text).toContain('Deuda y mora')
-    expect(text).toContain('Top 10 mayor deuda')
-    expect(text).toContain('Listado economico')
+    expect(text).toContain('Los 10 casos con mayor total registrado')
+    expect(text).toContain('Casos por deuda vencida')
+    // pageSize=1 no es una opción: vale el tamaño por omisión (10) y la página 2 cae en la única.
+    expect(text).toContain('1–3 de 3 casos.')
+    expect(text).toContain('Página 1 de 1')
     expect(getDebtorsDataMock).toHaveBeenCalledOnce()
   })
 
@@ -90,14 +112,15 @@ describe('pantallas con datos de gestion simulados', () => {
     const page = await NoContactPage({
       searchParams: Promise.resolve({ page: '1', pageSize: '10' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
     expect(text).toContain('Casos sin contacto')
-    expect(text).toContain('Estos casos requieren validacion')
+    expect(text).toContain('antes de gestionarlos hay que conseguir o validar')
     expect(text).toContain('AG-1001')
+    expect(text).not.toContain('IN-2001')
   })
 
-  it('aplica filtros operativos para casos prioritarios', async () => {
+  it('aplica los filtros en los grupos de trabajo', async () => {
     const page = await PriorityCasesPage({
       searchParams: Promise.resolve({
         q: 'ana',
@@ -109,14 +132,15 @@ describe('pantallas con datos de gestion simulados', () => {
         pageSize: '10',
       }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Casos prioritarios')
+    expect(text).toContain('Grupos de trabajo')
     expect(text).toContain('AG-1001')
-    expect(text).toContain('Filtros operativos')
+    expect(text).not.toContain('IN-2001')
+    expect(text).toContain('Mostrando 1 de 3 casos según los filtros.')
   })
 
-  it('procesa filtros y estadisticas del listado de objetos', async () => {
+  it('procesa filtros y estadisticas del listado de casos', async () => {
     const page = await DebtorsPage({
       searchParams: Promise.resolve({
         q: 'agua',
@@ -129,48 +153,75 @@ describe('pantallas con datos de gestion simulados', () => {
         pageSize: '20',
       }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Objetos de deuda')
-    expect(text).toMatch(/Busqueda:\s*agua/)
-    expect(text).toMatch(/Prioridad\s+ALTA/)
+    expect(text).toContain('Casos')
+    expect(text).toMatch(/Búsqueda:\s*agua/)
+    expect(text).toContain('Persona vinculada: Ana Perez')
+    expect(text).toContain('Mostrando 1 de 3 casos según los filtros.')
   })
 
   it('procesa filtros y resumen de personas', async () => {
     const page = await PeoplePage({
       searchParams: Promise.resolve({ q: 'ana', risk: 'ALTO', page: '1', pageSize: '20' }),
     })
-    const text = textFromReactTree(page)
+    const text = renderedText(page)
 
-    expect(text).toContain('Personas / Deudores')
+    expect(text).toContain('Personas')
     expect(text).toContain('Ana Perez')
-    expect(text).toContain('Riesgo alto')
+    expect(text).toContain('Índice anterior por persona')
   })
 
-  it('presenta analisis de riesgo individual y del objeto', async () => {
-    const page = await RiskAnalysisPage()
-    const text = textFromReactTree(page)
+  // Prueba final (F3): «Sin contacto» quedaba con el total de la cartera aunque la búsqueda no encontrara a nadie.
+  it('en Personas, «Sin contacto» sale de la misma selección que los demás indicadores', async () => {
+    const without = (page: unknown) => markupOf(page as never).match(/data-people-without-contact[^>]*>([^<]*)</)?.[1]
+    const all = await PeoplePage({ searchParams: Promise.resolve({}) })
+    const none = await PeoplePage({ searchParams: Promise.resolve({ q: 'NO-EXISTE-PRUEBA' }) })
+    expect(renderedText(none)).toContain('Mostrando 0 de')
+    expect(without(none)).toBe('0')
+    // Sin filtros coincide con la cantidad de personas sin contacto de toda la cartera.
+    expect(Number(without(all))).toBe(buildPeople().filter(person => person.hasContact === false).length)
+    expect(Number(without(all))).toBeGreaterThan(0)
+  })
 
-    expect(text).toContain('Analisis de riesgo')
-    expect(text).toContain('Objetos con riesgo')
-    expect(text).toContain('Personas con puntaje alto')
+  // Prueba final (F4): a 390 px los encabezados de las tablas de casos se pisaban.
+  it('las tablas de casos conservan un ancho mínimo en pantallas angostas e intermedias, y avisan que se desplazan', async () => {
+    const pages = [
+      await DebtorsPage({ searchParams: Promise.resolve({}) }), await PriorityCasesPage({ searchParams: Promise.resolve({}) }),
+      await NoContactPage({ searchParams: Promise.resolve({}) }), await DebtAgingPage({ searchParams: Promise.resolve({}) }), await RiskAnalysisPage(),
+    ]
+    for (const page of pages) {
+      const tables = markupOf(page as never).match(/<table class="[^"]*table-fixed[^"]*"/g) ?? []
+      expect(tables.length).toBeGreaterThan(0)
+      for (const table of tables) expect(table).toMatch(/min-w-\[\d+rem\][^"]*md:min-w-\[\d+rem\]/)
+      expect(markupOf(page as never)).toContain('data-table-scroll-hint')
+    }
+  })
+
+  it('presenta el puntaje de prioridad del caso y, aparte, el índice anterior por persona', async () => {
+    const text = renderedText(await RiskAnalysisPage())
+
+    expect(text).toContain('Puntaje de prioridad')
+    expect(text).toContain('Casos en banda alta')
+    expect(text).toContain('Índice anterior por persona')
+    expect(text).not.toMatch(/severidad/i)
   })
 
   it('agrupa las acciones recomendadas existentes', async () => {
-    const page = await RecommendedActionsPage()
-    const text = textFromReactTree(page)
+    const text = renderedText(await RecommendedActionsPage())
 
     expect(text).toContain('Acciones recomendadas')
-    expect(text).toContain('Resumen por recomendacion')
-    expect(text).toContain('Seguimiento posterior')
+    expect(text).toContain('Resumen por grupo de trabajo')
+    for (const group of ['Seguimiento', 'Mejorar datos', 'Revisión jurídica', 'Contacto y plan', 'Recordatorio']) expect(text).toContain(group)
   })
 
   it('muestra el detalle completo de un objeto y deriva a notFound cuando falta', async () => {
     const detailPage = await DebtorDetailPage({ params: Promise.resolve({ debtorId: '1' }) })
-    const detailText = textFromReactTree(detailPage)
+    // N7: el contenido está en componentes; se renderiza la ficha y cada pestaña (helpers/case-page).
+    const detailText = renderedText(detailPage)
 
-    expect(detailText).toContain('Resumen del objeto')
-    expect(detailText).toContain('Contactos de personas asociadas')
+    expect(detailText).toContain('Totales del caso')
+    expect(panelOf(detailPage, 'people').text).toContain('Contactos de las personas asociadas')
     expect(detailText).toContain('AG-1001')
 
     getDebtorDetailDataMock.mockResolvedValueOnce({ detail: null, warnings: [] })

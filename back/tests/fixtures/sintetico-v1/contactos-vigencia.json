@@ -1,0 +1,37 @@
+{
+  "version": "sintetico-v1",
+  "clase": "S",
+  "tipo": "artefacto complementario de la fixture de contrato; no es una columna del archivo municipal",
+  "motivo": "cabecera.tsv no trae vigencia de contacto y el origen real tampoco (CO03: hoy siempre activo)",
+  "clave": [
+    "municipio",
+    "Destinatario_Id",
+    "columna"
+  ],
+  "valores": {
+    "ACTIVO": "vigente: utilizable si el formato es válido",
+    "INACTIVO": "dado de baja: no utilizable aunque esté bien formado (CONTACTO_INACTIVO, OBSERVADO)"
+  },
+  "por_defecto": "contacto con valor no listado: ACTIVO",
+  "distinto_de": "marcador o formato inválido (CONTACTO_PLACEHOLDER/CONTACTO_FORMATO_INVALIDO, INVALIDO) y ausencia (columna vacía: no hay contacto)",
+  "contactos": [
+    {
+      "municipio": "municipio-sintetico-a",
+      "Destinatario_Id": "90033",
+      "columna": "Destinatario_Email",
+      "vigencia": "INACTIVO"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "Destinatario_Id": "90033",
+      "columna": "Destinatario_Telefono",
+      "vigencia": "INACTIVO"
+    },
+    {
+      "municipio": "municipio-sintetico-a",
+      "Destinatario_Id": "90034",
+      "columna": "Destinatario_Telefono",
+      "vigencia": "ACTIVO"
+    }
+  ]
+}

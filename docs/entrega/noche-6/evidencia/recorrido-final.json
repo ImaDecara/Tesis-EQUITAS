@@ -1,0 +1,234 @@
+{
+  "case_id": "N6-DEMO-LOCAL",
+  "mode": "recorrido",
+  "passed": true,
+  "started_at_utc": "2026-11-09T12:12:47.231Z",
+  "checks": [
+    {
+      "id": "environment",
+      "passed": true,
+      "observed": {
+        "sourceSha": "f6e2a4d24306f2594c9606e5901026a3696d1841",
+        "sourceBranch": null,
+        "environment": "local",
+        "supabaseProjectRef": null
+      },
+      "ended_at_utc": "2026-11-09T12:12:47.333Z"
+    },
+    {
+      "id": "data_matches_manifest",
+      "passed": true,
+      "observed": {
+        "objects": 15,
+        "debts": 29,
+        "amount": "11665250.00",
+        "published": [
+          {
+            "id": 4,
+            "as_of": "2026-09-30",
+            "cabecera": "8663ed7f78b2e5c86dd84917b730490ad37419300d804082830d50b36a9a3754",
+            "detalle": "931bceb287e5b52237bfdc429794dd233ad096a2a40806af46e68455fc91af3e"
+          }
+        ],
+        "events": 4,
+        "publications": 1,
+        "reviews": 0,
+        "approvals": 0
+      },
+      "ended_at_utc": "2026-11-09T12:12:47.405Z"
+    },
+    {
+      "id": "consulta_dashboard_manifest",
+      "passed": true,
+      "observed": {
+        "cutoff": "2026-09-30",
+        "deuda_total": "$ 11.665.250",
+        "report_links": [
+          "/api/reports/queue",
+          "/api/reports/data-quality",
+          "/api/reports/decisions"
+        ]
+      },
+      "ended_at_utc": "2026-11-09T12:12:48.833Z"
+    },
+    {
+      "id": "consulta_filters_queue_detail",
+      "passed": true,
+      "observed": {
+        "sin_contacto": [
+          "DEMO6-3-60004",
+          "DEMO6-6-60005"
+        ],
+        "csv_detalles": 2,
+        "csv_total_ars": 865800,
+        "cola_a_ficha": "/debtors/4"
+      },
+      "ended_at_utc": "2026-11-09T12:12:50.770Z"
+    },
+    {
+      "id": "consulta_missing_values_visible",
+      "passed": true,
+      "observed": "Porcentaje faltante: «No informado» y suma no verificable, sin inventar 100",
+      "ended_at_utc": "2026-11-09T12:12:51.268Z"
+    },
+    {
+      "id": "operator_decision_persists",
+      "passed": true,
+      "observed": {
+        "review_id": 1,
+        "decision": "MODIFICA",
+        "intensidad": 3,
+        "motivo": "DATOS_INCOMPLETOS"
+      },
+      "ended_at_utc": "2026-11-09T12:12:53.606Z"
+    },
+    {
+      "id": "supervisor_approval_persists",
+      "passed": true,
+      "observed": {
+        "approval_id": 1,
+        "aprobador_distinto": true
+      },
+      "ended_at_utc": "2026-11-09T12:12:55.853Z"
+    },
+    {
+      "id": "reports_supervisor_visible_and_correct",
+      "passed": true,
+      "observed": {
+        "links": [
+          "/api/reports/queue",
+          "/api/reports/data-quality",
+          "/api/reports/decisions",
+          "/api/reports/supervision",
+          "/api/reports/access"
+        ],
+        "queue_total_ars": "11665250",
+        "decisions_row": {
+          "decision": "MODIFICA",
+          "aprobacion": "APRUEBA"
+        },
+        "audit_report_export_added": 5
+      },
+      "ended_at_utc": "2026-11-09T12:12:56.799Z"
+    },
+    {
+      "id": "reports_denied_by_role",
+      "passed": true,
+      "observed": {
+        "consulta /api/reports/supervision": 403,
+        "consulta /api/reports/access": 403,
+        "importador /api/reports/queue": 403,
+        "importador /api/reports/data-quality": 403,
+        "importador /api/reports/decisions": 403,
+        "importador /api/reports/supervision": 403,
+        "importador /api/reports/access": 403,
+        "anonimo /api/reports/queue": 307
+      },
+      "ended_at_utc": "2026-11-09T12:12:58.695Z"
+    },
+    {
+      "id": "logout_blocks_protected_routes",
+      "passed": true,
+      "observed": "operador, supervisor, consulta: logout y acceso directo redirigido a /login",
+      "ended_at_utc": "2026-11-09T12:13:00.247Z"
+    },
+    {
+      "id": "foreign_and_unassigned_identities_get_no_portfolio",
+      "passed": true,
+      "observed": {
+        "ajeno /": 200,
+        "ajeno /priority-cases": 200,
+        "ajeno /debtors/3": 200,
+        "ajeno /api/reports/queue": 200,
+        "sin-membresia /": 307,
+        "sin-membresia /priority-cases": 307,
+        "sin-membresia /debtors/3": 307,
+        "sin-membresia /api/reports/queue": 307,
+        "importador /": 200,
+        "importador /priority-cases": 200,
+        "importador /debtors/3": 200,
+        "importador /api/reports/queue": 403
+      },
+      "ended_at_utc": "2026-11-09T12:13:04.570Z"
+    },
+    {
+      "id": "console_clean",
+      "passed": true,
+      "observed": {
+        "errores": 0,
+        "preexistentes_importador": 4,
+        "visitas_importador": [
+          "/",
+          "/",
+          "/",
+          "/debtors/3"
+        ],
+        "por_visita": {
+          "0": 1,
+          "1": 1,
+          "2": 1,
+          "3": 1
+        }
+      },
+      "ended_at_utc": "2026-11-09T12:13:04.571Z"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "01-consulta-tablero.png",
+      "sha256": "31f5fff377fed9ada42b3e52abd82075fd0b4cb554eae45d78f9e016d56e36cc"
+    },
+    {
+      "path": "02-consulta-faltantes.png",
+      "sha256": "1af722b869cb0c3487af201d6d52f345e80b92252e744d0f2f7421cc682bb50c"
+    },
+    {
+      "path": "03-operador-decision-persistida.png",
+      "sha256": "482741c3ffa39585424827caa09913a7d246d4195049ecb796356a13b11e8470"
+    },
+    {
+      "path": "04-supervisor-aprobacion-persistida.png",
+      "sha256": "eeefeb4a8bd6ea721a4c91b6e028a8b3e8841e37a4473da3acfe33f3fba737dc"
+    }
+  ],
+  "console_errors": [
+    "importador / #0: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador / #1: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador / #2: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador /debtors/3 #3: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+  ],
+  "environment": "next start + Supabase local (demo persistente)",
+  "limits": "Cartera sintética de la demo. Demuestra el recorrido técnico local; no certifica Vercel, bases remotas ni uso municipal.",
+  "base_url": "http://127.0.0.1:3000",
+  "source_sha": "f6e2a4d24306f2594c9606e5901026a3696d1841",
+  "tree_clean": true,
+  "dataset_sha256": "2a69af35af21417f2bc8d2320c10da83cd4e2393ed3ee0264989cbb5c28f48ee",
+  "case": {
+    "id": 3,
+    "identifier": "DEMO6-1-60003"
+  },
+  "portfolio": {
+    "objects": 15,
+    "debts": 29,
+    "amount": "11665250.00",
+    "published": [
+      {
+        "id": 4,
+        "as_of": "2026-09-30",
+        "cabecera": "8663ed7f78b2e5c86dd84917b730490ad37419300d804082830d50b36a9a3754",
+        "detalle": "931bceb287e5b52237bfdc429794dd233ad096a2a40806af46e68455fc91af3e"
+      }
+    ],
+    "events": 4,
+    "publications": 1,
+    "reviews": 0,
+    "approvals": 0
+  },
+  "known_preexisting_console_errors": [
+    "importador / #0: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador / #1: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador / #2: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.",
+    "importador /debtors/3 #3: Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+  ],
+  "ended_at_utc": "2026-11-09T12:13:04.602Z"
+}

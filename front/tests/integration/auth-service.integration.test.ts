@@ -31,11 +31,15 @@ function buildQuery(result: QueryResult) {
 function configureClient(results: { appUser: QueryResult; tenantUser: QueryResult }) {
   const appUserQuery = buildQuery(results.appUser)
   const tenantUserQuery = buildQuery(results.tenantUser)
+  const tenantQuery = buildQuery({ data: [{ id: 7, status: 'ACTIVE' }], error: null })
+  const roleQuery = buildQuery({ data: [{ id: 3, name: 'ADMIN' }], error: null })
   const from = vi.fn((table: string) => {
     if (table === 'user') {
       return appUserQuery
     }
 
+    if (table === 'tenant') return tenantQuery
+    if (table === 'role') return roleQuery
     return tenantUserQuery
   })
 
@@ -51,8 +55,8 @@ describe('integracion simulada de autorizacion con Supabase', () => {
 
   it('valida la relacion auth.users, public.user y tenant_user activa', async () => {
     const client = configureClient({
-      appUser: { data: [{ id: 42, auth_user: 'auth-user-1' }], error: null },
-      tenantUser: { data: [{ tenant: 7, role: 'operator', status: true }], error: null },
+      appUser: { data: [{ id: 42, auth_user: 'auth-user-1', status: 'ACTIVE' }], error: null },
+      tenantUser: { data: [{ user: 42, tenant: 7, role: 3, status: true }], error: null },
     })
 
     const result = await validateAuthUserTenantAccess('auth-user-1')
@@ -64,7 +68,7 @@ describe('integracion simulada de autorizacion con Supabase', () => {
         authUserId: 'auth-user-1',
         appUserId: '42',
         tenantId: '7',
-        role: 'operator',
+        role: '3',
       },
     })
     expect(client.from).toHaveBeenCalledWith('user')
@@ -101,7 +105,7 @@ describe('integracion simulada de autorizacion con Supabase', () => {
       isAuthorized: false,
       requiresLogin: false,
       code: 'DATABASE_ERROR',
-      message: 'Error consultando public.user: permission denied for table user',
+      message: 'No disponible: no se pudo verificar el usuario.',
     })
   })
 

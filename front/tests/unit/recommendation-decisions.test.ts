@@ -1,18 +1,42 @@
 import { describe, expect, it } from 'vitest'
+import golden from '../../../contracts/decision-rules.v1.1.golden.json'
+import { evaluateDecisionRulesV1, type DecisionInput } from '@/lib/domain/decision-rules-v1'
 import { generateDebtorRecommendation } from '@/lib/services/debtor-recommendation-generator'
 
-describe('R-FUN-01 / E04: tabla de decision de recomendaciones', () => {
+// Las expectativas heredadas dependían del perfil y del contacto para sumar
+// puntos. Ahora la intervención es la salida de R1–R7/M1 del contrato v1.
+describe('ALIGN-010: presentación de las intervenciones v1', () => {
   it.each([
-    ['alto con contacto prevalece sobre mora', 'ALTO', true, 1, 400000, 90, 'Llamado prioritario', true],
-    ['alto sin contacto requiere revision', 'ALTO', false, 0, 0, 0, 'Plan de pago / revision humana', true],
-    ['mora de 60 dias', 'MEDIO', true, 1, 1, 60, 'Plan de pago / revision humana', true],
-    ['mora de 59 dias', 'MEDIO', true, 1, 1, 59, 'Mensaje recordatorio', false],
-    ['sin mora, saldo justo en limite', 'BAJO', true, 0, 350000, 60, 'Mensaje recordatorio', false],
-    ['sin mora, saldo debajo del limite', 'BAJO', false, 0, 349999, 90, 'Seguimiento posterior', false],
-    ['sin deuda', 'BAJO', true, 0, 0, 0, 'Seguimiento posterior', false],
-  ] as const)('REC-01: %s', (_case, risk, hasContact, overdueDebt, totalDebt, overdueDays, type, isUrgent) => {
-    const result = generateDebtorRecommendation({ risk, hasContact, overdueDebt, totalDebt, overdueDays })
-    expect(result).toMatchObject({ type, summary: type, isUrgent })
-    expect(result.reason.length).toBeGreaterThan(0)
+    ['R1', 'Mejorar datos'], ['R2', 'Mejorar datos'], ['R3', 'Revisión jurídica'],
+    ['R4', 'Contacto y plan'], ['R5', 'Recordatorio'], ['R6', 'Seguimiento'], ['R7', 'Seguimiento'],
+  ])('%s se presenta como %s', (rule, label) => {
+    const sample = golden.casos.find(item => item.esperado.intervencion.regla === rule && !item.esperado.intervencion.modificador)!
+    const decision = evaluateDecisionRulesV1(sample.entrada as DecisionInput)
+    const result = generateDebtorRecommendation(decision)
+    expect(result.type).toBe(label)
+    expect(result.summary).toBe(label)
+    expect(result.reason).toContain(decision.explicacion.frase_contrastiva)
+    expect(result.reason).not.toMatch(/deuda exigible|escalamiento|recordatorio formal/)
+    if (rule === 'R3') expect(result.reason).toContain('Requiere revisión caso por caso')
+  })
+
+  it.each(golden.casos)('$id conserva la explicación, sin porcentajes ni acciones intensas', sample => {
+    const decision = evaluateDecisionRulesV1(sample.entrada as DecisionInput)
+    const result = generateDebtorRecommendation(decision)
+    expect(result.reason).toContain(decision.explicacion.frase_contrastiva)
+    expect(result.reason).not.toContain('%')
+    expect(decision.intervencion.intensidad).toBeLessThan(3)
+    if (decision.banderas.includes('SIN_CONTACTO_ACTIVO')) {
+      expect(result.type).toBe('Mejorar datos')
+      expect(decision.mensaje_borrador).toBeNull()
+    }
+    if (decision.revision.requiere_revision_humana) {
+      expect(result.isUrgent).toBe(true)
+      expect(result.reason).toContain('Requiere revisión caso por caso')
+    }
+  })
+
+  it('una lectura fallida no genera una intervención ni urgencia', () => {
+    expect(generateDebtorRecommendation(null)).toMatchObject({ type: 'No disponible', isUrgent: false })
   })
 })

@@ -12,9 +12,11 @@ type PeopleFiltersFormProps = {
     q: string
     risk: string
   }
+  /** El filtro por índice anterior solo se ofrece si el dato existe para alguna persona. */
+  showLegacyIndex?: boolean
 }
 
-export function PeopleFiltersForm({ initialValues }: PeopleFiltersFormProps) {
+export function PeopleFiltersForm({ initialValues, showLegacyIndex = false }: PeopleFiltersFormProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [isPending, startTransition] = useTransition()
@@ -55,27 +57,28 @@ export function PeopleFiltersForm({ initialValues }: PeopleFiltersFormProps) {
             id="q"
             name="q"
             defaultValue={initialValues.q}
-            placeholder="Ej: Juan Perez o 30123456"
+            placeholder="Ej.: Juan Pérez o 30123456"
             className="h-9 w-full rounded-md border border-slate-300 bg-white pr-3 pl-8 text-sm text-slate-900 outline-none ring-[#163a63]/20 transition focus:ring-4"
           />
         </div>
       </div>
 
-      <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-600">
-          Riesgo individual
+      {showLegacyIndex && <div>
+        <label htmlFor="risk" className="mb-1 block text-xs font-semibold text-slate-600">
+          Índice anterior
         </label>
         <select
+          id="risk"
           name="risk"
           defaultValue={initialValues.risk}
           className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none"
         >
           <option value="">Todos</option>
-          <option value="BAJO">Bajo (0-39)</option>
-          <option value="MEDIO">Medio (40-69)</option>
-          <option value="ALTO">Alto (70-100)</option>
+          <option value="BAJO">Bajo (0 a 39)</option>
+          <option value="MEDIO">Medio (40 a 69)</option>
+          <option value="ALTO">Alto (70 a 100)</option>
         </select>
-      </div>
+      </div>}
 
       <div className="flex items-end gap-2">
         <button
@@ -83,7 +86,7 @@ export function PeopleFiltersForm({ initialValues }: PeopleFiltersFormProps) {
           disabled={isPending}
           className={cn(buttonVariants({ variant: 'default' }), 'h-9')}
         >
-          {isPending ? 'Aplicando...' : 'Aplicar'}
+          {isPending ? 'Aplicando…' : 'Aplicar'}
         </button>
         <button
           type="button"

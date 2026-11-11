@@ -29,8 +29,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
   if (!isAuthReady) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_#eef2f7_0,_#f7f5ef_40%,_#f4f4f1_100%)] p-6">
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
-          Validando sesion...
+        <div role="status" className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
+          Validando sesión…
         </div>
       </div>
     )

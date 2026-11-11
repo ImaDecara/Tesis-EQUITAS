@@ -13,9 +13,11 @@ export function PersonRiskBadge({
   risk,
   score,
 }: {
-  risk: PersonIndividualRiskLevel
+  risk: PersonIndividualRiskLevel | null
   score?: number | null
 }) {
+  if (risk === null) return <Badge variant="neutral">No disponible</Badge>
+
   if (risk === 'ALTO') {
     return <Badge variant="danger">{formatRiskBadgeLabel('Alto', score)}</Badge>
   }

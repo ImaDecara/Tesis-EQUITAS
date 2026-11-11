@@ -20,7 +20,8 @@
     "quality:duplicates": "jscpd app components lib ../back/ETL ../back/api ../back/services --min-lines 5 --min-tokens 50 --reporters console,json --output ../.quality/jscpd --no-colors",
     "quality:complexity": "jscpd app components lib ../back/ETL ../back/api ../back/services --complexity --reporters console,json --output ../.quality/jscpd --report-name complexity --no-colors",
     "test:supabase": "vitest run --config vitest.supabase.config.ts",
-    "test:smoke": "node tests/smoke/deployed-smoke.mjs"
+    "test:smoke": "node tests/smoke/deployed-smoke.mjs",
+    "test:thesis-flow": "node tests/smoke/thesis-flow-smoke.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",
@@ -49,5 +50,10 @@
     "vite": "7.3.7",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "4.1.12"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.5"
+    }
   }
 }

@@ -1,0 +1,318 @@
+{
+  "id": "decision-rules",
+  "version": "1.1.0",
+  "estado": "PROVISIONAL_PENDIENTE_APROBACION",
+  "fecha": "2026-11-10",
+  "ticket": "ALIGN-008",
+  "version_anterior": "1.0.0",
+  "cambio_respecto_de_1_0_0": "Única corrección, por decisión del usuario del 2026-11-10: una obligación PAGADA (estado_catalogo PAID) deja de contar como deuda pendiente, como vencida y en el puntaje (sección obligaciones_pagadas). Todo lo demás —parámetros, bandas, reglas, textos y el cálculo de cualquier otro estado— es idéntico a 1.0.0. Las decisiones registradas con 1.0.0 conservan su versión.",
+  "documento": "docs/tesis/reglas-decision-v1.1.md",
+  "documento_base": "docs/tesis/reglas-decision-v1.md",
+  "contrato_de_dominio": "docs/tesis/contrato-dominio-v1.md",
+  "casos_golden": "contracts/decision-rules.v1.1.golden.json",
+  "naturaleza": {
+    "puntajes": "Heurísticos por reglas explícitas. La severidad y la prioridad operativa son puntos 0–100, no porcentajes ni probabilidades calibradas de pago, de recupero ni de ningún otro evento.",
+    "no_deduce": [
+      "pobreza ni situación social del hogar",
+      "voluntad o capacidad de pago",
+      "exigibilidad de la deuda",
+      "prescripción"
+    ],
+    "excluido": [
+      "probabilidades",
+      "aprendizaje automático",
+      "domicilio como factor",
+      "tipo de persona como factor"
+    ],
+    "politica_de_cambios": "Toda modificación de parámetros, reglas o textos crea una versión nueva (por ejemplo, 1.1.0 o 2.0.0) con su propio archivo y sus casos golden; esta versión nunca se edita en silencio.",
+    "aprobacion": "Requiere aprobación humana de la política antes de cualquier uso municipal; el umbral de VERIFICAR_PRESCRIPCION lo fija el área jurídica."
+  },
+  "unidad": "objeto tributario (tabla debtor), según contrato-dominio-v1 §2",
+  "estados_de_presencia": [
+    "OBSERVADO",
+    "NO_INFORMADO_EN_ORIGEN",
+    "NO_INTEGRADO",
+    "INVALIDO",
+    "NO_APLICA"
+  ],
+  "entrada": {
+    "representacion_de_valores": "Cada dato es {\"estado\": <estado de presencia>, \"valor\": <valor o null>}. Solo un valor con estado OBSERVADO se usa en una regla; cualquier otro estado lleva valor null y nunca se interpreta como 0.",
+    "campos": {
+      "id": "Clave interna del objeto (OB01), texto ASCII. Se usa solo para el desempate final.",
+      "as_of": "Fecha de corte ISO 8601 (L03). Obligatoria: sin corte declarado no se evalúa (el llamador muestra 'no disponible' o usa la fecha de cálculo con aviso, ALIGN-010).",
+      "source_updated_at": "Fecha de actualización de origen (L05) con estado de presencia. Solo alimenta la bandera FECHAS_INCONSISTENTES.",
+      "obligaciones": "Lista de obligaciones leídas del objeto (DE00). Cada una: id, current_amount (DE05, ARS con hasta 2 decimales), due_date (DE07), estado_origen (NOTD_ESTA_id/NOTD_SITU_id, DE10), periodo_fiscal (DE02 real) y estado_catalogo. Si la lectura de obligaciones falla, el llamador no evalúa el objeto (contrato §4.1 regla 6).",
+      "estado_catalogo": "Clave del catálogo debt_status de la obligación (debt.status → debt_status.key: PAID, OVERDUE, ACTIVE, SUSPENDED, …), con estado de presencia. Solo se usa para obligaciones_pagadas. Si falta el campo se trata como NO_INTEGRADO. Si la lectura del catálogo falla, el llamador no evalúa el objeto: un error de lectura nunca se convierte en «no pagada».",
+      "contactos_activos": "Cantidad de contactos activos con valor cargado de las personas con relación activa (FO08 unificado por ALIGN-011). Contacto cargado no significa verificado (AU05).",
+      "personas": "Personas con relación activa: tipo (PE04) y porcentaje_declarado (RE01). Solo alimentan banderas de calidad.",
+      "vulnerabilidad": "AU01. En la cartera real es siempre NO_INFORMADO_EN_ORIGEN. El valor OBSERVADO solo existe en casos sintéticos (S) para probar que nunca sube la intensidad."
+    },
+    "valores_vulnerabilidad_observada": ["INDICIO_VULNERABILIDAD", "SIN_INDICIO"],
+    "valores_tipo_persona": ["FISICA", "JURIDICA", "UNKNOWN"]
+  },
+  "aritmetica": {
+    "fechas": "Fechas ISO 8601 sin hora; los días de atraso son la diferencia en días calendario as_of − due_date (calculada en UTC, sin husos ni horario de verano).",
+    "importes": "Los importes de entrada tienen como máximo 2 decimales. Se suman y comparan en centavos enteros (importe × 100 redondeado al entero más cercano, lo que solo corrige el error de representación binaria).",
+    "texto": "Los identificadores se comparan por punto de código, sin reglas de idioma."
+  },
+  "evaluabilidad": {
+    "obligacion_evaluable": "Obligación no pagada (ver obligaciones_pagadas) con current_amount OBSERVADO y ≥ 0, y due_date OBSERVADO y ≥ fecha_minima_plausible.",
+    "fecha_minima_plausible": "1970-01-01",
+    "motivos_no_evaluable": [
+      "IMPORTE_NO_OBSERVADO",
+      "IMPORTE_NEGATIVO",
+      "VENCIMIENTO_NO_OBSERVADO",
+      "VENCIMIENTO_INCONSISTENTE"
+    ],
+    "obligacion_vencida_al_corte": "Obligación evaluable (por lo tanto no pagada) con current_amount > 0 y due_date < as_of (estrictamente). Se determina por calendario respecto del corte; no afirma estado de origen, exigibilidad ni ausencia de pago. Una obligación con importe 0 observado se conserva como cero y no está en mora.",
+    "estado_severidad": {
+      "COMPLETA": "Todas las obligaciones leídas no pagadas son evaluables (incluye el objeto sin obligaciones y el objeto con solo pagadas: cero derivado).",
+      "PARCIAL": "Hay al menos una obligación no pagada evaluable y al menos una no pagada no evaluable. El valor, los insumos y la banda son un mínimo calculado solo con las obligaciones evaluables: los faltantes no se cuentan como 0 ni se suman, y no se descarta una banda superior ni deuda vencida entre las no evaluables.",
+      "NO_DISPONIBLE": "Hay obligaciones no pagadas pero ninguna es evaluable. Severidad y prioridad son null (nunca 0)."
+    },
+    "detalle_no_evaluables": {
+      "campo": "severidad.motivos_no_evaluables: lista de {motivo, estado, cantidad}; estado es el estado de presencia (contrato §4) del dato que impidió evaluar la obligación y cantidad, el número de obligaciones con ese motivo y estado. Una obligación puede tener dos motivos (importe y vencimiento). Orden: motivos_no_evaluable y luego estados_de_presencia.",
+      "motivo_por_dato": {
+        "IMPORTE_NO_OBSERVADO": "current_amount con estado distinto de OBSERVADO (se registra ese estado)",
+        "IMPORTE_NEGATIVO": "current_amount OBSERVADO menor que 0 (estado OBSERVADO)",
+        "VENCIMIENTO_NO_OBSERVADO": "due_date con estado distinto de OBSERVADO (se registra ese estado)",
+        "VENCIMIENTO_INCONSISTENTE": "due_date OBSERVADO anterior a fecha_minima_plausible (estado OBSERVADO)"
+      },
+      "etiquetas": {
+        "IMPORTE_NO_OBSERVADO": "importe {estado}",
+        "IMPORTE_NEGATIVO": "importe OBSERVADO negativo",
+        "VENCIMIENTO_NO_OBSERVADO": "vencimiento {estado}",
+        "VENCIMIENTO_INCONSISTENTE": "vencimiento OBSERVADO anterior a 1970-01-01"
+      },
+      "texto": "obligaciones no evaluables: {obligaciones_no_evaluables} de {obligaciones_leidas}; {etiqueta}: {cantidad} (entradas separadas por '; ', en el orden de motivos_no_evaluables)",
+      "obligaciones_leidas": "En 1.1.0, {obligaciones_leidas} cuenta las obligaciones leídas NO pagadas: las pagadas quedan fuera del texto explicativo y se informan aparte en severidad.obligaciones_pagadas. Sin pagadas coincide con 1.0.0 (todas las leídas)."
+    }
+  },
+  "obligaciones_pagadas": {
+    "clave_catalogo": "PAID",
+    "condicion": "estado_catalogo OBSERVADO con valor exactamente igual a clave_catalogo (comparación por punto de código, sin normalizar mayúsculas, espacios ni rótulos).",
+    "efecto": "La obligación pagada queda fuera del cálculo: no suma a monto_actualizado_ars, no es vencida al corte, no puntúa, no cuenta como no evaluable aunque le falte importe o vencimiento, no levanta FECHAS_INCONSISTENTES ni ninguna otra bandera de obligación (ESTADO_ORIGEN_NO_INFORMADO, PERIODO_NO_INFORMADO) y no entra en {obligaciones_leidas} del texto explicativo. Solo se informa su cantidad en severidad.obligaciones_pagadas.",
+    "no_pagada": "estado_catalogo ausente, con estado distinto de OBSERVADO o con cualquier otra clave (ACTIVE, OVERDUE, SUSPENDED, PAYMENT_PLAN, JUDICIAL, CERTIFICATE_ACTIVE, CANCELLED, UNKNOWN o una clave no reconocida): la obligación se computa exactamente como en 1.0.0, por importe y vencimiento. Nunca se trata como pagada.",
+    "sin_regla_nueva": "No hay regla para suspendidas, plan de pago, judicial, certificado ni cancelada: se computan como en 1.0.0. Ningún estado se renombra ni se reclasifica.",
+    "solo_pagadas": "Un objeto cuyas obligaciones leídas son todas pagadas se evalúa como el objeto sin obligaciones: severidad 0 COMPLETA, banda BAJA, monto 0 y cantidad_vencidas 0; R7 (seguimiento sin contacto) si tiene contacto activo y R1 (mejorar datos) si no.",
+    "salida": "severidad.obligaciones_pagadas: cantidad de obligaciones leídas excluidas por esta sección (0 si ninguna).",
+    "origen": "Decisión del usuario del 2026-11-10 (plan de entrega, noche 7, §9.2 y D4). Es un cambio respecto de 1.0.0 y del cargador de main, que no excluye ningún estado."
+  },
+  "severidad": {
+    "escala": [0, 100],
+    "unidad": "puntos heurísticos (no %)",
+    "insumos": [
+      "monto_actualizado_ars: deuda pendiente evaluable del objeto = Σ current_amount de sus obligaciones NO pagadas evaluables, vencidas o no (contrato §3 regla 1, PR01/FO01; no es la deuda vencida PR02/FO02 ni el total registrado, que incluye las pagadas)",
+      "dias_atraso_maximo: máximo de as_of − due_date entre las vencidas al corte (NO_APLICA si no hay vencidas)",
+      "cantidad_vencidas: cantidad de obligaciones vencidas al corte"
+    ],
+    "no_usa": [
+      "contacto",
+      "personas o cantidad de personas",
+      "porcentaje declarado",
+      "tipo de persona",
+      "domicilio",
+      "vulnerabilidad",
+      "estado de origen",
+      "estado de catálogo, salvo la exclusión de obligaciones_pagadas",
+      "promedios u otros valores del lote"
+    ],
+    "regla_de_bandas": "Cada factor suma los puntos de la última banda cuyo 'desde' es menor o igual que el insumo. Las bandas son absolutas (paramétricas) y no dependen del lote.",
+    "regla_sin_vencidas": "Si cantidad_vencidas = 0 (ninguna obligación evaluable vencida al corte), los tres factores aportan 0 y la severidad es 0: el monto actualizado del objeto se informa como insumo, pero un objeto sin mora a la fecha de corte no es severo. Con cantidad_vencidas ≥ 1, el monto actualizado del objeto puntúa completo según sus bandas.",
+    "factores": {
+      "monto_actualizado_ars": {
+        "peso_maximo": 50,
+        "bandas": [
+          { "desde": 0, "puntos": 0 },
+          { "desde": 0.01, "puntos": 10 },
+          { "desde": 50000, "puntos": 20 },
+          { "desde": 200000, "puntos": 30 },
+          { "desde": 500000, "puntos": 40 },
+          { "desde": 1000000, "puntos": 50 }
+        ],
+        "nota": "Montos en ARS de la fecha de corte; valores por defecto provisionales que deben recalibrarse por municipio y por inflación mediante una versión nueva."
+      },
+      "dias_atraso_maximo": {
+        "peso_maximo": 30,
+        "bandas": [
+          { "desde": 0, "puntos": 0 },
+          { "desde": 1, "puntos": 5 },
+          { "desde": 31, "puntos": 10 },
+          { "desde": 91, "puntos": 15 },
+          { "desde": 181, "puntos": 20 },
+          { "desde": 366, "puntos": 25 },
+          { "desde": 731, "puntos": 30 }
+        ]
+      },
+      "cantidad_vencidas": {
+        "peso_maximo": 20,
+        "bandas": [
+          { "desde": 0, "puntos": 0 },
+          { "desde": 1, "puntos": 5 },
+          { "desde": 3, "puntos": 10 },
+          { "desde": 6, "puntos": 15 },
+          { "desde": 12, "puntos": 20 }
+        ]
+      }
+    },
+    "bandas": [
+      { "codigo": "BAJA", "desde": 0 },
+      { "codigo": "MEDIA", "desde": 40 },
+      { "codigo": "ALTA", "desde": 70 }
+    ],
+    "banda_sin_valor": "NO_DISPONIBLE"
+  },
+  "banderas": {
+    "orden": [
+      "SIN_CONTACTO_ACTIVO",
+      "PORCENTAJES_NO_SUMAN_100",
+      "ESTADO_ORIGEN_NO_INFORMADO",
+      "PERIODO_NO_INFORMADO",
+      "FECHAS_INCONSISTENTES",
+      "TIPO_PERSONA_DESCONOCIDO",
+      "VERIFICAR_PRESCRIPCION"
+    ],
+    "definiciones": {
+      "SIN_CONTACTO_ACTIVO": "contactos_activos no es OBSERVADO con valor ≥ 1 (cero observado o lectura no disponible). Es calidad de datos: no suma severidad ni prioridad.",
+      "PORCENTAJES_NO_SUMAN_100": "Hay personas y algún porcentaje_declarado no es OBSERVADO, o |Σ porcentajes − 100| > tolerancia. Nunca se normaliza. Sin personas: NO_APLICA, sin bandera.",
+      "ESTADO_ORIGEN_NO_INFORMADO": "Alguna obligación no pagada tiene estado_origen distinto de OBSERVADO. v1 no interpreta los valores del estado de origen (catálogo pendiente de ALIGN-004/ALIGN-024).",
+      "PERIODO_NO_INFORMADO": "Alguna obligación no pagada tiene periodo_fiscal distinto de OBSERVADO (hoy debt.period copia DEUD_id, DE02).",
+      "FECHAS_INCONSISTENTES": "source_updated_at OBSERVADO posterior a as_of, o alguna obligación no pagada con due_date OBSERVADO anterior a fecha_minima_plausible (esa obligación queda no evaluable).",
+      "TIPO_PERSONA_DESCONOCIDO": "Alguna persona tiene tipo distinto de OBSERVADO o igual a UNKNOWN. Nunca es factor de severidad, intervención ni prioridad.",
+      "VERIFICAR_PRESCRIPCION": "Alguna obligación vencida al corte tiene dias_atraso ≥ umbral. Solo pide verificar: nunca afirma prescripción ni exigibilidad."
+    },
+    "tolerancia_porcentajes": 0.01,
+    "verificar_prescripcion": {
+      "umbral_dias_atraso": 1825,
+      "origen": "Parámetro operativo de alerta por defecto, provisional. No representa ni presume ningún plazo legal de prescripción; lo fija el área jurídica antes de cualquier uso municipal."
+    }
+  },
+  "vulnerabilidad": {
+    "salida": {
+      "NO_INFORMADA": "Cualquier estado distinto de OBSERVADO (en la cartera real: NO_INFORMADO_EN_ORIGEN). Se muestra 'Vulnerabilidad: no informada'. No modifica la sugerencia: su ausencia no se interpreta como 'vulnerable' ni como 'no vulnerable'.",
+      "SIN_INDICIO": "OBSERVADO sin indicio (solo sintético). Sin efecto: nunca sube la intensidad.",
+      "INDICIO_VULNERABILIDAD": "OBSERVADO con indicio (solo sintético). Efecto: tope de intensidad automática 1 y revisión humana obligatoria."
+    },
+    "efectos_permitidos": ["BAJAR_INTENSIDAD", "EXIGIR_REVISION"],
+    "efecto_prohibido": "SUBIR_INTENSIDAD",
+    "tope_intensidad_con_indicio": 1,
+    "prohibido_inferir_de": [
+      "deuda",
+      "domicilio",
+      "tipo de persona",
+      "documento",
+      "falta de contacto"
+    ]
+  },
+  "escala_intensidad": {
+    "origen": "Valor por defecto provisional, pendiente de ALIGN-003 (no aprobado por el usuario). Solo habilita uso con datos sintéticos.",
+    "niveles": [
+      { "nivel": 0, "descripcion": "Mejorar o verificar datos, sin contacto con el contribuyente" },
+      { "nivel": 1, "descripcion": "Comunicación informativa o recordatorio por un canal disponible" },
+      { "nivel": 2, "descripcion": "Contacto personal con ofrecimiento de plan o asistencia" },
+      { "nivel": 3, "descripcion": "Intimación administrativa formal" },
+      { "nivel": 4, "descripcion": "Derivación a procuración o vía judicial" }
+    ],
+    "intensa_desde": 3,
+    "maximo_automatico": 2,
+    "regla_intensas": "El sistema nunca sugiere 3 ni 4. Solo una persona puede proponerlas y requieren aprobación de supervisor con la lista de control de ALIGN-003."
+  },
+  "regla_canal": "canal_requerido = (intensidad >= 1). Ninguna intervención con intensidad >= 1 se sugiere sin canal disponible (R1 se aplica antes).",
+  "intervenciones": {
+    "MEJORAR_DATOS": { "intensidad": 0, "cola": "Mejorar datos" },
+    "REVISION_JURIDICA": { "intensidad": 0, "cola": "Revisión jurídica" },
+    "CONTACTO_PERSONAL_Y_PLAN": { "intensidad": 2, "cola": "Contacto y plan" },
+    "RECORDATORIO_INFORMATIVO": { "intensidad": 1, "cola": "Recordatorio" },
+    "SEGUIMIENTO": { "intensidad": [0, 1], "cola": "Seguimiento" }
+  },
+  "reglas_intervencion": {
+    "orden": "Se aplica la primera regla que se cumple; luego el modificador de vulnerabilidad.",
+    "reglas": [
+      { "id": "R1", "condicion": "SIN_CONTACTO_ACTIVO", "intervencion": "MEJORAR_DATOS", "intensidad": 0 },
+      { "id": "R2", "condicion": "severidad NO_DISPONIBLE", "intervencion": "MEJORAR_DATOS", "intensidad": 0 },
+      { "id": "R3", "condicion": "VERIFICAR_PRESCRIPCION", "intervencion": "REVISION_JURIDICA", "intensidad": 0 },
+      { "id": "R4", "condicion": "banda ALTA", "intervencion": "CONTACTO_PERSONAL_Y_PLAN", "intensidad": 2 },
+      { "id": "R5", "condicion": "banda MEDIA", "intervencion": "RECORDATORIO_INFORMATIVO", "intensidad": 1 },
+      { "id": "R6", "condicion": "banda BAJA y severidad > 0", "intervencion": "SEGUIMIENTO", "intensidad": 1 },
+      { "id": "R7", "condicion": "severidad = 0", "intervencion": "SEGUIMIENTO", "intensidad": 0 }
+    ],
+    "modificador_vulnerabilidad": {
+      "id": "M1",
+      "condicion": "vulnerabilidad INDICIO_VULNERABILIDAD",
+      "efecto": "intensidad = min(intensidad, 1); si la regla fue R4, la intervención pasa a RECORDATORIO_INFORMATIVO; revisión humana obligatoria. Nunca sube la intensidad."
+    }
+  },
+  "revision": {
+    "significado": "requiere_revision_humana = true: la sugerencia se revisa caso por caso antes de ejecutarse y no admite gestión masiva.",
+    "motivos": {
+      "INDICIO_VULNERABILIDAD": "Vulnerabilidad informada con indicio (solo sintético en v1).",
+      "SEVERIDAD_PARCIAL": "La severidad es un mínimo porque hay obligaciones no evaluables."
+    },
+    "orden_motivos": ["INDICIO_VULNERABILIDAD", "SEVERIDAD_PARCIAL"]
+  },
+  "prioridad": {
+    "escala": [0, 100],
+    "ambito": "Dentro de cada cola (intervención). Las prioridades de colas distintas no se comparan entre sí.",
+    "valor": "Igual a la severidad del objeto; null si la severidad es NO_DISPONIBLE.",
+    "orden": [
+      "prioridad descendente (null al final)",
+      "monto_actualizado_ars descendente (null al final)",
+      "vencimiento_mas_antiguo ascendente (fecha más antigua primero; null al final)",
+      "id ascendente por punto de código"
+    ],
+    "vencimiento_mas_antiguo": "Menor due_date entre las obligaciones vencidas al corte; null si no hay vencidas."
+  },
+  "explicacion": {
+    "factores": ["monto_actualizado_ars", "dias_atraso_maximo", "cantidad_vencidas"],
+    "severidad_texto": {
+      "COMPLETA": "{valor}",
+      "PARCIAL": "al menos {valor}",
+      "NO_DISPONIBLE": "no disponible"
+    },
+    "frases_contrastivas": {
+      "R1": "Se sugiere mejorar los datos de contacto y no una gestión con el contribuyente porque el objeto no tiene un contacto activo cargado; la falta de contacto no modifica la severidad ({severidad_texto}).",
+      "R2": "Se sugiere verificar los datos y no una gestión con el contribuyente porque ninguna obligación tiene importe y vencimiento evaluables ({detalle_no_evaluables}); los faltantes no se cuentan como cero.",
+      "R3": "Se sugiere revisión jurídica y no una gestión de cobro porque al menos una obligación vencida tiene {umbral_prescripcion} días o más de atraso a la fecha de corte; esta alerta no afirma que la deuda esté prescripta.",
+      "R4": "Se sugiere contacto personal con ofrecimiento de plan o asistencia y no un recordatorio informativo porque la severidad ({severidad_texto}) alcanza el umbral de {umbral_alta}.",
+      "R5": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad ({severidad_texto}) es menor que {umbral_alta} y alcanza {umbral_media}.",
+      "R6": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad ({severidad_texto}) es menor que {umbral_media}.",
+      "R7": "Se sugiere seguimiento sin contacto y no una comunicación porque no hay deuda vencida con importe positivo a la fecha de corte.",
+      "M1": "Se sugiere un recordatorio informativo y no contacto personal con plan porque hay un indicio de vulnerabilidad informado, que solo puede moderar la intensidad; requiere revisión humana."
+    },
+    "seleccion_de_frase": "Severidad COMPLETA o NO_DISPONIBLE: frases_contrastivas[regla]. Severidad PARCIAL: frases_contrastivas_parcial[regla] seguida de un espacio y de complemento_parcial. Con M1 y regla R4 se usa la clave M1 en ambos casos.",
+    "frases_contrastivas_parcial": {
+      "R1": "Se sugiere mejorar los datos de contacto y no una gestión con el contribuyente porque el objeto no tiene un contacto activo cargado; la falta de contacto no modifica la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}).",
+      "R3": "Se sugiere revisión jurídica y no una gestión de cobro porque al menos una obligación evaluable vencida tiene {umbral_prescripcion} días o más de atraso a la fecha de corte; esta alerta no afirma que la deuda esté prescripta.",
+      "R4": "Se sugiere contacto personal con ofrecimiento de plan o asistencia y no un recordatorio informativo porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) ya alcanza el umbral de {umbral_alta}.",
+      "R5": "Se sugiere un recordatorio informativo y no contacto personal con plan porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) alcanza {umbral_media}; con los datos disponibles no puede determinarse si alcanza {umbral_alta}.",
+      "R6": "Se sugiere seguimiento con comunicación informativa y no un recordatorio porque la severidad mínima calculada con las obligaciones evaluables ({severidad_texto}) es mayor que 0; con los datos disponibles no puede determinarse si alcanza {umbral_media}.",
+      "R7": "Se sugiere seguimiento sin contacto y no una comunicación porque ninguna obligación evaluable está vencida con importe positivo a la fecha de corte; con los datos disponibles no puede determinarse si alguna obligación no evaluable lo está.",
+      "M1": "Se sugiere un recordatorio informativo y no contacto personal con plan porque hay un indicio de vulnerabilidad informado, que solo puede moderar la intensidad; requiere revisión humana."
+    },
+    "complemento_parcial": "No se pudo evaluar todo el objeto ({detalle_no_evaluables}): esas obligaciones no se cuentan como cero, la severidad puede ser mayor que este mínimo y la sugerencia requiere revisión humana.",
+    "marcadores": {
+      "umbral_alta": "severidad.bandas[ALTA].desde",
+      "umbral_media": "severidad.bandas[MEDIA].desde",
+      "umbral_prescripcion": "banderas.verificar_prescripcion.umbral_dias_atraso",
+      "obligaciones_leidas": "obligaciones leídas no pagadas (evaluabilidad.detalle_no_evaluables.obligaciones_leidas)",
+      "detalle_no_evaluables": "evaluabilidad.detalle_no_evaluables.texto aplicado a severidad.motivos_no_evaluables"
+    }
+  },
+  "mensajes_borrador": {
+    "estado": "BORRADOR_SUJETO_A_VALIDACION_JURIDICA",
+    "envio": "NINGUNO: EQUITAS no envía mensajes; la persona operadora decide si usa el texto y por qué canal, fuera del sistema.",
+    "marcadores_permitidos": ["{tipo_objeto}", "{identificador_objeto}", "{fecha_corte}"],
+    "prohibido_en_texto": ["intimación", "embargo", "juicio", "judicial", "prescrip", "vulnerab", "pobreza", "riesgo", "puntaje", "probabilidad"],
+    "seleccion": {
+      "CONTACTO_PERSONAL_Y_PLAN": "MSG-CONTACTO-PLAN-v1",
+      "RECORDATORIO_INFORMATIVO": "MSG-RECORDATORIO-v1",
+      "SEGUIMIENTO_intensidad_1": "MSG-SEGUIMIENTO-v1",
+      "sin_mensaje": "MEJORAR_DATOS, REVISION_JURIDICA y SEGUIMIENTO con intensidad 0 no tienen mensaje (no hay contacto con el contribuyente)."
+    },
+    "plantillas": {
+      "MSG-CONTACTO-PLAN-v1": "Hola. Le escribimos de la Municipalidad por la cuenta {tipo_objeto} {identificador_objeto}. Según nuestros registros al {fecha_corte}, figura con obligaciones vencidas. Queremos ofrecerle información sobre planes de pago y opciones de asistencia. Puede responder por este medio o acercarse a la oficina de Rentas. Si ya regularizó, desestime este mensaje.",
+      "MSG-RECORDATORIO-v1": "Hola. Le escribimos de la Municipalidad por la cuenta {tipo_objeto} {identificador_objeto}. Según nuestros registros al {fecha_corte}, figura con obligaciones vencidas. Puede consultar el detalle y las formas de pago en la oficina de Rentas o en los canales oficiales. Si ya regularizó, desestime este mensaje.",
+      "MSG-SEGUIMIENTO-v1": "Hola. Le recordamos que puede consultar el estado de la cuenta {tipo_objeto} {identificador_objeto} en la oficina de Rentas o en los canales oficiales. Según nuestros registros al {fecha_corte}, figura con obligaciones vencidas. Si ya regularizó, desestime este mensaje."
+    }
+  }
+}

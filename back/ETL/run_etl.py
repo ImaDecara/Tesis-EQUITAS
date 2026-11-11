@@ -1,55 +1,55 @@
 import argparse
-from collections.abc import Hashable, Mapping
+import re
+import sys
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from ETL.extract import extract_from_input_folder_limited
+from ETL.config import ETLError, get_import_credentials, get_settings, settings
+from ETL.extract import (
+    extract_from_input_folder_limited,
+    load_source_profile,
+    source_files,
+    source_folder,
+)
 from ETL.load import (
-    load_address,
-    load_city,
-    load_debtor,
-    load_debtor_contact,
-    load_debtor_person,
-    load_debtor_profile,
-    load_debtor_profile_detail,
-    load_debts_bulk,
-    load_person,
-    load_province,
+    etl_message,
+    execute_import_batch,
+    record_import_batch,
+    reset_log_context,
+    resolve_catalogs,
+    set_log_context,
 )
 
 # El módulo de transformación contiene funciones específicas para convertir las filas del DataFrame
 from ETL.transform import (
-    build_address_payload,
-    build_city_payload,
-    build_debt_payload,
-    build_debtor_contact_payloads,
-    build_debtor_payload,
-    build_debtor_person_payload,
-    build_debtor_profile_detail_payload,
-    build_debtor_profile_payload,
-    build_header_context_by_clave,
-    build_person_payload,
-    build_province_payload,
-    clean_text,
-    get_issue_date_from_header,
-    get_last_collection_date_from_header,
-    parse_decimal,
-    parse_int,
-    print_transform_summary,
+    CATALOG_KEY_COLUMNS,
+    PreparedBatch,
+    StructuralRejection,
+    batch_counts,
+    build_transform_summary,
+    prepare_batch,
+    required_catalog_keys,
+    source_contract,
 )
+from ETL.validate_source import ValidationError, load_mapping
+from services.decision_rules_v1 import RULES_VERSION
 
+IMPORT_SOURCE = "ETL_CLI"
+STATUS_VALIDATED = "VALIDADO"
+STATUS_PUBLISHED = "PUBLICADO"
+STATUS_FAILED = "FALLIDO"
 
-# Convierte una fila de pandas a dict[str, Any], asegurando que las claves sean strings.
-def row_to_str_dict(row: Mapping[Hashable, Any]) -> dict[str, Any]:
-    return {str(key): value for key, value in row.items()}
-
-
-# Convierte un DataFrame a lista de diccionarios con claves string.
-# Esto es útil para evitar problemas de tipo de clave si el DataFrame tiene columnas con nombres que no son strings.
-def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
-    raw_records = dataframe.to_dict(orient="records")
-    return [row_to_str_dict(row) for row in raw_records]
+# Qué hacer con lo publicado que el archivo ya no trae. La decide quien carga, nunca el ETL por su cuenta:
+# - rechazar (por defecto): lote completo. Falta un objeto, una obligación o una relación: FALLIDO, sin escribir;
+# - conservar: delta. Lo ausente queda como está, activo y contando en su perfil;
+# - dar-de-baja: delta con bajas. De los objetos aceptados, las relaciones y los contactos ausentes pasan a inactivos.
+# En las tres, un objeto ausente no se toca y una obligación ausente se conserva: el archivo no dice que se pagó, y debt no
+# tiene baja. Lo ausente se informa siempre en counts.ausentes y lo desactivado en bajas_relaciones y bajas_contactos.
+ABSENT_REJECT = "rechazar"
+ABSENT_KEEP = "conservar"
+ABSENT_DEACTIVATE = "dar-de-baja"
+ABSENT_POLICIES = (ABSENT_REJECT, ABSENT_KEEP, ABSENT_DEACTIVATE)
 
 
 # Función principal del ETL.
@@ -58,6 +58,53 @@ def run_etl(
     execute: bool = False,
     limit_objects: int | None = None,
     priority_tipo_ingreso_ids: list[int] | None = None,
+    cut_off: str | None = None,
+    mapping_path: str | None = None,
+    absent_policy: str = ABSENT_REJECT,
+    expected_revision: str | None = None,
+) -> None:
+    token = set_log_context(0, None)
+    try:
+        # Rechazar antes de leer archivos, resumir filas o crear el cliente.
+        if absent_policy not in ABSENT_POLICIES:
+            raise ETLError("ABSENT_POLICY_INVALID")
+        if expected_revision is not None and (not execute or re.fullmatch(r"[0-9a-f]{64}", expected_revision) is None):
+            raise ETLError("IMPORT_REVISION_CONFLICT")
+        _require_inputs(execute, cut_off, limit_objects, priority_tipo_ingreso_ids)
+        if cut_off is None:
+            _summarize_source(folder_name, limit_objects, priority_tipo_ingreso_ids)
+        else:
+            _validate_and_load(folder_name, execute, cut_off, mapping_path, absent_policy, expected_revision)
+    # Frontera de salida: un error de parsing o del proveedor puede contener filas.
+    except Exception as error:  # noqa: BLE001
+        code = error.code if isinstance(error, ETLError) else "ETL_FAILED"
+        raise ETLError(code, etl_message(code)) from None
+    finally:
+        reset_log_context(token)
+
+
+def _require_inputs(
+    execute: bool,
+    cut_off: str | None,
+    limit_objects: int | None,
+    priority_tipo_ingreso_ids: list[int] | None,
+) -> None:
+    if execute:
+        get_settings(execute=True)
+        if not cut_off:
+            raise ETLError("CUT_OFF_REQUIRED")
+    # Un subconjunto no es el lote validado: sus hashes y conteos no lo describirían.
+    if cut_off is not None and (limit_objects is not None or priority_tipo_ingreso_ids):
+        raise ETLError("PARTIAL_LOAD_REJECTED")
+    if execute:
+        get_import_credentials()
+
+
+# Vista previa sin corte: solo conteos de los archivos. No valida ni autoriza cargar.
+def _summarize_source(
+    folder_name: str,
+    limit_objects: int | None,
+    priority_tipo_ingreso_ids: list[int] | None,
 ) -> None:
     source_data = extract_from_input_folder_limited(
         folder_name=folder_name,
@@ -65,370 +112,151 @@ def run_etl(
         priority_tipo_ingreso_ids=priority_tipo_ingreso_ids,
     )
 
-    cabecera_df = source_data.cabecera_df
-    detalle_df = source_data.detalle_df
-
-    print_transform_summary(
-        cabecera_df=cabecera_df,
-        detalle_df=detalle_df,
+    summary = build_transform_summary(
+        cabecera_df=source_data.cabecera_df,
+        detalle_df=source_data.detalle_df,
     )
+    print("RESUMEN DE TRANSFORMACIÓN")
+    print(f"Personas únicas: {summary.persons_count}")
+    print(f"Objetos únicos: {summary.debtors_count}")
+    print(f"Relaciones únicas: {summary.debtor_person_relations_count}")
+    print(f"Filas de detalle: {summary.detail_rows_count}")
+    print(f"Deudas únicas: {summary.unique_debts_count}")
+    print(f"Deudas duplicadas: {summary.duplicated_debt_rows_count}")
 
     print()
-    print(f"Carpeta procesada: {folder_name}")
+    print(etl_message("SOURCE_SELECTED", key=folder_name))
     print(f"Límite de objetos: {limit_objects}")
     print(f"Tipos de ingreso priorizados: {priority_tipo_ingreso_ids or []}")
 
-    if not execute:
-        print()
-        print("DRY-RUN FINALIZADO")
-        print("No se insertó ni actualizó nada en Supabase.")
-        print("Para ejecutar la carga real, usá el flag --execute.")
-        return
-
     print()
-    print("INICIANDO CARGA REAL EN SUPABASE")
-    print("-" * 80)
+    print("DRY-RUN FINALIZADO")
+    print("No se insertó ni actualizó nada en Supabase.")
+    print("Para validar el lote, indicá --cut-off; para cargarlo, agregá --execute.")
 
-    # Diccionario para ubicar el debtor interno a partir del tipo de bien y la cuenta.
-    # Esto es clave para no mezclar objetos de distintos tipos.
-    # Ejemplo:
-    # - INMUEBLE Cuenta 3 -> (1, 3)
-    # - AGUA Cuenta 3     -> (6, 3)
-    debtor_id_by_key: dict[tuple[int, int], int] = {}
 
-    person_id_by_external_id: dict[int, int] = {}
+# Los errores de configuración son códigos propios del contrato: se conservan sin valores ni rutas.
+def _source_error(error: ValidationError) -> ETLError:
+    return ETLError(str(error).split(":", 1)[0])
 
-    persons_loaded = 0
-    debtors_loaded = 0
-    relations_loaded = 0
-    debts_loaded = 0
-    duplicate_debts_skipped = 0
 
-    provinces_loaded = 0
-    cities_loaded = 0
-    addresses_loaded = 0
-    contacts_loaded = 0
-    profiles_loaded = 0
-    profile_details_loaded = 0
+def _load_mapping(folder: Path, mapping_path: str | None) -> dict[str, Any]:
+    try:
+        if mapping_path is not None:
+            return load_source_profile(mapping_path, source_contract())
+        return load_mapping(folder)
+    except ValidationError as error:
+        raise _source_error(error) from None
 
-    # Diccionarios auxiliares para calcular debtor_profile al final del ETL.
-    persons_by_debtor_id: dict[int, set[int]] = {}
-    contact_keys_by_person_id: dict[int, set[tuple[int, str]]] = {}
-    debt_payloads_by_debtor_id: dict[int, list[dict[str, Any]]] = {}
-    debt_payloads_to_load: list[dict[str, Any]] = []
-    relation_metadata_by_debtor_and_person: dict[tuple[int, int], dict[str, Any]] = {}
-    debt_bulk_summary = {
-        "received": 0,
-        "unique": 0,
-        "inserted": 0,
-        "updated": 0,
-        "unchanged": 0,
-    }
 
-    # ========================================================
-    # 1. PROCESAR CABECERA
-    # ========================================================
+def _prepare(folder: Path, mapping: dict[str, Any], cut_off: str) -> PreparedBatch:
+    try:
+        return prepare_batch(source_files(folder, mapping), mapping, source_contract(), cut_off)
+    except OSError:
+        raise ETLError("ARCHIVO_NO_LEIBLE") from None
+    except ValidationError as error:
+        raise _source_error(error) from None
 
-    # Cargamos primero personas y objetos de deuda.
-    # También cargamos la relación debtor_person, contactos, provincia, ciudad y dirección.
-    for index, row in enumerate(dataframe_to_records(cabecera_df), start=1):
-        person_payload = build_person_payload(row)
-        debtor_payload = build_debtor_payload(row)
 
-        person_external_id = person_payload.get("external_id")
-        debtor_external_id = debtor_payload.get("external_id")
-        debtor_type_id = parse_int(row.get("Bien_Tipo_Id"))
-
-        if person_external_id is None:
-            print(f"⚠️ Fila omitida: person sin external_id. Row: {row}")
-            continue
-
-        if debtor_external_id is None:
-            print(f"⚠️ Fila omitida: debtor sin external_id. Row: {row}")
-            continue
-
-        if debtor_type_id is None:
-            print(f"⚠️ Fila omitida: debtor sin Bien_Tipo_Id. Row: {row}")
-            continue
-
-        person_row = load_person(person_payload)
-        debtor_row = load_debtor(debtor_payload)
-
-        person_id = int(person_row["id"])
-        debtor_id = int(debtor_row["id"])
-
-        person_id_by_external_id[int(person_external_id)] = person_id
-
-        # Guardamos el debtor por clave compuesta:
-        # Bien_Tipo_Id + Cuenta.
-        debtor_key = (int(debtor_type_id), int(debtor_external_id))
-        debtor_id_by_key[debtor_key] = debtor_id
-
-        persons_by_debtor_id.setdefault(debtor_id, set()).add(person_id)
-
-        debtor_person_payload = build_debtor_person_payload(
-            row=row,
-            debtor_id=debtor_id,
-            person_id=person_id,
-        )
-
-        load_debtor_person(debtor_person_payload)
-
-        relation_metadata_by_debtor_and_person[(debtor_id, person_id)] = {
-            "role": debtor_person_payload.get("role"),
-            "priority": debtor_person_payload.get("priority"),
-        }
-
-        persons_loaded += 1
-        debtors_loaded += 1
-        relations_loaded += 1
-
-        # ====================================================
-        # 1.1 PROVINCE
-        # ====================================================
-
-        # Cargamos o actualizamos provincia a partir de Destinatario_Provincia.
-        province_payload = build_province_payload(row)
-
-        province_id: int | None = None
-        city_id: int | None = None
-
-        if province_payload:
-            province_row = load_province(province_payload)
-            province_id = int(province_row["id"])
-            provinces_loaded += 1
-
-        # ====================================================
-        # 1.2 CITY
-        # ====================================================
-
-        # Cargamos o actualizamos ciudad/localidad a partir de provincia, localidad y CP.
-        if province_id is not None:
-            city_payload = build_city_payload(
-                row=row,
-                province_id=province_id,
-            )
-
-            if city_payload:
-                city_row = load_city(city_payload)
-                city_id = int(city_row["id"])
-                cities_loaded += 1
-
-        # ====================================================
-        # 1.3 ADDRESS
-        # ====================================================
-
-        # Cargamos o actualizamos la dirección principal asociada a la persona.
-        if city_id is not None:
-            address_payload = build_address_payload(
-                row=row,
-                person_id=person_id,
-                city_id=city_id,
-            )
-
-            if address_payload:
-                load_address(address_payload)
-                addresses_loaded += 1
-
-        # ====================================================
-        # 1.4 DEBTOR CONTACT
-        # ====================================================
-
-        # Cargamos contactos de la persona:
-        # teléfono, celular y email si vienen informados.
-        contact_payloads = build_debtor_contact_payloads(
-            row=row,
-            person_id=person_id,
-        )
-
-        for contact_payload in contact_payloads:
-            load_debtor_contact(contact_payload)
-            contacts_loaded += 1
-
-            contact_type = contact_payload.get("type")
-            contact_value = contact_payload.get("value")
-
-            if contact_type is not None and contact_value:
-                contact_keys_by_person_id.setdefault(person_id, set()).add(
-                    (int(contact_type), str(contact_value))
-                )
-
-        if index % 10 == 0:
-            print(f"Cabecera procesada: {index}/{len(cabecera_df)}")
-
-    # ========================================================
-    # 2. PROCESAR DETALLE
-    # ========================================================
-
-    # Desde detalle cargamos:
-    # - debt
-    #
-    # La deuda se deduplica en memoria por:
-    # Bien_Tipo_Id + Cuenta + DEUD_id.
-    #
-    # Esto evita mezclar deudas de distintos tipos de objeto.
-    header_context_by_clave = build_header_context_by_clave(cabecera_df)
-
-    loaded_debt_keys: set[tuple[int, int, int]] = set()
-
-    for index, row in enumerate(dataframe_to_records(detalle_df), start=1):
-        bien_tipo_id = parse_int(row.get("Bien_Tipo_Id"))
-        account = parse_int(row.get("Cuenta"))
-        debt_external_id = parse_int(row.get("DEUD_id"))
-
-        if bien_tipo_id is None:
-            print(f"⚠️ Detalle omitido: sin Bien_Tipo_Id. Row: {row}")
-            continue
-
-        if account is None:
-            print(f"⚠️ Detalle omitido: sin Cuenta. Row: {row}")
-            continue
-
-        if debt_external_id is None:
-            print(f"⚠️ Detalle omitido: sin DEUD_id. Row: {row}")
-            continue
-
-        # Clave de deduplicación robusta para múltiples tipos de bien.
-        debt_key = (bien_tipo_id, account, debt_external_id)
-
-        if debt_key in loaded_debt_keys:
-            duplicate_debts_skipped += 1
-            continue
-
-        # Buscamos el debtor usando Bien_Tipo_Id + Cuenta.
-        debtor_id = debtor_id_by_key.get((bien_tipo_id, account))
-
-        if debtor_id is None:
-            print(
-                f"⚠️ Detalle omitido: no existe debtor para "
-                f"Bien_Tipo_Id={bien_tipo_id}, Cuenta={account}, "
-                f"DEUD_id={debt_external_id}"
-            )
-            continue
-
-        clave = clean_text(row.get("ClaveAgrupacion"))
-        header_row = header_context_by_clave.get(clave) if clave else None
-
-        issue_date = get_issue_date_from_header(header_row)
-        last_collection_date = get_last_collection_date_from_header(header_row)
-
-        debt_payload = build_debt_payload(
-            row=row,
-            debtor_id=debtor_id,
-            issue_date=issue_date,
-            last_collection_date=last_collection_date,
-        )
-
-        debt_payloads_to_load.append(debt_payload)
-        debt_payloads_by_debtor_id.setdefault(debtor_id, []).append(debt_payload)
-        loaded_debt_keys.add(debt_key)
-        debts_loaded += 1
-
-        if index % 100 == 0:
-            print(
-                f"Detalle procesado: {index}/{len(detalle_df)} | "
-                f"Deudas preparadas: {debts_loaded} | "
-                f"Duplicadas omitidas: {duplicate_debts_skipped}"
-            )
-
+def _print_validation(batch: PreparedBatch) -> None:
+    report = batch.report
+    print("VALIDACIÓN DEL LOTE")
+    print(f"Resultado del lote: {report['resultado_lote']}")
+    print(f"Motivos de bloqueo: {', '.join(report['motivos_bloqueo']) or 'ninguno'}")
+    print(f"Corte: {report['fecha_corte']}")
+    for name, value in report["conteos"].items():
+        print(f"{name}: {'no disponible' if value is None else value}")
+    for kind, rows in report["filas"].items():
+        print(f"Filas de {kind}: {rows['leidas']} leídas, {rows['aceptadas']} aceptadas, {rows['rechazadas']} rechazadas")
+        for code, count in rows["rechazadas_por_codigo"].items():
+            print(f"  Rechazo {code}: {count}")
     print()
-    print(f"Cargando {len(debt_payloads_to_load)} deudas por lotes en Supabase...")
-    debt_bulk_summary = load_debts_bulk(debt_payloads_to_load)
 
-    # ========================================================
-    # 3. CALCULAR PROMEDIO DE DEUDA PARA RIESGO
-    # ========================================================
 
-    # Calcula el promedio de deuda total por objeto para usarlo como referencia relativa del riesgo.
-    total_debt_amounts_for_average: list[float] = []
-
-    for debt_rows in debt_payloads_by_debtor_id.values():
-        total_amount = sum(
-            parse_decimal(row.get("current_amount"))
-            for row in debt_rows
-        )
-
-        if total_amount > 0:
-            total_debt_amounts_for_average.append(total_amount)
-
-    average_total_debt_amount = (
-        sum(total_debt_amounts_for_average) / len(total_debt_amounts_for_average)
-        if total_debt_amounts_for_average
-        else 0.0
+def _register_batch(
+    batch_hashes: dict[str, str],
+    cut_off: str,
+    status: str,
+    counts: dict[str, Any],
+    *,
+    source_updated_at: str | None = None,
+    supersedes: int | None = None,
+) -> int:
+    return record_import_batch(
+        tenant=settings.tenant_id,
+        source=IMPORT_SOURCE,
+        file_hashes=batch_hashes,
+        as_of=cut_off,
+        rules_version=RULES_VERSION,
+        status=status,
+        counts=counts,
+        source_updated_at=source_updated_at,
+        supersedes=supersedes,
     )
 
-    print(f"Promedio de deuda por objeto usado para riesgo: {average_total_debt_amount:.2f}")
 
-    # ========================================================
-    # 4. CALCULAR Y CARGAR DEBTOR_PROFILE
-    # ========================================================
+def _validate_and_load(folder_name: str, execute: bool, cut_off: str, mapping_path: str | None, absent_policy: str,
+                       expected_revision: str | None = None) -> None:
+    folder = source_folder(folder_name)
+    mapping = _load_mapping(folder, mapping_path)
 
-    # El perfil se calcula al final porque depende de deudas, personas asociadas y contactos ya cargados.
-    for debtor_id, person_ids in persons_by_debtor_id.items():
-        debt_rows = debt_payloads_by_debtor_id.get(debtor_id, [])
+    try:
+        batch = _prepare(folder, mapping, cut_off)
+    except StructuralRejection as rejection:
+        if execute:
+            _register_batch(rejection.file_hashes, cut_off, STATUS_FAILED, {})
+        raise ETLError(rejection.code) from None
 
-        available_contact_count = sum(
-            len(contact_keys_by_person_id.get(person_id, set()))
-            for person_id in person_ids
-        )
+    _print_validation(batch)
 
-        debtor_profile_payload = build_debtor_profile_payload(
-            debtor_id=debtor_id,
-            debt_rows=debt_rows,
-            active_person_count=len(person_ids),
-            available_contact_count=available_contact_count,
-            average_total_debt_amount=average_total_debt_amount,
-        )
+    if execute and batch.publishable:
+        _publish_validated_batch(batch, absent_policy, expected_revision)
+        return
 
-        debtor_profile_row = load_debtor_profile(debtor_profile_payload)
-        debtor_profile_id = int(debtor_profile_row["id"])
-        profiles_loaded += 1
+    if execute:
+        _register_batch(batch.file_hashes, cut_off, STATUS_FAILED, batch_counts(batch.report),
+                        source_updated_at=batch.source_updated_at)
+    if not batch.publishable:
+        raise ETLError("BATCH_BLOCKED")
 
-        # ====================================================
-        # 4.1 CALCULAR Y CARGAR DEBTOR_PROFILE_DETAIL
-        # ====================================================
+    print("DRY-RUN FINALIZADO")
+    print("No se insertó ni actualizó nada en Supabase.")
+    print("Para ejecutar la carga real, usá el flag --execute.")
 
-        # El detalle del perfil se calcula por cada persona asociada al objeto de deuda.
-        for person_id in sorted(person_ids):
-            person_contact_count = len(contact_keys_by_person_id.get(person_id, set()))
-            relation_metadata = relation_metadata_by_debtor_and_person.get(
-                (debtor_id, person_id),
-                {},
-            )
 
-            debtor_profile_detail_payload = build_debtor_profile_detail_payload(
-                debtor_profile_id=debtor_profile_id,
-                person_id=person_id,
-                profile_risk_level=int(debtor_profile_payload["socioeconomic_risk_level"]),
-                person_contact_count=person_contact_count,
-                role=clean_text(relation_metadata.get("role")),
-                priority=parse_decimal(relation_metadata.get("priority")),
-            )
+# El registro append-only, la revisión congelada y las escrituras se coordinan en SQL.
+# Staging no escribe cartera. PUBLICADO incluye el recibo durable de esa transacción.
+def _publish_validated_batch(batch: PreparedBatch, absent_policy: str = ABSENT_REJECT,
+                             expected_revision: str | None = None) -> None:
+    resolve_catalogs(required_catalog_keys(batch), CATALOG_KEY_COLUMNS)
+    print("INICIANDO CARGA REAL EN SUPABASE")
+    result = execute_import_batch(batch, tenant=settings.tenant_id, absent_policy=absent_policy,
+                                  expected_revision=expected_revision)
+    loaded = result["counts"]
+    if loaded.get("ausentes"):
+        print("Ausentes del archivo: " + ", ".join(f"{name}={count}" for name, count in loaded["ausentes"].items()))
+    print(f"Lote publicado: {result['batch_id']}")
+    _print_load_summary(loaded)
 
-            load_debtor_profile_detail(debtor_profile_detail_payload)
-            profile_details_loaded += 1
 
-    # ========================================================
-    # 5. RESUMEN FINAL
-    # ========================================================
-
+def _print_load_summary(loaded: Mapping[str, Any]) -> None:
     print()
     print("CARGA FINALIZADA")
     print("-" * 80)
-    print(f"Person rows procesadas:              {persons_loaded}")
-    print(f"Debtor rows procesadas:              {debtors_loaded}")
-    print(f"Relaciones debtor_person cargadas:   {relations_loaded}")
-    print(f"Deudas únicas cargadas/actualizadas: {debts_loaded}")
-    print(f"Deudas insertadas:                   {debt_bulk_summary['inserted']}")
-    print(f"Deudas actualizadas:                 {debt_bulk_summary['updated']}")
-    print(f"Deudas sin cambios:                  {debt_bulk_summary['unchanged']}")
-    print(f"Deudas duplicadas omitidas:          {duplicate_debts_skipped}")
-    print(f"Provincias procesadas:               {provinces_loaded}")
-    print(f"Ciudades procesadas:                 {cities_loaded}")
-    print(f"Direcciones cargadas/actualizadas:   {addresses_loaded}")
-    print(f"Contactos cargados/actualizados:     {contacts_loaded}")
-    print(f"Perfiles debtor_profile cargados:    {profiles_loaded}")
-    print(f"Detalles debtor_profile_detail:      {profile_details_loaded}")
+    print(f"Objetos publicados:                  {loaded.get('objetos_publicados', 0)}")
+    print(f"Relaciones debtor_person publicadas: {loaded.get('relaciones_publicadas', 0)}")
+    print(f"Deudas únicas cargadas/actualizadas: {loaded.get('deudas_publicadas', 0)}")
+    print(f"Deudas insertadas:                   {loaded.get('deudas_insertadas', 0)}")
+    print(f"Deudas actualizadas:                 {loaded.get('deudas_actualizadas', 0)}")
+    print(f"Deudas sin cambios:                  {loaded.get('deudas_sin_cambios', 0)}")
+    print(f"Direcciones publicadas:              {loaded.get('direcciones_publicadas', 0)}")
+    print(f"Contactos publicados:                {loaded.get('contactos_publicados', 0)}")
+    print(f"Perfiles debtor_profile publicados:  {loaded.get('perfiles_publicados', 0)}")
+    print(f"Relaciones dadas de baja:            {loaded.get('bajas_relaciones', 0)}")
+    print(f"Contactos dados de baja:             {loaded.get('bajas_contactos', 0)}")
+    print(f"Filas insertadas:                    {loaded.get('filas_insertadas', 0)}")
+    print(f"Filas actualizadas:                  {loaded.get('filas_actualizadas', 0)}")
+    print(f"Filas sin cambios:                   {loaded.get('filas_sin_cambios', 0)}")
     print("-" * 80)
 
 
@@ -441,20 +269,40 @@ def main() -> None:
     parser.add_argument(
         "--folder",
         default="inmuebles",
-        help="Carpeta dentro de back/data/input. Por defecto: inmuebles",
+        help="Carpeta dentro de back/data/input, o ruta absoluta del lote. Por defecto: inmuebles",
     )
 
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="Ejecuta la carga real en Supabase. Si no se usa, corre en modo dry-run.",
+        help="Ejecuta la carga real en Supabase. Exige --cut-off. Si no se usa, corre en modo dry-run.",
+    )
+
+    parser.add_argument(
+        "--cut-off",
+        default=None,
+        help="Fecha de corte del lote, AAAA-MM-DD, igual a la declarada en el perfil. Obligatoria con --execute.",
+    )
+
+    parser.add_argument(
+        "--mapping",
+        default=None,
+        help="Perfil JSON del lote. Sin él, solo se admite una fixture sintética con manifest.json.",
+    )
+
+    parser.add_argument(
+        "--ausentes",
+        choices=ABSENT_POLICIES,
+        default=ABSENT_REJECT,
+        help="Qué hacer con lo publicado que el archivo ya no trae: rechazar el lote (por defecto), "
+        "conservarlo (delta) o dar de baja relaciones y contactos de los objetos aceptados.",
     )
 
     parser.add_argument(
         "--limit-objects",
         type=int,
         default=None,
-        help="Limita la carga a N objetos únicos por Bien_Tipo_Id + Cuenta.",
+        help="Solo vista previa sin corte. Limita el resumen a N objetos únicos por Bien_Tipo_Id + Cuenta.",
     )
 
     parser.add_argument(
@@ -462,17 +310,28 @@ def main() -> None:
         type=int,
         nargs="*",
         default=None,
-        help="Tipo_Ingreso_Id que deben priorizarse dentro del límite. Ejemplo: 801 802.",
+        help="Solo vista previa sin corte. Tipo_Ingreso_Id que deben priorizarse dentro del límite.",
     )
+
+    parser.add_argument("--revalidate", default=None,
+                        help="Revalidar explícitamente un lote fallido, descartado o desactualizado; revisión SHA-256 anterior.")
 
     args = parser.parse_args()
 
-    run_etl(
-        folder_name=args.folder,
-        execute=args.execute,
-        limit_objects=args.limit_objects,
-        priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
-    )
+    try:
+        run_etl(
+            folder_name=args.folder,
+            execute=args.execute,
+            limit_objects=args.limit_objects,
+            priority_tipo_ingreso_ids=args.priority_tipo_ingreso,
+            cut_off=args.cut_off,
+            mapping_path=args.mapping,
+            absent_policy=args.ausentes,
+            expected_revision=args.revalidate,
+        )
+    except ETLError as error:
+        print(str(error), file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

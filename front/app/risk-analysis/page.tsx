@@ -1,182 +1,110 @@
 import Link from 'next/link'
-import { Eye, ShieldAlert, UsersRound } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 
 import { RiskDonutChart } from '@/components/dashboard/chart-cards'
 import { DataWarnings } from '@/components/equitas/data-warnings'
-import { RiskBadge } from '@/components/equitas/risk-badge'
 import { AppShell } from '@/components/layout/app-shell'
-import { PersonRiskBadge } from '@/components/people/person-risk-badge'
-import { buttonVariants } from '@/components/ui/button'
+import { LegacyIndexPanel } from '@/components/people/legacy-index-panel'
+import { PriorityScoreBadge } from '@/components/portfolio/case-cells'
+import { emptyPortfolioScreen, PageHeading } from '@/components/portfolio/portfolio-state'
+import { bandLabel, casesLabel, filterLine, filterNotes, isEmptyLegacyIndexWarning, missingLines, SCORE_LABEL, SCORE_NOTE, SCORE_RECIPE } from '@/components/portfolio/portfolio-text'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScrollHint } from '@/components/ui/table'
+import { formatNumber, readingFailed } from '@/lib/data-presence'
 import { getDebtorsData, getPeopleData } from '@/lib/equitas-data'
-import { getHighIndividualRiskPeople, getHighRiskCases } from '@/lib/equitas-view-selectors'
+import { getHighRiskCases } from '@/lib/equitas-view-selectors'
+import { mapDashboardMetricsFromDebtorObjects } from '@/lib/mappers/dashboard-metrics-mapper'
+import { filterPortfolio, normalizePortfolioSearchParams, portfolioHref, type RawPortfolioSearchParams } from '@/lib/portfolio-filters'
 import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-export default async function RiskAnalysisPage() {
-  const [{ debtors, warnings: debtorWarnings }, { people, peopleDashboard, warnings: peopleWarnings }] =
-    await Promise.all([getDebtorsData(), getPeopleData()])
-  const warnings = [...debtorWarnings, ...peopleWarnings]
-  const objectRiskDistribution = ['ALTO', 'MEDIO', 'BAJO'].map((risk) => ({
-    label: risk,
-    value: debtors.filter((debtor) => debtor.risk === risk).length,
-  }))
+const TITLE = SCORE_LABEL
+
+export default async function RiskAnalysisPage({ searchParams }: { searchParams?: Promise<RawPortfolioSearchParams> } = {}) {
+  const empty = await emptyPortfolioScreen(TITLE)
+  if (empty) return empty
+  const [source, { people, peopleDashboard, warnings: peopleWarnings }] = await Promise.all([getDebtorsData(), getPeopleData()])
+  const filters = normalizePortfolioSearchParams(await searchParams ?? {})
+  const active = Object.values(filters).some(Boolean)
+  const { items: debtors, warnings: debtorWarnings, failed } = filterPortfolio(source.debtors, filters, source.warnings)
+  const objectDashboard = mapDashboardMetricsFromDebtorObjects({ debtors, debtStatusBuckets: new Map(), warnings: debtorWarnings })
+  const objectRiskDistribution = objectDashboard.byRisk.filter(item => item.label !== 'No disponible').map(item => ({ label: bandLabel(item.label), value: item.value }))
+  const withoutScore = objectDashboard.byRisk.find(item => item.label === 'No disponible')?.value ?? 0
   const highRiskCases = getHighRiskCases(debtors)
-  const highIndividualRiskPeople = getHighIndividualRiskPeople(people)
+  // El aviso «sin filas» del índice anterior no es un error de lectura: el panel lo explica aparte.
+  const readWarnings = [...source.warnings, ...peopleWarnings.filter(warning => !isEmptyLegacyIndexWarning(warning))]
+  const missing = missingLines([[SCORE_LABEL, objectDashboard.metrics?.priorityCases], ['Casos con puntaje mayor a 90', objectDashboard.metrics?.riskAboveNinetyCases]])
 
   return (
     <AppShell>
-      <section className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-[#163a63]">
-          Analisis de riesgo
-        </h1>
-        <p className="text-sm text-slate-600">
-          El riesgo del objeto representa la criticidad del caso. El riesgo individual representa
-          la criticidad de cada persona asociada.
-        </p>
-      </section>
+      <PageHeading title={TITLE} description={`${SCORE_NOTE} ${SCORE_RECIPE}`} />
 
-      <div className="space-y-6">
-        <DataWarnings warnings={warnings} />
+      <div className="space-y-5">
+        <DataWarnings warnings={readWarnings} />
+        {filterNotes(debtorWarnings, source.warnings).map(note => <p key={note.message} role="status" className="text-sm text-amber-800">{note.message}</p>)}
+        {active && <p className="text-sm text-slate-700">{filterLine(failed ? null : debtors.length, readingFailed(source.warnings, 'debtor') ? null : source.debtors.length)}</p>}
+        {missing && <p className="text-xs text-slate-600">Datos faltantes que afectan los cálculos. {missing}.</p>}
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="border-[#d2dceb]">
             <CardHeader>
-              <CardTitle>Riesgo del objeto</CardTitle>
-              <CardDescription>Basado en la criticidad consolidada del caso.</CardDescription>
+              <CardTitle>Casos en banda alta</CardTitle>
+              <CardDescription>{SCORE_LABEL} desde 70 hasta 100, inclusive.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-start justify-between gap-3 rounded-lg border border-[#efd2d2] bg-[#fbefef] p-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-[#8f3434]">
-                    Objetos con riesgo &gt; 90
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {highRiskCases.length.toLocaleString('es-AR')}
-                  </p>
-                  <p className="text-xs text-slate-600">Criticidad extrema del caso</p>
+                  <p className="text-2xl font-semibold text-slate-900">{formatNumber(objectDashboard.priorityCases)}</p>
+                  <p className="text-xs text-slate-600">{objectDashboard.coverage?.highSeverityCases}</p>
                 </div>
-                <ShieldAlert className="size-5 text-[#9d3d3d]" />
+                <ShieldAlert className="size-5 text-[#9d3d3d]" aria-hidden />
               </div>
             </CardContent>
           </Card>
-
-          <Card className="border-[#d2dceb]">
-            <CardHeader>
-              <CardTitle>Riesgo individual</CardTitle>
-              <CardDescription>Basado en el puntaje individual de cada persona.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start justify-between gap-3 rounded-lg border border-[#e7d2ae] bg-[#f9f3e4] p-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-[#6f561e]">
-                    Personas con puntaje alto
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {highIndividualRiskPeople.length.toLocaleString('es-AR')}
-                  </p>
-                  <p className="text-xs text-slate-600">Puntaje individual desde 70</p>
-                </div>
-                <UsersRound className="size-5 text-[#8a6f2a]" />
-              </div>
-            </CardContent>
-          </Card>
+          {objectRiskDistribution.some(item => item.value > 0)
+            ? <RiskDonutChart title="Casos por banda" data={objectRiskDistribution} size="compact" />
+            : objectDashboard.priorityCases === null && <RiskDonutChart title="Casos por banda" data={[]} emptyMessage="No disponible: no se pudo calcular el puntaje de los casos." />}
         </section>
+        {withoutScore > 0 && <p className="text-xs text-slate-600">{casesLabel(withoutScore)} sin {SCORE_LABEL.toLowerCase()} calculado: no entran en el gráfico.</p>}
 
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <RiskDonutChart title="Distribucion de objetos por riesgo" data={objectRiskDistribution} />
-          <RiskDonutChart
-            title="Distribucion de personas por riesgo individual"
-            data={peopleDashboard.individualRiskDistribution}
-          />
-        </section>
-
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card className="border-[#d2dceb]">
-            <CardHeader>
-              <CardTitle>Objetos con riesgo mayor a 90</CardTitle>
-              <CardDescription>Casos con score de riesgo extremo.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Objeto</TableHead>
-                    <TableHead>Riesgo</TableHead>
-                    <TableHead className="text-right">Deuda</TableHead>
-                    <TableHead className="text-right">Accion</TableHead>
+        <Card className="border-[#d2dceb]">
+          <CardHeader>
+            <CardTitle>Casos en banda alta (hasta 10)</CardTitle>
+            <CardDescription>En el orden de su grupo de trabajo, no por un ranking entre grupos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TableScrollHint />
+            <Table className="table-fixed min-w-[30rem] md:min-w-[36rem]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[34%] md:w-[26%]">Identificador</TableHead>
+                  <TableHead className="hidden w-[24%] md:table-cell">Grupo de trabajo</TableHead>
+                  <TableHead className="w-[33%] md:w-[24%]">{SCORE_LABEL}</TableHead>
+                  <TableHead className="w-[33%] text-right md:w-[26%]">Deuda pendiente</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {highRiskCases.length === 0 && (
+                  <TableRow><TableCell colSpan={4}>{objectDashboard.priorityCases === null ? 'No disponible: no se pudo calcular el puntaje de los casos.' : 'No hay casos en banda alta.'}</TableCell></TableRow>
+                )}
+                {highRiskCases.slice(0, 10).map(debtor => (
+                  <TableRow key={debtor.id}>
+                    <TableCell className="align-top">
+                      <Link href={portfolioHref(`/debtors/${encodeURIComponent(debtor.id)}`, filters)} className="font-medium break-words text-[#163a63] underline">{debtor.identifier}</Link>
+                      <p className="text-xs text-slate-500">{debtor.type}</p>
+                    </TableCell>
+                    <TableCell className="hidden align-top md:table-cell">{debtor.recommendationType}</TableCell>
+                    <TableCell className="align-top"><PriorityScoreBadge debtor={debtor} /></TableCell>
+                    <TableCell className="text-right align-top">{formatCurrency(debtor.pendingDebt)}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {highRiskCases.slice(0, 10).map((debtor) => (
-                    <TableRow key={debtor.id}>
-                      <TableCell>
-                        <div className="font-medium text-slate-900">{debtor.identifier}</div>
-                        <p className="text-xs text-slate-500">{debtor.type}</p>
-                      </TableCell>
-                      <TableCell>
-                        <RiskBadge risk={debtor.risk} score={debtor.riskScore} />
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(debtor.totalDebt)}</TableCell>
-                      <TableCell className="text-right">
-                        <Link
-                          href={`/debtors/${encodeURIComponent(debtor.id)}`}
-                          className={buttonVariants({ variant: 'default', size: 'sm' })}
-                        >
-                          <Eye className="size-3.5" />
-                          Detalle
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-          <Card className="border-[#d2dceb]">
-            <CardHeader>
-              <CardTitle>Personas con puntaje alto</CardTitle>
-              <CardDescription>Personas con puntaje individual desde 70.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Persona</TableHead>
-                    <TableHead>Riesgo individual</TableHead>
-                    <TableHead className="text-right">Puntaje</TableHead>
-                    <TableHead className="text-right">Objetos</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {highIndividualRiskPeople.slice(0, 10).map((person) => (
-                    <TableRow key={person.id}>
-                      <TableCell>
-                        <div className="font-medium text-slate-900">{person.name}</div>
-                        <p className="text-xs text-slate-500">{person.document}</p>
-                      </TableCell>
-                      <TableCell>
-                        <PersonRiskBadge risk={person.individualRisk} score={person.riskValue} />
-                      </TableCell>
-                      <TableCell className="text-right">{person.riskValue.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{person.debtorsCount}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </section>
+        <LegacyIndexPanel people={people} summary={peopleDashboard} warnings={peopleWarnings} />
       </div>
     </AppShell>
   )

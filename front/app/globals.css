@@ -12,6 +12,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* La barra superior es fija en pantallas chicas: no puede tapar el control con foco. */
+@media (max-width: 767px) {
+  html {
+    scroll-padding-top: 7.5rem;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

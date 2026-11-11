@@ -1,4 +1,10 @@
-import type { RecommendationKind, RiskLevel } from '@/types/equitas-domain'
+import { ACTIVE_RULES as contract, type Decision, type InterventionCode } from '@/lib/domain/decision-rules-v1'
+import type { RecommendationKind } from '@/types/equitas-domain'
+
+export const INTERVENTION_CODES = Object.keys(contract.intervenciones) as InterventionCode[]
+export const INTERVENTION_LABELS = Object.fromEntries(INTERVENTION_CODES.map(code =>
+  [code, contract.intervenciones[code].cola]
+)) as Record<InterventionCode, RecommendationKind>
 
 export type DebtorRecommendationResult = {
   type: RecommendationKind
@@ -7,67 +13,19 @@ export type DebtorRecommendationResult = {
   isUrgent: boolean
 }
 
-type RecommendationInput = {
-  risk: RiskLevel
-  hasContact: boolean
-  overdueDebt: number
-  totalDebt: number
-  overdueDays: number
-}
-
-// Traduce senales operativas en una accion concreta y entendible para el gestor municipal.
-export function generateDebtorRecommendation({
-  risk,
-  hasContact,
-  overdueDebt,
-  totalDebt,
-  overdueDays,
-}: RecommendationInput): DebtorRecommendationResult {
-  if (risk === 'ALTO' && hasContact) {
-    return {
-      type: 'Llamado prioritario',
-      summary: 'Llamado prioritario',
-      reason:
-        'Presenta riesgo alto y cuenta con contacto disponible, por lo que conviene gestionar en el dia.',
-      isUrgent: true,
-    }
+/** Presenta la decisión ya evaluada; no vuelve a calcular puntos ni usa perfiles. */
+export function generateDebtorRecommendation(decision: Decision | null): DebtorRecommendationResult {
+  if (!decision) return {
+    type: 'No disponible', summary: 'No disponible',
+    reason: 'No se pudo evaluar: lectura incompleta o fecha de corte inválida.', isUrgent: false,
   }
-
-  if (risk === 'ALTO' && !hasContact) {
-    return {
-      type: 'Plan de pago / revision humana',
-      summary: 'Plan de pago / revision humana',
-      reason:
-        'Tiene riesgo alto sin canal de contacto activo. Requiere intervencion humana para localizar y definir estrategia.',
-      isUrgent: true,
-    }
-  }
-
-  if (overdueDebt > 0 && overdueDays >= 60) {
-    return {
-      type: 'Plan de pago / revision humana',
-      summary: 'Plan de pago / revision humana',
-      reason:
-        'Acumula mora prolongada y necesita evaluacion de plan de pago o escalamiento de cobranza.',
-      isUrgent: true,
-    }
-  }
-
-  if (overdueDebt > 0 || totalDebt >= 350000) {
-    return {
-      type: 'Mensaje recordatorio',
-      summary: 'Mensaje recordatorio',
-      reason:
-        'Cuenta con deuda exigible o saldo relevante, por lo que corresponde recordatorio formal con seguimiento.',
-      isUrgent: false,
-    }
-  }
-
+  const type = INTERVENTION_LABELS[decision.intervencion.codigo]
+  const review = decision.revision.requiere_revision_humana || decision.intervencion.codigo === 'REVISION_JURIDICA'
   return {
-    type: 'Seguimiento posterior',
-    summary: 'Seguimiento posterior',
-    reason:
-      'No presenta senales criticas inmediatas. Se recomienda monitoreo periodico y contacto preventivo.',
-    isUrgent: false,
+    type,
+    summary: type,
+    reason: `${decision.explicacion.frase_contrastiva}${review ? ' Requiere revisión caso por caso antes de gestionar.' : ''}`,
+    // Compatibilidad con el DTO previo: señala revisión, nunca urgencia legal.
+    isUrgent: review,
   }
 }

@@ -1,10 +1,43 @@
+import re
 import time
-from collections.abc import Callable
+import uuid
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Mapping
+from contextvars import ContextVar, Token
+from datetime import date
+from decimal import Decimal, InvalidOperation
+from hashlib import blake2b
+from secrets import token_bytes
 from typing import Any, TypeVar, cast
 
 import httpx
 
-from ETL.config import supabase
+from ETL.config import ETLError, get_import_credentials, get_settings, supabase
+
+# La sal es efímera: las claves solo se correlacionan dentro del mismo proceso.
+_LOG_HASH_KEY = token_bytes(32)
+
+
+def hash_key(key: Any) -> str:
+    return blake2b(repr(key).encode("utf-8"), key=_LOG_HASH_KEY, digest_size=12).hexdigest()
+
+
+_LOG_CONTEXT: ContextVar[tuple[int, str]] = ContextVar("etl_log_context", default=(0, hash_key(None)))
+
+
+def set_log_context(row_number: int, key: Any) -> Token:
+    return _LOG_CONTEXT.set((row_number, hash_key(key)))
+
+
+def reset_log_context(token: Token) -> None:
+    _LOG_CONTEXT.reset(token)
+
+
+def etl_message(code: str, *, key: Any = None) -> str:
+    row_number, key_hash = _LOG_CONTEXT.get()
+    if key is not None:
+        key_hash = hash_key(key)
+    return f"fila={row_number} clave_hash={key_hash} codigo={code}"
 
 # ============================================================
 # NOMBRES DE TABLAS
@@ -34,6 +67,21 @@ TRANSIENT_SUPABASE_ERRORS = (
 MAX_SUPABASE_ATTEMPTS = 5
 SUPABASE_RETRY_DELAYS_SECONDS = (1, 2, 4, 8)
 DEFAULT_BULK_BATCH_SIZE = 500
+READ_PAGE_SIZE = 1000
+READ_IDS_PER_REQUEST = 200
+PROFILE_RECOMPUTE_FUNCTION = "recompute_debtor_profiles"
+PROFILE_RECOMPUTE_OBJECTS_PER_CALL = 500
+PROFILE_DETAILS_UPDATED = "detalles_actualizados"
+PROFILE_DEBTS_RECLASSIFIED = "deudas_reclasificadas"
+
+# Qué le pasó a cada fila en una carga. Una recarga idéntica tiene que dar solo "sin_cambios".
+WRITE_INSERTED = "insertadas"
+WRITE_UPDATED = "actualizadas"
+WRITE_UNCHANGED = "sin_cambios"
+WRITE_OUTCOMES = (WRITE_INSERTED, WRITE_UPDATED, WRITE_UNCHANGED)
+_WRITE_TALLY: ContextVar[dict[str, Counter[str]] | None] = ContextVar("etl_write_tally", default=None)
+
+# Cuándo se calculó el perfil no es parte de lo calculado: si nada más cambió, sigue valiendo el cálculo anterior.
 
 DEBT_COMPARE_COLUMNS = (
     "external_id",
@@ -52,7 +100,46 @@ DEBT_COMPARE_COLUMNS = (
 DEBT_NUMERIC_COLUMNS = {"original_amount", "current_amount"}
 DEBT_INTEGER_COLUMNS = {"external_id", "debtor", "currency", "status"}
 
+# Importes. Por la Data API llegan como número JSON y Python los vuelve float, que pierde centavos desde unos 100 billones:
+# una corrección de un centavo pasaría por igual. Para comparar se leen como texto. El porcentaje no hace falta: el validador
+# lo acota a 100 con dos decimales, y un float lo representa sin pérdida al volver a texto.
+EXACT_NUMERIC_COLUMNS = {
+    DEBT_TABLE: frozenset(DEBT_NUMERIC_COLUMNS),
+}
+
+IMPORT_BATCH_RPC_PATH = "/rest/v1/rpc/record_import_batch"
+IMPORT_BATCH_TIMEOUT_SECONDS = 15
+# Códigos estables de record_import_batch (SUPABASE_TESTING_CALIDAD.md). Cualquier otro texto no se propaga.
+IMPORT_BATCH_STABLE_ERROR = re.compile(
+    r"ROLE_NOT_ALLOWED|ACTOR_NOT_ACTIVE_MEMBER|IDEMPOTENCY_KEY_CONFLICT|SUPERSEDES_NOT_FOUND"
+    r"|INVALID_IMPORT_BATCH:[a-z0-9_]{1,63}"
+)
+
 T = TypeVar("T")
+
+
+class ImportBatchRejected(ETLError):
+    """La base respondió que no registró el evento. A diferencia de una respuesta perdida o un 5xx, se sabe que no quedó."""
+
+
+def start_write_tally() -> dict[str, Counter[str]]:
+    tally: dict[str, Counter[str]] = defaultdict(Counter)
+    _WRITE_TALLY.set(tally)
+    return tally
+
+
+def _count_writes(table_name: str, outcome: str, rows: int = 1) -> None:
+    tally = _WRITE_TALLY.get()
+    if tally is not None:
+        tally[table_name][outcome] += rows
+
+
+# Solo enteros y claves propias: se guarda tal cual en import_batch.counts.
+def write_summary(tally: Mapping[str, Counter[str]]) -> dict[str, Any]:
+    tables = {table: {outcome: counts[outcome] for outcome in WRITE_OUTCOMES} for table, counts in sorted(tally.items())}
+    totals = {f"filas_{outcome}": sum(counts[outcome] for counts in tables.values()) for outcome in WRITE_OUTCOMES}
+    return {**totals, "escrituras": tables}
+
 
 # ============================================================
 # FUNCIONES BASE DE SUPABASE
@@ -63,26 +150,29 @@ def execute_supabase_operation(
     operation: Callable[[], T],
     retry: bool = True,
 ) -> T:
-    if not retry:
-        return operation()
-
-    for attempt in range(1, MAX_SUPABASE_ATTEMPTS + 1):
+    attempts = MAX_SUPABASE_ATTEMPTS if retry else 1
+    for attempt in range(1, attempts + 1):
         try:
             return operation()
         except TRANSIENT_SUPABASE_ERRORS as error:
-            if attempt == MAX_SUPABASE_ATTEMPTS:
-                raise
+            if attempt == attempts:
+                # Conservar el tipo transitorio permite el reintento del llamador.
+                raise type(error)(etl_message("SUPABASE_RETRY_EXHAUSTED")) from None
 
             delay_seconds = SUPABASE_RETRY_DELAYS_SECONDS[attempt - 1]
             print(
-                f"[Supabase retry] {operation_name} falló por "
-                f"{error.__class__.__name__}. "
+                f"{etl_message('SUPABASE_RETRY')} "
                 f"Reintento {attempt + 1}/{MAX_SUPABASE_ATTEMPTS} "
                 f"en {delay_seconds}s."
             )
             time.sleep(delay_seconds)
+        except ETLError:
+            raise
+        # Frontera de salida: no propagar mensajes arbitrarios del proveedor.
+        except Exception:  # noqa: BLE001
+            raise ETLError("SUPABASE_OPERATION_FAILED", etl_message("SUPABASE_OPERATION_FAILED")) from None
 
-    raise RuntimeError(f"No se pudo ejecutar {operation_name}")
+    raise ETLError("SUPABASE_OPERATION_FAILED", etl_message("SUPABASE_OPERATION_FAILED"))
 
 
 # Valida que la respuesta de Supabase sea una lista con un diccionario
@@ -93,19 +183,12 @@ def get_first_response_row(
 ) -> dict[str, Any]:
 
     if not isinstance(data, list) or len(data) == 0:
-        raise RuntimeError(
-            f"Respuesta vacía o inválida al hacer {action} en {table_name}. "
-            f"Data recibida: {data}"
-        )
+        raise ETLError("RESPONSE_EMPTY_OR_INVALID", etl_message("RESPONSE_EMPTY_OR_INVALID"))
 
     first_row = data[0]
 
     if not isinstance(first_row, dict):
-        # Invalid remote response: preserve the loader's RuntimeError contract.
-        raise RuntimeError(  # noqa: TRY004
-            f"La respuesta de {table_name} no es un objeto/dict válido. "
-            f"Data recibida: {data}"
-        )
+        raise ETLError("RESPONSE_ROW_INVALID", etl_message("RESPONSE_ROW_INVALID"))
 
     return cast(dict[str, Any], first_row)
 
@@ -117,11 +200,9 @@ def fetch_one(
     retry_http: bool = True,
 ) -> dict[str, Any] | None:
 
-    for column, value in filters.items():
+    for value in filters.values():
         if value is None:
-            raise ValueError(
-                f"No se puede buscar en {table_name} con {column}=None"
-            )
+            raise ValueError(etl_message("FILTER_NULL", key=tuple(filters.values())))
 
     def select_operation() -> Any:
         query = supabase.table(table_name).select(columns)
@@ -161,9 +242,7 @@ def insert_row(
     )
 
     if not response.data:
-        raise RuntimeError(
-            f"No se pudo insertar en {table_name}. Payload: {payload}"
-        )
+        raise ETLError("INSERT_EMPTY_RESPONSE", etl_message("INSERT_EMPTY_RESPONSE"))
 
     return get_first_response_row(
     data=response.data,
@@ -181,7 +260,7 @@ def update_row(
 ) -> dict[str, Any]:
 
     response = execute_supabase_operation(
-        operation_name=f"update {table_name} id={row_id}",
+        operation_name=f"update {table_name}",
         operation=lambda: (
             supabase
             .table(table_name)
@@ -193,9 +272,7 @@ def update_row(
     )
 
     if not response.data:
-        raise RuntimeError(
-            f"No se pudo actualizar {table_name} id={row_id}. Payload: {payload}"
-        )
+        raise ETLError("UPDATE_EMPTY_RESPONSE", etl_message("UPDATE_EMPTY_RESPONSE"))
 
     return get_first_response_row(
     data=response.data,
@@ -224,16 +301,10 @@ def bulk_insert_rows(
     )
 
     if not response.data:
-        raise RuntimeError(
-            f"No se pudo insertar bulk en {table_name}. Filas: {len(payloads)}"
-        )
+        raise ETLError("BULK_EMPTY_RESPONSE", etl_message("BULK_EMPTY_RESPONSE"))
 
     if not isinstance(response.data, list):
-        # Invalid remote response: preserve the loader's RuntimeError contract.
-        raise RuntimeError(  # noqa: TRY004
-            f"Respuesta inválida al insertar bulk en {table_name}. "
-            f"Data recibida: {response.data}"
-        )
+        raise ETLError("BULK_RESPONSE_INVALID", etl_message("BULK_RESPONSE_INVALID"))
 
     return cast(list[dict[str, Any]], response.data)
 
@@ -243,22 +314,26 @@ def normalize_debt_key(payload: dict[str, Any]) -> tuple[int, int]:
     external_id = payload.get("external_id")
 
     if debtor_id is None:
-        raise ValueError(f"Debt sin debtor. Payload: {payload}")
+        raise ValueError(etl_message("DEBT_DEBTOR_MISSING"))
 
     if external_id is None:
-        raise ValueError(f"Debt sin external_id. Payload: {payload}")
+        raise ValueError(etl_message("DEBT_EXTERNAL_ID_MISSING"))
 
-    return int(debtor_id), int(external_id)
+    try:
+        return int(debtor_id), int(external_id)
+    except (TypeError, ValueError):
+        raise ValueError(etl_message("DEBT_KEY_INVALID", key=(debtor_id, external_id))) from None
 
 
 def debt_values_are_equal(column: str, current_value: Any, next_value: Any) -> bool:
+    if current_value is None or next_value is None:
+        return current_value is None and next_value is None
+
+    # Exacto y sin float: un centavo es un cambio y un nulo nunca equivale a 0.
     if column in DEBT_NUMERIC_COLUMNS:
-        return abs(float(current_value or 0) - float(next_value or 0)) < 0.000001
+        return Decimal(str(current_value)) == Decimal(str(next_value))
 
     if column in DEBT_INTEGER_COLUMNS:
-        if current_value is None or next_value is None:
-            return current_value is None and next_value is None
-
         return int(current_value) == int(next_value)
 
     return current_value == next_value
@@ -278,6 +353,11 @@ def debt_payload_matches_existing(
     )
 
 
+def _exact_select(table_name: str, columns: Iterable[str]) -> str:
+    exact = EXACT_NUMERIC_COLUMNS.get(table_name, frozenset())
+    return ",".join(f"{column}::text" if column in exact else column for column in columns)
+
+
 def fetch_existing_debts_by_key(
     payloads: list[dict[str, Any]],
 ) -> dict[tuple[int, int], dict[str, Any]]:
@@ -286,37 +366,11 @@ def fetch_existing_debts_by_key(
 
     expected_keys = {normalize_debt_key(payload) for payload in payloads}
     debtor_ids = sorted({debtor_id for debtor_id, _ in expected_keys})
-    external_ids = sorted({external_id for _, external_id in expected_keys})
-    select_columns = ",".join(("id", *DEBT_COMPARE_COLUMNS))
-
-    def select_existing_debts() -> Any:
-        return (
-            supabase
-            .table(DEBT_TABLE)
-            .select(select_columns)
-            .in_("debtor", debtor_ids)
-            .in_("external_id", external_ids)
-            .execute()
-        )
-
-    response = execute_supabase_operation(
-        operation_name=f"bulk select {DEBT_TABLE} ({len(payloads)} keys)",
-        operation=select_existing_debts,
-    )
-
+    select_columns = _exact_select(DEBT_TABLE, ("id", *DEBT_COMPARE_COLUMNS))
     rows_by_key: dict[tuple[int, int], dict[str, Any]] = {}
 
-    if not response.data:
-        return rows_by_key
-
-    if not isinstance(response.data, list):
-        # Invalid remote response: preserve the loader's RuntimeError contract.
-        raise RuntimeError(  # noqa: TRY004
-            f"Respuesta inválida al buscar deudas existentes. "
-            f"Data recibida: {response.data}"
-        )
-
-    for row in response.data:
+    # Todas las páginas: una fila existente que no se lee se insertaría de nuevo o se contaría como nueva.
+    for row in _rows_for_ids(DEBT_TABLE, select_columns, "debtor", debtor_ids):
         if not isinstance(row, dict):
             continue
 
@@ -328,20 +382,54 @@ def fetch_existing_debts_by_key(
     return rows_by_key
 
 
+def _same_value(current: Any, wanted: Any, *, numeric: bool = False) -> bool:
+    if current is None or wanted is None:
+        return current is None and wanted is None
+
+    if isinstance(current, bool) or isinstance(wanted, bool):
+        return isinstance(current, bool) and isinstance(wanted, bool) and current == wanted
+
+    if not numeric and isinstance(current, str) and isinstance(wanted, str):
+        return current == wanted
+
+    # Un número contra otro, o el texto exacto de una columna numérica, que puede tener otra escala. Un centavo es un cambio.
+    try:
+        return Decimal(str(current)) == Decimal(str(wanted))
+    except InvalidOperation:
+        return False
+
+
+def _row_already_has(
+    table_name: str,
+    existing_row: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    ignored_columns: Iterable[str],
+) -> bool:
+    ignored = set(ignored_columns)
+    exact = EXACT_NUMERIC_COLUMNS.get(table_name, frozenset())
+    return all(
+        _same_value(existing_row.get(column), value, numeric=column in exact)
+        for column, value in payload.items()
+        if column not in ignored
+    )
+
+
 #1.Busca si ya existe un registro con lookup_filters.
-#2. Si existe, actualiza.
+#2. Si existe y ya tiene esos valores, no lo toca. Si difiere, actualiza.
 #3. Si no existe, inserta.
 
 def insert_or_update_by_filters(
     table_name: str,
     payload: dict[str, Any],
     lookup_filters: dict[str, Any],
+    ignored_columns: Iterable[str] = (),
 ) -> dict[str, Any]:
 
-    def insert_or_update_operation() -> dict[str, Any]:
+    def insert_or_update_operation() -> tuple[dict[str, Any], str]:
         existing_row = fetch_one(
             table_name=table_name,
             filters=lookup_filters,
+            columns=_exact_select(table_name, ("id", *payload)),
             retry_http=False,
         )
 
@@ -349,27 +437,32 @@ def insert_or_update_by_filters(
             row_id = existing_row.get("id")
 
             if row_id is None:
-                raise RuntimeError(
-                    f"El registro encontrado en {table_name} no tiene columna id."
-                )
+                raise ETLError("ROW_ID_MISSING", etl_message("ROW_ID_MISSING"))
 
-            return update_row(
+            if _row_already_has(table_name, existing_row, payload, ignored_columns):
+                return existing_row, WRITE_UNCHANGED
+
+            updated_row = update_row(
                 table_name=table_name,
                 row_id=row_id,
                 payload=payload,
                 retry_http=False,
             )
+            return updated_row, WRITE_UPDATED
 
-        return insert_row(
+        inserted_row = insert_row(
             table_name=table_name,
             payload=payload,
             retry_http=False,
         )
+        return inserted_row, WRITE_INSERTED
 
-    return execute_supabase_operation(
+    row, outcome = execute_supabase_operation(
         operation_name=f"insert/update {table_name}",
         operation=insert_or_update_operation,
     )
+    _count_writes(table_name, outcome)
+    return row
 
 
 # ============================================================
@@ -386,7 +479,7 @@ def load_person(payload: dict[str, Any]) -> dict[str, Any]:
     external_id = payload.get("external_id")
 
     if external_id is None:
-        raise ValueError(f"Person sin external_id. Payload: {payload}")
+        raise ValueError(etl_message("PERSON_EXTERNAL_ID_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=PERSON_TABLE,
@@ -409,13 +502,13 @@ def load_debtor(payload: dict[str, Any]) -> dict[str, Any]:
     external_id = payload.get("external_id")
 
     if tenant is None:
-        raise ValueError(f"Debtor sin tenant. Payload: {payload}")
+        raise ValueError(etl_message("DEBTOR_TENANT_MISSING"))
 
     if debtor_type is None:
-        raise ValueError(f"Debtor sin type. Payload: {payload}")
+        raise ValueError(etl_message("DEBTOR_TYPE_MISSING"))
 
     if external_id is None:
-        raise ValueError(f"Debtor sin external_id. Payload: {payload}")
+        raise ValueError(etl_message("DEBTOR_EXTERNAL_ID_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=DEBTOR_TABLE,
@@ -438,10 +531,10 @@ def load_debtor_person(payload: dict[str, Any]) -> dict[str, Any]:
     person_id = payload.get("person")
 
     if debtor_id is None:
-        raise ValueError(f"DebtorPerson sin debtor. Payload: {payload}")
+        raise ValueError(etl_message("RELATION_DEBTOR_MISSING"))
 
     if person_id is None:
-        raise ValueError(f"DebtorPerson sin person. Payload: {payload}")
+        raise ValueError(etl_message("RELATION_PERSON_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=DEBTOR_PERSON_TABLE,
@@ -467,10 +560,10 @@ def load_debt(payload: dict[str, Any]) -> dict[str, Any]:
     external_id = payload.get("external_id")
 
     if debtor_id is None:
-        raise ValueError(f"Debt sin debtor. Payload: {payload}")
+        raise ValueError(etl_message("DEBT_DEBTOR_MISSING"))
 
     if external_id is None:
-        raise ValueError(f"Debt sin external_id. Payload: {payload}")
+        raise ValueError(etl_message("DEBT_EXTERNAL_ID_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=DEBT_TABLE,
@@ -536,9 +629,7 @@ def load_debts_bulk(
             row_id = existing_row.get("id")
 
             if row_id is None:
-                raise RuntimeError(
-                    f"La deuda encontrada no tiene columna id. Payload: {payload}"
-                )
+                raise ETLError("DEBT_ROW_ID_MISSING", etl_message("DEBT_ROW_ID_MISSING", key=debt_key))
 
             payloads_to_update.append((int(row_id), payload))
 
@@ -564,6 +655,9 @@ def load_debts_bulk(
             f"sin cambios: {summary['unchanged']}"
         )
 
+    _count_writes(DEBT_TABLE, WRITE_INSERTED, summary["inserted"])
+    _count_writes(DEBT_TABLE, WRITE_UPDATED, summary["updated"])
+    _count_writes(DEBT_TABLE, WRITE_UNCHANGED, summary["unchanged"])
     return summary
 
 #Inserta o actualiza una provincia.
@@ -578,7 +672,7 @@ def load_province(payload: dict[str, Any]) -> dict[str, Any]:
     name = payload.get("name")
 
     if not name:
-        raise ValueError(f"Province sin name. Payload: {payload}")
+        raise ValueError(etl_message("PROVINCE_NAME_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=PROVINCE_TABLE,
@@ -603,10 +697,10 @@ def load_city(payload: dict[str, Any]) -> dict[str, Any]:
     postal_code = payload.get("postal_code")
 
     if province is None:
-        raise ValueError(f"City sin province. Payload: {payload}")
+        raise ValueError(etl_message("CITY_PROVINCE_MISSING"))
 
     if not name:
-        raise ValueError(f"City sin name. Payload: {payload}")
+        raise ValueError(etl_message("CITY_NAME_MISSING"))
 
     lookup_filters = {
         "province": province,
@@ -616,10 +710,12 @@ def load_city(payload: dict[str, Any]) -> dict[str, Any]:
     if postal_code:
         lookup_filters["postal_code"] = postal_code
 
+    # Sin código postal se reutiliza la localidad que exista: borrarle el suyo obligaría a crearla de nuevo en cada recarga.
     return insert_or_update_by_filters(
         table_name=CITY_TABLE,
         payload=payload,
         lookup_filters=lookup_filters,
+        ignored_columns=() if postal_code else ("postal_code",),
     )
 
 # Inserta o actualiza una dirección.
@@ -628,7 +724,7 @@ def load_address(payload: dict[str, Any]) -> dict[str, Any]:
     person = payload.get("person")
 
     if person is None:
-        raise ValueError(f"Address sin person. Payload: {payload}")
+        raise ValueError(etl_message("ADDRESS_PERSON_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=ADDRESS_TABLE,
@@ -651,13 +747,13 @@ def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
     value = payload.get("value")
 
     if person is None:
-        raise ValueError(f"DebtorContact sin person. Payload: {payload}")
+        raise ValueError(etl_message("CONTACT_PERSON_MISSING"))
 
     if contact_type is None:
-        raise ValueError(f"DebtorContact sin type. Payload: {payload}")
+        raise ValueError(etl_message("CONTACT_TYPE_MISSING"))
 
     if not value:
-        raise ValueError(f"DebtorContact sin value. Payload: {payload}")
+        raise ValueError(etl_message("CONTACT_VALUE_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=DEBTOR_CONTACT_TABLE,
@@ -668,28 +764,7 @@ def load_debtor_contact(payload: dict[str, Any]) -> dict[str, Any]:
             "value": value,
         },
     )
-# Inserta o actualiza el perfil calculado de un objeto de deuda.
-def load_debtor_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Regla de deduplicación:
-    debtor_profile.debtor
-    """
-
-    debtor = payload.get("debtor")
-
-    if debtor is None:
-        raise ValueError(f"DebtorProfile sin debtor. Payload: {payload}")
-
-    return insert_or_update_by_filters(
-        table_name=DEBTOR_PROFILE_TABLE,
-        payload=payload,
-        lookup_filters={
-            "debtor": debtor,
-        },
-    )
-
-
-# Inserta o actualiza el detalle de riesgo de una persona dentro de un perfil.
+# Inserta o actualiza el detalle de una persona dentro de un perfil.
 def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Regla de deduplicación:
@@ -700,10 +775,10 @@ def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
     person = payload.get("person")
 
     if debtor_profile is None:
-        raise ValueError(f"DebtorProfileDetail sin debtor_profile. Payload: {payload}")
+        raise ValueError(etl_message("DETAIL_PROFILE_MISSING"))
 
     if person is None:
-        raise ValueError(f"DebtorProfileDetail sin person. Payload: {payload}")
+        raise ValueError(etl_message("DETAIL_PERSON_MISSING"))
 
     return insert_or_update_by_filters(
         table_name=DEBTOR_PROFILE_DETAIL_TABLE,
@@ -713,6 +788,8 @@ def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
             "person": person,
         },
     )
+
+
 # ============================================================
 # FUNCIONES AUXILIARES PARA CATÁLOGOS
 # ============================================================
@@ -721,26 +798,237 @@ def load_debtor_profile_detail(payload: dict[str, Any]) -> dict[str, Any]:
 def get_catalog_id_by_key(
     table_name: str,
     key: str,
+    key_column: str = "key",
 ) -> int:
     row = fetch_one(
         table_name=table_name,
-        filters={"key": key},
-        columns="id,key,value",
+        filters={key_column: key},
+        columns=f"id,{key_column}",
     )
 
     if not row:
-        raise RuntimeError(
-            f"No existe key='{key}' en la tabla catálogo {table_name}"
-        )
+        raise ETLError("CATALOG_KEY_MISSING", etl_message("CATALOG_KEY_MISSING", key=key))
 
     row_id = row.get("id")
 
     if row_id is None:
-        raise RuntimeError(
-            f"El catálogo {table_name} con key='{key}' no tiene id."
-        )
+        raise ETLError("CATALOG_ID_MISSING", etl_message("CATALOG_ID_MISSING", key=key))
 
     return int(row_id)
+
+
+# Resuelve todas las claves que la carga necesita, antes de la primera escritura. Una clave ausente detiene la carga.
+def resolve_catalogs(
+    required: Mapping[str, Iterable[str]],
+    key_columns: Mapping[str, str],
+) -> dict[str, dict[str, int]]:
+    return {
+        table_name: {
+            key: get_catalog_id_by_key(table_name, key, key_columns[table_name])
+            for key in sorted(keys)
+        }
+        for table_name, keys in required.items()
+    }
+
+
+# ============================================================
+# LECTURA DE LO YA PUBLICADO
+# ============================================================
+
+# Hasta la página vacía: la Data API corta en su máximo de filas sin avisar, y ese máximo puede ser menor que la página.
+def fetch_all_rows(
+    table_name: str,
+    columns: str,
+    filters: Mapping[str, Any] | None = None,
+    in_filter: tuple[str, list[int]] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def select_page() -> Any:
+        query = supabase.table(table_name).select(columns)
+
+        for column, value in (filters or {}).items():
+            query = query.eq(column, value)
+
+        if in_filter is not None:
+            query = query.in_(*in_filter)
+
+        return query.order("id").range(len(rows), len(rows) + READ_PAGE_SIZE - 1).execute()
+
+    while True:
+        response = execute_supabase_operation(f"select {table_name}", select_page)
+
+        if not response.data:
+            return rows
+
+        if not isinstance(response.data, list):
+            raise ETLError("READ_RESPONSE_INVALID", etl_message("READ_RESPONSE_INVALID"))
+
+        rows.extend(response.data)
+
+
+def _rows_for_ids(table_name: str, columns: str, column: str, ids: Iterable[int]) -> list[dict[str, Any]]:
+    unique_ids = sorted(set(ids))
+    return [
+        row
+        for start in range(0, len(unique_ids), READ_IDS_PER_REQUEST)
+        for row in fetch_all_rows(table_name, columns, in_filter=(column, unique_ids[start:start + READ_IDS_PER_REQUEST]))
+    ]
+
+
+# Objetos publicados del municipio, por (tipo, cuenta), con las obligaciones, personas y contactos que tienen hoy. Solo lee.
+# Una relación o un contacto ya inactivos no pueden "dejar de venir": no se comparan.
+def fetch_published_objects(tenant: int) -> dict[tuple[str | None, str], dict[str, Any]]:
+    type_keys = {row["id"]: row["key"] for row in fetch_all_rows("debtor_type", "id,key")}
+    contact_type_keys = {row["id"]: row["key"] for row in fetch_all_rows("contact_type", "id,key")}
+    debtors = fetch_all_rows(DEBTOR_TABLE, "id,type,external_id", filters={"tenant": tenant})
+    debtor_ids = [row["id"] for row in debtors]
+    relations = [row for row in _rows_for_ids(DEBTOR_PERSON_TABLE, "id,debtor,person,active", "debtor", debtor_ids) if row["active"]]
+    person_ids = [row["person"] for row in relations]
+    person_keys = {row["id"]: row["external_id"] for row in _rows_for_ids(PERSON_TABLE, "id,external_id", "id", person_ids)}
+    contacts_by_person: dict[int, dict[tuple[int, str | None, str], int]] = defaultdict(dict)
+
+    for row in _rows_for_ids(DEBTOR_CONTACT_TABLE, "id,person,type,value,active", "person", person_ids):
+        if row["active"]:
+            key = (person_keys[row["person"]], contact_type_keys.get(row["type"]), row["value"])
+            contacts_by_person[row["person"]][key] = row["id"]
+
+    published: dict[int, dict[str, Any]] = {
+        row["id"]: {"obligaciones": set(), "relaciones": {}, "contactos": {}} for row in debtors
+    }
+
+    for row in _rows_for_ids(DEBT_TABLE, "id,debtor,external_id", "debtor", debtor_ids):
+        published[row["debtor"]]["obligaciones"].add(row["external_id"])
+
+    for row in relations:
+        published[row["debtor"]]["relaciones"][person_keys[row["person"]]] = row["id"]
+        published[row["debtor"]]["contactos"].update(contacts_by_person.get(row["person"], {}))
+
+    return {(type_keys.get(row["type"]), str(row["external_id"])): published[row["id"]] for row in debtors}
+
+
+# ============================================================
+# BAJAS Y PERFILES DESDE LO PERSISTIDO
+# ============================================================
+
+# Baja explícita de lo que la política pidió dar de baja. Nunca borra: una fila inactiva se reactiva si vuelve a venir.
+def deactivate_rows(table_name: str, row_ids: Iterable[int]) -> int:
+    unique_ids = sorted(set(row_ids))
+
+    for start in range(0, len(unique_ids), READ_IDS_PER_REQUEST):
+        chunk = unique_ids[start:start + READ_IDS_PER_REQUEST]
+        execute_supabase_operation(
+            f"deactivate {table_name}",
+            lambda ids=chunk: supabase.table(table_name).update({"active": False}).in_("id", ids).execute(),
+        )
+
+    _count_writes(table_name, WRITE_UPDATED, len(unique_ids))
+    return len(unique_ids)
+
+
+# Recalcula los perfiles pedidos desde las deudas, relaciones y contactos persistidos. No toca ningún otro objeto.
+# Devuelve el id de perfil por objeto, leído aparte y por páginas.
+def recompute_debtor_profiles(
+    debtor_ids: Iterable[int],
+    as_of: date,
+    *,
+    contact_columns_integrated: bool,
+) -> dict[int, int]:
+    unique_ids = sorted(set(debtor_ids))
+
+    for start in range(0, len(unique_ids), PROFILE_RECOMPUTE_OBJECTS_PER_CALL):
+        params = {
+            "p_object_ids": unique_ids[start:start + PROFILE_RECOMPUTE_OBJECTS_PER_CALL],
+            "p_as_of": as_of.isoformat(),
+            "p_contact_columns_integrated": contact_columns_integrated,
+        }
+        response = execute_supabase_operation(
+            "recompute debtor_profile",
+            lambda body=params: supabase.rpc(PROFILE_RECOMPUTE_FUNCTION, body).execute(),
+        )
+        result = response.data
+
+        counters = (*WRITE_OUTCOMES, PROFILE_DETAILS_UPDATED, PROFILE_DEBTS_RECLASSIFIED)
+        if not isinstance(result, dict) or any(not isinstance(result.get(name), int) for name in counters):
+            raise ETLError("PROFILE_RECOMPUTE_RESPONSE_INVALID", etl_message("PROFILE_RECOMPUTE_RESPONSE_INVALID"))
+
+        for outcome in WRITE_OUTCOMES:
+            _count_writes(DEBTOR_PROFILE_TABLE, outcome, result[outcome])
+
+        _count_writes(DEBTOR_PROFILE_DETAIL_TABLE, WRITE_UPDATED, result[PROFILE_DETAILS_UPDATED])
+        _count_writes(DEBT_TABLE, WRITE_UPDATED, result[PROFILE_DEBTS_RECLASSIFIED])
+
+    return {row["debtor"]: row["id"] for row in _rows_for_ids(DEBTOR_PROFILE_TABLE, "id,debtor", "debtor", unique_ids)}
+
+
+# ============================================================
+# REGISTRO DEL LOTE
+# ============================================================
+
+def _import_batch_error(response: httpx.Response) -> ETLError:
+    try:
+        message = response.json().get("message")
+    except (ValueError, AttributeError):
+        message = None
+
+    code = message if isinstance(message, str) and IMPORT_BATCH_STABLE_ERROR.fullmatch(message) else "IMPORT_BATCH_REJECTED"
+
+    # Un 5xx puede venir de la puerta de enlace con la transacción ya confirmada: no prueba que el evento no haya quedado.
+    if 400 <= response.status_code < 500:
+        return ImportBatchRejected(code, etl_message(code))
+
+    return ETLError(code, etl_message(code))
+
+
+# Agrega un evento a import_batch por la función de servidor (ALIGN-018): credencial propia del servicio de
+# importación, nunca la clave general, que no tiene EXECUTE. Cada llamada es un evento: la clave de idempotencia
+# solo protege los reintentos de esa misma llamada. La clave por lote la define ALIGN-032.
+def record_import_batch(
+    *,
+    tenant: int,
+    source: str,
+    file_hashes: dict[str, str],
+    as_of: str,
+    rules_version: str,
+    status: str,
+    counts: dict[str, Any],
+    source_updated_at: str | None = None,
+    supersedes: int | None = None,
+) -> int:
+    credentials = get_import_credentials()
+    url = get_settings(execute=True).supabase_url.rstrip("/") + IMPORT_BATCH_RPC_PATH
+    body = {
+        "p_actor_user": credentials.actor_user,
+        "p_tenant": tenant,
+        "p_source": source,
+        "p_file_hashes": file_hashes,
+        "p_as_of": as_of,
+        "p_rules_version": rules_version,
+        "p_status": status,
+        "p_idempotency_key": str(uuid.uuid4()),
+        "p_source_updated_at": source_updated_at,
+        "p_counts": counts,
+        "p_supersedes": supersedes,
+    }
+    headers = {"apikey": credentials.public_key, "Authorization": f"Bearer {credentials.server_jwt}"}
+
+    def record_operation() -> httpx.Response:
+        return httpx.post(url, headers=headers, json=body, timeout=IMPORT_BATCH_TIMEOUT_SECONDS, trust_env=False)
+
+    response = execute_supabase_operation(f"record {status}", record_operation)
+
+    if response.status_code != 200:
+        raise _import_batch_error(response)
+
+    return int(response.json()["batch_id"])
+
+
+def execute_import_batch(batch: Any, *, tenant: int, absent_policy: str,
+                         expected_revision: str | None = None) -> dict[str, Any]:
+    """Único camino de publicación de la CLI; el commit y sus conteos viven en SQL."""
+    from ETL.publication import execute_batch
+
+    return execute_batch(batch, tenant=tenant, absent_policy=absent_policy, expected_revision=expected_revision)
 
 
 # ============================================================
@@ -759,7 +1047,7 @@ def test_connection() -> None:
 
     print("LOAD CONNECTION OK")
     print(f"Tabla consultada: {PERSON_TABLE}")
-    print(f"Respuesta data: {response.data}")
+    print(f"Registros recibidos: {len(response.data or [])}")
 
 
 if __name__ == "__main__":

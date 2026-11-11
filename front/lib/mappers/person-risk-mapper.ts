@@ -5,9 +5,11 @@ import {
   selectValueFromRow,
   stringifyUnknownValue,
 } from '@/lib/parsers/generic-value-selector'
-import { parseNumericValue, selectNumericValueFromRow } from '@/lib/parsers/numeric-value-parser'
+import { aggregateData, compareNullable, currentAmount, metric, observed, readingFailed, selectNumericData, sumMoney, unavailable } from '@/lib/data-presence'
 import { clampRiskScore, mapRiskLevel } from '@/lib/services/debtor-risk-calculator'
 import type {
+  DataWarning,
+  NumericData,
   PeopleDashboardSummary,
   PersonIndividualRiskLevel,
   PersonListItem,
@@ -25,31 +27,44 @@ export function mapRiskValueToIndividualRiskLevel(
   return mapRiskLevel(riskValue)
 }
 
-function buildPeopleDashboardSummary(people: PersonListItem[]): PeopleDashboardSummary {
+function buildPeopleDashboardSummary(people: PersonListItem[], warnings: DataWarning[]): PeopleDashboardSummary {
   const lowRiskCount = people.filter((person) => person.individualRisk === 'BAJO').length
   const mediumRiskCount = people.filter((person) => person.individualRisk === 'MEDIO').length
   const highRiskCount = people.filter((person) => person.individualRisk === 'ALTO').length
-  const withoutContactCount = people.filter((person) => !person.hasContact).length
+  const withoutContactCount = people.filter((person) => person.hasContact === false).length
 
+  const failed = readingFailed(warnings, 'person')
+  const riskFailed = failed || readingFailed(warnings, 'debtor_profile_detail')
+  const contactFailed = failed || readingFailed(warnings, 'debtor_contact')
+  const riskValues = people.map(person => metric(person, 'riskValue'))
+  const riskCount = (count: number) => aggregateData(riskValues.map(value => value.value === null ? value : observed(0)), 'sum', riskFailed).value === null ? null : count
   return {
-    totalPeople: people.length,
-    lowRiskCount,
-    mediumRiskCount,
-    highRiskCount,
-    withoutContactCount,
-    individualRiskDistribution: [
-      { label: 'Bajo', value: lowRiskCount },
-      { label: 'Medio', value: mediumRiskCount },
-      { label: 'Alto', value: highRiskCount },
+    metrics: {
+      riskValue: aggregateData(riskValues, 'max', riskFailed),
+      totalPeople: failed ? unavailable() : observed(people.length),
+      withoutContactCount: contactFailed ? unavailable() : observed(withoutContactCount),
+    },
+    totalPeople: failed ? null : people.length,
+    lowRiskCount: riskCount(lowRiskCount),
+    mediumRiskCount: riskCount(mediumRiskCount),
+    highRiskCount: riskCount(highRiskCount),
+    withoutContactCount: contactFailed ? null : withoutContactCount,
+    individualRiskDistribution: riskFailed ? [] : [
+      ...(riskValues.some(item => item.value !== null) || people.length === 0 ? [
+        { label: 'Bajo', value: lowRiskCount },
+        { label: 'Medio', value: mediumRiskCount },
+        { label: 'Alto', value: highRiskCount },
+      ] : []),
+      { label: 'No disponible', value: people.filter(person => person.riskValue === null).length },
     ],
-    topPeopleByRiskValue: [...people]
+    topPeopleByRiskValue: people.filter(person => person.riskValue !== null)
       .sort((a, b) => {
         if (b.riskValue !== a.riskValue) {
-          return b.riskValue - a.riskValue
+          return compareNullable(a.riskValue, b.riskValue)
         }
 
         if (b.totalDebtAssociated !== a.totalDebtAssociated) {
-          return b.totalDebtAssociated - a.totalDebtAssociated
+          return compareNullable(a.totalDebtAssociated, b.totalDebtAssociated)
         }
 
         return a.name.localeCompare(b.name)
@@ -95,58 +110,22 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     debtorIdentifierById.set(debtorId, identifier)
   }
 
-  const debtTotalByDebtor = new Map<string, number>()
+  const debtAmountsByDebtor = new Map<string, NumericData[]>()
   for (const debtRow of raw.debts) {
-    const debtorId = stringifyUnknownValue(
-      selectValueFromRow(debtRow, ['debtor_id', 'id_debtor', 'debtorid', 'debtor'])
-    )
-
-    if (!debtorId) {
-      continue
-    }
-
-    const updatedAmount =
-      selectNumericValueFromRow(debtRow, [
-        'updated_amount',
-        'amount_updated',
-        'total_amount',
-        'amount_due',
-        'monto_actualizado',
-      ]) ||
-      selectNumericValueFromRow(debtRow, [
-        'original_amount',
-        'amount_original',
-        'capital_amount',
-        'amount',
-        'monto_original',
-      ])
-
-    debtTotalByDebtor.set(debtorId, (debtTotalByDebtor.get(debtorId) ?? 0) + updatedAmount)
+    const debtorId = stringifyUnknownValue(selectValueFromRow(debtRow, ['debtor_id', 'id_debtor', 'debtorid', 'debtor']))
+    if (!debtorId) continue
+    const amounts = debtAmountsByDebtor.get(debtorId) ?? []
+    amounts.push(currentAmount(debtRow))
+    debtAmountsByDebtor.set(debtorId, amounts)
   }
-
-  const riskValueByPerson = new Map<string, number>()
+  const riskValuesByPerson = new Map<string, NumericData[]>()
   for (const detailRow of raw.debtorProfilesDetail) {
-    const personId = stringifyUnknownValue(
-      selectValueFromRow(detailRow, ['person', 'person_id', 'id_person'])
-    )
-
-    if (!personId) {
-      continue
-    }
-
-    const riskValueRaw = selectNumericValueFromRow(detailRow, [
-      'risk_value',
-      'risk',
-      'value',
-      'score',
-    ])
-    const riskValue = clampRiskValue(parseNumericValue(riskValueRaw))
-    const currentValue = riskValueByPerson.get(personId)
-
-    // Si hay varios detalles de perfil, usamos el valor maximo para no subestimar el riesgo.
-    if (currentValue === undefined || riskValue > currentValue) {
-      riskValueByPerson.set(personId, riskValue)
-    }
+    const personId = stringifyUnknownValue(selectValueFromRow(detailRow, ['person', 'person_id', 'id_person']))
+    if (!personId) continue
+    const values = riskValuesByPerson.get(personId) ?? []
+    const value = selectNumericData(detailRow, ['risk_value', 'risk', 'value', 'score'])
+    values.push(value.value === null ? value : observed(clampRiskValue(value.value)))
+    riskValuesByPerson.set(personId, values)
   }
 
   const debtorIdsByPerson = new Map<string, Set<string>>()
@@ -232,6 +211,19 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     }
   }
 
+  // La suma de un objeto es la misma para todas las personas vinculadas a él: se calcula una vez por objeto.
+  // Sin esto, un objeto con miles de personas vinculadas repetía la suma completa por cada una.
+  const exposureFailed = readingFailed(raw.warnings, 'debt', 'debtor', 'debtor_person', 'person')
+  const exposureByDebtor = new Map<string, ReturnType<typeof sumMoney>>()
+  const exposureOfDebtor = (debtorId: string) => {
+    let amount = exposureByDebtor.get(debtorId)
+    if (!amount) {
+      amount = sumMoney(debtAmountsByDebtor.get(debtorId) ?? [], exposureFailed)
+      exposureByDebtor.set(debtorId, amount)
+    }
+    return amount
+  }
+
   const people: PersonListItem[] = []
   for (const personRow of raw.people) {
     const personId = stringifyUnknownValue(selectValueFromRow(personRow, ['id', 'person_id']))
@@ -249,16 +241,16 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
     const document =
       selectTextFromRow(personRow, ['document_number', 'document', 'dni', 'tax_id']) ||
       'Sin documento'
-    const riskValue = clampRiskValue(riskValueByPerson.get(personId) ?? 0)
-    const individualRisk = mapRiskValueToIndividualRiskLevel(riskValue)
+    const riskMetric = aggregateData(riskValuesByPerson.get(personId) ?? [unavailable()], 'max', readingFailed(raw.warnings, 'debtor_profile_detail', 'person'))
+    const riskValue = riskMetric.value
+    const individualRisk = riskValue === null ? null : mapRiskValueToIndividualRiskLevel(riskValue)
     const debtorIds = Array.from(debtorIdsByPerson.get(personId) ?? new Set<string>())
     const debtorIdentifiers = debtorIds.map(
       (debtorId) => debtorIdentifierById.get(debtorId) ?? `OBJ-${debtorId}`
     )
-    const totalDebtAssociated = debtorIds.reduce(
-      (acc, debtorId) => acc + (debtTotalByDebtor.get(debtorId) ?? 0),
-      0
-    )
+    const debtExposure = debtorIds.map(debtorId => ({ debtorId, amount: exposureOfDebtor(debtorId) }))
+    const exposureMetric = sumMoney(debtExposure.map(item => item.amount), exposureFailed)
+    const totalDebtAssociated = exposureMetric.value
 
     people.push({
       id: personId,
@@ -266,9 +258,12 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
       document,
       individualRisk,
       riskValue,
-      debtorsCount: debtorIds.length,
-      hasContact: hasContactByPerson.get(personId) ?? false,
+      debtorsCount: readingFailed(raw.warnings, 'debtor_person', 'debtor') ? null : debtorIds.length,
+      hasContact: readingFailed(raw.warnings, 'debtor_contact', 'person') ? null : hasContactByPerson.get(personId) ?? false,
       totalDebtAssociated,
+      debtExposure,
+      exposureLabel: 'Exposición asociada (no aditiva)',
+      metrics: { riskValue: riskMetric, totalDebtAssociated: exposureMetric },
       debtorIds,
       debtorIdentifiers,
     })
@@ -276,11 +271,11 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
 
   people.sort((a, b) => {
     if (b.riskValue !== a.riskValue) {
-      return b.riskValue - a.riskValue
+      return compareNullable(a.riskValue, b.riskValue)
     }
 
     if (b.totalDebtAssociated !== a.totalDebtAssociated) {
-      return b.totalDebtAssociated - a.totalDebtAssociated
+      return compareNullable(a.totalDebtAssociated, b.totalDebtAssociated)
     }
 
     return a.name.localeCompare(b.name)
@@ -288,6 +283,19 @@ export function mapPeopleFromRawData(raw: RawPersonDataBundle): {
 
   return {
     people,
-    dashboard: buildPeopleDashboardSummary(people),
+    dashboard: buildPeopleDashboardSummary(people, raw.warnings),
+  }
+}
+
+// Unión de objetos de las personas filtradas, antes de paginar. Nunca suma exposiciones.
+export function summarizePeople(people: PersonListItem[], warnings: DataWarning[] = [], filterReadFailed = false) {
+  const objects = new Map<string, NumericData>()
+  for (const person of people) {
+    for (const exposure of person.debtExposure) objects.set(exposure.debtorId, exposure.amount)
+  }
+  const failed = filterReadFailed || readingFailed(warnings, 'person', 'debtor_person', 'debtor', 'debt')
+  return {
+    totalDebtAssociated: sumMoney([...objects.values()], failed),
+    averageRiskValue: aggregateData(people.map(person => metric(person, 'riskValue')), 'mean', readingFailed(warnings, 'person', 'debtor_profile_detail')),
   }
 }

@@ -1,0 +1,2501 @@
+{
+  "version": "sintetico-v1",
+  "semilla": 20261028,
+  "perfil": "contrato",
+  "fecha_corte": "2026-09-30",
+  "calculado_por": "modelo del generador; no usa back/ETL ni lee los archivos escritos",
+  "convenciones": {
+    "linea": "línea física del archivo; la cabecera de columnas es la línea 1",
+    "importes": "texto decimal con dos decimales",
+    "vencida": "PENDIENTE con vencimiento < fecha_corte",
+    "agregados": "valor solo de filas observadas y filas_no_observadas aparte (contrato §4.1); completo=false: valor es un subtotal, no el total del objeto"
+  },
+  "municipios": {
+    "municipio-sintetico-a": {
+      "conteos": {
+        "filas_cabecera": 42,
+        "filas_detalle": 163,
+        "objetos": 40,
+        "objetos_aceptados": 31,
+        "objetos_en_cuarentena": 9,
+        "personas": 40,
+        "relaciones": 42,
+        "obligaciones_unicas": 160,
+        "duplicados_identicos": 1,
+        "duplicados_conflictivos": 1,
+        "detalle_sin_cabecera": 1,
+        "objetos_sin_contacto_utilizable": 9,
+        "objetos_porcentajes_no_100": 2
+      },
+      "importes": {
+        "actualizado_aceptado": "2519236.14",
+        "actualizado_en_cuarentena_observado": "202712.94",
+        "actualizado_filas_no_observadas": {
+          "NO_INFORMADO_EN_ORIGEN": 1
+        }
+      },
+      "objetos": [
+        {
+          "caso": "base-valido",
+          "bien_tipo_id": "3",
+          "cuenta": "4100",
+          "clave_agrupacion": "3-4100",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90001
+          ],
+          "obligaciones": 3,
+          "importe_actualizado": {
+            "valor": "46279.60",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "38807.97",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 3,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-11-23",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1042,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "misma-cuenta-otro-tipo",
+          "bien_tipo_id": "6",
+          "cuenta": "4100",
+          "clave_agrupacion": "6-4100",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90002
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "24727.52",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "21851.55",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-08-08",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2244,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "cuenta-canonica-123",
+          "bien_tipo_id": "3",
+          "cuenta": "123",
+          "clave_agrupacion": "3-123",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90003
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "29015.13",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "23782.89",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-10-09",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2182,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "cuenta-ceros-izquierda",
+          "bien_tipo_id": "3",
+          "cuenta": "000123",
+          "clave_agrupacion": "3-000123",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "CUENTA_NO_CANONICA"
+          ],
+          "banderas": [],
+          "personas": [
+            90004
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "30761.03",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "22955.99",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-04-12",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1267,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "cuenta-alfanumerica",
+          "bien_tipo_id": "6",
+          "cuenta": "R-0456",
+          "clave_agrupacion": "6-R-0456",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "CUENTA_NO_CANONICA"
+          ],
+          "banderas": [],
+          "personas": [
+            90005
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "9848.44",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "6041.99",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2024-04-28",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 885,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "importe-cero",
+          "bien_tipo_id": "6",
+          "cuenta": "10001",
+          "clave_agrupacion": "6-10001",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90006
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "643.71",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "519.12",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-03-17",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1293,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "importe-vacio",
+          "bien_tipo_id": "6",
+          "cuenta": "10002",
+          "clave_agrupacion": "6-10002",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "IMPORTE_VACIO"
+          ],
+          "banderas": [],
+          "personas": [
+            90007
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "11786.82",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {
+              "NO_INFORMADO_EN_ORIGEN": 1
+            },
+            "completo": false
+          },
+          "importe_capital": {
+            "valor": "31977.88",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-08-11",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1876,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "importe-no-numerico",
+          "bien_tipo_id": "3",
+          "cuenta": "10003",
+          "clave_agrupacion": "3-10003",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "IMPORTE_NO_NUMERICO"
+          ],
+          "banderas": [],
+          "personas": [
+            90008
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "31297.67",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "17603.23",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {
+              "INVALIDO": 1
+            },
+            "completo": false
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-02-05",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2429,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "fecha-ambigua",
+          "bien_tipo_id": "3",
+          "cuenta": "10004",
+          "clave_agrupacion": "3-10004",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90009
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "73.15",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "51.88",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-04-03",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1276,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "fecha-imposible",
+          "bien_tipo_id": "3",
+          "cuenta": "10005",
+          "clave_agrupacion": "3-10005",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "FECHA_IMPOSIBLE"
+          ],
+          "banderas": [],
+          "personas": [
+            90010
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "7036.12",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "5912.71",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 0,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 1
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": null,
+            "presencia": "INVALIDO",
+            "filas_no_observadas": {
+              "INVALIDO": 1
+            },
+            "completo": false
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": null,
+            "presencia": "INVALIDO",
+            "filas_no_observadas": {
+              "INVALIDO": 1
+            },
+            "completo": false
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "estados-origen-vencimiento-viejo",
+          "bien_tipo_id": "6",
+          "cuenta": "10006",
+          "clave_agrupacion": "6-10006",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90011
+          ],
+          "obligaciones": 5,
+          "importe_actualizado": {
+            "valor": "104241.29",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "80845.94",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 1,
+            "ANULADA": 1,
+            "SUSPENDIDA": 1,
+            "UNKNOWN": 1,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-01-15",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2450,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {
+              "NO_INFORMADO_EN_ORIGEN": 1
+            },
+            "completo": false
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "vencimiento-posterior-al-corte",
+          "bien_tipo_id": "3",
+          "cuenta": "10007",
+          "clave_agrupacion": "3-10007",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90012
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "5913.48",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "4316.41",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 0,
+            "VIGENTE": 1,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2026-11-14",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": null,
+            "presencia": "NO_APLICA",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "contacto-placeholder",
+          "bien_tipo_id": "3",
+          "cuenta": "10008",
+          "clave_agrupacion": "3-10008",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "CONTACTO_NO_UTILIZABLE",
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90013
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "4052.60",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "3047.07",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-05-21",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1593,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "contacto-formato-invalido",
+          "bien_tipo_id": "3",
+          "cuenta": "10009",
+          "clave_agrupacion": "3-10009",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "CONTACTO_NO_UTILIZABLE",
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90014
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "9380.62",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "8527.84",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2024-10-06",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 724,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "sin-contacto",
+          "bien_tipo_id": "3",
+          "cuenta": "10010",
+          "clave_agrupacion": "3-10010",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90018
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "45817.25",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "34111.78",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-03-31",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1279,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "dos-personas-un-objeto",
+          "bien_tipo_id": "6",
+          "cuenta": "10011",
+          "clave_agrupacion": "6-10011",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "MULTIPLES_PERSONAS"
+          ],
+          "personas": [
+            90016,
+            90017
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "26112.38",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "22440.22",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-06-02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1216,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 2,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "persona-varios-objetos-1",
+          "bien_tipo_id": "3",
+          "cuenta": "10012",
+          "clave_agrupacion": "3-10012",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90015
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "31368.33",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "21633.33",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-06-16",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1202,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "persona-varios-objetos-2",
+          "bien_tipo_id": "6",
+          "cuenta": "10013",
+          "clave_agrupacion": "6-10013",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90015
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "16195.55",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "10516.59",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-07-10",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1543,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "persona-varios-objetos-3",
+          "bien_tipo_id": "1",
+          "cuenta": "10014",
+          "clave_agrupacion": "1-10014",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90015
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "17188.39",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "11383.04",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-09-28",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1828,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "porcentajes-120",
+          "bien_tipo_id": "6",
+          "cuenta": "10015",
+          "clave_agrupacion": "6-10015",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "MULTIPLES_PERSONAS",
+            "PORCENTAJES_NO_SUMAN_100"
+          ],
+          "personas": [
+            90019,
+            90020
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "27546.36",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "24377.31",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-12-25",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1740,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "120",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 2,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "porcentaje-80",
+          "bien_tipo_id": "3",
+          "cuenta": "10016",
+          "clave_agrupacion": "3-10016",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "PORCENTAJES_NO_SUMAN_100"
+          ],
+          "personas": [
+            90021
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "31725.46",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "19583.62",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-07-02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1186,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "80",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 3,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "porcentaje-faltante",
+          "bien_tipo_id": "3",
+          "cuenta": "10017",
+          "clave_agrupacion": "3-10017",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "PORCENTAJE_FALTANTE"
+          ],
+          "personas": [
+            90022
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "25749.42",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "18933.40",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2025-10-03",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 362,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": null,
+            "presencia": "NO_INFORMADO_EN_ORIGEN"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "persona-juridica",
+          "bien_tipo_id": "1",
+          "cuenta": "10018",
+          "clave_agrupacion": "1-10018",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90023
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "22679.84",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "21396.08",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-04-27",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1617,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "objeto-inactivo-en-origen",
+          "bien_tipo_id": "3",
+          "cuenta": "10019",
+          "clave_agrupacion": "3-10019",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "OBJETO_INACTIVO_EN_ORIGEN"
+          ],
+          "personas": [
+            90024
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "17020.14",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "12071.02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-06-09",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1574,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "tipo-ingreso-sin-mapeo-etl",
+          "bien_tipo_id": "6",
+          "cuenta": "10020",
+          "clave_agrupacion": "6-10020",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "TIPO_INGRESO_SIN_MAPEO_EN_ETL"
+          ],
+          "personas": [
+            90025
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "15430.61",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "10641.80",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2025-07-01",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 456,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "tipo-ingreso-fuera-de-catalogo",
+          "bien_tipo_id": "6",
+          "cuenta": "10021",
+          "clave_agrupacion": "6-10021",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "TIPO_INGRESO_FUERA_DE_CATALOGO"
+          ],
+          "banderas": [],
+          "personas": [
+            90026
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "25900.83",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "23334.08",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2024-04-30",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 883,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "tipo-bien-fuera-de-catalogo",
+          "bien_tipo_id": "9",
+          "cuenta": "10022",
+          "clave_agrupacion": "9-10022",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "TIPO_BIEN_FUERA_DE_CATALOGO"
+          ],
+          "banderas": [],
+          "personas": [
+            90027
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "16237.49",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "10085.40",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-09-18",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2203,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "conciliacion-diferente",
+          "bien_tipo_id": "3",
+          "cuenta": "10023",
+          "clave_agrupacion": "3-10023",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "CONCILIACION_DIFERENTE"
+          ],
+          "banderas": [],
+          "personas": [
+            90028
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "14303.69",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "8338.29",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-01-24",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1710,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "cabecera-sin-detalle",
+          "bien_tipo_id": "6",
+          "cuenta": "10024",
+          "clave_agrupacion": "6-10024",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "CABECERA_SIN_DETALLE"
+          ],
+          "personas": [
+            90029
+          ],
+          "obligaciones": 0,
+          "importe_actualizado": {
+            "valor": "0.00",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "0.00",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 0,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": null,
+            "presencia": "NO_APLICA",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": null,
+            "presencia": "NO_APLICA",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "duplicado-identico",
+          "bien_tipo_id": "3",
+          "cuenta": "10025",
+          "clave_agrupacion": "3-10025",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "DUPLICADO_IDENTICO"
+          ],
+          "personas": [
+            90030
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "70067.73",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "45124.42",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2022-11-29",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1401,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "duplicado-conflictivo",
+          "bien_tipo_id": "6",
+          "cuenta": "10026",
+          "clave_agrupacion": "6-10026",
+          "resultado": "CUARENTENA",
+          "motivos": [
+            "DUPLICADO_CONFLICTIVO"
+          ],
+          "banderas": [],
+          "personas": [
+            90031
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "55540.85",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "37762.74",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-11-21",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1774,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "contacto-inactivo",
+          "bien_tipo_id": "3",
+          "cuenta": "10028",
+          "clave_agrupacion": "3-10028",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "CONTACTO_INACTIVO",
+            "CONTACTO_NO_UTILIZABLE",
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90033
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "818.16",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "517.82",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2023-03-09",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1301,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 2
+        },
+        {
+          "caso": "contacto-activo-mismo-valor",
+          "bien_tipo_id": "6",
+          "cuenta": "10029",
+          "clave_agrupacion": "6-10029",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90034
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "16960.52",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "11944.03",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-04-05",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2004,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "3",
+          "cuenta": "10030",
+          "clave_agrupacion": "3-10030",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90035
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "34412.57",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "22059.34",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2024-07-09",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 813,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "6",
+          "cuenta": "10031",
+          "clave_agrupacion": "6-10031",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90036
+          ],
+          "obligaciones": 29,
+          "importe_actualizado": {
+            "valor": "465962.11",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "320988.27",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 29,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-02-01",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2433,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "6",
+          "cuenta": "10032",
+          "clave_agrupacion": "6-10032",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90037
+          ],
+          "obligaciones": 18,
+          "importe_actualizado": {
+            "valor": "285258.66",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "194520.44",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 18,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-04-07",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2002,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "3",
+          "cuenta": "10033",
+          "clave_agrupacion": "3-10033",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90038
+          ],
+          "obligaciones": 24,
+          "importe_actualizado": {
+            "valor": "452512.54",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "340793.44",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 24,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-07-18",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2265,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "3",
+          "cuenta": "10034",
+          "clave_agrupacion": "3-10034",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90039
+          ],
+          "obligaciones": 19,
+          "importe_actualizado": {
+            "valor": "347967.74",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "251229.73",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 19,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-06-02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2311,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "3",
+          "cuenta": "10035",
+          "clave_agrupacion": "3-10035",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90040
+          ],
+          "obligaciones": 11,
+          "importe_actualizado": {
+            "valor": "194308.10",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "149113.62",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 11,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-03-24",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2381,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "3",
+          "cuenta": "10036",
+          "clave_agrupacion": "3-10036",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90041
+          ],
+          "obligaciones": 11,
+          "importe_actualizado": {
+            "valor": "149807.18",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "118279.21",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 11,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2020-03-02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 2403,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        }
+      ],
+      "hallazgos": [
+        {
+          "archivo": "cabecera",
+          "linea": 5,
+          "campo": "Cuenta",
+          "codigo": "CUENTA_NO_CANONICA",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 6,
+          "campo": "Cuenta",
+          "codigo": "CUENTA_NO_CANONICA",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 14,
+          "campo": "Destinatario_Celular",
+          "codigo": "CONTACTO_PLACEHOLDER",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 14,
+          "campo": "Destinatario_Email",
+          "codigo": "CONTACTO_PLACEHOLDER",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 14,
+          "campo": "Destinatario_Telefono",
+          "codigo": "CONTACTO_PLACEHOLDER",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 15,
+          "campo": "Destinatario_Email",
+          "codigo": "CONTACTO_FORMATO_INVALIDO",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 30,
+          "campo": "Bien_Tipo_Id",
+          "codigo": "TIPO_BIEN_FUERA_DE_CATALOGO",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 31,
+          "campo": "Deuda_Actualizada",
+          "codigo": "CONCILIACION_DIFERENTE",
+          "presencia": "OBSERVADO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 35,
+          "campo": "Destinatario_Email",
+          "codigo": "CONTACTO_INACTIVO",
+          "presencia": "OBSERVADO"
+        },
+        {
+          "archivo": "cabecera",
+          "linea": 35,
+          "campo": "Destinatario_Telefono",
+          "codigo": "CONTACTO_INACTIVO",
+          "presencia": "OBSERVADO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 13,
+          "campo": "NOTD_totalActualizado",
+          "codigo": "IMPORTE_VACIO",
+          "presencia": "NO_INFORMADO_EN_ORIGEN"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 14,
+          "campo": "NOTD_capital",
+          "codigo": "IMPORTE_NO_NUMERICO",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 17,
+          "campo": "NOTD_vencimiento",
+          "codigo": "FECHA_IMPOSIBLE",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 22,
+          "campo": "NOTD_ESTA_id",
+          "codigo": "ESTADO_ORIGEN_NO_INFORMADO",
+          "presencia": "NO_INFORMADO_EN_ORIGEN"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 39,
+          "campo": "Tipo_Ingreso_Id",
+          "codigo": "TIPO_INGRESO_FUERA_DE_CATALOGO",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 44,
+          "campo": "DEUD_id",
+          "codigo": "DUPLICADO_IDENTICO",
+          "presencia": "OBSERVADO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 47,
+          "campo": "DEUD_id",
+          "codigo": "DUPLICADO_CONFLICTIVO",
+          "presencia": "INVALIDO"
+        },
+        {
+          "archivo": "detalle",
+          "linea": 49,
+          "campo": "ClaveAgrupacion",
+          "codigo": "DETALLE_SIN_CABECERA",
+          "presencia": "INVALIDO"
+        }
+      ]
+    },
+    "municipio-sintetico-b": {
+      "conteos": {
+        "filas_cabecera": 3,
+        "filas_detalle": 6,
+        "objetos": 3,
+        "objetos_aceptados": 3,
+        "objetos_en_cuarentena": 0,
+        "personas": 3,
+        "relaciones": 3,
+        "obligaciones_unicas": 6,
+        "duplicados_identicos": 0,
+        "duplicados_conflictivos": 0,
+        "detalle_sin_cabecera": 0,
+        "objetos_sin_contacto_utilizable": 1,
+        "objetos_porcentajes_no_100": 0
+      },
+      "importes": {
+        "actualizado_aceptado": "125285.39",
+        "actualizado_en_cuarentena_observado": "0.00",
+        "actualizado_filas_no_observadas": {}
+      },
+      "objetos": [
+        {
+          "caso": "misma-cuenta-otro-municipio",
+          "bien_tipo_id": "3",
+          "cuenta": "4100",
+          "clave_agrupacion": "3-4100",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90001
+          ],
+          "obligaciones": 2,
+          "importe_actualizado": {
+            "valor": "50589.02",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "35212.28",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 2,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2025-04-15",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 533,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "6",
+          "cuenta": "10037",
+          "clave_agrupacion": "6-10037",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [],
+          "personas": [
+            90042
+          ],
+          "obligaciones": 3,
+          "importe_actualizado": {
+            "valor": "65233.63",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "41381.32",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 3,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2021-09-25",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 1831,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 1,
+          "contactos_inactivos": 0
+        },
+        {
+          "caso": "relleno",
+          "bien_tipo_id": "1",
+          "cuenta": "10038",
+          "clave_agrupacion": "1-10038",
+          "resultado": "ACEPTADO",
+          "motivos": [],
+          "banderas": [
+            "SIN_CONTACTO_UTILIZABLE"
+          ],
+          "personas": [
+            90043
+          ],
+          "obligaciones": 1,
+          "importe_actualizado": {
+            "valor": "9462.74",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "importe_capital": {
+            "valor": "8374.11",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "estados_al_corte": {
+            "VENCIDA": 1,
+            "VIGENTE": 0,
+            "PAGADA": 0,
+            "ANULADA": 0,
+            "SUSPENDIDA": 0,
+            "UNKNOWN": 0,
+            "PENDIENTE_VENCIMIENTO_NO_OBSERVADO": 0
+          },
+          "vencimiento_mas_antiguo": {
+            "valor": "2024-08-22",
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "dias_vencida_mas_antigua": {
+            "valor": 769,
+            "presencia": "OBSERVADO",
+            "filas_no_observadas": {},
+            "completo": true
+          },
+          "suma_porcentajes": {
+            "valor": "100",
+            "presencia": "OBSERVADO"
+          },
+          "contactos_utilizables": 0,
+          "contactos_inactivos": 0
+        }
+      ],
+      "hallazgos": []
+    }
+  }
+}

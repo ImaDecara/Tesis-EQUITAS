@@ -13,7 +13,7 @@ function httpPages(pages: unknown[], error?: { message: string; code?: string | 
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: async (input) => {
       urls.push(new URL(String(input)))
-      return new Response(JSON.stringify(error ?? remaining.shift() ?? []), {
+      return new Response(JSON.stringify(error ?? (remaining.length ? remaining.shift() : [])), {
         status: error ? 400 : 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -77,6 +77,13 @@ describe('R-DAT-01 / lector paginado: validacion y fallos seguros', () => {
 
   it('DAT-13: rechaza una pagina que no sea un array', async () => {
     const { client } = httpPages([{ id: 1 }])
+    const result = await loadAllTableRows('debt', client)
+    expect(result.rows).toEqual([])
+    expect(result.warning?.code).toBe('DATA_PAGINATION_INVALID')
+  })
+
+  it.each([null, undefined])('ALIGN-019: una respuesta vacia %s no confirma una cartera parcial', async page => {
+    const { client } = httpPages([[{ id: 1 }], page])
     const result = await loadAllTableRows('debt', client)
     expect(result.rows).toEqual([])
     expect(result.warning?.code).toBe('DATA_PAGINATION_INVALID')

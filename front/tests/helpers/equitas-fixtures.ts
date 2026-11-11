@@ -1,10 +1,59 @@
+import { observed } from '@/lib/data-presence'
 import type {
   DashboardData,
   DebtorDetailData,
   DebtorListItem,
   PeopleDashboardSummary,
   PersonListItem,
+  RawDebtorDataBundle,
+  RawPersonDataBundle,
 } from '@/types/equitas-domain'
+
+// Forma de las filas persistidas. Identidades y contactos deliberadamente sintéticos.
+export function buildPresenceRawData(): RawDebtorDataBundle {
+  return {
+    debtors: [{ id: 901, external_id: 'SINTETICO-OBJ-901', type: 6 }],
+    debtorTypes: [{ id: 6, value: 'AGUA' }],
+    debts: [{ id: 801, debtor: 901, original_amount: 500, current_amount: 0,
+      updated_amount: 0, status: 2, due_date: '2020-01-01', period: 'SINTETICO-DEUDA-801' }],
+    debtStatuses: [
+      { id: 2, key: 'OVERDUE', value: 'Vencida' },
+      { id: 3, key: 'PAID', value: 'Pagada' },
+      { id: 8, key: 'UNKNOWN', value: 'Desconocido' },
+    ],
+    people: [
+      { id: 701, full_name: 'Persona sintética A', document_number: 'SINTETICO-A' },
+      { id: 702, full_name: 'Persona sintética B', document_number: 'SINTETICO-B' },
+    ],
+    debtorPeople: [
+      { id: 401, debtor: 901, person: 701, active: true, priority: 50, role: 'SINTETICO' },
+      { id: 402, debtor: 901, person: 702, active: true, priority: 50, role: 'SINTETICO' },
+    ],
+    debtorContacts: [
+      { id: 601, person: 701, value: 'sintetico-a@example.test', type: 1, active: true },
+      { id: 602, person: 701, value: 'sintetico-b@example.test', type: 1, active: true },
+    ],
+    debtorProfiles: [],
+    warnings: [],
+  }
+}
+
+export function buildIncompleteStatusRawData(): RawDebtorDataBundle {
+  const raw = buildPresenceRawData()
+  raw.debtors.push({ id: 902, external_id: 'SINTETICO-OBJ-902', type: 6 })
+  raw.debts = [
+    { id: 821, debtor: 902, current_amount: 50, status: 2, due_date: '2020-01-01' },
+    { id: 822, debtor: 902, current_amount: 70, status: 8, due_date: null },
+  ]
+  raw.people = raw.people.slice(0, 1)
+  raw.debtorPeople = [raw.debtorPeople[0], { debtor: 902, person: 701, active: true }]
+  return raw
+}
+
+export function buildPresencePeopleData(): RawPersonDataBundle {
+  const raw = buildPresenceRawData()
+  return { ...raw, debtorProfilesDetail: [{ person: 701, debtor_profile: 901, risk_value: 0 }] }
+}
 
 export function buildDebtor(overrides: Partial<DebtorListItem> = {}): DebtorListItem {
   return {
@@ -14,6 +63,7 @@ export function buildDebtor(overrides: Partial<DebtorListItem> = {}): DebtorList
     description: 'Conexion de agua municipal',
     status: 'Activo',
     totalDebt: 1000,
+    pendingDebt: 1000,
     overdueDebt: 800,
     peopleCount: 1,
     peopleIds: ['501'],
@@ -45,6 +95,7 @@ export function buildDebtors(): DebtorListItem[] {
       description: 'Tasa de inmueble',
       status: 'Vencida',
       totalDebt: 500,
+      pendingDebt: 500,
       overdueDebt: 500,
       peopleIds: ['502'],
       peopleNames: ['Bruno Diaz'],
@@ -67,6 +118,7 @@ export function buildDebtors(): DebtorListItem[] {
       description: 'Patente municipal',
       status: 'Activo',
       totalDebt: 200,
+      pendingDebt: 200,
       overdueDebt: 0,
       peopleIds: ['503'],
       peopleNames: ['Carla Nuñez'],
@@ -96,6 +148,8 @@ export function buildPeople(): PersonListItem[] {
       debtorsCount: 1,
       hasContact: false,
       totalDebtAssociated: 1000,
+      debtExposure: [{ debtorId: '1', amount: observed(1000) }],
+      exposureLabel: 'Exposición asociada (no aditiva)',
       debtorIds: ['1'],
       debtorIdentifiers: ['AG-1001'],
     },
@@ -108,6 +162,8 @@ export function buildPeople(): PersonListItem[] {
       debtorsCount: 1,
       hasContact: true,
       totalDebtAssociated: 500,
+      debtExposure: [{ debtorId: '2', amount: observed(500) }],
+      exposureLabel: 'Exposición asociada (no aditiva)',
       debtorIds: ['2'],
       debtorIdentifiers: ['IN-2001'],
     },
@@ -120,6 +176,8 @@ export function buildPeople(): PersonListItem[] {
       debtorsCount: 1,
       hasContact: true,
       totalDebtAssociated: 200,
+      debtExposure: [{ debtorId: '3', amount: observed(200) }],
+      exposureLabel: 'Exposición asociada (no aditiva)',
       debtorIds: ['3'],
       debtorIdentifiers: ['RO-3001'],
     },
@@ -156,6 +214,8 @@ export function buildDashboard(): DashboardData {
   return {
     totalDebtors: 3,
     totalDebt: 1700,
+    pendingDebt: 1700,
+    overdueDebt: 1300,
     overdueCases: 2,
     withContactCases: 2,
     withoutContactCases: 1,
@@ -184,7 +244,7 @@ export function buildDashboard(): DashboardData {
       { label: 'Plan de pago / revision humana', value: 0 },
       { label: 'Seguimiento posterior', value: 1 },
     ],
-    topDebtChart: debtors.map((debtor) => ({ label: debtor.identifier, value: debtor.totalDebt })),
+    topDebtChart: debtors.flatMap(debtor => debtor.totalDebt === null ? [] : [{ label: debtor.identifier, value: debtor.totalDebt }]),
     topDebtors: debtors.map((debtor) => ({
       id: debtor.id,
       identifier: debtor.identifier,
@@ -267,6 +327,7 @@ export function buildDebtorDetail(): DebtorDetailData {
     ],
     profile: {
       totalDebt: 1000,
+      pendingDebt: 1000,
       overdueDebt: 800,
       debtCount: 2,
       antiquityDays: 120,

@@ -1,4 +1,3 @@
-from collections.abc import Callable
 
 import httpx
 import pytest
@@ -50,7 +49,7 @@ def test_loader_propagates_a_transient_error_after_the_last_retry(
 
     monkeypatch.setattr(load.time, 'sleep', lambda _: None)
 
-    with pytest.raises(httpx.ConnectError, match='connection unavailable'):
+    with pytest.raises(httpx.ConnectError, match='codigo=SUPABASE_RETRY_EXHAUSTED'):
         load.execute_supabase_operation('consulta de prueba', operation)
 
     assert attempts == load.MAX_SUPABASE_ATTEMPTS
